@@ -134,7 +134,7 @@ select_web_target() {
 # Get web target URL
 get_web_target_url() {
     if [[ -z "$CURRENT_WEB_TARGET" ]]; then
-        echo -e "${YELLOW}No web target selected.${NC}"
+        echo -e "${YELLOW}No web target selected.${NC}" >&2
         local choice=$(echo "Select from Database
 Enter Manually
 Cancel" | fzf --prompt="How to provide URL: " --height=40% --reverse)
