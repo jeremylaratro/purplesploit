@@ -1714,7 +1714,7 @@ main_menu() {
                         read -p "Limit to specific share? (leave empty for all shares): " share_opt
                         read -p "File pattern to match? (e.g., *.xlsx, *.txt, or leave empty for all): " pattern_opt
                         
-                        cmd="nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True"
+                        cmd="nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000"
                         [[ -n "$share_opt" ]] && cmd="$cmd SHARE='$share_opt'"
                         [[ -n "$pattern_opt" ]] && cmd="$cmd PATTERN='$pattern_opt'"
                         
@@ -1745,7 +1745,7 @@ main_menu() {
                         fi
                         
                         echo -e "\n${GREEN}Files will be downloaded to: ~/.nxc/modules/nxc_spider_plus/${NC}\n"
-                        run_command "nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True"
+                        run_command "nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000"
                         
                         echo -e "\n${CYAN}Download complete!${NC}"
                         read -p "Open download directory? (y/n): " open_dir
@@ -1773,7 +1773,7 @@ main_menu() {
                         echo -e "\n${GREEN}Downloading files matching: $pattern${NC}"
                         echo -e "${GREEN}Files will be saved to: ~/.nxc/modules/nxc_spider_plus/${NC}\n"
                         
-                        run_command "nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True PATTERN='$pattern'"
+                        run_command "nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True PATTERN='$pattern' MAX_FILE_SIZE=512000"
                         
                         echo -e "\n${CYAN}Files matching '$pattern' have been downloaded!${NC}"
                         read -p "View downloaded files? (y/n): " view
@@ -1845,7 +1845,7 @@ Download all files in share" | fzf --prompt="Select: " --height=30% --reverse)
                                 ;;
                             "Download all files in share")
                                 echo -e "\n${GREEN}Downloading all files from share: $share${NC}\n"
-                                run_command "nxc smb $target $auth -M spider_plus -o SHARE='$share' DOWNLOAD_FLAG=True"
+                                run_command "nxc smb $target $auth -M spider_plus -o SHARE='$share' DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000"
                                 ;;
                         esac
                         ;;

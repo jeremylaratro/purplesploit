@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/kali/.local/**)",
+      "Read(//home/kali/.nxc/modules/nxc_spider_plus/**)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

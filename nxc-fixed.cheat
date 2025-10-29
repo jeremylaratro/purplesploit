@@ -73,13 +73,13 @@ $ password: echo "Password123"
 % nxc, smb, shares
 
 # Spider all shares (list all files)
-nxc smb <target> -u <username> -p <password> -M spider_plus
+nxc smb <target> -u <username> -p <password> -M spider_plus -o MAX_FILE_SIZE=512000
 
 # Spider specific share
-nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name>
+nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name> MAX_FILE_SIZE=512000
 
 # Spider with pattern matching
-nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern>
+nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern> MAX_FILE_SIZE=512000
 
 # Download file from share
 nxc smb <target> -u <username> -p <password> --get-file <remote_path> <local_path>
@@ -88,7 +88,7 @@ nxc smb <target> -u <username> -p <password> --get-file <remote_path> <local_pat
 nxc smb <target> -u <username> -p <password> --put-file <local_path> <remote_path>
 
 # List files in specific share
-nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name> READ_ONLY=false
+nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name> READ_ONLY=false MAX_FILE_SIZE=512000
 
 $ target: echo "192.168.1.10"
 $ username: echo "administrator"
@@ -493,7 +493,7 @@ nxc smb <subnet> -u <username> -p <password> -M get-network
 nxc smb <subnet> -u <username> -p <password> --shares | grep -i "READ,WRITE"
 
 # Search for sensitive files
-nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern>
+nxc smb <target> -u <username> -p <password> -M spider_plus -o PATTERN=<pattern> MAX_FILE_SIZE=512000
 
 # Find computers with specific software
 nxc smb <subnet> -u <username> -p <password> -M enum_avproducts
