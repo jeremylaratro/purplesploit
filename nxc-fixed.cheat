@@ -93,7 +93,7 @@ nxc smb <target> -u <username> -p <password> -M spider_plus -o SHARE=<share_name
 $ target: echo "192.168.1.10"
 $ username: echo "administrator"
 $ password: echo "Password123"
-$ share_name: echo "C$"
+$ share_name: echo -e "C$\nADMIN$\nIPC$\nSYSVOL\nNETLOGON\nUsers\nShared\nData\nPublic"
 $ pattern: echo "*.xlsx"
 $ remote_path: echo "C:\\Windows\\System32\\config\\SAM"
 $ local_path: echo "/tmp/SAM"
