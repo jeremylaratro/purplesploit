@@ -1070,6 +1070,7 @@ Download All Files (Recursive)
 Download Files by Pattern
 Spider & List Only (No Download)
 Spider Specific Share
+Parse Spider Results
 Download Specific File (Manual Path)
 Upload File
 Back" | fzf --prompt="$prompt" --height=50% --reverse --header="$header"
@@ -1834,11 +1835,11 @@ main_menu() {
                             sleep 2
                             continue
                         fi
-                        
+
                         echo -e "\n${CYAN}Choose action:${NC}"
                         action=$(echo "List files only
 Download all files in share" | fzf --prompt="Select: " --height=30% --reverse)
-                        
+
                         case "$action" in
                             "List files only")
                                 run_command "nxc smb $target $auth -M spider_plus -o SHARE='$share'"
@@ -1846,6 +1847,95 @@ Download all files in share" | fzf --prompt="Select: " --height=30% --reverse)
                             "Download all files in share")
                                 echo -e "\n${GREEN}Downloading all files from share: $share${NC}\n"
                                 run_command "nxc smb $target $auth -M spider_plus -o SHARE='$share' DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000"
+                                ;;
+                        esac
+                        ;;
+                    "Parse Spider Results")
+                        spider_plus_dir="$HOME/.nxc/modules/nxc_spider_plus"
+
+                        if [[ ! -d "$spider_plus_dir" ]]; then
+                            echo -e "${RED}Spider plus directory not found: $spider_plus_dir${NC}"
+                            echo -e "${YELLOW}Run a spider_plus scan first!${NC}"
+                            sleep 3
+                            continue
+                        fi
+
+                        # Find available JSON files
+                        json_files=($(find "$spider_plus_dir" -name "*.json" -type f 2>/dev/null))
+
+                        if [[ ${#json_files[@]} -eq 0 ]]; then
+                            echo -e "${RED}No spider_plus results found in $spider_plus_dir${NC}"
+                            echo -e "${YELLOW}Run a spider_plus scan first!${NC}"
+                            sleep 3
+                            continue
+                        fi
+
+                        # Show available options
+                        echo -e "\n${GREEN}Available spider_plus results:${NC}"
+                        for json_file in "${json_files[@]}"; do
+                            ip=$(basename "$json_file" .json)
+                            echo -e "  - $ip"
+                        done
+
+                        echo -e "\n${CYAN}Parse options:${NC}"
+                        parse_action=$(echo "Parse specific IP
+Parse all results
+Back" | fzf --prompt="Select: " --height=30% --reverse)
+
+                        case "$parse_action" in
+                            "Parse specific IP")
+                                read -p "Enter IP address: " target_ip
+
+                                if [[ -z "$target_ip" ]]; then
+                                    echo -e "${RED}IP address cannot be empty!${NC}"
+                                    sleep 2
+                                    continue
+                                fi
+
+                                json_file="$spider_plus_dir/${target_ip}.json"
+
+                                if [[ ! -f "$json_file" ]]; then
+                                    echo -e "${RED}No results found for IP: $target_ip${NC}"
+                                    sleep 2
+                                    continue
+                                fi
+
+                                # Ask for sort option
+                                sort_option=$(echo "share
+size
+name" | fzf --prompt="Sort by: " --height=30% --reverse)
+
+                                echo -e "\n${GREEN}Parsing results for $target_ip...${NC}\n"
+
+                                # Check if parse_spider_plus.py exists
+                                if [[ -f "./parse_spider_plus.py" ]]; then
+                                    python3 ./parse_spider_plus.py "$target_ip" --sort "${sort_option:-share}"
+                                elif [[ -f "/home/user/purplesploit/parse_spider_plus.py" ]]; then
+                                    python3 /home/user/purplesploit/parse_spider_plus.py "$target_ip" --sort "${sort_option:-share}"
+                                else
+                                    echo -e "${RED}parse_spider_plus.py not found!${NC}"
+                                fi
+
+                                read -p "Press Enter to continue..."
+                                ;;
+                            "Parse all results")
+                                # Ask for sort option
+                                sort_option=$(echo "share
+size
+name" | fzf --prompt="Sort by: " --height=30% --reverse)
+
+                                echo -e "\n${GREEN}Parsing all spider_plus results...${NC}\n"
+
+                                # Check if parse_spider_plus.py exists
+                                if [[ -f "./parse_spider_plus.py" ]]; then
+                                    python3 ./parse_spider_plus.py --all --sort "${sort_option:-share}"
+                                elif [[ -f "/home/user/purplesploit/parse_spider_plus.py" ]]; then
+                                    python3 /home/user/purplesploit/parse_spider_plus.py --all --sort "${sort_option:-share}"
+                                else
+                                    echo -e "${RED}parse_spider_plus.py not found!${NC}"
+                                fi
+
+                                read -p "Press Enter to continue..."
                                 ;;
                         esac
                         ;;
