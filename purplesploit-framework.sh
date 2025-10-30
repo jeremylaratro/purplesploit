@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # PurpleSploit Framework - Main Entry Point
-# Metasploit-Style Pentesting Framework
+# Metasploit-Style Pentesting Framework with FZF Integration
 #
 # Usage: ./purplesploit-framework.sh
 #
@@ -63,9 +63,11 @@ main_loop() {
 
             search)
                 if [[ ${#args[@]} -eq 0 ]]; then
-                    echo "[!] Usage: search <keyword>"
+                    # Interactive FZF search with no initial query
+                    fzf_module_search ""
                 else
-                    module_search "${args[0]}"
+                    # FZF search with initial query
+                    fzf_module_search "${args[*]}"
                 fi
                 ;;
 
@@ -75,6 +77,11 @@ main_loop() {
                 else
                     module_info "${args[0]}"
                 fi
+                ;;
+
+            browse)
+                # Interactive category browser
+                fzf_category_browse
                 ;;
 
             # Variable commands
@@ -144,7 +151,8 @@ main_loop() {
             # Workspace commands
             workspace)
                 if [[ ${#args[@]} -eq 0 ]]; then
-                    workspace_list
+                    # Interactive FZF workspace selection
+                    fzf_workspace_select
                 elif [[ "${args[0]}" == "-a" ]]; then
                     if [[ ${#args[@]} -lt 2 ]]; then
                         echo "[!] Usage: workspace -a <name>"
@@ -159,6 +167,8 @@ main_loop() {
                     fi
                 elif [[ "${args[0]}" == "-i" ]]; then
                     workspace_info "${args[1]:-}"
+                elif [[ "${args[0]}" == "-l" ]]; then
+                    workspace_list
                 else
                     workspace_switch "${args[0]}"
                 fi
@@ -167,7 +177,8 @@ main_loop() {
             # Target commands
             targets)
                 if [[ ${#args[@]} -eq 0 ]]; then
-                    workspace_list_targets
+                    # Interactive FZF target selection
+                    fzf_target_select
                 elif [[ "${args[0]}" == "-a" ]]; then
                     if [[ ${#args[@]} -lt 2 ]]; then
                         echo "[!] Usage: targets -a <target>"
@@ -192,9 +203,67 @@ main_loop() {
                     else
                         workspace_export_targets "${args[1]}"
                     fi
+                elif [[ "${args[0]}" == "-l" ]]; then
+                    workspace_list_targets
                 else
                     echo "[!] Unknown targets option: ${args[0]}"
-                    echo "[*] Available: -a (add), -r (remove), -i (import), -e (export)"
+                    echo "[*] Available: -a (add), -r (remove), -i (import), -e (export), -l (list)"
+                fi
+                ;;
+
+            # Credential commands
+            credentials|creds)
+                if [[ ${#args[@]} -eq 0 ]]; then
+                    # Interactive FZF credential selection
+                    fzf_credential_select
+                elif [[ "${args[0]}" == "-a" ]]; then
+                    credential_add_interactive
+                elif [[ "${args[0]}" == "-l" ]]; then
+                    credential_list_all
+                elif [[ "${args[0]}" == "-d" ]]; then
+                    if [[ ${#args[@]} -lt 2 ]]; then
+                        echo "[!] Usage: credentials -d <id>"
+                    else
+                        credential_delete "${args[1]}"
+                    fi
+                elif [[ "${args[0]}" == "-e" ]]; then
+                    if [[ ${#args[@]} -lt 2 ]]; then
+                        echo "[!] Usage: credentials -e <id>"
+                    else
+                        credential_edit "${args[1]}"
+                    fi
+                elif [[ "${args[0]}" == "-m" ]]; then
+                    credential_manage
+                elif [[ "${args[0]}" == "-i" ]]; then
+                    if [[ ${#args[@]} -lt 2 ]]; then
+                        echo "[!] Usage: credentials -i <file>"
+                    else
+                        credential_import "${args[1]}"
+                    fi
+                elif [[ "${args[0]}" == "-x" ]]; then
+                    if [[ ${#args[@]} -lt 2 ]]; then
+                        echo "[!] Usage: credentials -x <file>"
+                    else
+                        credential_export "${args[1]}"
+                    fi
+                else
+                    # Load credential by ID
+                    credential_load "${args[0]}"
+                fi
+                ;;
+
+            # Mythic C2 commands
+            mythic)
+                if [[ ${#args[@]} -eq 0 ]]; then
+                    mythic_menu
+                elif [[ "${args[0]}" == "configure" ]]; then
+                    mythic_configure
+                elif [[ "${args[0]}" == "test" ]]; then
+                    mythic_test_connection
+                elif [[ "${args[0]}" == "payloads" ]]; then
+                    mythic_list_payloads
+                else
+                    mythic_menu
                 fi
                 ;;
 
@@ -216,16 +285,24 @@ main_loop() {
             # History commands
             history)
                 if [[ ${#args[@]} -eq 0 ]]; then
-                    command_history_show
+                    # Interactive FZF history selection
+                    fzf_history_select
                 elif [[ "${args[0]}" == "-s" ]]; then
                     if [[ ${#args[@]} -lt 2 ]]; then
                         echo "[!] Usage: history -s <keyword>"
                     else
                         command_history_search "${args[1]}"
                     fi
+                elif [[ "${args[0]}" == "-l" ]]; then
+                    command_history_show "${args[1]:-20}"
                 else
                     command_history_show "${args[0]}"
                 fi
+                ;;
+
+            # Interactive variable editor
+            vars)
+                fzf_variable_select
                 ;;
 
             # Utility commands
