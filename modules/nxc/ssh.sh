@@ -19,21 +19,24 @@ handle_ssh() {
     auth=$(build_auth)
     target=$(get_target_for_command) || return 1
 
+    # Get port argument if using non-standard port
+    port_arg=$(get_port_arg "$target" "ssh")
+
     subchoice=$(show_menu "ssh" "Select SSH Operation: ")
 
     case "$subchoice" in
         "Test Authentication")
-            run_command "nxc ssh $target $auth"
+            run_command "nxc ssh $target $auth $port_arg"
             ;;
         "Execute Command")
             read -p "Command: " cmd
-            run_command "nxc ssh $target $auth -x '$cmd'"
+            run_command "nxc ssh $target $auth $port_arg -x '$cmd'"
             ;;
         "Get System Info")
-            run_command "nxc ssh $target $auth -x 'uname -a'"
+            run_command "nxc ssh $target $auth $port_arg -x 'uname -a'"
             ;;
         "Check Sudo Privileges")
-            run_command "nxc ssh $target $auth -x 'sudo -l'"
+            run_command "nxc ssh $target $auth $port_arg -x 'sudo -l'"
             ;;
     esac
 }
