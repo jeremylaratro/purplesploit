@@ -43,6 +43,7 @@ source "${SCRIPT_DIR}/lib/targets.sh"
 source "${SCRIPT_DIR}/lib/web_targets.sh"
 source "${SCRIPT_DIR}/lib/ad_targets.sh"
 source "${SCRIPT_DIR}/lib/nmap_results.sh"
+source "${SCRIPT_DIR}/lib/database_management.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 
 # ============================================================================
@@ -147,6 +148,9 @@ main_menu() {
                 ;;
             "Select AD Target")
                 select_ad_target
+                ;;
+            "Database Management (Reset/Clear)")
+                manage_databases
                 ;;
 
             # ===== WEB TESTING TOOLS =====

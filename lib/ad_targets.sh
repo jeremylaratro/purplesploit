@@ -158,6 +158,45 @@ edit_ad_target() {
     sleep 2
 }
 
+# Clear all AD targets
+clear_all_ad_targets() {
+    clear
+    echo -e "${YELLOW}╔═══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║     CLEAR ALL AD TARGETS                  ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will delete ALL Active Directory targets!${NC}"
+    echo ""
+
+    local target_count=$(list_ad_target_names | wc -l)
+    echo -e "AD targets to be deleted: ${RED}$target_count${NC}"
+    echo ""
+
+    read -p "Type 'CLEAR' to confirm deletion: " confirm
+
+    if [[ "$confirm" == "CLEAR" ]]; then
+        # Reinitialize the database (empty)
+        cat > "$AD_TARGETS_DB" << 'EOF'
+# Active Directory Targets Database
+# Format: NAME|DOMAIN|DC_NAME|DC_IP|ADDITIONAL_INFO
+EOF
+        chmod 600 "$AD_TARGETS_DB"
+
+        # Clear current selection
+        CURRENT_AD_TARGET_NAME=""
+        AD_DOMAIN=""
+        AD_DC_NAME=""
+        AD_DC_IP=""
+        AD_ADDITIONAL_INFO=""
+
+        echo -e "\n${GREEN}✓ All AD targets cleared!${NC}"
+        sleep 2
+    else
+        echo -e "\n${YELLOW}Cancelled.${NC}"
+        sleep 2
+    fi
+}
+
 # Manage AD targets menu
 manage_ad_targets() {
     while true; do
