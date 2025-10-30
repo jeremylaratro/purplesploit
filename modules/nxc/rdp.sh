@@ -19,17 +19,20 @@ handle_rdp() {
     auth=$(build_auth)
     target=$(get_target_for_command) || return 1
 
+    # Get port argument if using non-standard port
+    port_arg=$(get_port_arg "$target" "rdp")
+
     subchoice=$(show_menu "rdp" "Select RDP Operation: ")
 
     case "$subchoice" in
         "Test Authentication")
-            run_command "nxc rdp $target $auth"
+            run_command "nxc rdp $target $auth $port_arg"
             ;;
         "RDP Scanner")
-            run_command "nxc rdp $target $auth -M rdp-scanner"
+            run_command "nxc rdp $target $auth $port_arg -M rdp-scanner"
             ;;
         "Take Screenshot")
-            run_command "nxc rdp $target $auth -M rdp-screenshot"
+            run_command "nxc rdp $target $auth $port_arg -M rdp-screenshot"
             ;;
     esac
 }
