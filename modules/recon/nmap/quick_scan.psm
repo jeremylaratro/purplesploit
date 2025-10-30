@@ -3,11 +3,14 @@
 
 MODULE_NAME="recon/nmap/quick_scan"
 MODULE_CATEGORY="recon"
-MODULE_DESCRIPTION="Quick nmap scan (top 1000 ports)"
+MODULE_DESCRIPTION="Quick nmap scan (top 1000 ports) with auto service detection"
 MODULE_AUTHOR="PurpleSploit Team"
 MODULE_TOOL="nmap"
 
 REQUIRED_VARS="RHOST"
 OPTIONAL_VARS="PORTS:1-1000,THREADS:10"
 
-COMMAND_TEMPLATE="nmap -T4 --top-ports 1000 -Pn \${RHOST}"
+COMMAND_TEMPLATE="nmap -T4 --top-ports 1000 -Pn -oG \${OUTPUT_DIR}/nmap_quick_\${RHOST}.gnmap \${RHOST}"
+
+# Post-execution: Analyze results and populate service database
+OUTPUT_PARSER="nmap_analyze_results"

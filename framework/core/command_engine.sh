@@ -216,6 +216,9 @@ command_execute_foreground() {
     echo ""
     if [[ $exit_code -eq 0 ]]; then
         echo -e "${SUCCESS_COLOR}[+] Command completed successfully (${duration}s)${NC}"
+
+        # Post-execution analysis
+        command_post_execution_analysis "$output_file"
     else
         echo -e "${ERROR_COLOR}[!] Command failed with exit code: $exit_code (${duration}s)${NC}"
     fi
@@ -228,6 +231,59 @@ command_execute_foreground() {
     read -p "Press Enter to continue..."
 
     return $exit_code
+}
+
+# Post-execution analysis (e.g., parse nmap results)
+# Usage: command_post_execution_analysis [output_file]
+command_post_execution_analysis() {
+    local output_file="$1"
+    local current_module=$(module_get_current)
+
+    if [[ -z "$current_module" ]]; then
+        return 0
+    fi
+
+    # Check if module has OUTPUT_PARSER defined
+    local parser=$(module_get_field "$current_module" "OUTPUT_PARSER")
+
+    if [[ -z "$parser" ]]; then
+        return 0
+    fi
+
+    # Handle nmap result analysis
+    if [[ "$parser" == "nmap_analyze_results" ]]; then
+        echo ""
+        echo -e "${CYAN}[*] Analyzing scan results...${NC}"
+
+        local target=$(var_get "RHOST" 2>/dev/null)
+
+        # Look for output files
+        local output_dir=$(var_get "OUTPUT_DIR" 2>/dev/null)
+
+        if [[ -n "$output_file" && -f "$output_file" ]]; then
+            service_detect_from_output "$(cat "$output_file")" "$target"
+        elif [[ -n "$output_dir" ]]; then
+            # Check for gnmap, nmap, or xml files
+            local scan_files=$(find "$output_dir" -name "nmap_*${target}*" -type f 2>/dev/null)
+
+            for scan_file in $scan_files; do
+                if [[ "$scan_file" == *.gnmap ]] || [[ "$scan_file" == *.nmap ]]; then
+                    service_detect_from_output "$(cat "$scan_file")" "$target"
+                elif [[ "$scan_file" == *.xml ]]; then
+                    service_parse_nmap "$scan_file" "$target"
+                fi
+            done
+        fi
+
+        # Show detected services
+        local service_count=$(service_get_for_target "$target" | wc -l)
+        if [[ $service_count -gt 0 ]]; then
+            echo -e "${GREEN}[+] Detected $service_count services on $target${NC}"
+            echo -e "${CYAN}[*] Run 'search relevant' to see applicable modules${NC}"
+        fi
+    fi
+
+    return 0
 }
 
 # Execute command in background
