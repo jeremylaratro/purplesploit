@@ -43,6 +43,7 @@ source "${SCRIPT_DIR}/lib/targets.sh"
 source "${SCRIPT_DIR}/lib/web_targets.sh"
 source "${SCRIPT_DIR}/lib/ad_targets.sh"
 source "${SCRIPT_DIR}/lib/nmap_results.sh"
+source "${SCRIPT_DIR}/lib/services.sh"
 source "${SCRIPT_DIR}/lib/database_management.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 
@@ -168,44 +169,44 @@ main_menu() {
                 ;;
 
             # ===== NXC SMB OPERATIONS =====
-            "SMB Authentication")
+            "SMB Authentication"|"● SMB Authentication")
                 handle_smb_auth
                 ;;
-            "SMB Enumeration")
+            "SMB Enumeration"|"● SMB Enumeration")
                 handle_smb_enum
                 ;;
-            "SMB Shares")
+            "SMB Shares"|"● SMB Shares")
                 handle_smb_shares
                 ;;
-            "SMB Execution")
+            "SMB Execution"|"● SMB Execution")
                 handle_smb_exec
                 ;;
-            "SMB Credentials")
+            "SMB Credentials"|"● SMB Credentials")
                 handle_smb_creds
                 ;;
-            "SMB Vulnerabilities")
+            "SMB Vulnerabilities"|"● SMB Vulnerabilities")
                 handle_smb_vulns
                 ;;
 
             # ===== NXC LDAP OPERATIONS =====
-            "LDAP Enumeration")
+            "LDAP Enumeration"|"● LDAP Enumeration")
                 handle_ldap
                 ;;
-            "LDAP BloodHound")
+            "LDAP BloodHound"|"● LDAP BloodHound")
                 handle_bloodhound
                 ;;
 
             # ===== NXC OTHER PROTOCOLS =====
-            "WinRM Operations")
+            "WinRM Operations"|"● WinRM Operations")
                 handle_winrm
                 ;;
-            "MSSQL Operations")
+            "MSSQL Operations"|"● MSSQL Operations")
                 handle_mssql
                 ;;
-            "RDP Operations")
+            "RDP Operations"|"● RDP Operations")
                 handle_rdp
                 ;;
-            "SSH Operations")
+            "SSH Operations"|"● SSH Operations")
                 handle_ssh
                 ;;
             "Network Scanning")

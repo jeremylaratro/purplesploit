@@ -75,6 +75,39 @@ import_web_targets_from_nmap() {
     fi
 }
 
+# Auto-import detected services from nmap scan
+import_services_from_nmap() {
+    local xml_file="$1"
+
+    if [[ ! -f "$xml_file" ]]; then
+        echo -e "${RED}Error: Scan file not found: $xml_file${NC}"
+        return 1
+    fi
+
+    if [[ ! -f "${SCRIPT_DIR}/parse_nmap.py" ]]; then
+        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Detecting services (SMB, LDAP, SSH, RDP, WinRM, MSSQL)...${NC}"
+    echo ""
+
+    # Use the parser to export detected services
+    python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" --export-services "$SERVICES_DB"
+
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}Services imported successfully!${NC}"
+        # Also import web targets
+        echo ""
+        echo -e "${CYAN}Detecting web servers...${NC}"
+        python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" --export-web "$WEB_TARGETS_DB"
+        return 0
+    else
+        echo -e "${RED}Failed to import services${NC}"
+        return 1
+    fi
+}
+
 # View nmap scan results menu
 view_nmap_results() {
     local scans=$(list_nmap_scans)
