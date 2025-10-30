@@ -42,6 +42,7 @@ source "${SCRIPT_DIR}/lib/credentials.sh"
 source "${SCRIPT_DIR}/lib/targets.sh"
 source "${SCRIPT_DIR}/lib/web_targets.sh"
 source "${SCRIPT_DIR}/lib/ad_targets.sh"
+source "${SCRIPT_DIR}/lib/nmap_results.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 
 # ============================================================================
@@ -269,10 +270,7 @@ main_menu() {
 echo "Initializing databases..."
 
 # Initialize all databases
-init_creds_db
-init_targets_db
-init_web_targets_db
-init_ad_targets_db
+init_all_databases
 
 # Load default credentials
 load_creds "Null Auth"
