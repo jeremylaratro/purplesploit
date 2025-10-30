@@ -9,6 +9,7 @@ CREDS_DB="$HOME/.pentest-credentials.db"
 TARGETS_DB="$HOME/.pentest-targets.db"
 WEB_TARGETS_DB="$HOME/.pentest-web-targets.db"
 AD_TARGETS_DB="$HOME/.pentest-ad-targets.db"
+NMAP_RESULTS_DIR="$HOME/.pentest-nmap-results"
 
 # Colors
 RED='\033[0;31m'

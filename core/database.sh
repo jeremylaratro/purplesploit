@@ -50,10 +50,19 @@ EOF
     fi
 }
 
+# Initialize nmap results directory
+init_nmap_results_dir() {
+    if [[ ! -d "$NMAP_RESULTS_DIR" ]]; then
+        mkdir -p "$NMAP_RESULTS_DIR"
+        chmod 700 "$NMAP_RESULTS_DIR"
+    fi
+}
+
 # Initialize all databases
 init_all_databases() {
     init_creds_db
     init_targets_db
     init_web_targets_db
     init_ad_targets_db
+    init_nmap_results_dir
 }
