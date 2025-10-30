@@ -23,24 +23,38 @@ show_menu() {
 
     case $category in
         "main")
+            # Build dynamic NXC menu based on detected services
+            local nxc_smb=$(highlight_if_active "$TARGET" "smb" "SMB Authentication")
+            local nxc_smb_enum=$(highlight_if_active "$TARGET" "smb" "SMB Enumeration")
+            local nxc_smb_shares=$(highlight_if_active "$TARGET" "smb" "SMB Shares")
+            local nxc_smb_exec=$(highlight_if_active "$TARGET" "smb" "SMB Execution")
+            local nxc_smb_creds=$(highlight_if_active "$TARGET" "smb" "SMB Credentials")
+            local nxc_smb_vulns=$(highlight_if_active "$TARGET" "smb" "SMB Vulnerabilities")
+            local nxc_ldap=$(highlight_if_active "$TARGET" "ldap" "LDAP Enumeration")
+            local nxc_ldap_bh=$(highlight_if_active "$TARGET" "ldap" "LDAP BloodHound")
+            local nxc_winrm=$(highlight_if_active "$TARGET" "winrm" "WinRM Operations")
+            local nxc_mssql=$(highlight_if_active "$TARGET" "mssql" "MSSQL Operations")
+            local nxc_rdp=$(highlight_if_active "$TARGET" "rdp" "RDP Operations")
+            local nxc_ssh=$(highlight_if_active "$TARGET" "ssh" "SSH Operations")
+
             echo "┌ WEB TESTING ───────────────────────────
 Feroxbuster (Directory/File Discovery)
 WFUZZ (Fuzzing)
 SQLMap (SQL Injection)
 HTTPX (HTTP Probing)
 ┌ NETWORK TESTING - NXC ─────────────────
-SMB Authentication
-SMB Enumeration
-SMB Shares
-SMB Execution
-SMB Credentials
-SMB Vulnerabilities
-LDAP Enumeration
-LDAP BloodHound
-WinRM Operations
-MSSQL Operations
-RDP Operations
-SSH Operations
+$nxc_smb
+$nxc_smb_enum
+$nxc_smb_shares
+$nxc_smb_exec
+$nxc_smb_creds
+$nxc_smb_vulns
+$nxc_ldap
+$nxc_ldap_bh
+$nxc_winrm
+$nxc_mssql
+$nxc_rdp
+$nxc_ssh
 Network Scanning
 ┌ NETWORK TESTING - IMPACKET ────────────
 Impacket PSExec
@@ -234,9 +248,8 @@ Password Spray
 Find Admin Access
 Multi-Protocol Scan
 ---
-Nmap Port Scan (Auto Web Detection)
-Nmap Service Detection
-Nmap Vulnerability Scan
+Nmap TCP Scan (Service Detection)
+Nmap UDP Scan
 View Nmap Results
 Back" | fzf --prompt="$prompt" --height=40% --reverse --header="$header"
             ;;

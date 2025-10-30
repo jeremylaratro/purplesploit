@@ -36,76 +36,49 @@ handle_scanning() {
         "Multi-Protocol Scan")
             run_command "nxc smb $target $auth && nxc winrm $target $auth && nxc mssql $target $auth"
             ;;
-        "Nmap Port Scan (Auto Web Detection)")
+        "Nmap TCP Scan (Service Detection)")
             # Get scan parameters
-            echo -e "${CYAN}Nmap Port Scan with Auto Web Detection${NC}"
+            echo -e "${CYAN}Nmap TCP Scan with Service Detection${NC}"
             echo ""
-            read -p "Port range [default: 1-10000]: " ports
-            [[ -z "$ports" ]] && ports="1-10000"
-
-            read -p "Scan name [default: scan_$(date +%Y%m%d_%H%M%S)]: " scan_name
-            [[ -z "$scan_name" ]] && scan_name="scan_$(date +%Y%m%d_%H%M%S)"
+            read -p "Scan name [default: tcp_scan_$(date +%Y%m%d_%H%M%S)]: " scan_name
+            [[ -z "$scan_name" ]] && scan_name="tcp_scan_$(date +%Y%m%d_%H%M%S)"
 
             output_file="$NMAP_RESULTS_DIR/${scan_name}.xml"
 
-            # Run nmap with service detection
-            cmd="nmap -sV -p $ports -oX '$output_file' $target"
+            # Run nmap with full TCP scan and service detection
+            cmd="nmap $target -p- -sV -sC --min-rate 3950 --max-rtt-timeout 4.2 -oX '$output_file'"
             run_command "$cmd"
 
-            # Parse results and auto-detect web servers
+            # Parse results and auto-detect services
             if [[ -f "$output_file" ]]; then
                 echo ""
-                echo -e "${GREEN}Scan complete! Parsing results...${NC}"
+                echo -e "${GREEN}Scan complete! Parsing results and detecting services...${NC}"
                 echo ""
                 parse_nmap_results "$output_file" "--detailed"
                 echo ""
-                echo -e "${YELLOW}Auto-detecting web servers and adding to web targets...${NC}"
-                import_web_targets_from_nmap "$output_file"
+                echo -e "${YELLOW}Auto-detecting services (web, SMB, LDAP, SSH, RDP, WinRM, MSSQL)...${NC}"
+                import_services_from_nmap "$output_file"
                 echo ""
                 read -p "Press Enter to continue..."
             fi
             ;;
-        "Nmap Service Detection")
-            echo -e "${CYAN}Nmap Service Detection (Top 1000 Ports)${NC}"
+        "Nmap UDP Scan")
+            echo -e "${CYAN}Nmap UDP Scan${NC}"
             echo ""
-            read -p "Scan name [default: svc_scan_$(date +%Y%m%d_%H%M%S)]: " scan_name
-            [[ -z "$scan_name" ]] && scan_name="svc_scan_$(date +%Y%m%d_%H%M%S)"
-
-            output_file="$NMAP_RESULTS_DIR/${scan_name}.xml"
-
-            # Run nmap with aggressive service detection
-            cmd="nmap -sV -sC -O --version-intensity 5 -oX '$output_file' $target"
-            run_command "$cmd"
-
-            # Parse results and auto-detect web servers
-            if [[ -f "$output_file" ]]; then
-                echo ""
-                echo -e "${GREEN}Scan complete! Parsing results...${NC}"
-                echo ""
-                parse_nmap_results "$output_file" "--detailed"
-                echo ""
-                echo -e "${YELLOW}Auto-import web servers to web targets?${NC}"
-                read -p "Continue? (y/n): " confirm
-                if [[ "$confirm" == "y" ]]; then
-                    import_web_targets_from_nmap "$output_file"
-                fi
-                echo ""
-                read -p "Press Enter to continue..."
+            read -p "Port range [default: top 100 UDP ports]: " ports
+            if [[ -z "$ports" ]]; then
+                port_arg="--top-ports 100"
+            else
+                port_arg="-p $ports"
             fi
-            ;;
-        "Nmap Vulnerability Scan")
-            echo -e "${CYAN}Nmap Vulnerability Scan (NSE Scripts)${NC}"
-            echo ""
-            read -p "Port range [default: 1-1000]: " ports
-            [[ -z "$ports" ]] && ports="1-1000"
 
-            read -p "Scan name [default: vuln_scan_$(date +%Y%m%d_%H%M%S)]: " scan_name
-            [[ -z "$scan_name" ]] && scan_name="vuln_scan_$(date +%Y%m%d_%H%M%S)"
+            read -p "Scan name [default: udp_scan_$(date +%Y%m%d_%H%M%S)]: " scan_name
+            [[ -z "$scan_name" ]] && scan_name="udp_scan_$(date +%Y%m%d_%H%M%S)"
 
             output_file="$NMAP_RESULTS_DIR/${scan_name}.xml"
 
-            # Run nmap with vuln scripts
-            cmd="nmap -sV --script vuln -p $ports -oX '$output_file' $target"
+            # Run nmap UDP scan
+            cmd="nmap $target -sU $port_arg -sV --min-rate 3950 --max-rtt-timeout 4.2 -oX '$output_file'"
             run_command "$cmd"
 
             # Parse results
@@ -115,11 +88,8 @@ handle_scanning() {
                 echo ""
                 parse_nmap_results "$output_file" "--detailed"
                 echo ""
-                echo -e "${YELLOW}Auto-import web servers to web targets?${NC}"
-                read -p "Continue? (y/n): " confirm
-                if [[ "$confirm" == "y" ]]; then
-                    import_web_targets_from_nmap "$output_file"
-                fi
+                echo -e "${YELLOW}Auto-detecting services...${NC}"
+                import_services_from_nmap "$output_file"
                 echo ""
                 read -p "Press Enter to continue..."
             fi
