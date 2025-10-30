@@ -139,3 +139,31 @@ Summary + Web Import" | fzf --prompt="View option: " --height=40% --reverse)
     echo ""
     read -p "Press Enter to continue..."
 }
+
+# Clear all nmap results
+clear_all_nmap_results() {
+    clear
+    echo -e "${YELLOW}╔═══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║     CLEAR ALL NMAP RESULTS                ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will delete ALL nmap scan results!${NC}"
+    echo ""
+
+    local scan_count=$(list_nmap_scans | wc -l)
+    echo -e "Nmap scans to be deleted: ${RED}$scan_count${NC}"
+    echo ""
+
+    read -p "Type 'CLEAR' to confirm deletion: " confirm
+
+    if [[ "$confirm" == "CLEAR" ]]; then
+        # Remove all XML files from nmap results directory
+        rm -f "$NMAP_RESULTS_DIR"/*.xml 2>/dev/null
+
+        echo -e "\n${GREEN}✓ All nmap results cleared!${NC}"
+        sleep 2
+    else
+        echo -e "\n${YELLOW}Cancelled.${NC}"
+        sleep 2
+    fi
+}

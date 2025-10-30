@@ -147,6 +147,44 @@ delete_credential_set() {
     fi
 }
 
+# Clear all credentials except defaults
+clear_all_credentials() {
+    clear
+    echo -e "${YELLOW}╔═══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║     CLEAR ALL CREDENTIALS                 ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will delete ALL custom credential sets!${NC}"
+    echo -e "${CYAN}Default credentials (Null Auth, Guest Account) will be preserved.${NC}"
+    echo ""
+
+    local custom_count=$(list_cred_names | grep -v "^Null Auth$" | grep -v "^Guest Account$" | wc -l)
+    echo -e "Custom credential sets to be deleted: ${RED}$custom_count${NC}"
+    echo ""
+
+    read -p "Type 'CLEAR' to confirm deletion: " confirm
+
+    if [[ "$confirm" == "CLEAR" ]]; then
+        # Reinitialize the database (keeps only default entries)
+        cat > "$CREDS_DB" << 'EOF'
+# NXC Credentials Database
+# Format: NAME|USERNAME|PASSWORD|DOMAIN|HASH
+Null Auth|''|''||
+Guest Account|guest|''||
+EOF
+        chmod 600 "$CREDS_DB"
+
+        # Reset to default
+        load_creds "Null Auth"
+
+        echo -e "\n${GREEN}✓ All custom credentials cleared!${NC}"
+        sleep 2
+    else
+        echo -e "\n${YELLOW}Cancelled.${NC}"
+        sleep 2
+    fi
+}
+
 # Credential management menu
 manage_credentials() {
     while true; do
