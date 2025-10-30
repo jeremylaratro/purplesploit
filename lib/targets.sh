@@ -180,6 +180,42 @@ delete_target_entry() {
     fi
 }
 
+# Clear all targets
+clear_all_targets() {
+    clear
+    echo -e "${YELLOW}╔═══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║     CLEAR ALL TARGETS                     ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will delete ALL network targets!${NC}"
+    echo ""
+
+    local target_count=$(list_target_names | wc -l)
+    echo -e "Targets to be deleted: ${RED}$target_count${NC}"
+    echo ""
+
+    read -p "Type 'CLEAR' to confirm deletion: " confirm
+
+    if [[ "$confirm" == "CLEAR" ]]; then
+        # Reinitialize the database (empty)
+        cat > "$TARGETS_DB" << 'EOF'
+# NXC Targets Database
+# Format: NAME|TARGET
+EOF
+        chmod 600 "$TARGETS_DB"
+
+        # Clear current selection
+        CURRENT_TARGET_NAME=""
+        TARGET=""
+
+        echo -e "\n${GREEN}✓ All targets cleared!${NC}"
+        sleep 2
+    else
+        echo -e "\n${YELLOW}Cancelled.${NC}"
+        sleep 2
+    fi
+}
+
 # Manage targets menu
 manage_targets() {
     while true; do

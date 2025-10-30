@@ -104,6 +104,42 @@ Cancel" | fzf --prompt="How to provide URL: " --height=40% --reverse)
     echo "$WEB_TARGET_URL"
 }
 
+# Clear all web targets
+clear_all_web_targets() {
+    clear
+    echo -e "${YELLOW}╔═══════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║     CLEAR ALL WEB TARGETS                 ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will delete ALL web targets!${NC}"
+    echo ""
+
+    local target_count=$(list_web_target_names | wc -l)
+    echo -e "Web targets to be deleted: ${RED}$target_count${NC}"
+    echo ""
+
+    read -p "Type 'CLEAR' to confirm deletion: " confirm
+
+    if [[ "$confirm" == "CLEAR" ]]; then
+        # Reinitialize the database (empty)
+        cat > "$WEB_TARGETS_DB" << 'EOF'
+# Web Targets Database
+# Format: NAME|URL
+EOF
+        chmod 600 "$WEB_TARGETS_DB"
+
+        # Clear current selection
+        CURRENT_WEB_TARGET=""
+        WEB_TARGET_URL=""
+
+        echo -e "\n${GREEN}✓ All web targets cleared!${NC}"
+        sleep 2
+    else
+        echo -e "\n${YELLOW}Cancelled.${NC}"
+        sleep 2
+    fi
+}
+
 # Manage web targets menu
 manage_web_targets() {
     while true; do
