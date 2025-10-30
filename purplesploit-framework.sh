@@ -65,6 +65,9 @@ main_loop() {
                 if [[ ${#args[@]} -eq 0 ]]; then
                     # Interactive FZF search with no initial query
                     fzf_module_search ""
+                elif [[ "${args[0]}" == "relevant" ]]; then
+                    # Search for modules relevant to detected services
+                    service_search_relevant_fzf
                 else
                     # FZF search with initial query
                     fzf_module_search "${args[*]}"
@@ -303,6 +306,26 @@ main_loop() {
             # Interactive variable editor
             vars)
                 fzf_variable_select
+                ;;
+
+            # Service analysis commands
+            services)
+                if [[ ${#args[@]} -eq 0 ]]; then
+                    service_list_detected
+                elif [[ "${args[0]}" == "-t" ]] || [[ "${args[0]}" == "--target" ]]; then
+                    service_list_current_target
+                elif [[ "${args[0]}" == "-c" ]] || [[ "${args[0]}" == "--clear" ]]; then
+                    service_clear
+                elif [[ "${args[0]}" == "-i" ]] || [[ "${args[0]}" == "--import" ]]; then
+                    if [[ ${#args[@]} -lt 2 ]]; then
+                        echo "[!] Usage: services -i <nmap_file>"
+                    else
+                        service_import_nmap "${args[1]}"
+                    fi
+                else
+                    echo "[!] Unknown services option: ${args[0]}"
+                    echo "[*] Available: -t (current target), -c (clear), -i <file> (import)"
+                fi
                 ;;
 
             # Utility commands

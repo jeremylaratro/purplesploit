@@ -67,6 +67,7 @@ framework_init() {
     source "$FRAMEWORK_DIR/core/fzf_integration.sh"
     source "$FRAMEWORK_DIR/core/credential_manager.sh"
     source "$FRAMEWORK_DIR/core/mythic_integration.sh"
+    source "$FRAMEWORK_DIR/core/service_analyzer.sh"
 
     # Initialize subsystems
     echo -e "${CYAN}[*] Initializing variable manager...${NC}"
@@ -80,6 +81,9 @@ framework_init() {
 
     echo -e "${CYAN}[*] Initializing credential manager...${NC}"
     credential_init
+
+    echo -e "${CYAN}[*] Initializing service analyzer...${NC}"
+    service_analyzer_init
 
     echo -e "${CYAN}[*] Initializing Mythic C2 integration...${NC}"
     mythic_init
@@ -125,10 +129,17 @@ framework_help() {
     echo "  use <module>              - Select a module to use"
     echo "  back                      - Deselect current module"
     echo "  search [keyword]          - 🔍 FZF: Interactive module search"
+    echo "  search relevant           - 🎯 Smart: Show modules for detected services"
     echo "  browse                    - 🔍 FZF: Browse modules by category"
     echo "  info [module]             - Show module information"
     echo "  show modules              - List all available modules"
     echo "  show categories           - List module categories"
+    echo ""
+    echo "Service Analysis Commands:"
+    echo "  services                  - List all detected services"
+    echo "  services -t               - List services on current target"
+    echo "  services -c               - Clear service database"
+    echo "  services -i <file>        - Import from nmap output file"
     echo ""
     echo "Variable Commands:"
     echo "  set <VAR> <value>         - Set a variable"
