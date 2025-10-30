@@ -66,6 +66,7 @@ Select AD Target
 Toggle Run Mode (Single/All)
 Manage Credentials
 Manage Targets
+Database Management (Reset/Clear)
 Exit" | fzf --prompt="$prompt" --height=100% --reverse --header="$header" --expect=t,c,w,a,s,m,d --header-first --header="$header
 ───────────────────────────────────────
 Keybinds: [t]argets [c]reds [w]eb [d] AD [a]uthSwitch [s]TargetSwitch [m]ode"
