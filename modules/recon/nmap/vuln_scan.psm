@@ -1,0 +1,13 @@
+#!/bin/bash
+# Nmap Vulnerability Scan Module
+
+MODULE_NAME="recon/nmap/vuln_scan"
+MODULE_CATEGORY="recon"
+MODULE_DESCRIPTION="Nmap vulnerability scan using NSE scripts"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="nmap"
+
+REQUIRED_VARS="RHOST"
+OPTIONAL_VARS=""
+
+COMMAND_TEMPLATE="nmap -sV --script vuln -Pn -oA \${OUTPUT_DIR}/nmap_vuln_\${RHOST} \${RHOST}"

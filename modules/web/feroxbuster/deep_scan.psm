@@ -1,0 +1,13 @@
+#!/bin/bash
+# Feroxbuster Deep Scan Module
+
+MODULE_NAME="web/feroxbuster/deep_scan"
+MODULE_CATEGORY="web"
+MODULE_DESCRIPTION="Deep scan with file extensions and recursion"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="feroxbuster"
+
+REQUIRED_VARS="TARGET_URL"
+OPTIONAL_VARS="THREADS:50,EXTENSIONS:php,html,js,txt,asp,aspx,jsp,WORDLIST:/usr/share/wordlists/dirb/common.txt"
+
+COMMAND_TEMPLATE="feroxbuster -u \${TARGET_URL} --thorough --methods GET,POST -t \${THREADS} -x \${EXTENSIONS} -w \${WORDLIST} --depth 4"

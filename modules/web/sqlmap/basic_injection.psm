@@ -1,0 +1,13 @@
+#!/bin/bash
+# SQLMap Basic Injection Module
+
+MODULE_NAME="web/sqlmap/basic_injection"
+MODULE_CATEGORY="web"
+MODULE_DESCRIPTION="Basic SQL injection scan on target URL"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="sqlmap"
+
+REQUIRED_VARS="TARGET_URL"
+OPTIONAL_VARS="THREADS:10"
+
+COMMAND_TEMPLATE="sqlmap -u \${TARGET_URL} --batch --threads=\${THREADS} --level=1 --risk=1"

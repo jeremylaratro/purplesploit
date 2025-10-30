@@ -1,0 +1,13 @@
+#!/bin/bash
+# Full Nmap Scan Module
+
+MODULE_NAME="recon/nmap/full_scan"
+MODULE_CATEGORY="recon"
+MODULE_DESCRIPTION="Full nmap scan with service/version detection (all ports)"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="nmap"
+
+REQUIRED_VARS="RHOST"
+OPTIONAL_VARS="THREADS:10"
+
+COMMAND_TEMPLATE="nmap -sV -sC -p- -T4 -Pn -oA \${OUTPUT_DIR}/nmap_full_\${RHOST} \${RHOST}"
