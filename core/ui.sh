@@ -232,6 +232,11 @@ Back" | fzf --prompt="$prompt" --height=40% --reverse --header="$header"
 Password Spray
 Find Admin Access
 Multi-Protocol Scan
+---
+Nmap Port Scan (Auto Web Detection)
+Nmap Service Detection
+Nmap Vulnerability Scan
+View Nmap Results
 Back" | fzf --prompt="$prompt" --height=40% --reverse --header="$header"
             ;;
         "impacket_psexec")
