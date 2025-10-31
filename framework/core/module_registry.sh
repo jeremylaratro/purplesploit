@@ -22,11 +22,8 @@
 #
 
 # Module storage
-declare -A MODULE_REGISTRY
-declare -A MODULE_METADATA
-declare -a MODULE_LIST
-
-# Current module state
+# Initialize associative arrays without declare to ensure global scope
+# These will be set up properly in module_registry_init
 CURRENT_MODULE=""
 CURRENT_MODULE_PATH=""
 
@@ -41,13 +38,19 @@ module_registry_init() {
 
     echo "[*] Discovering modules in $modules_dir..."
 
-    # Find all .psm files
+    # Find all .psm files using mapfile (avoids subshell issues)
     local module_count=0
-    while IFS= read -r -d '' module_file; do
+    local -a module_files
+
+    # Use mapfile to read find output into array
+    mapfile -t module_files < <(find "$modules_dir" -type f -name "*.psm")
+
+    # Load each module
+    for module_file in "${module_files[@]}"; do
         if module_load_metadata "$module_file"; then
-            ((module_count++))
+            ((module_count++)) || true
         fi
-    done < <(find "$modules_dir" -type f -name "*.psm" -print0)
+    done
 
     echo "[+] Loaded $module_count modules"
     return 0
