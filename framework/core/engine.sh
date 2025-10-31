@@ -26,7 +26,13 @@ export NC='\033[0m'
 
 # Banner
 show_banner() {
-    clear
+    # Clear screen safely
+    if [[ -n "${TERM:-}" ]]; then
+        clear 2>/dev/null || echo -e "\n\n\n"
+    else
+        echo -e "\n\n\n"
+    fi
+
     echo -e "${MAGENTA}"
     cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -56,6 +62,11 @@ EOF
 # Initialize framework
 framework_init() {
     echo -e "${CYAN}[*] Initializing PurpleSploit Framework...${NC}"
+
+    # Declare global arrays for module registry (must be done before sourcing)
+    declare -gA MODULE_REGISTRY
+    declare -gA MODULE_METADATA
+    declare -ga MODULE_LIST
 
     # Source core components
     echo -e "${CYAN}[*] Loading core components...${NC}"
@@ -104,7 +115,10 @@ framework_init() {
 
 # Show framework status
 framework_status() {
-    local module_count=${#MODULE_LIST[@]}
+    local module_count=0
+    if [[ -v MODULE_LIST ]]; then
+        module_count=${#MODULE_LIST[@]}
+    fi
     local current_module=$(module_get_current)
     local current_workspace=$(workspace_current)
 
@@ -246,7 +260,11 @@ framework_quickstart() {
 framework_cleanup() {
     echo ""
     echo -e "${CYAN}[*] Saving workspace...${NC}"
-    var_save_workspace "$CURRENT_WORKSPACE"
+
+    # Only save workspace if it's been initialized
+    if [[ -n "${CURRENT_WORKSPACE:-}" ]]; then
+        var_save_workspace "$CURRENT_WORKSPACE"
+    fi
 
     echo -e "${GREEN}[+] Thank you for using PurpleSploit Framework!${NC}"
     echo ""

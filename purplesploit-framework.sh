@@ -6,7 +6,7 @@
 # Usage: ./purplesploit-framework.sh
 #
 
-set -euo pipefail
+set -eo pipefail
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
