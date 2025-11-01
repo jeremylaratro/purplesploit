@@ -346,6 +346,41 @@ main_loop() {
                 show_banner
                 ;;
 
+            # Single-letter keybinds (from original lite version)
+            s)
+                # Switch/Select target
+                fzf_target_select
+                ;;
+
+            c)
+                # Manage credentials (interactive menu)
+                fzf_credential_select
+                ;;
+
+            t)
+                # Show target management menu
+                echo ""
+                echo "Target Management:"
+                echo "  targets           - Interactive target selection"
+                echo "  targets -a <ip>   - Add target"
+                echo "  targets -r <ip>   - Remove target"
+                echo "  targets -l        - List all targets"
+                echo "  targets -i <file> - Import from file"
+                echo "  targets -e <file> - Export to file"
+                echo ""
+                ;;
+
+            a)
+                # Apply/Activate credentials (select and load)
+                echo -e "${CYAN}[*] Selecting and loading credentials...${NC}"
+                fzf_credential_select
+                ;;
+
+            v)
+                # Quick variable editor
+                fzf_variable_select
+                ;;
+
             exit|quit)
                 echo ""
                 echo -e "${CYAN}[*] Exiting framework...${NC}"
