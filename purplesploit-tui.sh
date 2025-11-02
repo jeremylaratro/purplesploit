@@ -115,6 +115,8 @@ Impacket Enumeration
 Impacket SMB Client
 Service Management
 Registry Operations
+┌ SESSIONS (WORKSPACES & JOBS) ──────────
+Sessions Management
 ┌ SETTINGS ─────────────────────────────
 Manage Web Targets
 Manage AD Targets
@@ -133,10 +135,10 @@ Exit"
         --reverse \
         --header="$header
 ───────────────────────────────────────
-Keybinds: [t]argets [c]reds [w]eb [d] AD [a]uthSwitch [s]TargetSwitch [m]ode
+Keybinds: [t]argets [c]reds [w]eb [d]AD [j]jobs/workspaces [m]ode
 ● = Service detected on target" \
         --header-first \
-        --expect=t,c,w,d,a,s,m
+        --expect=t,c,w,d,j,m
 }
 
 # Initialize and run
@@ -162,8 +164,7 @@ main() {
             c) manage_credentials; continue ;;
             w) manage_web_targets; continue ;;
             d) manage_ad_targets; continue ;;
-            a) select_credentials; continue ;;
-            s) select_target; continue ;;
+            j) handle_sessions_menu; continue ;;
             m) toggle_run_mode; continue ;;
         esac
         
@@ -206,7 +207,10 @@ main() {
             "Impacket SMB Client") handle_smbclient ;;
             "Service Management") handle_services ;;
             "Registry Operations") handle_registry ;;
-            
+
+            # Sessions
+            "Sessions Management") handle_sessions_menu ;;
+
             # Management
             "Manage Web Targets") manage_web_targets ;;
             "Manage AD Targets") manage_ad_targets ;;
@@ -217,6 +221,125 @@ main() {
             "Manage Credentials") manage_credentials ;;
             "Manage Targets") manage_targets ;;
             "Database Management (Reset/Clear)") manage_databases ;;
+        esac
+    done
+}
+
+# Sessions Management Menu
+handle_sessions_menu() {
+    while true; do
+        local header=$(build_header)
+        local choice=$(echo "┌ WORKSPACES ────────────────────────────
+Switch Workspace (FZF)
+Create New Workspace
+List All Workspaces
+Delete Workspace
+Show Workspace Info
+┌ BACKGROUND JOBS ───────────────────────
+List Running Jobs
+View Job Output
+Kill Background Job
+┌ NAVIGATION ────────────────────────────
+Back to Main Menu" | fzf \
+            --prompt="Sessions Management: " \
+            --height=80% \
+            --reverse \
+            --header="$header
+───────────────────────────────────────
+Workspaces: Organize per-engagement | Jobs: Run tools in background")
+
+        case "$choice" in
+            "")
+                return
+                ;;
+            "Back to Main Menu")
+                return
+                ;;
+
+            # Workspaces
+            "Switch Workspace (FZF)")
+                echo ""
+                fzf_workspace_select || true
+                echo ""
+                read -p "Press enter to continue..."
+                ;;
+            "Create New Workspace")
+                echo ""
+                read -p "Enter workspace name: " ws_name
+                if [[ -n "$ws_name" ]]; then
+                    workspace_create "$ws_name" || true
+                fi
+                read -p "Press enter to continue..."
+                ;;
+            "List All Workspaces")
+                echo ""
+                echo "Available Workspaces:"
+                echo "===================="
+                workspace_list || true
+                echo ""
+                read -p "Press enter to continue..."
+                ;;
+            "Delete Workspace")
+                echo ""
+                read -p "Enter workspace name to delete: " ws_name
+                if [[ -n "$ws_name" ]]; then
+                    read -p "Are you sure? This cannot be undone! (yes/no): " confirm
+                    if [[ "$confirm" == "yes" ]]; then
+                        workspace_delete "$ws_name" || true
+                    else
+                        echo "[!] Cancelled"
+                    fi
+                fi
+                read -p "Press enter to continue..."
+                ;;
+            "Show Workspace Info")
+                echo ""
+                echo "Current Workspace Information:"
+                echo "=============================="
+                workspace_info || true
+                echo ""
+                read -p "Press enter to continue..."
+                ;;
+
+            # Jobs
+            "List Running Jobs")
+                echo ""
+                echo "Background Jobs:"
+                echo "================"
+                command_jobs_list || true
+                echo ""
+                read -p "Press enter to continue..."
+                ;;
+            "View Job Output")
+                echo ""
+                command_jobs_list || true
+                echo ""
+                read -p "Enter job ID to view: " job_id
+                if [[ -n "$job_id" ]]; then
+                    echo ""
+                    echo "Job Output (last 50 lines):"
+                    echo "==========================="
+                    # Show output from job
+                    local job_file="$HOME/.purplesploit/jobs/${job_id}.log"
+                    if [[ -f "$job_file" ]]; then
+                        tail -50 "$job_file"
+                    else
+                        echo "[!] Job file not found"
+                    fi
+                fi
+                echo ""
+                read -p "Press enter to continue..."
+                ;;
+            "Kill Background Job")
+                echo ""
+                command_jobs_list || true
+                echo ""
+                read -p "Enter job ID to kill: " job_id
+                if [[ -n "$job_id" ]]; then
+                    command_job_kill "$job_id" || true
+                fi
+                read -p "Press enter to continue..."
+                ;;
         esac
     done
 }
