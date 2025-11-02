@@ -15,6 +15,7 @@ source "$SCRIPT_DIR/framework/core/engine.sh"
 # Source original lite version components for comprehensive tool coverage
 source "$SCRIPT_DIR/core/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/core/database.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/core/ui.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/credentials.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/web_targets.sh" 2>/dev/null || true
