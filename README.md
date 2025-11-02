@@ -46,7 +46,29 @@ PurpleSploit Framework is a **Metasploit-inspired pentesting framework** that un
 
 ## Quick Start
 
-### Launch Framework
+PurpleSploit offers **two interfaces** - choose the one that fits your workflow:
+
+### 🎯 FZF TUI Interface (Recommended for Visual Navigation)
+
+```bash
+./purplesploit-tui.sh
+```
+
+**Visual menu-driven interface** - See all options, navigate with arrow keys, starred items (★) show detected services.
+
+### ⌨️ Metasploit-Style CLI Interface
+
+```bash
+./purplesploit-framework.sh
+```
+
+**Command-line interface** - Type commands like Metasploit (use, set, run, search, etc.)
+
+> **See [INTERFACES.md](INTERFACES.md) for detailed comparison and usage guide**
+
+---
+
+### Quick Workflow Example
 
 ```bash
 ./purplesploit-framework.sh
