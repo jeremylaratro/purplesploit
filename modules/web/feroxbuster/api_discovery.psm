@@ -1,0 +1,13 @@
+#!/bin/bash
+# Feroxbuster API Discovery Module
+
+MODULE_NAME="web/feroxbuster/api_discovery"
+MODULE_CATEGORY="web"
+MODULE_DESCRIPTION="Scan for API endpoints with common HTTP methods"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="feroxbuster"
+
+REQUIRED_VARS="TARGET_URL"
+OPTIONAL_VARS="THREADS:50,WORDLIST:/usr/share/wordlists/dirb/common.txt"
+
+COMMAND_TEMPLATE="feroxbuster -u \${TARGET_URL} --thorough --methods GET,POST,PUT,DELETE,PATCH -x json,xml -t \${THREADS} -w \${WORDLIST}"
