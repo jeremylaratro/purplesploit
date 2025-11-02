@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/lib/targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/web_targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/ad_targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/services.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/lib/database_management.sh" 2>/dev/null || true
 
 # Source tool modules from lite version
 for module in modules/web/*.sh modules/nxc/*.sh modules/impacket/*.sh; do
@@ -135,10 +136,10 @@ Exit"
         --reverse \
         --header="$header
 ───────────────────────────────────────
-Keybinds: [t]argets [c]reds [w]eb [d]AD [j]jobs/workspaces [m]ode
+Keybinds: [t]argets [c]reds [w]eb [d]AD [a]uthSwitch [s]TargetSwitch [j]obs [m]ode
 ● = Service detected on target" \
         --header-first \
-        --expect=t,c,w,d,j,m
+        --expect=t,c,w,d,a,s,j,m
 }
 
 # Initialize and run
@@ -164,6 +165,8 @@ main() {
             c) manage_credentials; continue ;;
             w) manage_web_targets; continue ;;
             d) manage_ad_targets; continue ;;
+            a) select_credentials; continue ;;
+            s) select_target; continue ;;
             j) handle_sessions_menu; continue ;;
             m) toggle_run_mode; continue ;;
         esac
