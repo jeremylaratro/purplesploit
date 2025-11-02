@@ -57,33 +57,23 @@ clear_all_databases() {
 
         # Clear each database
         echo -n "  • Credentials... "
-        clear_all_credentials > /dev/null 2>&1 << 'CLEAR'
-CLEAR
-CLEAR
+        clear_all_credentials > /dev/null 2>&1
         echo -e "${GREEN}✓${NC}"
 
         echo -n "  • Network Targets... "
-        clear_all_targets > /dev/null 2>&1 << 'CLEAR'
-CLEAR
-CLEAR
+        clear_all_targets > /dev/null 2>&1
         echo -e "${GREEN}✓${NC}"
 
         echo -n "  • Web Targets... "
-        clear_all_web_targets > /dev/null 2>&1 << 'CLEAR'
-CLEAR
-CLEAR
+        clear_all_web_targets > /dev/null 2>&1
         echo -e "${GREEN}✓${NC}"
 
         echo -n "  • AD Targets... "
-        clear_all_ad_targets > /dev/null 2>&1 << 'CLEAR'
-CLEAR
-CLEAR
+        clear_all_ad_targets > /dev/null 2>&1
         echo -e "${GREEN}✓${NC}"
 
         echo -n "  • Nmap Results... "
-        clear_all_nmap_results > /dev/null 2>&1 << 'CLEAR'
-CLEAR
-CLEAR
+        clear_all_nmap_results > /dev/null 2>&1
         echo -e "${GREEN}✓${NC}"
 
         echo ""
