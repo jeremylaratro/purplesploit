@@ -20,9 +20,9 @@
 ╚═══════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Metasploit-Style Pentesting Framework with Intelligent Module Selection**
+**Comprehensive Visual Pentesting Framework with Hybrid Architecture**
 
-[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Installation](#installation)
+[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Architecture](#architecture)
 
 </div>
 
@@ -30,206 +30,204 @@
 
 ## Overview
 
-PurpleSploit Framework is a **Metasploit-inspired pentesting framework** that unifies popular security tools under a single, intelligent interface. It combines CLI power with FZF-driven menu selection and **smart service analysis** to show only relevant modules for your targets.
+PurpleSploit is a **visual, menu-driven pentesting framework** that combines the best of both worlds:
+- **Visual FZF-based TUI** for easy navigation and discovery
+- **Scalable framework backend** with workspaces, modules, and service analysis
+- **Comprehensive tool coverage** including NXC, Impacket, web tools, and more
 
 ### Why PurpleSploit?
 
-- 🎯 **Smart Module Selection** - Automatically detects services and shows only relevant modules
-- 🔍 **FZF Integration** - Interactive menus meet Metasploit-style CLI
+- 🎯 **Visual Interface** - See all options at once, navigate with arrow keys
+- ⭐ **Service Detection** - Automatically highlights relevant tools for your target
 - 🔐 **Multi-Credential Management** - Store and switch between credential sets
-- 🎯 **Multi-Target Tracking** - Organize targets per workspace
-- 🚀 **Mythic C2 Integration** - Automated agent deployment
-- 📦 **Modular Architecture** - Add new tools by dropping a `.psm` file
-- 🔧 **Universal Variables** - Set once, use everywhere
+- 📁 **Workspace Organization** - Organize targets per-engagement
+- ⚡ **Background Jobs** - Run long scans without blocking
+- 🎨 **Hybrid Architecture** - Framework scalability + comprehensive tool coverage
+- 🚀 **Quick Keybinds** - Single-key shortcuts for common tasks
 
 ---
 
 ## Quick Start
 
-PurpleSploit offers **two interfaces** - choose the one that fits your workflow:
-
-### 🎯 FZF TUI Interface (Recommended for Visual Navigation)
+### Launch PurpleSploit
 
 ```bash
 ./purplesploit-tui.sh
 ```
 
-**Visual menu-driven interface** - See all options, navigate with arrow keys, starred items (★) show detected services.
+That's it! The visual menu will guide you through everything.
 
-### ⌨️ Metasploit-Style CLI Interface
+### Quick Workflow
 
-```bash
-./purplesploit-framework.sh
-```
-
-**Command-line interface** - Type commands like Metasploit (use, set, run, search, etc.)
-
-> **See [INTERFACES.md](INTERFACES.md) for detailed comparison and usage guide**
-
----
-
-### Quick Workflow Example
-
-```bash
-./purplesploit-framework.sh
-```
-
-### Basic Workflow
-
-```bash
-# 1. Set your target
-purplesploit> set RHOST 192.168.1.100
-
-# 2. Run a quick scan
-purplesploit> use recon/nmap/quick_scan
-purplesploit(recon/nmap/quick_scan)> run
-
-[+] Detected 5 services on 192.168.1.100
-[*] Run 'search relevant' to see applicable modules
-
-# 3. Search for ONLY relevant modules (smart!)
-purplesploit> search relevant
-
-[FZF menu shows only modules for detected services]
-- web/feroxbuster/basic_scan ✓ (HTTP detected)
-- network/nxc/smb/enum_shares ✓ (SMB detected)
-- network/nxc/rdp/screenshot ✓ (RDP detected)
-[SSH/LDAP/MSSQL modules NOT shown - not detected]
-
-# 4. Select credentials (FZF)
-purplesploit> credentials
-[Select from saved credentials]
-
-# 5. Run the module
-purplesploit> run
-```
-
-### Interactive Features
-
-All with FZF menus for point-and-click selection:
-
-```bash
-search          # Interactive module search
-search relevant # Smart: only modules for detected services
-browse          # Browse by category
-targets         # Select target from workspace
-credentials     # Select and load credentials
-workspace       # Switch workspaces
-vars            # Edit variables interactively
-history         # Browse and re-run commands
-```
+1. **Press `[s]`** → Select/switch target
+2. **Press `[c]`** → Select credentials
+3. **Navigate menu** → Use arrow keys to browse tools
+4. **Look for `●` markers** → These tools match detected services on your target
+5. **Select a tool** → Press Enter to see submenu options
+6. **Run and profit** → Tools execute and output appears
 
 ---
 
-## Features
+## Main Menu Categories
 
-### 🎯 Intelligent Service Analysis
+### 🌐 WEB TESTING
+- **Feroxbuster** - Directory/file discovery (7 modes)
+- **WFUZZ** - Fuzzing (7 modes)
+- **SQLMap** - SQL injection (10 modes)
+- **HTTPX** - HTTP probing (8 modes)
 
-Automatically analyzes nmap scans and filters modules:
+### 🔒 NETWORK TESTING - NXC
+- **SMB** - Auth, Enum, Shares, Exec, Creds, Vulns (40+ options)
+- **LDAP** - Enumeration, BloodHound (13 options)
+- **WinRM** - Operations (7 options)
+- **MSSQL** - Operations (7 options)
+- **RDP, SSH** - Protocol-specific operations
 
-```bash
-# After running nmap scan:
-purplesploit> services
+### 📦 NETWORK TESTING - IMPACKET
+- **Execution** - PSExec, WMIExec, SMBExec, ATExec, DcomExec
+- **Credentials** - SecretsDump, Kerberoasting, AS-REP Roasting
+- **Utilities** - Enumeration, SMB Client, Services, Registry
 
-Detected Services:
-Target               Port     Service
-192.168.1.100        80       http
-192.168.1.100        445      microsoft-ds
-192.168.1.100        3389     rdp
+### 📂 SESSIONS (WORKSPACES & JOBS)
+- **Workspaces** - Per-engagement organization
+- **Background Jobs** - Run tools in background, monitor output
 
-# Smart search shows ONLY relevant modules
-purplesploit> search relevant
-[Only web, SMB, and RDP modules shown]
+### ⚙️ SETTINGS
+- **Targets** - Web targets, AD targets, standard targets
+- **Credentials** - Multi-credential database
+- **Run Mode** - Single vs. all targets
+- **Database** - Reset/clear operations
+
+---
+
+## Key Features
+
+### Visual Service Detection
+
+When you run an nmap scan, PurpleSploit automatically detects services and marks relevant tools with `●`:
+
+```
+┌ NETWORK TESTING - NXC ─────────────────
+● SMB Authentication          ← SMB detected!
+● SMB Enumeration            ← These are relevant
+● SMB Shares
+  LDAP Enumeration           ← No LDAP service detected
+  WinRM Operations           ← No WinRM detected
 ```
 
-**[Read more: Service Analysis Guide](docs/SERVICE_ANALYSIS.md)**
+### Keyboard Shortcuts
 
-### 🔍 FZF-Powered Menus
+| Key | Action |
+|-----|--------|
+| `t` | Manage targets |
+| `c` | Manage credentials |
+| `w` | Manage web targets |
+| `d` | Manage AD targets |
+| `a` | Switch authentication |
+| `s` | Switch target |
+| `j` | Sessions (workspaces/jobs) |
+| `m` | Toggle run mode |
 
-Metasploit CLI + Interactive menus:
+### Workspaces
 
-- **Module Search** - Type keyword, select from filtered results
-- **Category Browser** - Browse modules organized by category
-- **Target Selection** - Click to select targets (with live ping)
-- **Credential Selection** - Click to load saved credentials
-- **Workspace Selection** - Quick workspace switching
-- **Variable Editor** - Select and edit any variable
-- **History Browser** - Select previous commands to re-run
-
-**[Read more: Features Guide](docs/FEATURES.md)**
-
-### 🔐 Multi-Credential Management
-
-Store unlimited credential sets:
+Organize your work per-engagement:
 
 ```bash
-# Add credentials
-credentials -a
-Username: administrator
-Password: [hidden]
-Domain: CORP.LOCAL
+# Access via [j] key or menu
+Sessions Management → Create New Workspace
+Enter name: client-acme-2025
 
-# Select with FZF (click from list)
-credentials
-[Arrow keys, Enter to select]
-
-# Credentials auto-populate in modules
-use network/nxc/smb/enum_shares
-run  # Uses loaded credentials automatically
+# Everything is now organized:
+~/.purplesploit/workspaces/client-acme-2025/
+├── targets.txt
+├── credentials.db
+├── services.db
+└── output/
 ```
 
-### 🚀 Mythic C2 Integration
+### Background Jobs
 
-Deploy agents via NXC and Impacket:
+Run long scans without blocking:
 
+1. Select a tool (e.g., "Full Nmap Scan")
+2. Configure options
+3. Run in background
+4. Press `[j]` → List Running Jobs
+5. View output anytime
+
+---
+
+## Architecture
+
+### Hybrid Design
+
+PurpleSploit combines two proven systems:
+
+```
+┌─────────────────────────────────────┐
+│      Hybrid TUI (Main)              │
+│  purplesploit-tui.sh                │
+├─────────────────────────────────────┤
+│                                     │
+│  ┌──────────────┐  ┌──────────────┐│
+│  │  Framework   │  │   Lite       ││
+│  │  Backend     │  │   Handlers   ││
+│  ├──────────────┤  ├──────────────┤│
+│  │ • Workspaces │  │ • NXC tools  ││
+│  │ • Modules    │  │ • Impacket   ││
+│  │ • Services   │  │ • Web tools  ││
+│  │ • Variables  │  │ • Proven UX  ││
+│  └──────────────┘  └──────────────┘│
+│                                     │
+│         Best of both worlds         │
+└─────────────────────────────────────┘
+```
+
+**Framework Backend** provides:
+- Universal variable system (${VAR})
+- Workspace management
+- Service analysis & smart filtering
+- Background job execution
+- Module auto-discovery (.psm files)
+
+**Lite Handlers** provide:
+- Comprehensive tool coverage (50+ categories)
+- Battle-tested implementations
+- Rich submenu options
+- Interactive modes
+
+---
+
+## Alternative Interfaces
+
+While the TUI is the main interface, alternative interfaces are available in `bin/`:
+
+**Metasploit-Style CLI:**
 ```bash
-# Configure once
-mythic configure
-Server: https://mythic.example.com
-API Key: abc123...
-
-# Deploy agent
-use c2/mythic/deploy_smb
-set MYTHIC_PAYLOAD /tmp/agent.exe
-run
-
-[+] Payload deployed - check Mythic for callback!
+./bin/purplesploit-framework.sh
 ```
+Command-line interface for power users who prefer typing commands.
 
-**[Read more: Mythic Integration](docs/FEATURES.md#-mythic-c2-integration)**
+**Original Lite Version:**
+```bash
+./bin/purplesploit.sh
+```
+The original lite version for backwards compatibility.
 
-### 📦 Module System
+See [docs/INTERFACES.md](docs/INTERFACES.md) for detailed comparison.
 
-**19 Built-in Modules:**
+---
 
-#### Reconnaissance
-- `recon/nmap/quick_scan` - Fast port scan with auto-analysis
-- `recon/nmap/full_scan` - Full scan with service detection
-- `recon/nmap/vuln_scan` - Vulnerability scanning
+## Documentation
 
-#### Web Testing
-- `web/feroxbuster/basic_scan` - Directory discovery
-- `web/feroxbuster/deep_scan` - Deep scan with extensions
-- `web/feroxbuster/api_discovery` - API endpoint discovery
-- `web/httpx/probe_urls` - HTTP probing
-- `web/sqlmap/basic_injection` - SQL injection testing
-- `web/sqlmap/database_dump` - Database dumping
-
-#### Network (NXC)
-- `network/nxc/smb/*` - SMB authentication, enumeration, shares, credentials
-- `network/nxc/ldap/*` - LDAP enumeration
-- `network/nxc/winrm/*` - WinRM operations
-- `network/nxc/rdp/*` - RDP operations
-
-#### C2 Deployment
-- `c2/mythic/deploy_smb` - Deploy via SMB
-- `c2/mythic/deploy_winrm` - Deploy via WinRM
-- `c2/mythic/deploy_psexec` - Deploy via PSExec
-- `c2/mythic/deploy_wmiexec` - Deploy via WMIExec
-
-**Add your own:** Drop a `.psm` file in `modules/`, framework auto-discovers it!
-
-**[Module Template](MODULE_TEMPLATE.psm)** | **[Full Module List](docs/FRAMEWORK_README.md#example-modules)**
+| Document | Description |
+|----------|-------------|
+| [docs/FRAMEWORK_README.md](docs/FRAMEWORK_README.md) | Framework architecture details |
+| [docs/FEATURES.md](docs/FEATURES.md) | FZF integration, credentials, Mythic C2 |
+| [docs/SERVICE_ANALYSIS.md](docs/SERVICE_ANALYSIS.md) | Service detection and smart filtering |
+| [docs/INTERFACES.md](docs/INTERFACES.md) | Interface comparison guide |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Contribution guidelines |
+| [MODULE_TEMPLATE.psm](MODULE_TEMPLATE.psm) | Template for creating new modules |
 
 ---
 
@@ -238,368 +236,120 @@ run
 ### Prerequisites
 
 ```bash
-# Required
-- bash 4.0+
-- fzf (for interactive menus)
+# Core tools
+apt install fzf ripgrep
 
-# Optional (for specific modules)
-- nmap
-- feroxbuster
-- sqlmap
-- httpx
-- netexec (nxc)
-- impacket
-- mythic (for C2 integration)
+# Pentesting tools (install as needed)
+apt install nmap feroxbuster sqlmap
+pipx install netexec impacket
 ```
 
-### Install FZF (Recommended)
+### Setup
 
 ```bash
-# Debian/Ubuntu
-sudo apt install fzf
-
-# macOS
-brew install fzf
-
-# Or manual install
-git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-~/.fzf/install
-```
-
-### Clone Repository
-
-```bash
-git clone https://github.com/jeremylaratro/purplesploit.git
+git clone <repository>
 cd purplesploit
-chmod +x purplesploit-framework.sh
-```
-
-### Launch
-
-```bash
-./purplesploit-framework.sh
-```
-
----
-
-## Documentation
-
-### Core Documentation
-
-- **[Framework Guide](docs/FRAMEWORK_README.md)** - Complete framework documentation
-- **[Features Guide](docs/FEATURES.md)** - FZF, credentials, Mythic C2
-- **[Service Analysis](docs/SERVICE_ANALYSIS.md)** - Smart module selection guide
-- **[Module Template](MODULE_TEMPLATE.psm)** - Create your own modules
-
-### Legacy (Lite Version)
-
-The "lite" version (TUI-based) is preserved in `purplesploit.sh`:
-
-```bash
-./purplesploit.sh  # Launch lite version
-```
-
-- **[Legacy Documentation](docs/legacy/)** - Original lite version docs
-
----
-
-## Command Reference
-
-### Module Commands
-
-| Command | Description |
-|---------|-------------|
-| `use <module>` | Select a module |
-| `search [keyword]` | 🔍 Interactive search |
-| `search relevant` | 🎯 Smart: modules for detected services |
-| `browse` | 🔍 Browse by category |
-| `back` | Deselect module |
-| `info` | Show module details |
-
-### Smart Analysis
-
-| Command | Description |
-|---------|-------------|
-| `search relevant` | Show only modules for detected services |
-| `services` | List detected services |
-| `services -t` | Services on current target |
-
-### Target & Credential Management
-
-| Command | Description |
-|---------|-------------|
-| `targets` | 🔍 Select target (FZF) |
-| `targets -a <ip>` | Add target |
-| `credentials` | 🔍 Select credentials (FZF) |
-| `credentials -a` | Add new credential |
-| `workspace` | 🔍 Select workspace (FZF) |
-
-### Execution
-
-| Command | Description |
-|---------|-------------|
-| `run` | Execute module |
-| `run -y` | Execute without confirmation |
-| `run -j` | Execute in background |
-| `check` | Preview command |
-
-### Variables
-
-| Command | Description |
-|---------|-------------|
-| `set <VAR> <value>` | Set variable |
-| `vars` | 🔍 Interactive editor |
-| `show options` | Module options |
-| `show vars` | All variables |
-
-**Full command list:** Type `help` in framework
-
----
-
-## Usage Examples
-
-### Scenario 1: Quick Web Assessment
-
-```bash
-purplesploit> set TARGET_URL https://target.com
-purplesploit> search ferox
-[Select web/feroxbuster/deep_scan from menu]
-purplesploit> vars  # Edit THREADS, WORDLIST, etc.
-purplesploit> run
-```
-
-### Scenario 2: Internal Network Pentest
-
-```bash
-# Create workspace
-purplesploit> workspace -a acme_internal
-
-# Add targets
-purplesploit> targets -i targets.txt
-
-# Scan target
-purplesploit> targets  # FZF select first target
-purplesploit> use recon/nmap/full_scan
-purplesploit> run
-
-# Smart module selection
-purplesploit> search relevant
-[Only shows modules for detected services]
-
-# Load credentials and attack
-purplesploit> credentials  # FZF select admin creds
-purplesploit> run
-```
-
-### Scenario 3: Automated C2 Deployment
-
-```bash
-# Configure Mythic once
-purplesploit> mythic configure
-
-# Deploy to target
-purplesploit> use c2/mythic/deploy_smb
-purplesploit> set RHOST 192.168.1.100
-purplesploit> set MYTHIC_PAYLOAD /tmp/agent.exe
-purplesploit> credentials  # Select domain admin
-purplesploit> run
-
-[+] Payload deployed via SMB
-[*] Check Mythic for callback
-```
-
----
-
-## Architecture
-
-```
-purplesploit/
-├── purplesploit-framework.sh    # Main entry point (Full version)
-├── purplesploit.sh              # Lite version (legacy)
-├── MODULE_TEMPLATE.psm          # Template for new modules
-│
-├── framework/                   # Framework core
-│   └── core/
-│       ├── engine.sh            # Main engine
-│       ├── variable_manager.sh  # Universal variables
-│       ├── module_registry.sh   # Module discovery
-│       ├── command_engine.sh    # Command execution
-│       ├── workspace_manager.sh # Workspace management
-│       ├── fzf_integration.sh   # FZF menus
-│       ├── credential_manager.sh# Credential database
-│       ├── mythic_integration.sh# Mythic C2 support
-│       └── service_analyzer.sh  # Smart service detection
-│
-├── modules/                     # Tool modules (.psm files)
-│   ├── recon/
-│   │   └── nmap/
-│   ├── web/
-│   │   ├── feroxbuster/
-│   │   ├── sqlmap/
-│   │   └── httpx/
-│   ├── network/
-│   │   └── nxc/
-│   └── c2/
-│       └── mythic/
-│
-└── docs/                        # Documentation
-    ├── FRAMEWORK_README.md      # Full framework guide
-    ├── FEATURES.md              # Feature documentation
-    ├── SERVICE_ANALYSIS.md      # Service analysis guide
-    └── legacy/                  # Old lite version docs
+chmod +x purplesploit-tui.sh
+./purplesploit-tui.sh
 ```
 
 ---
 
 ## Creating Custom Modules
 
-Add any tool in 5 minutes:
-
-**1. Create module file:** `modules/category/tool/action.psm`
+Add new tools by dropping a `.psm` file in `modules/`:
 
 ```bash
-#!/bin/bash
-MODULE_NAME="web/nuclei/basic_scan"
-MODULE_CATEGORY="web"
-MODULE_DESCRIPTION="Nuclei vulnerability scan"
-MODULE_AUTHOR="Your Name"
-MODULE_TOOL="nuclei"
-
-REQUIRED_VARS="TARGET_URL"
-OPTIONAL_VARS="THREADS:50,TEMPLATES:"
-
-COMMAND_TEMPLATE="nuclei -u \${TARGET_URL} -t \${TEMPLATES} -c \${THREADS}"
+# modules/recon/custom/my_scan.psm
+MODULE_NAME="recon/custom/my_scan"
+MODULE_CATEGORY="recon"
+MODULE_DESCRIPTION="My custom scan"
+MODULE_TOOL="nmap"
+REQUIRED_VARS="RHOST"
+COMMAND_TEMPLATE="nmap -sV ${RHOST}"
 ```
 
-**2. Restart framework** - Auto-discovered!
-
-**3. Use it:**
-
-```bash
-purplesploit> search nuclei
-purplesploit> use web/nuclei/basic_scan
-purplesploit> run
-```
-
-**[Full Module Creation Guide](docs/FRAMEWORK_README.md#adding-custom-modules)**
-
----
-
-## Data Storage
-
-### Locations
-
-- **Workspaces:** `~/.purplesploit/workspaces/`
-- **Credentials:** `~/.purplesploit/credentials.db`
-- **Services:** `~/.purplesploit/workspaces/<workspace>/services.db`
-- **Command History:** `~/.purplesploit/command_history`
-- **Mythic Config:** `~/.purplesploit/mythic_config`
-- **Job Logs:** `~/.purplesploit/jobs/`
-
-### Per-Workspace Structure
-
-```
-~/.purplesploit/workspaces/<workspace>/
-├── targets/
-│   └── hosts.txt           # Target list
-├── services.db             # Detected services
-├── output/                 # Module outputs
-├── logs/                   # Execution logs
-├── data/                   # Misc data
-└── vars.conf               # Workspace variables
-```
-
----
-
-## Lite vs Full Version
-
-| Feature | Lite (purplesploit.sh) | Full (purplesploit-framework.sh) |
-|---------|------------------------|----------------------------------|
-| Interface | TUI menus | Metasploit CLI + FZF |
-| Variables | Per-tool | Universal system |
-| Adding Tools | Edit multiple files | Drop 1 .psm file |
-| Service Analysis | Manual | Automatic |
-| Smart Search | No | Yes (search relevant) |
-| Credentials | Basic | Multi-credential DB |
-| Mythic C2 | No | Yes |
-| Scalability | Medium | Extremely high |
-
-**Both versions available!** Use `purplesploit.sh` for TUI or `purplesploit-framework.sh` for full features.
-
----
-
-## Contributing
-
-See **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** for guidelines.
-
-**Ways to contribute:**
-- Add new modules (drop a `.psm` file!)
-- Improve service detection mappings
-- Add output parsers
-- Report bugs
-- Improve documentation
+Framework auto-discovers and loads it!
 
 ---
 
 ## Troubleshooting
 
-### FZF Not Working
-
-**Problem:** Commands fall back to basic mode
-
-**Solution:**
+### FZF not found
 ```bash
-sudo apt install fzf  # or brew install fzf
+apt install fzf
 ```
 
-### No Services Detected
+### Database errors
+Press `[j]` → Sessions Management → Database Management → Reset/Clear
 
-**Problem:** `search relevant` says no services
-
-**Solution:**
+### Module not loading
 ```bash
-# Run nmap scan first
-use recon/nmap/quick_scan
-set RHOST <target>
-run
+# Check syntax
+bash -n modules/path/to/module.psm
 
-# Then search
-search relevant
+# Check permissions
+chmod +x modules/path/to/module.psm
 ```
-
-### Module Not Found
-
-**Problem:** Custom module not appearing
-
-**Solution:**
-```bash
-# Check module file name ends in .psm
-# Check MODULE_NAME is set correctly
-# Restart framework to re-scan modules
-```
-
-**[Full Troubleshooting Guide](docs/FEATURES.md#-troubleshooting)**
 
 ---
 
-## Credits
+## Project Structure
 
-- **Framework:** PurpleSploit Team
-- **Tools:** nmap, feroxbuster, sqlmap, NetExec, Impacket, Mythic, and respective authors
-- **Inspired by:** Metasploit Framework
+```
+purplesploit/
+├── purplesploit-tui.sh      # Main hybrid TUI (start here!)
+├── MODULE_TEMPLATE.psm      # Template for new modules
+├── README.md                # This file
+├── bin/                     # Alternative interfaces
+│   ├── purplesploit-framework.sh  # CLI interface
+│   ├── purplesploit.sh            # Original lite
+│   └── purplesploit-tui-simple.sh # Framework-only TUI
+├── docs/                    # Documentation
+├── framework/               # Framework backend
+│   └── core/               # Core framework components
+├── modules/                 # Tool modules (.psm files)
+│   ├── recon/
+│   ├── web/
+│   ├── network/
+│   └── c2/
+├── core/                    # Lite version core
+├── lib/                     # Lite version libraries
+└── modules/*.sh             # Lite version tool handlers
+```
+
+---
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for:
+- Code style guidelines
+- How to add new tools
+- How to create modules
+- Pull request process
 
 ---
 
 ## License
 
-MIT License - See LICENSE file
+MIT License - See LICENSE file for details
+
+---
+
+## Credits
+
+Built with:
+- [FZF](https://github.com/junegunn/fzf) - Fuzzy finder
+- [NetExec](https://github.com/Pennyw0rth/NetExec) - Network execution tool
+- [Impacket](https://github.com/fortra/impacket) - Network protocols toolkit
+- And many more excellent open-source tools
 
 ---
 
 <div align="center">
 
-**🟣 Happy Hacking! 🟣**
+**Happy Hacking! 🎯**
 
-[Documentation](docs/) • [GitHub Issues](https://github.com/jeremylaratro/purplesploit/issues) • [Module Template](MODULE_TEMPLATE.psm)
+[Report Issue](https://github.com/your-repo/issues) • [Request Feature](https://github.com/your-repo/issues)
 
 </div>
