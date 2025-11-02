@@ -1,0 +1,13 @@
+#!/bin/bash
+# NXC SMB Share Enumeration Module
+
+MODULE_NAME="network/nxc/smb/enum_shares"
+MODULE_CATEGORY="network"
+MODULE_DESCRIPTION="Enumerate SMB shares on target"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="nxc"
+
+REQUIRED_VARS="RHOST,USERNAME"
+OPTIONAL_VARS="PASSWORD:,DOMAIN:,HASH:"
+
+COMMAND_TEMPLATE="nxc smb \${RHOST} -u \${USERNAME} -p '\${PASSWORD}' \${DOMAIN:+-d \$DOMAIN} \${HASH:+-H \$HASH} --shares"

