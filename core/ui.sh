@@ -30,6 +30,7 @@ show_menu() {
             local nxc_smb_exec=$(highlight_if_active "$TARGET" "smb" "SMB Execution")
             local nxc_smb_creds=$(highlight_if_active "$TARGET" "smb" "SMB Credentials")
             local nxc_smb_vulns=$(highlight_if_active "$TARGET" "smb" "SMB Vulnerabilities")
+            local nxc_utils=$(highlight_if_active "$TARGET" "smb" "NXC Utilities (hosts/krb5/slinky)")
             local nxc_ldap=$(highlight_if_active "$TARGET" "ldap" "LDAP Enumeration")
             local nxc_ldap_bh=$(highlight_if_active "$TARGET" "ldap" "LDAP BloodHound")
             local nxc_winrm=$(highlight_if_active "$TARGET" "winrm" "WinRM Operations")
@@ -49,6 +50,7 @@ $nxc_smb_shares
 $nxc_smb_exec
 $nxc_smb_creds
 $nxc_smb_vulns
+$nxc_utils
 $nxc_ldap
 $nxc_ldap_bh
 $nxc_winrm
@@ -81,9 +83,9 @@ Toggle Run Mode (Single/All)
 Manage Credentials
 Manage Targets
 Database Management (Reset/Clear)
-Exit" | fzf --prompt="$prompt" --height=100% --reverse --header="$header" --expect=t,c,w,a,s,m,d --header-first --header="$header
+Exit" | fzf --prompt="$prompt" --height=100% --reverse --header="$header" --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-a,ctrl-s,ctrl-m,ctrl-d --header-first --header="$header
 ───────────────────────────────────────
-Keybinds: [t]argets [c]reds [w]eb [d] AD [a]uthSwitch [s]TargetSwitch [m]ode"
+Keybinds: CTRL+T:targets  CTRL+C:creds  CTRL+W:web  CTRL+D:AD  CTRL+A:authSwitch  CTRL+S:targetSwitch  CTRL+M:mode"
             ;;
         "feroxbuster")
             echo "Basic Directory Scan
@@ -189,6 +191,17 @@ SMBGhost (CVE-2020-0796)
 PrintNightmare
 All Vulnerability Checks
 Back" | fzf --prompt="$prompt" --height=50% --reverse --header="$header"
+            ;;
+        "nxc_utils")
+            echo "Generate /etc/hosts File
+Generate krb5.conf File
+Slinky Module (Create .lnk for Hash Capture)
+Pass-the-Ticket (Use Kerberos Cache)
+Kerberos Authentication (-k)
+Spider Plus Module (Enhanced)
+NTLMv1 Downgrade (Capture Weak Hashes)
+Check SMB Signing
+Back" | fzf --prompt="$prompt" --height=60% --reverse --header="$header"
             ;;
         "ldap")
             echo "Enumerate Users
