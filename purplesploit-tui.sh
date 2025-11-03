@@ -95,6 +95,7 @@ $(highlight_if_active "$target" "smb" "SMB Shares")
 $(highlight_if_active "$target" "smb" "SMB Execution")
 $(highlight_if_active "$target" "smb" "SMB Credentials")
 $(highlight_if_active "$target" "smb" "SMB Vulnerabilities")
+$(highlight_if_active "$target" "smb" "NXC Utilities (hosts/krb5/slinky)")
 $(highlight_if_active "$target" "ldap" "LDAP Enumeration")
 $(highlight_if_active "$target" "ldap" "LDAP BloodHound")
 $(highlight_if_active "$target" "winrm" "WinRM Operations")
@@ -137,10 +138,10 @@ Exit"
         --reverse \
         --header="$header
 ───────────────────────────────────────
-Keybinds: [t]argets [c]reds [w]eb [d]AD [a]uthSwitch [s]TargetSwitch [j]obs [m]ode
+Keybinds: CTRL+T:targets  CTRL+C:creds  CTRL+W:web  CTRL+D:AD  CTRL+A:authSwitch  CTRL+S:targetSwitch  CTRL+J:jobs  CTRL+M:mode
 ● = Service detected on target" \
         --header-first \
-        --expect=t,c,w,d,a,s,j,m
+        --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j,ctrl-m
 }
 
 # Initialize and run
@@ -162,14 +163,14 @@ main() {
         
         # Handle keybinds
         case "$key" in
-            t) manage_targets; continue ;;
-            c) manage_credentials; continue ;;
-            w) manage_web_targets; continue ;;
-            d) manage_ad_targets; continue ;;
-            a) select_credentials; continue ;;
-            s) select_target; continue ;;
-            j) handle_sessions_menu; continue ;;
-            m) toggle_run_mode; continue ;;
+            ctrl-t) manage_targets; continue ;;
+            ctrl-c) manage_credentials; continue ;;
+            ctrl-w) manage_web_targets; continue ;;
+            ctrl-d) manage_ad_targets; continue ;;
+            ctrl-a) select_credentials; continue ;;
+            ctrl-s) select_target; continue ;;
+            ctrl-j) handle_sessions_menu; continue ;;
+            ctrl-m) toggle_run_mode; continue ;;
         esac
         
         # Handle menu selections
@@ -189,6 +190,7 @@ main() {
             *"SMB Execution"*) handle_smb_exec ;;
             *"SMB Credentials"*) handle_smb_creds ;;
             *"SMB Vulnerabilities"*) handle_smb_vulns ;;
+            *"NXC Utilities"*) handle_nxc_utils ;;
             *"LDAP Enumeration"*) handle_ldap ;;
             *"LDAP BloodHound"*) handle_bloodhound ;;
             *"WinRM Operations"*) handle_winrm ;;
