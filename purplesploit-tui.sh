@@ -28,6 +28,9 @@ for module in modules/web/*.sh modules/nxc/*.sh modules/impacket/*.sh; do
     [[ -f "$module" ]] && source "$module" 2>/dev/null || true
 done
 
+# Source AI automation module
+source "$SCRIPT_DIR/modules/ai_automation.sh" 2>/dev/null || true
+
 # Initialize framework
 framework_init_silent() {
     declare -gA MODULE_REGISTRY MODULE_METADATA
@@ -120,6 +123,8 @@ Service Management
 Registry Operations
 ┌ SESSIONS (WORKSPACES & JOBS) ──────────
 Sessions Management
+┌ AI AUTOMATION ─────────────────────────
+AI Automation (OpenAI/Claude)
 ┌ SETTINGS ─────────────────────────────
 Manage Web Targets
 Manage AD Targets
@@ -216,6 +221,9 @@ main() {
 
             # Sessions
             "Sessions Management") handle_sessions_menu ;;
+
+            # AI Automation
+            *"AI Automation"*) handle_ai_automation ;;
 
             # Management
             "Manage Web Targets") manage_web_targets ;;
