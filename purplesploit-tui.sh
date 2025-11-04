@@ -65,39 +65,43 @@ build_header() {
     local creds="${CURRENT_CRED_NAME:-<none>}"
     local run_mode="${RUN_MODE:-single}"
 
-    # Simple color-coded header without special characters
-    echo "Workspace: $workspace | Target: $target | Creds: $creds | Mode: $run_mode"
+    # Use enhanced context bar if available
+    if type draw_enhanced_context &>/dev/null; then
+        draw_enhanced_context "$workspace" "$target" "$creds" "$run_mode"
+    else
+        # Fallback to simple header
+        echo "Workspace: $workspace | Target: $target | Creds: $creds | Mode: $run_mode"
+    fi
 }
 
-# Service highlighting helper
+# Service highlighting helper with enhanced colors
 highlight_if_active() {
     local target="$1"
     local service="$2"
     local text="$3"
 
     if [[ -n "$target" ]] && service_check "$target" "$service" 2>/dev/null; then
-        echo "● $text"
+        # Service detected - highlight with green bullet
+        echo "${BRIGHT_GREEN}●${NC} ${BRIGHT_CYAN}$text${NC}"
     else
-        echo "  $text"
+        # Service not detected - dimmed
+        echo "${DIM}○${NC} $text"
     fi
 }
 
-# Main menu
+# Main menu with enhanced colors
 show_main_menu() {
-    local header=$(build_header)
     local target="${TARGET:-$(var_get RHOST 2>/dev/null)}"
-    
-    # Build dynamic menu with service highlighting
-    local menu="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- WEB TESTING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Feroxbuster (Directory/File Discovery)
-WFUZZ (Fuzzing)
-SQLMap (SQL Injection)
-HTTPX (HTTP Probing)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- NETWORK TESTING - NXC
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    # Build dynamic menu with color-coded sections
+    local menu="
+${BRIGHT_YELLOW}┌─ 🌐 WEB TESTING ───────────────────────────────────────────────────────────${NC}
+${CYAN}▸${NC} Feroxbuster (Directory/File Discovery)
+${CYAN}▸${NC} WFUZZ (Fuzzing)
+${CYAN}▸${NC} SQLMap (SQL Injection)
+${CYAN}▸${NC} HTTPX (HTTP Probing)
+
+${BRIGHT_MAGENTA}┌─ 🔒 NETWORK TESTING - NXC ─────────────────────────────────────────────────${NC}
 $(highlight_if_active "$target" "smb" "SMB Authentication")
 $(highlight_if_active "$target" "smb" "SMB Enumeration")
 $(highlight_if_active "$target" "smb" "SMB Shares")
@@ -111,47 +115,47 @@ $(highlight_if_active "$target" "winrm" "WinRM Operations")
 $(highlight_if_active "$target" "mssql" "MSSQL Operations")
 $(highlight_if_active "$target" "rdp" "RDP Operations")
 $(highlight_if_active "$target" "ssh" "SSH Operations")
-Network Scanning
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- NETWORK TESTING - IMPACKET
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Impacket PSExec
-Impacket WMIExec
-Impacket SMBExec
-Impacket ATExec
-Impacket DcomExec
-Impacket SecretsDump
-Impacket SAM/LSA/NTDS Dump
-Kerberoasting (GetUserSPNs)
-AS-REP Roasting (GetNPUsers)
-Golden/Silver Tickets
-Impacket Enumeration
-Impacket SMB Client
-Service Management
-Registry Operations
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- SESSIONS (WORKSPACES & JOBS)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Sessions Management
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- AI AUTOMATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AI Automation (OpenAI/Claude)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- SETTINGS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Manage Web Targets
-Manage AD Targets
-Switch Credentials
-Switch Target
-Select AD Target
-Toggle Run Mode (Single/All)
-Manage Credentials
-Manage Targets
-Database Management (Reset/Clear)
-Exit"
+${CYAN}▸${NC} Network Scanning
 
-    echo "$menu" | fzf \
+${BRIGHT_BLUE}┌─ 🛠️  NETWORK TESTING - IMPACKET ──────────────────────────────────────────${NC}
+${CYAN}▸${NC} Impacket PSExec
+${CYAN}▸${NC} Impacket WMIExec
+${CYAN}▸${NC} Impacket SMBExec
+${CYAN}▸${NC} Impacket ATExec
+${CYAN}▸${NC} Impacket DcomExec
+${CYAN}▸${NC} Impacket SecretsDump
+${CYAN}▸${NC} Impacket SAM/LSA/NTDS Dump
+${CYAN}▸${NC} Kerberoasting (GetUserSPNs)
+${CYAN}▸${NC} AS-REP Roasting (GetNPUsers)
+${CYAN}▸${NC} Golden/Silver Tickets
+${CYAN}▸${NC} Impacket Enumeration
+${CYAN}▸${NC} Impacket SMB Client
+${CYAN}▸${NC} Service Management
+${CYAN}▸${NC} Registry Operations
+
+${BRIGHT_GREEN}┌─ 💼 SESSIONS (WORKSPACES & JOBS) ──────────────────────────────────────────${NC}
+${CYAN}▸${NC} Sessions Management
+
+${BRIGHT_CYAN}┌─ 🤖 AI AUTOMATION ─────────────────────────────────────────────────────────${NC}
+${CYAN}▸${NC} AI Automation (OpenAI/Claude)
+
+${BRIGHT_WHITE}┌─ ⚙️  SETTINGS ─────────────────────────────────────────────────────────────${NC}
+${CYAN}▸${NC} Manage Web Targets
+${CYAN}▸${NC} Manage AD Targets
+${CYAN}▸${NC} Switch Credentials
+${CYAN}▸${NC} Switch Target
+${CYAN}▸${NC} Select AD Target
+${CYAN}▸${NC} Toggle Run Mode (Single/All)
+${CYAN}▸${NC} Manage Credentials
+${CYAN}▸${NC} Manage Targets
+${CYAN}▸${NC} Database Management (Reset/Clear)
+
+${BRIGHT_RED}┌─ 🚪 EXIT ──────────────────────────────────────────────────────────────────${NC}
+${BRIGHT_RED}Exit${NC}"
+
+    # Enhanced fzf with custom color scheme
+    echo -e "$menu" | fzf \
+        --ansi \
         --prompt="▶ Select Tool: " \
         --height=100% \
         --reverse \
@@ -160,10 +164,11 @@ Exit"
         --info=inline \
         --pointer="▶" \
         --marker="✓" \
-        --header="$header
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Shortcuts: CTRL+T=targets | CTRL+C=creds | CTRL+W=web | CTRL+D=AD | CTRL+A=auth | CTRL+S=target | CTRL+J=jobs | CTRL+M=mode
-● = Service detected | Type to filter/autocomplete" \
+        --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
+        --header="$(build_header)
+${BRIGHT_CYAN}┌─ Keyboard Shortcuts ───────────────────────────────────────────────────────${NC}
+${BRIGHT_CYAN}│${NC} CTRL+T:targets | CTRL+C:creds | CTRL+W:web | CTRL+D:AD | CTRL+A:auth | CTRL+S:target | CTRL+J:jobs | CTRL+M:mode
+${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | ${DIM}○${NC} = Service not detected | Type to filter/autocomplete" \
         --header-first \
         --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j,ctrl-m
 }
@@ -171,28 +176,67 @@ Shortcuts: CTRL+T=targets | CTRL+C=creds | CTRL+W=web | CTRL+D=AD | CTRL+A=auth 
 # Initialize and run
 main() {
     clear
-    show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
+
+    # Show enhanced banner if available
+    local workspace=$(workspace_current 2>/dev/null || echo "default")
+    if type show_enhanced_banner &>/dev/null; then
+        show_enhanced_banner "$workspace" "1.0"
+    else
+        show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
+    fi
 
     echo ""
-    echo "Initializing PurpleSploit Framework..."
+    echo -e "${BRIGHT_CYAN}[*] Initializing PurpleSploit Framework...${NC}"
     echo ""
+
+    # Show progress during initialization
+    if type show_init_progress &>/dev/null; then
+        show_init_progress "Loading core modules" 1 5
+        sleep 0.2
+    fi
 
     framework_init_silent
 
-    echo ""
-    echo "[+] Framework backend initialized"
-    echo "[+] Lite tool handlers loaded"
-    echo "[+] AI automation ready"
-    echo "[+] Database connections established"
+    if type show_init_progress &>/dev/null; then
+        show_init_progress "Initializing workspace" 2 5
+        sleep 0.2
+        show_init_progress "Loading tool modules" 3 5
+        sleep 0.2
+        show_init_progress "Connecting to databases" 4 5
+        sleep 0.2
+        show_init_progress "Starting AI integration" 5 5
+        sleep 0.2
+        echo ""
+    fi
 
     echo ""
-    echo "Ready! All systems operational"
+    if type show_success &>/dev/null; then
+        show_success "Framework backend initialized"
+        show_success "Lite tool handlers loaded"
+        show_success "AI automation ready"
+        show_success "Database connections established"
+    else
+        echo -e "${GREEN}[+] Framework backend initialized${NC}"
+        echo -e "${GREEN}[+] Lite tool handlers loaded${NC}"
+        echo -e "${GREEN}[+] AI automation ready${NC}"
+        echo -e "${GREEN}[+] Database connections established${NC}"
+    fi
+
+    echo ""
+    echo -e "${BRIGHT_GREEN}✓ Ready! All systems operational${NC}"
     echo ""
     sleep 1
     
     while true; do
         clear
-        show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
+
+        # Show enhanced banner if available
+        local workspace=$(workspace_current 2>/dev/null || echo "default")
+        if type show_enhanced_banner &>/dev/null; then
+            show_enhanced_banner "$workspace" "1.0"
+        else
+            show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
+        fi
         echo ""
 
         local output=$(show_main_menu)
@@ -272,34 +316,33 @@ main() {
     done
 }
 
-# Sessions Management Menu
+# Sessions Management Menu with enhanced visuals
 handle_sessions_menu() {
     while true; do
-        local header=$(build_header)
-        local choice=$(echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- WORKSPACES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Switch Workspace (FZF)
-Create New Workspace
-List All Workspaces
-Delete Workspace
-Show Workspace Info
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- BACKGROUND JOBS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-List Running Jobs
-View Job Output
-Kill Background Job
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- NAVIGATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Back to Main Menu" | fzf \
-            --prompt="Sessions Management: " \
+        local menu="
+${BRIGHT_CYAN}┌─ 💼 WORKSPACES ────────────────────────────────────────────────────────────${NC}
+${CYAN}▸${NC} Switch Workspace (FZF)
+${CYAN}▸${NC} Create New Workspace
+${CYAN}▸${NC} List All Workspaces
+${CYAN}▸${NC} Delete Workspace
+${CYAN}▸${NC} Show Workspace Info
+
+${BRIGHT_YELLOW}┌─ 🔄 BACKGROUND JOBS ───────────────────────────────────────────────────────${NC}
+${CYAN}▸${NC} List Running Jobs
+${CYAN}▸${NC} View Job Output
+${CYAN}▸${NC} Kill Background Job
+
+${BRIGHT_MAGENTA}┌─ ⬅️  NAVIGATION ────────────────────────────────────────────────────────────${NC}
+${BRIGHT_GREEN}Back to Main Menu${NC}"
+
+        local choice=$(echo -e "$menu" | fzf \
+            --ansi \
+            --prompt="💼 Sessions Management: " \
             --height=80% \
             --reverse \
-            --header="$header
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Workspaces: Organize per-engagement | Jobs: Run tools in background")
+            --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
+            --header="$(build_header)
+${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in background${NC}")
 
         case "$choice" in
             "")
@@ -310,44 +353,69 @@ Workspaces: Organize per-engagement | Jobs: Run tools in background")
                 ;;
 
             # Workspaces
-            "Switch Workspace (FZF)")
+            *"Switch Workspace"*)
                 echo ""
+                if type show_info &>/dev/null; then
+                    show_info "Switching workspace..."
+                fi
                 fzf_workspace_select || true
                 echo ""
                 read -p "Press enter to continue..."
                 ;;
-            "Create New Workspace")
+            *"Create New Workspace"*)
                 echo ""
                 read -p "Enter workspace name: " ws_name
                 if [[ -n "$ws_name" ]]; then
-                    workspace_create "$ws_name" || true
+                    if type show_loading &>/dev/null; then
+                        show_loading "Creating workspace '$ws_name'"
+                    fi
+                    if workspace_create "$ws_name" 2>/dev/null; then
+                        type show_success &>/dev/null && show_success "Workspace '$ws_name' created!"
+                    else
+                        type show_error &>/dev/null && show_error "Failed to create workspace"
+                    fi
                 fi
                 read -p "Press enter to continue..."
                 ;;
-            "List All Workspaces")
+            *"List All Workspaces"*)
                 echo ""
-                echo "Available Workspaces:"
+                if type show_info &>/dev/null; then
+                    show_info "Available Workspaces:"
+                else
+                    echo "Available Workspaces:"
+                fi
                 echo "===================="
                 workspace_list || true
                 echo ""
                 read -p "Press enter to continue..."
                 ;;
-            "Delete Workspace")
+            *"Delete Workspace"*)
                 echo ""
                 read -p "Enter workspace name to delete: " ws_name
                 if [[ -n "$ws_name" ]]; then
-                    read -p "Are you sure? This cannot be undone! (yes/no): " confirm
+                    if type show_warning &>/dev/null; then
+                        show_warning "This action cannot be undone!"
+                    fi
+                    read -p "Are you sure? (yes/no): " confirm
                     if [[ "$confirm" == "yes" ]]; then
-                        workspace_delete "$ws_name" || true
+                        if workspace_delete "$ws_name" 2>/dev/null; then
+                            type show_success &>/dev/null && show_success "Workspace deleted"
+                        else
+                            type show_error &>/dev/null && show_error "Failed to delete workspace"
+                        fi
                     else
-                        echo "[!] Cancelled"
+                        type show_info &>/dev/null && show_info "Cancelled" || echo "[!] Cancelled"
                     fi
                 fi
                 read -p "Press enter to continue..."
                 ;;
-            "Show Workspace Info")
+            *"Show Workspace Info"*)
                 echo ""
-                echo "Current Workspace Information:"
+                if type show_info &>/dev/null; then
+                    show_info "Current Workspace Information:"
+                else
+                    echo "Current Workspace Information:"
+                fi
                 echo "=============================="
                 workspace_info || true
                 echo ""
@@ -355,41 +423,56 @@ Workspaces: Organize per-engagement | Jobs: Run tools in background")
                 ;;
 
             # Jobs
-            "List Running Jobs")
+            *"List Running Jobs"*)
                 echo ""
-                echo "Background Jobs:"
+                if type show_info &>/dev/null; then
+                    show_info "Background Jobs:"
+                else
+                    echo "Background Jobs:"
+                fi
                 echo "================"
                 command_jobs_list || true
                 echo ""
                 read -p "Press enter to continue..."
                 ;;
-            "View Job Output")
+            *"View Job Output"*)
                 echo ""
                 command_jobs_list || true
                 echo ""
                 read -p "Enter job ID to view: " job_id
                 if [[ -n "$job_id" ]]; then
                     echo ""
-                    echo "Job Output (last 50 lines):"
+                    if type show_info &>/dev/null; then
+                        show_info "Job Output (last 50 lines):"
+                    else
+                        echo "Job Output (last 50 lines):"
+                    fi
                     echo "==========================="
                     # Show output from job
                     local job_file="$HOME/.purplesploit/jobs/${job_id}.log"
                     if [[ -f "$job_file" ]]; then
                         tail -50 "$job_file"
                     else
-                        echo "[!] Job file not found"
+                        type show_error &>/dev/null && show_error "Job file not found" || echo "[!] Job file not found"
                     fi
                 fi
                 echo ""
                 read -p "Press enter to continue..."
                 ;;
-            "Kill Background Job")
+            *"Kill Background Job"*)
                 echo ""
                 command_jobs_list || true
                 echo ""
                 read -p "Enter job ID to kill: " job_id
                 if [[ -n "$job_id" ]]; then
-                    command_job_kill "$job_id" || true
+                    if type show_loading &>/dev/null; then
+                        show_loading "Killing job $job_id"
+                    fi
+                    if command_job_kill "$job_id" 2>/dev/null; then
+                        type show_success &>/dev/null && show_success "Job killed"
+                    else
+                        type show_error &>/dev/null && show_error "Failed to kill job"
+                    fi
                 fi
                 read -p "Press enter to continue..."
                 ;;
