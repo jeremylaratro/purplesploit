@@ -28,6 +28,7 @@ source "$SCRIPT_DIR/lib/targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/web_targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/ad_targets.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/services.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/lib/nmap_results.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/database_management.sh" 2>/dev/null || true
 
 # Source tool modules from lite version
