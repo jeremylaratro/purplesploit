@@ -24,7 +24,7 @@ class KaliAPIClient:
         """Check if the Kali API server is healthy"""
         try:
             response = self.session.get(
-                f"{self.server_url}/health",
+                f"{self.server_url}/api/health",
                 timeout=5
             )
             return response.status_code == 200
@@ -36,7 +36,7 @@ class KaliAPIClient:
         """Execute a command on the Kali server"""
         try:
             response = self.session.post(
-                f"{self.server_url}/api/command",
+                f"{self.server_url}/api/execute",
                 json={"command": command},
                 timeout=self.timeout
             )
@@ -214,7 +214,7 @@ NEVER skip step 1. NEVER make up output. ALWAYS use functions when asked to exec
                 payload["additional_args"] = additional_args
 
             response = self.kali_client.session.post(
-                f"{self.kali_client.server_url}/api/tools/nmap",
+                f"{self.kali_client.server_url}/api/scan/nmap",
                 json=payload,
                 timeout=self.kali_client.timeout
             )
