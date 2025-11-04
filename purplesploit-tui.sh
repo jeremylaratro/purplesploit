@@ -159,6 +159,12 @@ ${CYAN}▸${NC} Database Management (Reset/Clear)
 ${BRIGHT_RED}┌─ 🚪 EXIT ──────────────────────────────────────────────────────────────────${NC}
 ${BRIGHT_RED}Exit${NC}"
 
+    # Build header with proper ANSI code expansion
+    local header_text="$(build_header)
+$(echo -e "${BRIGHT_CYAN}┌─ Keyboard Shortcuts ───────────────────────────────────────────────────────${NC}")
+$(echo -e "${BRIGHT_CYAN}│${NC} CTRL+T:targets | CTRL+C:creds | CTRL+W:web | CTRL+D:AD | CTRL+A:auth | CTRL+S:target | CTRL+J:jobs | CTRL+M:mode")
+$(echo -e "${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | ${DIM}○${NC} = Service not detected | Type to filter/autocomplete")"
+
     # Enhanced fzf with custom color scheme
     echo -e "$menu" | fzf \
         --ansi \
@@ -171,11 +177,9 @@ ${BRIGHT_RED}Exit${NC}"
         --pointer="▶" \
         --marker="✓" \
         --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
-        --header="$(build_header)
-${BRIGHT_CYAN}┌─ Keyboard Shortcuts ───────────────────────────────────────────────────────${NC}
-${BRIGHT_CYAN}│${NC} CTRL+T:targets | CTRL+C:creds | CTRL+W:web | CTRL+D:AD | CTRL+A:auth | CTRL+S:target | CTRL+J:jobs | CTRL+M:mode
-${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | ${DIM}○${NC} = Service not detected | Type to filter/autocomplete" \
+        --header="$header_text" \
         --header-first \
+        --bind="enter:accept" \
         --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j,ctrl-m
 }
 
@@ -355,14 +359,18 @@ ${CYAN}▸${NC} Kill Background Job
 ${BRIGHT_MAGENTA}┌─ ⬅️  NAVIGATION ────────────────────────────────────────────────────────────${NC}
 ${BRIGHT_GREEN}Back to Main Menu${NC}"
 
+        # Build header with proper ANSI code expansion
+        local sessions_header="$(build_header)
+$(echo -e "${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in background${NC}")"
+
         local choice=$(echo -e "$menu" | fzf \
             --ansi \
             --prompt="💼 Sessions Management: " \
             --height=80% \
             --reverse \
+            --bind="enter:accept" \
             --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
-            --header="$(build_header)
-${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in background${NC}")
+            --header="$sessions_header")
 
         # Strip colors for matching
         local clean_choice=$(strip_colors "$choice")
