@@ -9,6 +9,12 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Strip ANSI color codes and special characters from text
+strip_colors() {
+    # Remove ANSI codes, bullet points, and trim whitespace
+    echo "$1" | sed -r 's/\x1b\[[0-9;]*m//g; s/\x1b\(B//g; s/[▸●○★◆◦✓✗⚠ℹ🌐🔒🛠️💼🤖⚙️🚪🎯🔐⚡⬅️🔄]//g; s/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
 # Source framework engine  
 source "$SCRIPT_DIR/framework/core/engine.sh"
 
@@ -242,7 +248,10 @@ main() {
         local output=$(show_main_menu)
         local key=$(echo "$output" | head -n1)
         local choice=$(echo "$output" | tail -n1)
-        
+
+        # Strip colors from choice for matching
+        local clean_choice=$(strip_colors "$choice")
+
         # Handle keybinds
         case "$key" in
             ctrl-t) manage_targets; continue ;;
@@ -255,16 +264,16 @@ main() {
             ctrl-m) toggle_run_mode; continue ;;
         esac
         
-        # Handle menu selections
-        case "$choice" in
+        # Handle menu selections (use clean_choice without color codes)
+        case "$clean_choice" in
             "Exit"|"") exit 0 ;;
-            
+
             # Web Testing
-            "Feroxbuster (Directory/File Discovery)") handle_feroxbuster ;;
-            "WFUZZ (Fuzzing)") handle_wfuzz ;;
-            "SQLMap (SQL Injection)") handle_sqlmap ;;
-            "HTTPX (HTTP Probing)") handle_httpx ;;
-            
+            *"Feroxbuster"*|*"Directory/File Discovery"*) handle_feroxbuster ;;
+            *"WFUZZ"*|*"Fuzzing"*) handle_wfuzz ;;
+            *"SQLMap"*|*"SQL Injection"*) handle_sqlmap ;;
+            *"HTTPX"*|*"HTTP Probing"*) handle_httpx ;;
+
             # NXC
             *"SMB Authentication"*) handle_smb_auth ;;
             *"SMB Enumeration"*) handle_smb_enum ;;
@@ -272,46 +281,57 @@ main() {
             *"SMB Execution"*) handle_smb_exec ;;
             *"SMB Credentials"*) handle_smb_creds ;;
             *"SMB Vulnerabilities"*) handle_smb_vulns ;;
-            *"NXC Utilities"*) handle_nxc_utils ;;
+            *"NXC Utilities"*|*"hosts/krb5/slinky"*) handle_nxc_utils ;;
             *"LDAP Enumeration"*) handle_ldap ;;
-            *"LDAP BloodHound"*) handle_bloodhound ;;
+            *"LDAP BloodHound"*|*"BloodHound"*) handle_bloodhound ;;
             *"WinRM Operations"*) handle_winrm ;;
             *"MSSQL Operations"*) handle_mssql ;;
             *"RDP Operations"*) handle_rdp ;;
             *"SSH Operations"*) handle_ssh ;;
-            "Network Scanning") handle_scanning ;;
-            
+            *"Network Scanning"*) handle_scanning ;;
+
             # Impacket
-            "Impacket PSExec") handle_psexec ;;
-            "Impacket WMIExec") handle_wmiexec ;;
-            "Impacket SMBExec") handle_smbexec ;;
-            "Impacket ATExec") handle_atexec ;;
-            "Impacket DcomExec") handle_dcomexec ;;
-            "Impacket SecretsDump"|"Impacket SAM/LSA/NTDS Dump") handle_secretsdump ;;
-            "Kerberoasting (GetUserSPNs)") handle_kerberoast ;;
-            "AS-REP Roasting (GetNPUsers)") handle_asreproast ;;
-            "Golden/Silver Tickets") handle_tickets ;;
-            "Impacket Enumeration") handle_enum ;;
-            "Impacket SMB Client") handle_smbclient ;;
-            "Service Management") handle_services ;;
-            "Registry Operations") handle_registry ;;
+            *"Impacket PSExec"*|*"PSExec"*) handle_psexec ;;
+            *"Impacket WMIExec"*|*"WMIExec"*) handle_wmiexec ;;
+            *"Impacket SMBExec"*|*"SMBExec"*) handle_smbexec ;;
+            *"Impacket ATExec"*|*"ATExec"*) handle_atexec ;;
+            *"Impacket DcomExec"*|*"DcomExec"*) handle_dcomexec ;;
+            *"SecretsDump"*|*"SAM/LSA/NTDS"*) handle_secretsdump ;;
+            *"Kerberoasting"*|*"GetUserSPNs"*) handle_kerberoast ;;
+            *"AS-REP Roasting"*|*"GetNPUsers"*) handle_asreproast ;;
+            *"Golden/Silver Tickets"*|*"Tickets"*) handle_tickets ;;
+            *"Impacket Enumeration"*) handle_enum ;;
+            *"Impacket SMB Client"*) handle_smbclient ;;
+            *"Service Management"*) handle_services ;;
+            *"Registry Operations"*) handle_registry ;;
 
             # Sessions
-            "Sessions Management") handle_sessions_menu ;;
+            *"Sessions Management"*|*"Sessions"*) handle_sessions_menu ;;
 
             # AI Automation
             *"AI Automation"*) handle_ai_automation ;;
 
             # Management
-            "Manage Web Targets") manage_web_targets ;;
-            "Manage AD Targets") manage_ad_targets ;;
-            "Switch Credentials") select_credentials ;;
-            "Switch Target") select_target ;;
-            "Select AD Target") select_ad_target ;;
-            "Toggle Run Mode (Single/All)") toggle_run_mode ;;
-            "Manage Credentials") manage_credentials ;;
-            "Manage Targets") manage_targets ;;
-            "Database Management (Reset/Clear)") manage_databases ;;
+            *"Manage Web Targets"*|*"Web Targets"*) manage_web_targets ;;
+            *"Manage AD Targets"*|*"AD Targets"*) manage_ad_targets ;;
+            *"Switch Credentials"*) select_credentials ;;
+            *"Switch Target"*) select_target ;;
+            *"Select AD Target"*) select_ad_target ;;
+            *"Toggle Run Mode"*|*"Run Mode"*) toggle_run_mode ;;
+            *"Manage Credentials"*) manage_credentials ;;
+            *"Manage Targets"*) manage_targets ;;
+            *"Database Management"*|*"Reset/Clear"*) manage_databases ;;
+
+            # Default case - show error
+            *)
+                if [[ -n "$clean_choice" ]]; then
+                    echo ""
+                    echo -e "${BRIGHT_RED}[!] Unknown selection: '$clean_choice'${NC}"
+                    echo -e "${YELLOW}[*] Debug - Original choice: '$choice'${NC}"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
         esac
     done
 }
@@ -344,7 +364,10 @@ ${BRIGHT_GREEN}Back to Main Menu${NC}"
             --header="$(build_header)
 ${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in background${NC}")
 
-        case "$choice" in
+        # Strip colors for matching
+        local clean_choice=$(strip_colors "$choice")
+
+        case "$clean_choice" in
             "")
                 return
                 ;;
