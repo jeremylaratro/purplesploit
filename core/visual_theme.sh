@@ -456,6 +456,144 @@ draw_shortcuts_bar() {
 }
 
 # ============================================================================
+# Enhanced Banner with Color Gradient
+# ============================================================================
+
+show_enhanced_banner() {
+    local workspace="${1:-default}"
+    local version="${2:-1.0}"
+
+    echo -e ""
+    # Top border with gradient effect
+    echo -e "${BRIGHT_MAGENTA}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
+    # PURPLE line
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_MAGENTA}██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗${NC}       ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_MAGENTA}██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗${NC}      ${BRIGHT_MAGENTA}║${NC}"
+    # Transition to cyan
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${MAGENTA}██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝${NC}      ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${CYAN}██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝${NC}       ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_CYAN}██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║${NC}           ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_CYAN}╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝${NC}           ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
+    # SPLOIT in different gradient
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_CYAN}███████╗██████╗  █████╗ ███╗   ███╗███████╗${NC}${BRIGHT_GREEN}██╗    ██╗${NC} ${BRIGHT_YELLOW}██████╗${NC}    ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_CYAN}██╔════╝██╔══██╗██╔══██╗████╗ ████║██╔════╝${NC}${BRIGHT_GREEN}██║    ██║${NC}${BRIGHT_YELLOW}██╔═══██╗${NC}   ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${CYAN}█████╗  ██████╔╝███████║██╔████╔██║█████╗${NC}  ${GREEN}██║ █╗ ██║${NC}${YELLOW}██║   ██║${NC}   ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${CYAN}██╔══╝  ██╔══██╗██╔══██║██║╚██╔╝██║██╔══╝${NC}  ${GREEN}██║███╗██║${NC}${YELLOW}██║   ██║${NC}   ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_BLUE}██║     ██║  ██║██║  ██║██║ ╚═╝ ██║███████╗${NC}${BRIGHT_GREEN}╚███╔███╔╝${NC}${BRIGHT_YELLOW}╚██████╔╝${NC}   ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_BLUE}╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝${NC}${BRIGHT_GREEN} ╚══╝╚══╝${NC} ${BRIGHT_YELLOW}╚═════╝${NC}    ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
+    # Subtitle with color
+    echo -e "${BRIGHT_MAGENTA}║${NC}           ${DIM}${CYAN}Metasploit-Style Offensive Security Framework${NC}              ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}                ${DIM}Version ${version} | Workspace: ${BRIGHT_CYAN}${workspace}${NC}                     ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
+    echo -e "${BRIGHT_MAGENTA}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e ""
+}
+
+# Enhanced context bar with better colors
+draw_enhanced_context() {
+    local workspace="$1"
+    local target="$2"
+    local creds="$3"
+    local mode="$4"
+
+    # Use colors to indicate status
+    local target_color="${BRIGHT_RED}"
+    [[ -n "$target" && "$target" != "<none>" ]] && target_color="${BRIGHT_GREEN}"
+
+    local creds_color="${BRIGHT_RED}"
+    [[ -n "$creds" && "$creds" != "<none>" ]] && creds_color="${BRIGHT_YELLOW}"
+
+    echo -e "${BRIGHT_CYAN}┌────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BRIGHT_CYAN}│${NC} ${BOLD}${BRIGHT_MAGENTA}⚡ Workspace:${NC} ${BRIGHT_CYAN}${workspace}${NC} ${BRIGHT_CYAN}│${NC} ${BOLD}${BRIGHT_MAGENTA}🎯 Target:${NC} ${target_color}${target}${NC} ${BRIGHT_CYAN}│${NC} ${BOLD}${BRIGHT_MAGENTA}🔐 Creds:${NC} ${creds_color}${creds}${NC} ${BRIGHT_CYAN}│${NC} ${BOLD}${BRIGHT_MAGENTA}⚙️  Mode:${NC} ${MAGENTA}${mode}${NC} ${BRIGHT_CYAN}│${NC}"
+    echo -e "${BRIGHT_CYAN}└────────────────────────────────────────────────────────────────────────────┘${NC}"
+    echo -e ""
+}
+
+# Enhanced menu category headers with color and style
+draw_menu_category() {
+    local icon="$1"
+    local title="$2"
+    local color="${3:-$BRIGHT_CYAN}"
+    local width=76
+
+    local title_full="$icon $title"
+    local title_len=${#title_full}
+    local line_len=$(( (width - title_len - 2) ))
+
+    echo -e "${color}┌─ ${BOLD}${title_full}${NC}${color} $(printf "%${line_len}s" | tr ' ' '─')${NC}"
+}
+
+# Color-coded menu items based on status
+draw_menu_item() {
+    local icon="$1"
+    local text="$2"
+    local status="${3:-normal}"  # normal, active, inactive, recommended
+
+    case "$status" in
+        active)
+            echo -e "${BRIGHT_GREEN}●${NC} ${BRIGHT_CYAN}${text}${NC}"
+            ;;
+        recommended)
+            echo -e "${BRIGHT_YELLOW}★${NC} ${BRIGHT_WHITE}${text}${NC}"
+            ;;
+        inactive)
+            echo -e "${DIM}○ ${text}${NC}"
+            ;;
+        *)
+            echo -e "${CYAN}▸${NC} ${text}"
+            ;;
+    esac
+}
+
+# Loading animation for initialization
+show_init_progress() {
+    local message="$1"
+    local step="$2"
+    local total="$3"
+
+    local percent=$(( step * 100 / total ))
+    local bar_width=30
+    local filled=$(( bar_width * step / total ))
+
+    echo -ne "\r${BRIGHT_CYAN}[${NC}"
+    for ((i=0; i<bar_width; i++)); do
+        if [ $i -lt $filled ]; then
+            echo -ne "${BRIGHT_MAGENTA}━${NC}"
+        else
+            echo -ne "${DIM}━${NC}"
+        fi
+    done
+    echo -ne "${BRIGHT_CYAN}]${NC} ${BRIGHT_GREEN}${percent}%${NC} ${message}..."
+
+    if [ $step -eq $total ]; then
+        echo ""
+    fi
+}
+
+# Styled shortcuts help
+draw_shortcuts_help() {
+    echo -e ""
+    echo -e "${DIM}┌─ Keyboard Shortcuts ─────────────────────────────────────────────────────┐${NC}"
+    echo -e "${DIM}│${NC} ${BRIGHT_CYAN}CTRL+T${NC}:targets  ${BRIGHT_CYAN}CTRL+C${NC}:creds   ${BRIGHT_CYAN}CTRL+W${NC}:web    ${BRIGHT_CYAN}CTRL+D${NC}:AD     ${BRIGHT_CYAN}CTRL+A${NC}:auth ${DIM}│${NC}"
+    echo -e "${DIM}│${NC} ${BRIGHT_CYAN}CTRL+S${NC}:select   ${BRIGHT_CYAN}CTRL+J${NC}:jobs    ${BRIGHT_CYAN}CTRL+M${NC}:mode   ${BRIGHT_CYAN}Type${NC} to filter    ${DIM}│${NC}"
+    echo -e "${DIM}└──────────────────────────────────────────────────────────────────────────┘${NC}"
+}
+
+# Service indicator with color
+show_service_indicator() {
+    local detected="${1:-false}"
+
+    if [[ "$detected" == "true" ]]; then
+        echo -e "${BRIGHT_GREEN}●${NC}"
+    else
+        echo -e "${DIM}○${NC}"
+    fi
+}
+
+# ============================================================================
 # Export Functions
 # ============================================================================
 
@@ -479,3 +617,10 @@ export -f draw_table_row
 export -f draw_table_footer
 export -f draw_context_bar
 export -f draw_shortcuts_bar
+export -f show_enhanced_banner
+export -f draw_enhanced_context
+export -f draw_menu_category
+export -f draw_menu_item
+export -f show_init_progress
+export -f draw_shortcuts_help
+export -f show_service_indicator
