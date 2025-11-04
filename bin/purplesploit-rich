@@ -16,7 +16,8 @@ python_dir = project_root / "python"
 if python_dir.exists():
     sys.path.insert(0, str(python_dir))
 
-from purplesploit.tui.app import main
+# Use interactive app with mouse and keyboard support
+from purplesploit.tui.app_interactive import main
 
 if __name__ == "__main__":
     main()
