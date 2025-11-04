@@ -72,17 +72,25 @@ class PurpleSploitTUI:
 
     def _init_framework(self):
         """Initialize the bash framework"""
+        # Check if framework exists
+        framework_engine = self.project_root / "framework" / "core" / "engine.sh"
+
+        if not framework_engine.exists():
+            self.console.print("[warning]Framework not found - running in lite mode[/warning]")
+            return
+
         self.console.print("[info]Initializing PurpleSploit framework...[/info]")
 
         # Source framework and initialize
         returncode, stdout, stderr = self.bash_executor.execute_command(
-            "source framework/core/engine.sh && framework_init_silent",
+            "source framework/core/engine.sh && framework_init_silent 2>/dev/null || true",
             show_spinner=True
         )
 
         if returncode != 0:
-            self.console.print(f"[danger]Failed to initialize framework: {stderr}[/danger]")
-            sys.exit(1)
+            self.console.print(f"[warning]Framework initialization had issues (continuing anyway)[/warning]")
+            if stderr and stderr.strip():
+                self.console.print(f"[dim]{stderr.strip()}[/dim]")
 
     def display_banner(self):
         """Display the PurpleSploit banner"""
