@@ -125,6 +125,7 @@ class BashExecutor:
                 result = subprocess.run(
                     command,
                     shell=shell,
+                    executable='/bin/bash',  # Use bash explicitly instead of sh
                     env=self.env,
                     capture_output=capture_output,
                     text=True,
@@ -134,6 +135,7 @@ class BashExecutor:
             result = subprocess.run(
                 command,
                 shell=shell,
+                executable='/bin/bash',  # Use bash explicitly instead of sh
                 env=self.env,
                 capture_output=capture_output,
                 text=True,
