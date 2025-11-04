@@ -97,5 +97,18 @@ handle_scanning() {
         "View Nmap Results")
             view_nmap_results
             ;;
+        "Back"|"")
+            # User cancelled or selected Back
+            return 0
+            ;;
+        *)
+            # Unknown selection - show debug info
+            if [[ -n "$subchoice" ]]; then
+                echo ""
+                echo -e "${RED}[!] Unknown selection: '$subchoice'${NC}"
+                echo ""
+                read -p "Press Enter to continue..."
+            fi
+            ;;
     esac
 }
