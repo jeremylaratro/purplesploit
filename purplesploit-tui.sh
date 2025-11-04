@@ -65,27 +65,20 @@ build_header() {
     local creds="${CURRENT_CRED_NAME:-<none>}"
     local run_mode="${RUN_MODE:-single}"
 
-    # Color-coded header
-    local ws_color="${BRIGHT_CYAN}"
-    local target_color="${BRIGHT_GREEN}"
-    local cred_color="${YELLOW}"
-    local mode_color="${MAGENTA}"
-
-    echo "${CYAN}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo "${CYAN}║${NC} ${BOLD}Workspace:${NC} ${ws_color}${workspace}${NC} ${CYAN}│${NC} ${BOLD}Target:${NC} ${target_color}${target}${NC} ${CYAN}│${NC} ${BOLD}Creds:${NC} ${cred_color}${creds}${NC} ${CYAN}│${NC} ${BOLD}Mode:${NC} ${mode_color}${run_mode}${NC} ${CYAN}║${NC}"
-    echo "${CYAN}╚════════════════════════════════════════════════════════════════════════╝${NC}"
+    # Simple color-coded header without special characters
+    echo "Workspace: $workspace | Target: $target | Creds: $creds | Mode: $run_mode"
 }
 
-# Service highlighting helper with enhanced visuals
+# Service highlighting helper
 highlight_if_active() {
     local target="$1"
     local service="$2"
     local text="$3"
 
     if [[ -n "$target" ]] && service_check "$target" "$service" 2>/dev/null; then
-        echo "${BRIGHT_GREEN}▶${NC} ${BRIGHT_CYAN}${text}${NC}"
+        echo "● $text"
     else
-        echo "${DIM}  ${text}${NC}"
+        echo "  $text"
     fi
 }
 
@@ -94,13 +87,17 @@ show_main_menu() {
     local header=$(build_header)
     local target="${TARGET:-$(var_get RHOST 2>/dev/null)}"
     
-    # Build dynamic menu with service highlighting and enhanced visuals
-    local menu="${BRIGHT_MAGENTA}╔══ WEB TESTING ══════════════════════════╗${NC}
-${BRIGHT_YELLOW}🌐${NC} Feroxbuster (Directory/File Discovery)
-${BRIGHT_YELLOW}🌐${NC} WFUZZ (Fuzzing)
-${BRIGHT_YELLOW}🌐${NC} SQLMap (SQL Injection)
-${BRIGHT_YELLOW}🌐${NC} HTTPX (HTTP Probing)
-${BRIGHT_MAGENTA}╔══ NETWORK TESTING - NXC ════════════════╗${NC}
+    # Build dynamic menu with service highlighting
+    local menu="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ WEB TESTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Feroxbuster (Directory/File Discovery)
+WFUZZ (Fuzzing)
+SQLMap (SQL Injection)
+HTTPX (HTTP Probing)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ NETWORK TESTING - NXC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 $(highlight_if_active "$target" "smb" "SMB Authentication")
 $(highlight_if_active "$target" "smb" "SMB Enumeration")
 $(highlight_if_active "$target" "smb" "SMB Shares")
@@ -114,54 +111,59 @@ $(highlight_if_active "$target" "winrm" "WinRM Operations")
 $(highlight_if_active "$target" "mssql" "MSSQL Operations")
 $(highlight_if_active "$target" "rdp" "RDP Operations")
 $(highlight_if_active "$target" "ssh" "SSH Operations")
-${BRIGHT_YELLOW}🔍${NC} Network Scanning
-${BRIGHT_MAGENTA}╔══ NETWORK TESTING - IMPACKET ═══════════╗${NC}
-${BRIGHT_RED}⚔${NC} Impacket PSExec
-${BRIGHT_RED}⚔${NC} Impacket WMIExec
-${BRIGHT_RED}⚔${NC} Impacket SMBExec
-${BRIGHT_RED}⚔${NC} Impacket ATExec
-${BRIGHT_RED}⚔${NC} Impacket DcomExec
-${BRIGHT_RED}💎${NC} Impacket SecretsDump
-${BRIGHT_RED}💎${NC} Impacket SAM/LSA/NTDS Dump
-${BRIGHT_RED}🎫${NC} Kerberoasting (GetUserSPNs)
-${BRIGHT_RED}🎫${NC} AS-REP Roasting (GetNPUsers)
-${BRIGHT_RED}🎫${NC} Golden/Silver Tickets
-${BRIGHT_YELLOW}🔍${NC} Impacket Enumeration
-${BRIGHT_YELLOW}📁${NC} Impacket SMB Client
-${BRIGHT_YELLOW}⚙${NC} Service Management
-${BRIGHT_YELLOW}📝${NC} Registry Operations
-${BRIGHT_MAGENTA}╔══ SESSIONS (WORKSPACES & JOBS) ═════════╗${NC}
-${BRIGHT_CYAN}💼${NC} Sessions Management
-${BRIGHT_MAGENTA}╔══ AI AUTOMATION ════════════════════════╗${NC}
-${BRIGHT_GREEN}🤖${NC} AI Automation (OpenAI/Claude)
-${BRIGHT_MAGENTA}╔══ SETTINGS ═════════════════════════════╗${NC}
-${CYAN}⚙${NC} Manage Web Targets
-${CYAN}⚙${NC} Manage AD Targets
-${CYAN}🔑${NC} Switch Credentials
-${CYAN}🎯${NC} Switch Target
-${CYAN}🏢${NC} Select AD Target
-${CYAN}🔄${NC} Toggle Run Mode (Single/All)
-${CYAN}👤${NC} Manage Credentials
-${CYAN}📡${NC} Manage Targets
-${RED}🗑${NC} Database Management (Reset/Clear)
-${RED}❌${NC} Exit"
+Network Scanning
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ NETWORK TESTING - IMPACKET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Impacket PSExec
+Impacket WMIExec
+Impacket SMBExec
+Impacket ATExec
+Impacket DcomExec
+Impacket SecretsDump
+Impacket SAM/LSA/NTDS Dump
+Kerberoasting (GetUserSPNs)
+AS-REP Roasting (GetNPUsers)
+Golden/Silver Tickets
+Impacket Enumeration
+Impacket SMB Client
+Service Management
+Registry Operations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SESSIONS (WORKSPACES & JOBS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sessions Management
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ AI AUTOMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AI Automation (OpenAI/Claude)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SETTINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Manage Web Targets
+Manage AD Targets
+Switch Credentials
+Switch Target
+Select AD Target
+Toggle Run Mode (Single/All)
+Manage Credentials
+Manage Targets
+Database Management (Reset/Clear)
+Exit"
 
     echo "$menu" | fzf \
-        --prompt="${BRIGHT_MAGENTA}▶${NC} Select Tool: " \
+        --prompt="▶ Select Tool: " \
         --height=100% \
         --reverse \
-        --ansi \
         --cycle \
         --border=rounded \
-        --margin=1 \
-        --padding=1 \
         --info=inline \
         --pointer="▶" \
         --marker="✓" \
         --header="$header
-${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
-${BOLD}Shortcuts:${NC} ${BRIGHT_CYAN}CTRL+T${NC}:targets  ${BRIGHT_CYAN}CTRL+C${NC}:creds  ${BRIGHT_CYAN}CTRL+W${NC}:web  ${BRIGHT_CYAN}CTRL+D${NC}:AD  ${BRIGHT_CYAN}CTRL+A${NC}:auth  ${BRIGHT_CYAN}CTRL+S${NC}:target  ${BRIGHT_CYAN}CTRL+J${NC}:jobs  ${BRIGHT_CYAN}CTRL+M${NC}:mode
-${BRIGHT_GREEN}▶${NC} = Service detected ${CYAN}│${NC} ${DIM}dim${NC} = Service not detected ${CYAN}│${NC} Type to filter/autocomplete" \
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Shortcuts: CTRL+T=targets | CTRL+C=creds | CTRL+W=web | CTRL+D=AD | CTRL+A=auth | CTRL+S=target | CTRL+J=jobs | CTRL+M=mode
+● = Service detected | Type to filter/autocomplete" \
         --header-first \
         --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j,ctrl-m
 }
@@ -169,32 +171,30 @@ ${BRIGHT_GREEN}▶${NC} = Service detected ${CYAN}│${NC} ${DIM}dim${NC} = Serv
 # Initialize and run
 main() {
     clear
-    show_banner
+    show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
 
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC} ${BRIGHT_CYAN}▶${NC} Initializing PurpleSploit Framework...                              ${CYAN}║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "Initializing PurpleSploit Framework..."
     echo ""
 
-    show_loading "Loading core components"
     framework_init_silent
 
     echo ""
-    show_success "Framework backend initialized"
-    show_success "Lite tool handlers loaded"
-    show_success "AI automation ready"
-    show_success "Database connections established"
+    echo "[+] Framework backend initialized"
+    echo "[+] Lite tool handlers loaded"
+    echo "[+] AI automation ready"
+    echo "[+] Database connections established"
 
     echo ""
-    echo -e "${BRIGHT_GREEN}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_GREEN}║${NC} ${BOLD}${BRIGHT_GREEN}✓ Ready!${NC} All systems operational                                        ${BRIGHT_GREEN}║${NC}"
-    echo -e "${BRIGHT_GREEN}╚════════════════════════════════════════════════════════════════════════╝${NC}"
-    sleep 2
+    echo "Ready! All systems operational"
+    echo ""
+    sleep 1
     
     while true; do
         clear
-        show_banner
-        
+        show_banner 2>/dev/null || echo "=== PurpleSploit Framework ==="
+        echo ""
+
         local output=$(show_main_menu)
         local key=$(echo "$output" | head -n1)
         local choice=$(echo "$output" | tail -n1)
@@ -276,23 +276,29 @@ main() {
 handle_sessions_menu() {
     while true; do
         local header=$(build_header)
-        local choice=$(echo "┌ WORKSPACES ────────────────────────────
+        local choice=$(echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ WORKSPACES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Switch Workspace (FZF)
 Create New Workspace
 List All Workspaces
 Delete Workspace
 Show Workspace Info
-┌ BACKGROUND JOBS ───────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BACKGROUND JOBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 List Running Jobs
 View Job Output
 Kill Background Job
-┌ NAVIGATION ────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ NAVIGATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Back to Main Menu" | fzf \
             --prompt="Sessions Management: " \
             --height=80% \
             --reverse \
             --header="$header
-───────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Workspaces: Organize per-engagement | Jobs: Run tools in background")
 
         case "$choice" in
