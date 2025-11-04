@@ -180,8 +180,7 @@ $(echo -e "${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | $
         --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
         --header="$header_text" \
         --header-first \
-        --bind="enter:accept" \
-        --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j,ctrl-m
+        --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j
 }
 
 # Initialize and run
@@ -369,7 +368,6 @@ $(echo -e "${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in backgr
             --prompt="💼 Sessions Management: " \
             --height=80% \
             --reverse \
-            --bind="enter:accept" \
             --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
             --header="$sessions_header")
 
