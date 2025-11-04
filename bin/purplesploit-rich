@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""
+PurpleSploit Rich TUI Launcher
+
+Launches the Rich-based terminal user interface for PurpleSploit
+"""
+
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+script_dir = Path(__file__).resolve().parent
+project_root = script_dir.parent
+python_dir = project_root / "python"
+
+if python_dir.exists():
+    sys.path.insert(0, str(python_dir))
+
+from purplesploit.tui.app import main
+
+if __name__ == "__main__":
+    main()
