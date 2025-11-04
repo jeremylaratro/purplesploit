@@ -83,9 +83,9 @@ Toggle Run Mode (Single/All)
 Manage Credentials
 Manage Targets
 Database Management (Reset/Clear)
-Exit" | fzf --prompt="$prompt" --height=100% --reverse --header="$header" --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-a,ctrl-s,ctrl-m,ctrl-d --header-first --header="$header
+Exit" | fzf --prompt="$prompt" --height=100% --reverse --header="$header" --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-a,ctrl-s,ctrl-d --header-first --header="$header
 ───────────────────────────────────────
-Keybinds: CTRL+T:targets  CTRL+C:creds  CTRL+W:web  CTRL+D:AD  CTRL+A:authSwitch  CTRL+S:targetSwitch  CTRL+M:mode"
+Keybinds: CTRL+T:targets  CTRL+C:creds  CTRL+W:web  CTRL+D:AD  CTRL+A:authSwitch  CTRL+S:targetSwitch"
             ;;
         "feroxbuster")
             echo "Basic Directory Scan
