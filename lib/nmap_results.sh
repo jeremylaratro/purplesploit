@@ -38,12 +38,12 @@ parse_nmap_results() {
         return 1
     fi
 
-    if [[ ! -f "${SCRIPT_DIR}/parse_nmap.py" ]]; then
-        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}${NC}"
+    if [[ ! -f "${SCRIPT_DIR}/tools/parse_nmap.py" ]]; then
+        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}/tools${NC}"
         return 1
     fi
 
-    python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" $options
+    python3 "${SCRIPT_DIR}/tools/parse_nmap.py" "$xml_file" $options
 }
 
 # Auto-import web targets from nmap scan
@@ -55,8 +55,8 @@ import_web_targets_from_nmap() {
         return 1
     fi
 
-    if [[ ! -f "${SCRIPT_DIR}/parse_nmap.py" ]]; then
-        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}${NC}"
+    if [[ ! -f "${SCRIPT_DIR}/tools/parse_nmap.py" ]]; then
+        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}/tools${NC}"
         return 1
     fi
 
@@ -64,7 +64,7 @@ import_web_targets_from_nmap() {
     echo ""
 
     # Use the parser to export web targets
-    python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" --export-web "$WEB_TARGETS_DB"
+    python3 "${SCRIPT_DIR}/tools/parse_nmap.py" "$xml_file" --export-web "$WEB_TARGETS_DB"
 
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}Web targets imported successfully!${NC}"
@@ -84,8 +84,8 @@ import_services_from_nmap() {
         return 1
     fi
 
-    if [[ ! -f "${SCRIPT_DIR}/parse_nmap.py" ]]; then
-        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}${NC}"
+    if [[ ! -f "${SCRIPT_DIR}/tools/parse_nmap.py" ]]; then
+        echo -e "${RED}Error: parse_nmap.py not found in ${SCRIPT_DIR}/tools${NC}"
         return 1
     fi
 
@@ -93,14 +93,14 @@ import_services_from_nmap() {
     echo ""
 
     # Use the parser to export detected services
-    python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" --export-services "$SERVICES_DB"
+    python3 "${SCRIPT_DIR}/tools/parse_nmap.py" "$xml_file" --export-services "$SERVICES_DB"
 
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}Services imported successfully!${NC}"
         # Also import web targets
         echo ""
         echo -e "${CYAN}Detecting web servers...${NC}"
-        python3 "${SCRIPT_DIR}/parse_nmap.py" "$xml_file" --export-web "$WEB_TARGETS_DB"
+        python3 "${SCRIPT_DIR}/tools/parse_nmap.py" "$xml_file" --export-web "$WEB_TARGETS_DB"
         return 0
     else
         echo -e "${RED}Failed to import services${NC}"
