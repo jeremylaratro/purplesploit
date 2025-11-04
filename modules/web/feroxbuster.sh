@@ -50,11 +50,11 @@ handle_feroxbuster() {
                 run_command "feroxbuster -u '$url' --thorough --methods GET,POST -w '$wordlist'"
                 ;;
             "Burp Integration Scan")
-                read -p "Burp proxy [default: 127.0.0.1:8080]: " proxy
-                [[ -z "$proxy" ]] && proxy="127.0.0.1:8080"
+                read -p "Burp proxy [default: http://127.0.0.1:8080]: " proxy
+                [[ -z "$proxy" ]] && proxy="http://127.0.0.1:8080"
                 echo -e "${CYAN}Scanning with Burp integration${NC}"
                 echo -e "${YELLOW}Make sure Burp is running and listening!${NC}"
-                run_command "feroxbuster -u '$url' --thorough --methods GET,POST --burp --burp-replay -p 'http://$proxy'"
+                run_command "feroxbuster -u '$url' --thorough --methods GET,POST --proxy '$proxy'"
                 ;;
             "API Discovery")
                 echo -e "${CYAN}Scanning for API endpoints${NC}"
