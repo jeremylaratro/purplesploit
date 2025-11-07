@@ -27,6 +27,8 @@ class CommandHandler:
         self.framework = framework
         self.display = Display()
         self.commands = self._register_commands()
+        self.last_search_results = []  # Store last search results for number selection
+        self.current_operation_index = None  # Track selected operation
 
     def _register_commands(self) -> Dict[str, Callable]:
         """
@@ -154,7 +156,10 @@ class CommandHandler:
         results = self.framework.search_modules(query)
 
         if results:
+            # Store results for number-based selection
+            self.last_search_results = results
             self.display.print_modules_table(results)
+            self.display.print_info("\nTip: Use 'use <number>' or 'use <module_path>' to load a module")
         else:
             self.display.print_warning(f"No modules found matching: {query}")
 
@@ -163,16 +168,42 @@ class CommandHandler:
     def cmd_use(self, args: List[str]) -> bool:
         """Load a module."""
         if not args:
-            self.display.print_error("Usage: use <module_path>")
+            self.display.print_error("Usage: use <module_path | number>")
             return True
 
-        module_path = args[0]
+        module_identifier = args[0]
+
+        # Check if it's a number (selecting from search results)
+        if module_identifier.isdigit():
+            index = int(module_identifier) - 1  # Convert to 0-based index
+
+            if not self.last_search_results:
+                self.display.print_error("No search results available. Run 'search' first")
+                return True
+
+            if index < 0 or index >= len(self.last_search_results):
+                self.display.print_error(f"Invalid number. Must be 1-{len(self.last_search_results)}")
+                return True
+
+            # Get module path from search results
+            module_path = self.last_search_results[index]['path']
+        else:
+            module_path = module_identifier
+
         module = self.framework.use_module(module_path)
 
         if module:
             self.display.print_success(f"Loaded module: {module.name}")
-            self.display.print_info("Type 'options' to view module options")
-            self.display.print_info("Type 'info' for module information")
+
+            # Check if module has operations/submenu
+            if module.has_operations():
+                self.display.print_info("\nThis module has multiple operations:")
+                operations = module.get_operations()
+                self._show_operations(operations)
+                self.display.print_info("\nTip: Use 'run <number>' or 'run <operation_name>' to execute")
+            else:
+                self.display.print_info("Type 'options' to view module options")
+                self.display.print_info("Type 'run' to execute the module")
         else:
             self.display.print_error(f"Failed to load module: {module_path}")
             self.display.print_info("Use 'search' to find modules")
@@ -284,15 +315,89 @@ class CommandHandler:
         return True
 
     def cmd_run(self, args: List[str]) -> bool:
-        """Run the current module."""
+        """Run the current module or a specific operation."""
         module = self.framework.session.current_module
         if not module:
             self.display.print_error("No module loaded. Use 'use <module>' first")
             return True
 
-        self.display.print_info(f"Running module: {module.name}")
-        results = self.framework.run_module(module)
-        self.display.print_results(results)
+        # Check if module has operations
+        if module.has_operations():
+            operations = module.get_operations()
+
+            # If args provided, select operation by number or name
+            if args:
+                operation_id = args[0]
+
+                # Try as number first
+                if operation_id.isdigit():
+                    index = int(operation_id) - 1
+                    if 0 <= index < len(operations):
+                        operation = operations[index]
+                    else:
+                        self.display.print_error(f"Invalid operation number. Must be 1-{len(operations)}")
+                        return True
+                else:
+                    # Try to find by name
+                    operation = None
+                    for op in operations:
+                        if op['name'].lower() == operation_id.lower():
+                            operation = op
+                            break
+
+                    if not operation:
+                        self.display.print_error(f"Operation not found: {operation_id}")
+                        self.display.print_info("Available operations:")
+                        self._show_operations(operations)
+                        return True
+            else:
+                # No args - show menu and prompt
+                self.display.print_info("Select an operation:")
+                self._show_operations(operations)
+
+                # Get user selection
+                try:
+                    from prompt_toolkit import prompt as pt_prompt
+                    selection = pt_prompt("\n▶ Select operation (number or name): ")
+
+                    if not selection:
+                        self.display.print_warning("No operation selected")
+                        return True
+
+                    # Try as number
+                    if selection.isdigit():
+                        index = int(selection) - 1
+                        if 0 <= index < len(operations):
+                            operation = operations[index]
+                        else:
+                            self.display.print_error(f"Invalid number")
+                            return True
+                    else:
+                        # Try by name
+                        operation = None
+                        for op in operations:
+                            if op['name'].lower() == selection.lower():
+                                operation = op
+                                break
+
+                        if not operation:
+                            self.display.print_error(f"Operation not found: {selection}")
+                            return True
+
+                except (EOFError, KeyboardInterrupt):
+                    self.display.print_warning("\nOperation cancelled")
+                    return True
+
+            # Execute the selected operation
+            self.display.print_info(f"Running: {operation['name']}")
+            results = self._execute_operation(module, operation)
+            self.display.print_results(results)
+
+        else:
+            # Traditional single-operation module
+            self.display.print_info(f"Running module: {module.name}")
+            results = self.framework.run_module(module)
+            self.display.print_results(results)
 
         return True
 
@@ -466,3 +571,75 @@ class CommandHandler:
         """Exit the framework."""
         self.display.print_info("Exiting PurpleSploit...")
         return False
+
+    # Helper methods
+    def _show_operations(self, operations: List[Dict]) -> None:
+        """
+        Display operations menu in a formatted table.
+
+        Args:
+            operations: List of operation dictionaries
+        """
+        from rich.table import Table
+        from rich import box
+
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Operation", style="green")
+        table.add_column("Description", style="white")
+
+        for i, op in enumerate(operations, 1):
+            table.add_row(
+                str(i),
+                op.get('name', 'Unknown'),
+                op.get('description', 'No description')
+            )
+
+        self.display.console.print(table)
+
+    def _execute_operation(self, module, operation: Dict) -> Dict:
+        """
+        Execute a specific module operation.
+
+        Args:
+            module: Module instance
+            operation: Operation dictionary with 'handler' key
+
+        Returns:
+            Results dictionary
+        """
+        handler = operation.get('handler')
+
+        if handler is None:
+            return {
+                "success": False,
+                "error": "No handler defined for operation"
+            }
+
+        try:
+            # Handler can be a method name (string) or callable
+            if isinstance(handler, str):
+                # Get method from module
+                method = getattr(module, handler, None)
+                if method is None:
+                    return {
+                        "success": False,
+                        "error": f"Handler method not found: {handler}"
+                    }
+                result = method()
+            elif callable(handler):
+                # Call directly
+                result = handler()
+            else:
+                return {
+                    "success": False,
+                    "error": f"Invalid handler type: {type(handler)}"
+                }
+
+            return result if isinstance(result, dict) else {"success": True, "output": str(result)}
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error executing operation: {str(e)}"
+            }
