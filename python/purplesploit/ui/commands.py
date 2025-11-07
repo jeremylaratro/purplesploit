@@ -178,7 +178,7 @@ class CommandHandler:
             # Auto-load if single result
             if len(module_results) == 1:
                 self.display.print_info(f"\n[Auto-loading single result...]")
-                return self.cmd_use([module_results[0]['path']])
+                return self.cmd_use([module_results[0].path])
             else:
                 self.display.print_info("\nTip: Use 'use <number>' to load a module")
         else:
@@ -205,7 +205,7 @@ class CommandHandler:
             # Search for module
             results = self.framework.search_modules(potential_module)
             if len(results) == 1:
-                module_path = results[0]['path']
+                module_path = results[0].path
                 module = self.framework.use_module(module_path)
 
                 if module:
@@ -248,7 +248,7 @@ class CommandHandler:
                 return True
 
             # Get module path from search results
-            module_path = self.last_search_results[index]['path']
+            module_path = self.last_search_results[index].path
         else:
             module_path = module_identifier
 
@@ -313,7 +313,9 @@ class CommandHandler:
 
         if what == "modules":
             modules = self.framework.list_modules()
+            self.last_search_results = modules  # Store for number selection
             self.display.print_modules_table(modules)
+            self.display.print_info("\nTip: Use 'use <number>' to load a module")
 
         elif what == "options":
             return self.cmd_options([])
@@ -412,41 +414,12 @@ class CommandHandler:
                         self._show_operations(operations)
                         return True
             else:
-                # No args - show menu and prompt
+                # No args - use interactive selector
                 self.display.print_info("Select an operation:")
-                self._show_operations(operations)
+                operation = self.interactive.select_operation(operations)
 
-                # Get user selection
-                try:
-                    from prompt_toolkit import prompt as pt_prompt
-                    selection = pt_prompt("\n▶ Select operation (number or name): ")
-
-                    if not selection:
-                        self.display.print_warning("No operation selected")
-                        return True
-
-                    # Try as number
-                    if selection.isdigit():
-                        index = int(selection) - 1
-                        if 0 <= index < len(operations):
-                            operation = operations[index]
-                        else:
-                            self.display.print_error(f"Invalid number")
-                            return True
-                    else:
-                        # Try by name
-                        operation = None
-                        for op in operations:
-                            if op['name'].lower() == selection.lower():
-                                operation = op
-                                break
-
-                        if not operation:
-                            self.display.print_error(f"Operation not found: {selection}")
-                            return True
-
-                except (EOFError, KeyboardInterrupt):
-                    self.display.print_warning("\nOperation cancelled")
+                if not operation:
+                    self.display.print_warning("No operation selected")
                     return True
 
             # Execute the selected operation
