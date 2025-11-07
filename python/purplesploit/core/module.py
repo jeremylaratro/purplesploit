@@ -273,6 +273,26 @@ class BaseModule(ABC):
                 if 'password' in cred and 'PASSWORD' in self.options:
                     self.set_option('PASSWORD', cred['password'])
 
+    def get_operations(self) -> List[Dict[str, Any]]:
+        """
+        Get list of operations/submenus for this module.
+        Override in subclass to provide granular operation selection.
+
+        Returns:
+            List of operation dictionaries with keys:
+            - name: Operation name
+            - description: Short description
+            - handler: Method name (string) or callable
+
+        If this returns an empty list, the module uses traditional run() method.
+        If it returns operations, the user must select an operation before running.
+        """
+        return []
+
+    def has_operations(self) -> bool:
+        """Check if module has granular operations/submenu."""
+        return len(self.get_operations()) > 0
+
 
 class ExternalToolModule(BaseModule):
     """
