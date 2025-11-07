@@ -290,6 +290,9 @@ class InteractiveSelector:
         preview: Optional[str]
     ) -> Optional[str]:
         """Use fzf for selection."""
+        import sys
+        import os
+
         try:
             # Build fzf command
             fzf_cmd = [
@@ -299,7 +302,10 @@ class InteractiveSelector:
                 '--reverse',
                 '--border',
                 '--prompt', prompt,
-                '--header', 'Use arrows/mouse to select, Enter to confirm, Esc to cancel'
+                '--header', 'Use arrows/mouse to select, Enter to confirm, Esc to cancel',
+                '--info', 'inline',
+                '--layout', 'reverse',
+                '--bind', 'ctrl-c:cancel'
             ]
 
             if multi:
@@ -308,36 +314,52 @@ class InteractiveSelector:
             if preview:
                 fzf_cmd.extend(['--preview', preview])
 
-            # Run fzf
+            # Run fzf with proper terminal control
+            # Important: redirect stdin/stdout/stderr to /dev/tty to bypass prompt_toolkit
             input_data = '\n'.join(items)
-            result = subprocess.run(
-                fzf_cmd,
-                input=input_data,
-                text=True,
-                capture_output=True
-            )
+
+            # Open /dev/tty for direct terminal access
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                result = subprocess.run(
+                    fzf_cmd,
+                    input=input_data,
+                    stdin=tty_in,
+                    stdout=subprocess.PIPE,
+                    stderr=tty_out,
+                    text=True
+                )
 
             if result.returncode == 0:
                 return result.stdout.strip()
 
-        except Exception:
+        except FileNotFoundError:
+            # fzf not found
+            return None
+        except Exception as e:
             # Fallback if fzf fails
+            print(f"[DEBUG] fzf error: {e}", file=sys.stderr)
             pass
 
         return None
 
     def _simple_select(self, items: List[str], prompt: str) -> Optional[str]:
         """Fallback simple selection without fzf."""
-        print("\nAvailable options:")
-        for i, item in enumerate(items, 1):
-            print(f"  {i}. {item}")
+        import sys
 
         try:
-            choice = input(f"\n{prompt}(1-{len(items)}): ")
-            if choice.isdigit():
-                index = int(choice) - 1
-                if 0 <= index < len(items):
-                    return items[index]
+            # Use /dev/tty for direct terminal access (bypass prompt_toolkit)
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable options:", file=tty_out)
+                for i, item in enumerate(items, 1):
+                    print(f"  {i}. {item}", file=tty_out)
+
+                print(f"\n{prompt}(1-{len(items)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(items):
+                        return items[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
@@ -345,18 +367,21 @@ class InteractiveSelector:
 
     def _simple_select_module(self, modules: List[Any]) -> Optional[Any]:
         """Simple module selection fallback."""
-        print("\nAvailable modules:")
-        for i, mod in enumerate(modules, 1):
-            path = self._get_attr(mod, 'path', '')
-            desc = self._get_attr(mod, 'description', '')[:50]
-            print(f"  {i}. {path} - {desc}")
-
         try:
-            choice = input(f"\nSelect (1-{len(modules)}): ")
-            if choice.isdigit():
-                index = int(choice) - 1
-                if 0 <= index < len(modules):
-                    return modules[index]
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable modules:", file=tty_out)
+                for i, mod in enumerate(modules, 1):
+                    path = self._get_attr(mod, 'path', '')
+                    desc = self._get_attr(mod, 'description', '')[:50]
+                    print(f"  {i}. {path} - {desc}", file=tty_out)
+
+                print(f"\nSelect (1-{len(modules)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(modules):
+                        return modules[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
@@ -364,16 +389,19 @@ class InteractiveSelector:
 
     def _simple_select_operation(self, operations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Simple operation selection fallback."""
-        print("\nAvailable operations:")
-        for i, op in enumerate(operations, 1):
-            print(f"  {i}. {op.get('name')} - {op.get('description')}")
-
         try:
-            choice = input(f"\nSelect (1-{len(operations)}): ")
-            if choice.isdigit():
-                index = int(choice) - 1
-                if 0 <= index < len(operations):
-                    return operations[index]
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable operations:", file=tty_out)
+                for i, op in enumerate(operations, 1):
+                    print(f"  {i}. {op.get('name')} - {op.get('description')}", file=tty_out)
+
+                print(f"\nSelect (1-{len(operations)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(operations):
+                        return operations[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
@@ -381,21 +409,24 @@ class InteractiveSelector:
 
     def _simple_select_target(self, targets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Simple target selection fallback."""
-        print("\nAvailable targets:")
-        for i, target in enumerate(targets, 1):
-            identifier = target.get('ip') or target.get('url', '')
-            name = target.get('name', '')
-            if name:
-                print(f"  {i}. {identifier} ({name})")
-            else:
-                print(f"  {i}. {identifier}")
-
         try:
-            choice = input(f"\nSelect (1-{len(targets)}): ")
-            if choice.isdigit():
-                index = int(choice) - 1
-                if 0 <= index < len(targets):
-                    return targets[index]
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable targets:", file=tty_out)
+                for i, target in enumerate(targets, 1):
+                    identifier = target.get('ip') or target.get('url', '')
+                    name = target.get('name', '')
+                    if name:
+                        print(f"  {i}. {identifier} ({name})", file=tty_out)
+                    else:
+                        print(f"  {i}. {identifier}", file=tty_out)
+
+                print(f"\nSelect (1-{len(targets)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(targets):
+                        return targets[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
@@ -403,21 +434,24 @@ class InteractiveSelector:
 
     def _simple_select_credential(self, credentials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Simple credential selection fallback."""
-        print("\nAvailable credentials:")
-        for i, cred in enumerate(credentials, 1):
-            username = cred.get('username', '')
-            domain = cred.get('domain', '')
-            if domain:
-                print(f"  {i}. {domain}\\{username}")
-            else:
-                print(f"  {i}. {username}")
-
         try:
-            choice = input(f"\nSelect (1-{len(credentials)}): ")
-            if choice.isdigit():
-                index = int(choice) - 1
-                if 0 <= index < len(credentials):
-                    return credentials[index]
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable credentials:", file=tty_out)
+                for i, cred in enumerate(credentials, 1):
+                    username = cred.get('username', '')
+                    domain = cred.get('domain', '')
+                    if domain:
+                        print(f"  {i}. {domain}\\{username}", file=tty_out)
+                    else:
+                        print(f"  {i}. {username}", file=tty_out)
+
+                print(f"\nSelect (1-{len(credentials)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(credentials):
+                        return credentials[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
