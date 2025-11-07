@@ -60,6 +60,14 @@ class CommandHandler:
             "creds": self.cmd_creds,
             "services": self.cmd_services,
 
+            # Enhanced search commands
+            "ops": self.cmd_ops,  # Search operations globally
+            "recent": self.cmd_recent,  # Show recent modules
+
+            # Quick shortcuts
+            "target": self.cmd_target_quick,  # Quick: target 192.168.1.1
+            "cred": self.cmd_cred_quick,      # Quick: cred admin:password
+
             # Utility commands
             "clear": self.cmd_clear,
             "history": self.cmd_history,
@@ -147,29 +155,79 @@ class CommandHandler:
         return True
 
     def cmd_search(self, args: List[str]) -> bool:
-        """Search for modules."""
+        """Enhanced search for modules with auto-load on single result."""
         if not args:
             self.display.print_error("Usage: search <query>")
+            self.display.print_info("Tip: Search looks at module name, description, category, and path")
             return True
 
         query = " ".join(args)
-        results = self.framework.search_modules(query)
 
-        if results:
+        # Search modules
+        module_results = self.framework.search_modules(query)
+
+        if module_results:
             # Store results for number-based selection
-            self.last_search_results = results
-            self.display.print_modules_table(results)
-            self.display.print_info("\nTip: Use 'use <number>' or 'use <module_path>' to load a module")
+            self.last_search_results = module_results
+            self.display.print_modules_table(module_results)
+
+            # Auto-load if single result
+            if len(module_results) == 1:
+                self.display.print_info(f"\n[Auto-loading single result...]")
+                return self.cmd_use([module_results[0]['path']])
+            else:
+                self.display.print_info("\nTip: Use 'use <number>' to load a module")
         else:
             self.display.print_warning(f"No modules found matching: {query}")
+            self.display.print_info("Tip: Use 'ops <query>' to search operations instead")
 
         return True
-
     def cmd_use(self, args: List[str]) -> bool:
-        """Load a module."""
+        """Smart module loading with optional operation filtering."""
         if not args:
-            self.display.print_error("Usage: use <module_path | number>")
+            self.display.print_error("Usage: use <module_path | number> [operation_filter]")
+            self.display.print_info("Examples:")
+            self.display.print_info("  use network/nxc_smb")
+            self.display.print_info("  use 1                  # Select from search results")
+            self.display.print_info("  use smb auth           # Load SMB module, show auth operations")
             return True
+
+        # Check for multi-word usage like "use smb auth"
+        if len(args) >= 2 and not args[0].isdigit():
+            # Try to find module matching first part
+            potential_module = args[0]
+            filter_term = " ".join(args[1:])
+
+            # Search for module
+            results = self.framework.search_modules(potential_module)
+            if len(results) == 1:
+                module_path = results[0]['path']
+                module = self.framework.use_module(module_path)
+
+                if module:
+                    self.display.print_success(f"Loaded module: {module.name}")
+
+                    if module.has_operations():
+                        operations = module.get_operations()
+                        # Filter operations by the filter term
+                        filtered_ops = [op for op in operations
+                                       if filter_term.lower() in op['name'].lower()
+                                       or filter_term.lower() in op['description'].lower()]
+
+                        if filtered_ops:
+                            self.display.print_info(f"\nShowing operations matching '{filter_term}':")
+                            self._show_operations(filtered_ops)
+                            self.display.print_info("\nTip: Use 'run <number>' to execute an operation")
+                        else:
+                            self.display.print_warning(f"No operations matching '{filter_term}'")
+                            self.display.print_info("\nShowing all operations:")
+                            self._show_operations(operations)
+                    return True
+            elif len(results) > 1:
+                self.display.print_error(f"Multiple modules match '{potential_module}'. Be more specific:")
+                self.last_search_results = results
+                self.display.print_modules_table(results)
+                return True
 
         module_identifier = args[0]
 
@@ -197,8 +255,8 @@ class CommandHandler:
 
             # Check if module has operations/submenu
             if module.has_operations():
-                self.display.print_info("\nThis module has multiple operations:")
                 operations = module.get_operations()
+                self.display.print_info(f"\nThis module has {len(operations)} operations:")
                 self._show_operations(operations)
                 self.display.print_info("\nTip: Use 'run <number>' or 'run <operation_name>' to execute")
             else:
@@ -209,7 +267,6 @@ class CommandHandler:
             self.display.print_info("Use 'search' to find modules")
 
         return True
-
     def cmd_back(self, args: List[str]) -> bool:
         """Unload current module."""
         if self.framework.session.current_module:
@@ -572,6 +629,187 @@ class CommandHandler:
         self.display.print_info("Exiting PurpleSploit...")
         return False
 
+
+    def cmd_ops(self, args: List[str]) -> bool:
+        """Search operations globally across all modules."""
+        if not args:
+            self.display.print_error("Usage: ops <query>")
+            self.display.print_info("Example: ops authentication")
+            return True
+
+        query = " ".join(args).lower()
+        results = self._search_operations(query)
+
+        if results:
+            self.display.console.print(f"\n[bold cyan]Found {len(results)} operations matching '{query}':[/bold cyan]\n")
+            for i, result in enumerate(results, 1):
+                mod_name = result['module']
+                mod_path = result['module_path']
+                op_name = result['operation']
+                op_desc = result['description']
+
+                self.display.console.print(f"  [dim]{i}.[/dim] [green]{mod_name}[/green]")
+                self.display.console.print(f"     Operation: {op_name}")
+                self.display.console.print(f"     {op_desc}")
+                self.display.console.print(f"     [dim]Path: {mod_path}[/dim]\n")
+
+            self.display.print_info("Tip: Use 'use <module_path>' to load the module")
+        else:
+            self.display.print_warning(f"No operations found matching: {query}")
+
+        return True
+
+    def cmd_recent(self, args: List[str]) -> bool:
+        """Show recently used modules."""
+        history = self.framework.session.command_history[-50:]  # Last 50 commands
+
+        # Extract 'use' commands
+        recent_modules = []
+        for entry in reversed(history):
+            cmd = entry.get('command', '')
+            if cmd.startswith('use '):
+                parts = cmd.split()
+                if len(parts) >= 2 and not parts[1].isdigit():
+                    module_path = parts[1]
+                    if module_path not in recent_modules:
+                        recent_modules.append(module_path)
+                    if len(recent_modules) >= 10:
+                        break
+
+        if recent_modules:
+            self.display.console.print("\n[bold cyan]Recently Used Modules:[/bold cyan]\n")
+            for i, mod_path in enumerate(recent_modules, 1):
+                # Try to get module info
+                if mod_path in self.framework.modules:
+                    meta = self.framework.modules[mod_path]
+                    self.display.console.print(f"  [dim]{i}.[/dim] [green]{mod_path}[/green] - {meta.description}")
+                else:
+                    self.display.console.print(f"  [dim]{i}.[/dim] {mod_path}")
+
+            self.display.print_info("\nTip: Use 'use <number>' after running 'search' or 'recent'")
+        else:
+            self.display.print_info("No recent modules found")
+
+        return True
+
+    def cmd_target_quick(self, args: List[str]) -> bool:
+        """Quick target setting: target 192.168.1.1"""
+        if not args:
+            # Show current target
+            target = self.framework.session.targets.get_current()
+            if target:
+                identifier = target.get('ip') or target.get('url')
+                self.display.print_info(f"Current target: {identifier}")
+            else:
+                self.display.print_info("No target set")
+            return True
+
+        identifier = args[0]
+
+        # Detect type
+        target_type = "web" if identifier.startswith("http") else "network"
+
+        # Add target
+        self.framework.add_target(target_type, identifier)
+
+        # Set as current
+        self.framework.session.targets.set_current(identifier)
+
+        self.display.print_success(f"Target set to: {identifier}")
+
+        # Also set RHOST/URL in current module if loaded
+        module = self.framework.session.current_module
+        if module:
+            if target_type == "network" and "RHOST" in module.options:
+                module.set_option("RHOST", identifier)
+                self.display.print_info(f"  → Set RHOST = {identifier}")
+            elif target_type == "web" and "URL" in module.options:
+                module.set_option("URL", identifier)
+                self.display.print_info(f"  → Set URL = {identifier}")
+
+        return True
+
+    def cmd_cred_quick(self, args: List[str]) -> bool:
+        """Quick credential setting: cred admin:password [domain]"""
+        if not args:
+            # Show current cred
+            cred = self.framework.session.credentials.get_current()
+            if cred:
+                self.display.print_info(f"Current cred: {cred['username']}")
+            else:
+                self.display.print_info("No credential set")
+            return True
+
+        # Parse username:password
+        if ":" in args[0]:
+            username, password = args[0].split(":", 1)
+        else:
+            username = args[0]
+            password = None
+
+        domain = args[1] if len(args) > 1 else None
+
+        # Add credential
+        self.framework.add_credential(username, password, domain)
+
+        # Set as current
+        self.framework.session.credentials.set_current(username)
+
+        self.display.print_success(f"Credential set: {username}")
+
+        # Also set in current module if loaded
+        module = self.framework.session.current_module
+        if module:
+            if "USERNAME" in module.options:
+                module.set_option("USERNAME", username)
+                self.display.print_info(f"  → Set USERNAME = {username}")
+            if password and "PASSWORD" in module.options:
+                module.set_option("PASSWORD", password)
+                self.display.print_info(f"  → Set PASSWORD = ****")
+            if domain and "DOMAIN" in module.options:
+                module.set_option("DOMAIN", domain)
+                self.display.print_info(f"  → Set DOMAIN = {domain}")
+
+        return True
+
+    def _search_operations(self, query: str) -> List[Dict]:
+        """
+        Search for operations across all modules.
+
+        Args:
+            query: Search term
+
+        Returns:
+            List of matching operations with module info
+        """
+        results = []
+        query_lower = query.lower()
+
+        for mod_path, metadata in self.framework.modules.items():
+            # Load module to get operations
+            try:
+                module_class = metadata.instance
+                if module_class:
+                    # Instantiate temporarily to get operations
+                    temp_module = module_class(self.framework)
+                    if temp_module.has_operations():
+                        operations = temp_module.get_operations()
+                        for op in operations:
+                            # Check if query matches operation name or description
+                            if (query_lower in op['name'].lower() or
+                                query_lower in op['description'].lower()):
+                                results.append({
+                                    'module': metadata.name,
+                                    'module_path': mod_path,
+                                    'operation': op['name'],
+                                    'description': op['description']
+                                })
+            except Exception:
+                pass  # Skip modules that fail to instantiate
+
+        return results
+
+    # Helper methods
     # Helper methods
     def _show_operations(self, operations: List[Dict]) -> None:
         """
