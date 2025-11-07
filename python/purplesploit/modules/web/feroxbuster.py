@@ -1,17 +1,19 @@
 """
 Feroxbuster Module
 
-Fast directory and file discovery for web applications.
+Directory and file discovery using feroxbuster.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from typing import Dict, Any, List
 
 
 class FeroxbusterModule(ExternalToolModule):
     """
-    Feroxbuster directory and file discovery module.
+    Feroxbuster module for directory and file discovery.
 
-    A fast, simple, recursive content discovery tool written in Rust.
+    Supports various scan types including basic, deep, custom wordlist,
+    Burp integration, API discovery, and backup file discovery.
     """
 
     def __init__(self, framework):
@@ -24,7 +26,7 @@ class FeroxbusterModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "Fast directory and file discovery tool for web applications"
+        return "Directory and file discovery with 7 scan types"
 
     @property
     def author(self) -> str:
@@ -42,119 +44,110 @@ class FeroxbusterModule(ExternalToolModule):
             "URL": {
                 "value": None,
                 "required": True,
-                "description": "Target URL (e.g., http://10.10.10.10)",
+                "description": "Target URL",
                 "default": None
             },
-            "WORDLIST": {
-                "value": "/usr/share/wordlists/dirb/common.txt",
-                "required": False,
-                "description": "Wordlist path",
-                "default": "/usr/share/wordlists/dirb/common.txt"
-            },
-            "EXTENSIONS": {
-                "value": "php,html,js,txt",
-                "required": False,
-                "description": "File extensions (comma-separated)",
-                "default": "php,html,js,txt"
-            },
-            "THREADS": {
-                "value": "50",
-                "required": False,
-                "description": "Number of concurrent threads",
-                "default": "50"
-            },
-            "PROXY": {
-                "value": None,
-                "required": False,
-                "description": "Proxy URL (e.g., http://127.0.0.1:8080)",
-                "default": None
-            },
-            "THOROUGH": {
-                "value": "true",
-                "required": False,
-                "description": "Enable thorough mode",
-                "default": "true"
-            },
-            "METHODS": {
-                "value": "GET,POST",
-                "required": False,
-                "description": "HTTP methods (comma-separated)",
-                "default": "GET,POST"
-            }
         })
 
-    def build_command(self) -> str:
+    def get_operations(self) -> List[Dict[str, Any]]:
         """
-        Build the feroxbuster command.
+        Get list of feroxbuster scan operations.
 
         Returns:
-            Command string to execute
+            List of operation dictionaries
         """
+        return [
+            {"name": "Basic Directory Scan", "description": "Basic scan with thorough mode", "handler": "op_basic_scan"},
+            {"name": "Deep Scan with Extensions", "description": "Deep scan with file extensions", "handler": "op_deep_scan"},
+            {"name": "Custom Wordlist Scan", "description": "Scan with custom wordlist", "handler": "op_custom_wordlist"},
+            {"name": "Burp Integration Scan", "description": "Scan with Burp Suite proxy", "handler": "op_burp_scan"},
+            {"name": "API Discovery", "description": "Scan for API endpoints", "handler": "op_api_discovery"},
+            {"name": "Backup File Discovery", "description": "Scan for backup files", "handler": "op_backup_discovery"},
+            {"name": "Custom Scan", "description": "Custom scan with your own flags", "handler": "op_custom_scan"},
+        ]
+
+    def _get_url(self) -> str:
+        """Get URL from options or prompt."""
         url = self.get_option("URL")
-        wordlist = self.get_option("WORDLIST")
-        extensions = self.get_option("EXTENSIONS")
-        threads = self.get_option("THREADS")
-        proxy = self.get_option("PROXY")
-        thorough = self.get_option("THOROUGH")
-        methods = self.get_option("METHODS")
+        if not url:
+            url = input("Target URL: ")
+            if url:
+                self.set_option("URL", url)
+        return url
 
-        # Base command
-        cmd = f"feroxbuster -u '{url}'"
+    def _execute_feroxbuster(self, extra_args: str = "") -> Dict[str, Any]:
+        """Execute feroxbuster with extra arguments."""
+        url = self._get_url()
+        if not url:
+            return {"success": False, "error": "URL required"}
 
-        # Add wordlist
-        if wordlist:
-            cmd += f" -w '{wordlist}'"
+        cmd = f"feroxbuster -u '{url}' --thorough --methods GET,POST"
 
-        # Add extensions
-        if extensions:
-            cmd += f" -x '{extensions}'"
+        if extra_args:
+            cmd += f" {extra_args}"
 
-        # Add threads
-        if threads:
-            cmd += f" -t {threads}"
+        return self.execute_command(cmd, timeout=600)
 
-        # Add methods
-        if methods:
-            cmd += f" --methods {methods}"
+    # ========================================================================
+    # Operation Handlers
+    # ========================================================================
 
-        # Add thorough mode
-        if thorough and thorough.lower() == "true":
-            cmd += " --thorough"
+    def op_basic_scan(self) -> Dict[str, Any]:
+        """Basic directory scan with thorough mode."""
+        self.log("Running basic scan with thorough mode", "info")
+        return self._execute_feroxbuster()
 
-        # Add proxy
-        if proxy:
-            cmd += f" --proxy '{proxy}'"
+    def op_deep_scan(self) -> Dict[str, Any]:
+        """Deep scan with custom extensions."""
+        exts = input("Extensions (e.g., php,html,js,txt) [default: php,html,js,txt,asp,aspx,jsp]: ")
+        if not exts:
+            exts = "php,html,js,txt,asp,aspx,jsp"
 
-        return cmd
+        self.log(f"Deep scan with extensions: {exts}", "info")
+        return self._execute_feroxbuster(f"-x '{exts}' -t 50")
 
-    def parse_output(self, output: str) -> dict:
+    def op_custom_wordlist(self) -> Dict[str, Any]:
+        """Scan with custom wordlist."""
+        wordlist = input("Wordlist path: ")
+        if not wordlist:
+            return {"success": False, "error": "Wordlist path required"}
+
+        import os
+        if not os.path.isfile(wordlist):
+            return {"success": False, "error": f"Wordlist not found: {wordlist}"}
+
+        return self._execute_feroxbuster(f"-w '{wordlist}'")
+
+    def op_burp_scan(self) -> Dict[str, Any]:
+        """Scan with Burp Suite integration."""
+        proxy = input("Burp proxy [default: http://127.0.0.1:8080]: ")
+        if not proxy:
+            proxy = "http://127.0.0.1:8080"
+
+        self.log("Scanning with Burp integration", "info")
+        self.log("Make sure Burp is running and listening!", "warning")
+        return self._execute_feroxbuster(f"--proxy '{proxy}'")
+
+    def op_api_discovery(self) -> Dict[str, Any]:
+        """Scan for API endpoints."""
+        self.log("Scanning for API endpoints", "info")
+        return self._execute_feroxbuster("--methods GET,POST,PUT,DELETE,PATCH -x json,xml")
+
+    def op_backup_discovery(self) -> Dict[str, Any]:
+        """Scan for backup files."""
+        self.log("Scanning for backup files", "info")
+        return self._execute_feroxbuster("-x bak,old,backup,zip,tar,gz,sql,db,config")
+
+    def op_custom_scan(self) -> Dict[str, Any]:
+        """Custom scan with user-provided flags."""
+        custom_flags = input("Additional feroxbuster flags: ")
+        if not custom_flags:
+            return {"success": False, "error": "No flags provided"}
+
+        return self._execute_feroxbuster(custom_flags)
+
+    def run(self) -> Dict[str, Any]:
         """
-        Parse feroxbuster output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
+        Fallback run method for basic scan.
         """
-        results = {
-            "found_urls": [],
-            "status_codes": {},
-        }
-
-        # Parse each line
-        for line in output.split('\n'):
-            # Look for status codes and URLs
-            # Feroxbuster output format: STATUS SIZE URL
-            if line.strip() and not line.startswith('['):
-                parts = line.split()
-                if len(parts) >= 3:
-                    status = parts[0]
-                    url = parts[-1]
-                    results["found_urls"].append(url)
-
-                    if status not in results["status_codes"]:
-                        results["status_codes"][status] = 0
-                    results["status_codes"][status] += 1
-
-        return results
+        return self.op_basic_scan()
