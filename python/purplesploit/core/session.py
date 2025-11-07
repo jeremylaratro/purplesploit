@@ -1,0 +1,416 @@
+"""
+Session and Context Management for PurpleSploit
+
+Manages persistent state including targets, credentials, workspace data,
+and module history. This is a key differentiator from Metasploit -
+context persists across module switches.
+"""
+
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+import json
+
+
+class Session:
+    """
+    Session management for PurpleSploit.
+
+    Maintains persistent context across module usage including:
+    - Current loaded module
+    - Target configurations (web and network)
+    - Credential sets
+    - Service detection results
+    - Workspace data and module results
+    - Command history
+    """
+
+    def __init__(self):
+        """Initialize a new session."""
+        self.created_at = datetime.now()
+
+        # Module context
+        self.current_module = None
+        self.module_history = []
+
+        # Persistent context (key differentiator from Metasploit)
+        self.targets = TargetManager()
+        self.credentials = CredentialManager()
+        self.services = ServiceManager()
+
+        # Workspace and results
+        self.workspace = {}
+        self.variables = {}
+
+        # History tracking
+        self.command_history = []
+
+        # Run mode
+        self.run_mode = "single"  # "single" or "all"
+
+    def load_module(self, module):
+        """
+        Load a module into the session.
+
+        Args:
+            module: Module instance to load
+        """
+        if self.current_module:
+            self.module_history.append({
+                "module": self.current_module.name,
+                "unloaded_at": datetime.now().isoformat()
+            })
+
+        self.current_module = module
+
+        # Auto-set options from context
+        if hasattr(module, 'auto_set_from_context'):
+            module.auto_set_from_context()
+
+    def unload_module(self):
+        """Unload the current module."""
+        if self.current_module:
+            self.module_history.append({
+                "module": self.current_module.name,
+                "unloaded_at": datetime.now().isoformat()
+            })
+            self.current_module = None
+
+    def store_results(self, module_name: str, results: Dict[str, Any]):
+        """
+        Store module execution results in workspace.
+
+        Args:
+            module_name: Name of the module
+            results: Results dictionary
+        """
+        if module_name not in self.workspace:
+            self.workspace[module_name] = []
+
+        self.workspace[module_name].append({
+            "timestamp": datetime.now().isoformat(),
+            "results": results
+        })
+
+    def get_results(self, module_name: str) -> List[Dict]:
+        """
+        Get stored results for a module.
+
+        Args:
+            module_name: Name of the module
+
+        Returns:
+            List of result dictionaries
+        """
+        return self.workspace.get(module_name, [])
+
+    def add_command(self, command: str):
+        """
+        Add a command to history.
+
+        Args:
+            command: Command string
+        """
+        self.command_history.append({
+            "command": command,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def get_current_target(self) -> Optional[Dict]:
+        """Get the current active target."""
+        return self.targets.get_current()
+
+    def get_current_credential(self) -> Optional[Dict]:
+        """Get the current active credential."""
+        return self.credentials.get_current()
+
+    def export_session(self) -> Dict:
+        """
+        Export the entire session state.
+
+        Returns:
+            Dictionary containing all session data
+        """
+        return {
+            "created_at": self.created_at.isoformat(),
+            "current_module": self.current_module.name if self.current_module else None,
+            "targets": self.targets.export(),
+            "credentials": self.credentials.export(),
+            "services": self.services.export(),
+            "workspace": self.workspace,
+            "variables": self.variables,
+            "command_history": self.command_history,
+            "run_mode": self.run_mode
+        }
+
+    def import_session(self, data: Dict):
+        """
+        Import session state from dictionary.
+
+        Args:
+            data: Session data dictionary
+        """
+        if "targets" in data:
+            self.targets.import_data(data["targets"])
+        if "credentials" in data:
+            self.credentials.import_data(data["credentials"])
+        if "services" in data:
+            self.services.import_data(data["services"])
+        if "workspace" in data:
+            self.workspace = data["workspace"]
+        if "variables" in data:
+            self.variables = data["variables"]
+        if "run_mode" in data:
+            self.run_mode = data["run_mode"]
+
+
+class TargetManager:
+    """Manages target hosts (both web URLs and network IPs)."""
+
+    def __init__(self):
+        self.targets = []
+        self.current_index = 0
+
+    def add(self, target: Dict[str, Any]) -> bool:
+        """
+        Add a target.
+
+        Args:
+            target: Target dictionary with keys like 'ip', 'url', 'name', 'type'
+
+        Returns:
+            True if added successfully
+        """
+        # Check for duplicates
+        for existing in self.targets:
+            if existing.get('ip') == target.get('ip') and existing.get('url') == target.get('url'):
+                return False
+
+        target['added_at'] = datetime.now().isoformat()
+        self.targets.append(target)
+        return True
+
+    def remove(self, identifier: str) -> bool:
+        """
+        Remove a target by IP, URL, or name.
+
+        Args:
+            identifier: IP, URL, or name to remove
+
+        Returns:
+            True if removed
+        """
+        for i, target in enumerate(self.targets):
+            if (target.get('ip') == identifier or
+                target.get('url') == identifier or
+                target.get('name') == identifier):
+                self.targets.pop(i)
+                if self.current_index >= len(self.targets):
+                    self.current_index = max(0, len(self.targets) - 1)
+                return True
+        return False
+
+    def list(self) -> List[Dict]:
+        """Get all targets."""
+        return self.targets
+
+    def get_current(self) -> Optional[Dict]:
+        """Get the current active target."""
+        if not self.targets:
+            return None
+        return self.targets[self.current_index]
+
+    def set_current(self, identifier: str) -> bool:
+        """
+        Set the current target by IP, URL, or index.
+
+        Args:
+            identifier: IP, URL, name, or index
+
+        Returns:
+            True if set successfully
+        """
+        # Try as index first
+        try:
+            index = int(identifier)
+            if 0 <= index < len(self.targets):
+                self.current_index = index
+                return True
+        except ValueError:
+            pass
+
+        # Try matching by identifier
+        for i, target in enumerate(self.targets):
+            if (target.get('ip') == identifier or
+                target.get('url') == identifier or
+                target.get('name') == identifier):
+                self.current_index = i
+                return True
+
+        return False
+
+    def export(self) -> Dict:
+        """Export target data."""
+        return {
+            "targets": self.targets,
+            "current_index": self.current_index
+        }
+
+    def import_data(self, data: Dict):
+        """Import target data."""
+        self.targets = data.get("targets", [])
+        self.current_index = data.get("current_index", 0)
+
+
+class CredentialManager:
+    """Manages credential sets."""
+
+    def __init__(self):
+        self.credentials = []
+        self.current_index = 0
+
+    def add(self, cred: Dict[str, Any]) -> bool:
+        """
+        Add a credential set.
+
+        Args:
+            cred: Credential dictionary with keys like 'username', 'password', 'domain', 'hash'
+
+        Returns:
+            True if added successfully
+        """
+        # Check for duplicates
+        for existing in self.credentials:
+            if (existing.get('username') == cred.get('username') and
+                existing.get('domain') == cred.get('domain')):
+                return False
+
+        cred['added_at'] = datetime.now().isoformat()
+        self.credentials.append(cred)
+        return True
+
+    def remove(self, identifier: str) -> bool:
+        """
+        Remove a credential by username or name.
+
+        Args:
+            identifier: Username or name
+
+        Returns:
+            True if removed
+        """
+        for i, cred in enumerate(self.credentials):
+            if (cred.get('username') == identifier or
+                cred.get('name') == identifier):
+                self.credentials.pop(i)
+                if self.current_index >= len(self.credentials):
+                    self.current_index = max(0, len(self.credentials) - 1)
+                return True
+        return False
+
+    def list(self) -> List[Dict]:
+        """Get all credentials."""
+        return self.credentials
+
+    def get_current(self) -> Optional[Dict]:
+        """Get the current active credential."""
+        if not self.credentials:
+            return None
+        return self.credentials[self.current_index]
+
+    def set_current(self, identifier: str) -> bool:
+        """
+        Set the current credential by username, name, or index.
+
+        Args:
+            identifier: Username, name, or index
+
+        Returns:
+            True if set successfully
+        """
+        # Try as index first
+        try:
+            index = int(identifier)
+            if 0 <= index < len(self.credentials):
+                self.current_index = index
+                return True
+        except ValueError:
+            pass
+
+        # Try matching by identifier
+        for i, cred in enumerate(self.credentials):
+            if (cred.get('username') == identifier or
+                cred.get('name') == identifier):
+                self.current_index = i
+                return True
+
+        return False
+
+    def export(self) -> Dict:
+        """Export credential data."""
+        return {
+            "credentials": self.credentials,
+            "current_index": self.current_index
+        }
+
+    def import_data(self, data: Dict):
+        """Import credential data."""
+        self.credentials = data.get("credentials", [])
+        self.current_index = data.get("current_index", 0)
+
+
+class ServiceManager:
+    """Manages detected services on targets."""
+
+    def __init__(self):
+        self.services = {}  # {target_ip: {service: [ports]}}
+
+    def add_service(self, target: str, service: str, port: int):
+        """
+        Record a detected service.
+
+        Args:
+            target: Target IP or hostname
+            service: Service name (e.g., 'smb', 'http', 'ssh')
+            port: Port number
+        """
+        if target not in self.services:
+            self.services[target] = {}
+
+        if service not in self.services[target]:
+            self.services[target][service] = []
+
+        if port not in self.services[target][service]:
+            self.services[target][service].append(port)
+
+    def get_services(self, target: str) -> Dict[str, List[int]]:
+        """
+        Get all services for a target.
+
+        Args:
+            target: Target IP or hostname
+
+        Returns:
+            Dictionary of {service: [ports]}
+        """
+        return self.services.get(target, {})
+
+    def has_service(self, target: str, service: str) -> bool:
+        """
+        Check if a target has a specific service.
+
+        Args:
+            target: Target IP or hostname
+            service: Service name
+
+        Returns:
+            True if service is detected
+        """
+        return service in self.services.get(target, {})
+
+    def export(self) -> Dict:
+        """Export service data."""
+        return {"services": self.services}
+
+    def import_data(self, data: Dict):
+        """Import service data."""
+        self.services = data.get("services", {})

@@ -368,7 +368,6 @@ $(echo -e "${DIM}Workspaces: Organize per-engagement | Jobs: Run tools in backgr
             --prompt="💼 Sessions Management: " \
             --height=80% \
             --reverse \
-            --bind="enter:accept" \
             --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
             --header="$sessions_header")
 
