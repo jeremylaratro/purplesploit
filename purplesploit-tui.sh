@@ -163,7 +163,7 @@ ${BRIGHT_RED}Exit${NC}"
     # Build header with proper ANSI code expansion
     local header_text="$(build_header)
 $(echo -e "${BRIGHT_CYAN}┌─ Keyboard Shortcuts ───────────────────────────────────────────────────────${NC}")
-$(echo -e "${BRIGHT_CYAN}│${NC} CTRL+T:targets | CTRL+C:creds | CTRL+W:web | CTRL+D:AD | CTRL+A:auth | CTRL+S:target | CTRL+J:jobs | CTRL+M:mode")
+$(echo -e "${BRIGHT_CYAN}│${NC} CTRL+T:targets | CTRL+C:creds | CTRL+W:web | CTRL+D:AD | CTRL+A:auth | CTRL+S:target | CTRL+J:jobs")
 $(echo -e "${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | ${DIM}○${NC} = Service not detected | Type to filter/autocomplete")"
 
     # Enhanced fzf with custom color scheme
@@ -180,6 +180,7 @@ $(echo -e "${BRIGHT_CYAN}│${NC} ${BRIGHT_GREEN}●${NC} = Service detected | $
         --color="fg:#d0d0d0,bg:#000000,hl:#5f87af,fg+:#00ff00,bg+:#262626,hl+:#5fd7ff,info:#afaf87,prompt:#d7005f,pointer:#af5fff,marker:#87ff00,spinner:#af5fff,header:#87afaf" \
         --header="$header_text" \
         --header-first \
+        --bind="enter:accept" \
         --expect=ctrl-t,ctrl-c,ctrl-w,ctrl-d,ctrl-a,ctrl-s,ctrl-j
 }
 
@@ -265,7 +266,6 @@ main() {
             ctrl-a) select_credentials; continue ;;
             ctrl-s) select_target; continue ;;
             ctrl-j) handle_sessions_menu; continue ;;
-            ctrl-m) toggle_run_mode; continue ;;
         esac
         
         # Handle menu selections (use clean_choice without color codes)
