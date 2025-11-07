@@ -5,14 +5,11 @@ SSH protocol operations using NetExec.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from typing import Dict, Any, List
 
 
 class NXCSSHModule(ExternalToolModule):
-    """
-    NetExec SSH module for SSH protocol testing.
-
-    Supports authentication, command execution, and SSH enumeration.
-    """
+    """NetExec SSH module for SSH authentication and command execution."""
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -24,7 +21,7 @@ class NXCSSHModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "SSH protocol testing and command execution using NetExec"
+        return "SSH operations with 6 commands"
 
     @property
     def author(self) -> str:
@@ -35,140 +32,61 @@ class NXCSSHModule(ExternalToolModule):
         return "network"
 
     def _init_options(self):
-        """Initialize module-specific options."""
         super()._init_options()
-
         self.options.update({
-            "RHOST": {
-                "value": None,
-                "required": True,
-                "description": "Target host IP address",
-                "default": None
-            },
-            "RPORT": {
-                "value": "22",
-                "required": False,
-                "description": "SSH port",
-                "default": "22"
-            },
-            "USERNAME": {
-                "value": None,
-                "required": False,
-                "description": "Username for authentication",
-                "default": None
-            },
-            "PASSWORD": {
-                "value": None,
-                "required": False,
-                "description": "Password for authentication",
-                "default": None
-            },
-            "KEY_FILE": {
-                "value": None,
-                "required": False,
-                "description": "SSH private key file path",
-                "default": None
-            },
-            "COMMAND": {
-                "value": None,
-                "required": False,
-                "description": "Command to execute (-x flag)",
-                "default": None
-            },
-            "SUDO": {
-                "value": "false",
-                "required": False,
-                "description": "Execute command with sudo",
-                "default": "false"
-            },
-            "SUDO_CHECK": {
-                "value": "false",
-                "required": False,
-                "description": "Check sudo privileges (--sudo-check)",
-                "default": "false"
-            }
+            "RHOST": {"value": None, "required": True, "description": "Target host IP", "default": None},
+            "USERNAME": {"value": None, "required": False, "description": "Username", "default": None},
+            "PASSWORD": {"value": None, "required": False, "description": "Password", "default": None},
         })
 
-    def build_command(self) -> str:
-        """
-        Build the nxc ssh command.
+    def get_operations(self) -> List[Dict[str, Any]]:
+        return [
+            {"name": "Test Authentication", "description": "Test SSH authentication", "handler": "op_test_auth"},
+            {"name": "Execute Command", "description": "Execute remote command", "handler": "op_exec_cmd"},
+            {"name": "Get System Info", "description": "Get uname and OS info", "handler": "op_sysinfo"},
+            {"name": "List Users", "description": "List system users", "handler": "op_users"},
+            {"name": "Check Sudo", "description": "Check sudo privileges", "handler": "op_sudo"},
+            {"name": "Network Info", "description": "Get network configuration", "handler": "op_netinfo"},
+        ]
 
-        Returns:
-            Command string to execute
-        """
-        rhost = self.get_option("RHOST")
-        rport = self.get_option("RPORT")
+    def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
         password = self.get_option("PASSWORD")
-        key_file = self.get_option("KEY_FILE")
-        command = self.get_option("COMMAND")
-        sudo = self.get_option("SUDO")
-        sudo_check = self.get_option("SUDO_CHECK")
+        if not username:
+            return ""
+        auth = f"-u '{username}'"
+        if password:
+            auth += f" -p '{password}'"
+        else:
+            auth += " -p ''"
+        return auth
 
-        # Base command
-        cmd = f"nxc ssh {rhost}"
+    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+        rhost = self.get_option("RHOST")
+        auth = self._build_auth()
+        cmd = f"nxc ssh {rhost} {auth}"
+        if extra_args:
+            cmd += f" {extra_args}"
+        return self.execute_command(cmd, timeout=120)
 
-        # Port
-        if rport and rport != "22":
-            cmd += f" --port {rport}"
+    def op_test_auth(self) -> Dict[str, Any]:
+        return self._execute_nxc()
 
-        # Authentication
-        if username:
-            cmd += f" -u '{username}'"
+    def op_exec_cmd(self) -> Dict[str, Any]:
+        cmd = input("Command: ")
+        return self._execute_nxc(f"-x '{cmd}'")
 
-            if password:
-                cmd += f" -p '{password}'"
-            elif key_file:
-                cmd += f" --key-file '{key_file}'"
-            else:
-                cmd += " -p ''"
+    def op_sysinfo(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'uname -a'")
 
-        # Command execution
-        if command:
-            cmd += f" -x '{command}'"
+    def op_users(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'cat /etc/passwd'")
 
-        # Sudo
-        if sudo and sudo.lower() == "true":
-            cmd += " --sudo"
+    def op_sudo(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'sudo -l'")
 
-        # Sudo check
-        if sudo_check and sudo_check.lower() == "true":
-            cmd += " --sudo-check"
+    def op_netinfo(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'ip a'")
 
-        return cmd
-
-    def parse_output(self, output: str) -> dict:
-        """
-        Parse nxc ssh output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "authentication": "unknown",
-            "sudo_available": False,
-            "command_output": [],
-        }
-
-        # Parse output
-        for line in output.split('\n'):
-            line = line.strip()
-
-            # Check authentication
-            if "[+]" in line:
-                results["authentication"] = "success"
-            elif "[-]" in line and ("Authentication failed" in line or "LOGON_FAILURE" in line):
-                results["authentication"] = "failed"
-
-            # Check sudo
-            if "sudo" in line.lower() and "available" in line.lower():
-                results["sudo_available"] = True
-
-            # Capture command output
-            if command and line and not line.startswith('['):
-                results["command_output"].append(line)
-
-        return results
+    def run(self) -> Dict[str, Any]:
+        return self.op_test_auth()

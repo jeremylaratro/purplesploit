@@ -5,13 +5,15 @@ LDAP protocol operations using NetExec.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from typing import Dict, Any, List
 
 
 class NXCLDAPModule(ExternalToolModule):
     """
     NetExec LDAP module for LDAP/Active Directory enumeration.
 
-    Supports authentication, user/group enumeration, and LDAP queries.
+    Supports user/group enumeration, BloodHound collection, LDAP queries,
+    and various AD attack techniques.
     """
 
     def __init__(self, framework):
@@ -24,7 +26,7 @@ class NXCLDAPModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "LDAP/Active Directory enumeration using NetExec"
+        return "LDAP/AD enumeration with 13 operations"
 
     @property
     def author(self) -> str:
@@ -61,7 +63,7 @@ class NXCLDAPModule(ExternalToolModule):
                 "value": None,
                 "required": False,
                 "description": "Domain name",
-                "default": None
+                "default": "WORKGROUP"
             },
             "HASH": {
                 "value": None,
@@ -69,144 +71,128 @@ class NXCLDAPModule(ExternalToolModule):
                 "description": "NTLM hash for pass-the-hash",
                 "default": None
             },
-            "USERS": {
-                "value": "false",
-                "required": False,
-                "description": "Enumerate users (--users)",
-                "default": "false"
-            },
-            "GROUPS": {
-                "value": "false",
-                "required": False,
-                "description": "Enumerate groups (--groups)",
-                "default": "false"
-            },
-            "TRUSTED_DOMAINS": {
-                "value": "false",
-                "required": False,
-                "description": "Enumerate trusted domains (--trusted-for-delegation)",
-                "default": "false"
-            },
-            "ASREPROAST": {
-                "value": "false",
-                "required": False,
-                "description": "Get AS-REP roastable users (--asreproast)",
-                "default": "false"
-            },
-            "KERBEROAST": {
-                "value": "false",
-                "required": False,
-                "description": "Get kerberoastable users (--kerberoasting)",
-                "default": "false"
-            },
-            "ADMIN_COUNT": {
-                "value": "false",
-                "required": False,
-                "description": "Get users with adminCount=1 (--admin-count)",
-                "default": "false"
-            },
-            "MODULE": {
-                "value": None,
-                "required": False,
-                "description": "NXC module to run (-M flag)",
-                "default": None
-            }
         })
 
-    def build_command(self) -> str:
-        """
-        Build the nxc ldap command.
+    def get_operations(self) -> List[Dict[str, Any]]:
+        """Get list of LDAP operations."""
+        return [
+            # Enumeration
+            {"name": "Enumerate Users", "description": "List domain users", "handler": "op_enum_users"},
+            {"name": "Enumerate Groups", "description": "List domain groups", "handler": "op_enum_groups"},
+            {"name": "Get User Descriptions", "description": "Extract user description fields", "handler": "op_user_desc"},
+            {"name": "Enumerate Computers", "description": "List domain computers", "handler": "op_enum_computers"},
+            {"name": "Enumerate Domain Trusts", "description": "List trusted domains", "handler": "op_enum_trusts"},
+            {"name": "ADCS Enumeration", "description": "Enumerate Active Directory Certificate Services", "handler": "op_adcs"},
+            {"name": "Check LDAP Signing", "description": "Check LDAP signing requirements", "handler": "op_ldap_signing"},
+            {"name": "Get All User Attributes", "description": "Dump all LDAP attributes", "handler": "op_all_attributes"},
 
-        Returns:
-            Command string to execute
-        """
-        rhost = self.get_option("RHOST")
+            # BloodHound Collection
+            {"name": "BloodHound - Collect All", "description": "Collect all BloodHound data", "handler": "op_bloodhound_all"},
+            {"name": "BloodHound - Sessions", "description": "Collect session data only", "handler": "op_bloodhound_sessions"},
+            {"name": "BloodHound - Trusts", "description": "Collect trust relationships", "handler": "op_bloodhound_trusts"},
+            {"name": "BloodHound - ACL", "description": "Collect ACL data", "handler": "op_bloodhound_acl"},
+            {"name": "BloodHound - Groups", "description": "Collect group memberships", "handler": "op_bloodhound_groups"},
+        ]
+
+    def _build_auth(self) -> str:
+        """Build authentication string for nxc."""
         username = self.get_option("USERNAME")
         password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
         hash_val = self.get_option("HASH")
-        module = self.get_option("MODULE")
 
-        # Base command
-        cmd = f"nxc ldap {rhost}"
+        if not username:
+            return ""
 
-        # Authentication
-        if username:
-            cmd += f" -u '{username}'"
+        auth = f"-u '{username}'"
 
-            if password:
-                cmd += f" -p '{password}'"
-            elif hash_val:
-                cmd += f" -H '{hash_val}'"
-            else:
-                cmd += " -p ''"
+        if hash_val:
+            auth += f" -H '{hash_val}'"
+        elif password:
+            auth += f" -p '{password}'"
+        else:
+            auth += " -p ''"
 
-        # Domain
-        if domain:
-            cmd += f" -d '{domain}'"
+        return auth
 
-        # Enumeration options
-        if self.get_option("USERS") and self.get_option("USERS").lower() == "true":
-            cmd += " --users"
+    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+        """Execute nxc ldap command with extra arguments."""
+        rhost = self.get_option("RHOST")
+        domain = self.get_option("DOMAIN")
+        auth = self._build_auth()
 
-        if self.get_option("GROUPS") and self.get_option("GROUPS").lower() == "true":
-            cmd += " --groups"
+        cmd = f"nxc ldap {rhost} {auth}"
 
-        if self.get_option("TRUSTED_DOMAINS") and self.get_option("TRUSTED_DOMAINS").lower() == "true":
-            cmd += " --trusted-for-delegation"
+        if domain and domain != "WORKGROUP":
+            cmd += f" -d {domain}"
 
-        if self.get_option("ASREPROAST") and self.get_option("ASREPROAST").lower() == "true":
-            cmd += " --asreproast"
+        if extra_args:
+            cmd += f" {extra_args}"
 
-        if self.get_option("KERBEROAST") and self.get_option("KERBEROAST").lower() == "true":
-            cmd += " --kerberoasting"
+        return self.execute_command(cmd, timeout=300)
 
-        if self.get_option("ADMIN_COUNT") and self.get_option("ADMIN_COUNT").lower() == "true":
-            cmd += " --admin-count"
+    # ========================================================================
+    # Enumeration Operations
+    # ========================================================================
 
-        # Module execution
-        if module:
-            cmd += f" -M {module}"
+    def op_enum_users(self) -> Dict[str, Any]:
+        """Enumerate domain users."""
+        return self._execute_nxc("--users")
 
-        return cmd
+    def op_enum_groups(self) -> Dict[str, Any]:
+        """Enumerate domain groups."""
+        return self._execute_nxc("--groups")
 
-    def parse_output(self, output: str) -> dict:
-        """
-        Parse nxc ldap output.
+    def op_user_desc(self) -> Dict[str, Any]:
+        """Get user description fields (often contain passwords)."""
+        return self._execute_nxc("-M get-desc-users")
 
-        Args:
-            output: Command stdout
+    def op_enum_computers(self) -> Dict[str, Any]:
+        """Enumerate domain computers."""
+        return self._execute_nxc("-M machines")
 
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "authentication": "unknown",
-            "users": [],
-            "groups": [],
-            "hashes": [],
-        }
+    def op_enum_trusts(self) -> Dict[str, Any]:
+        """Enumerate domain trust relationships."""
+        return self._execute_nxc("-M enum_trusts")
 
-        # Parse output
-        for line in output.split('\n'):
-            line = line.strip()
+    def op_adcs(self) -> Dict[str, Any]:
+        """Enumerate Active Directory Certificate Services."""
+        self.log("Enumerating ADCS for potential certificate-based attacks", "info")
+        return self._execute_nxc("-M adcs")
 
-            # Check authentication
-            if "[+]" in line and ":" in line:
-                results["authentication"] = "success"
-            elif "[-]" in line:
-                results["authentication"] = "failed"
+    def op_ldap_signing(self) -> Dict[str, Any]:
+        """Check LDAP signing requirements."""
+        return self._execute_nxc("-M ldap-checker")
 
-            # Parse users
-            if "User:" in line or "username" in line.lower():
-                results["users"].append(line)
+    def op_all_attributes(self) -> Dict[str, Any]:
+        """Get all LDAP user attributes."""
+        return self._execute_nxc("-M user-desc")
 
-            # Parse groups
-            if "Group:" in line or "group" in line.lower():
-                results["groups"].append(line)
+    # ========================================================================
+    # BloodHound Collection Operations
+    # ========================================================================
 
-            # Parse hashes (AS-REP or Kerberoast)
-            if "$krb5" in line:
-                results["hashes"].append(line)
+    def op_bloodhound_all(self) -> Dict[str, Any]:
+        """Collect all BloodHound data."""
+        self.log("Collecting all BloodHound data...", "info")
+        self.log("This may take several minutes on large domains", "warning")
+        return self._execute_nxc("-M bloodhound -o COLLECTION=All")
 
-        return results
+    def op_bloodhound_sessions(self) -> Dict[str, Any]:
+        """Collect BloodHound session data."""
+        return self._execute_nxc("-M bloodhound -o COLLECTION=Session")
+
+    def op_bloodhound_trusts(self) -> Dict[str, Any]:
+        """Collect BloodHound trust data."""
+        return self._execute_nxc("-M bloodhound -o COLLECTION=Trusts")
+
+    def op_bloodhound_acl(self) -> Dict[str, Any]:
+        """Collect BloodHound ACL data."""
+        return self._execute_nxc("-M bloodhound -o COLLECTION=ACL")
+
+    def op_bloodhound_groups(self) -> Dict[str, Any]:
+        """Collect BloodHound group membership data."""
+        return self._execute_nxc("-M bloodhound -o COLLECTION=Group")
+
+    def run(self) -> Dict[str, Any]:
+        """Fallback run method."""
+        return self.op_enum_users()
