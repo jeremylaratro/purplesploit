@@ -1,55 +1,11 @@
-# Core Web Framework
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
-aiofiles>=23.0.0
-httpx>=0.25.0
+# PurpleSploit Python Framework Requirements
 
-# Database & ORM
-sqlalchemy>=2.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-
-# Template Engine
-jinja2>=3.1.0
-
-# Terminal UI
+# Console and UI
+prompt-toolkit>=3.0.0
 rich>=13.0.0
-textual>=0.40.0
-prompt_toolkit>=3.0.0
 
-# Data Analysis
+# Data handling
 pandas>=2.0.0
-numpy>=1.24.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
 
-# Report Generation
-weasyprint>=60.0
-python-docx>=1.0.0
-openpyxl>=3.1.0
-reportlab>=4.0.0
-
-# Security & Crypto
-cryptography>=41.0.0
-
-# Configuration
-pyyaml>=6.0
-python-dotenv>=1.0.0
-
-# CLI
-click>=8.1.0
-typer>=0.9.0
-
-# AI (Optional - install if needed)
-# openai>=1.0.0
-# anthropic>=0.7.0
-
-# Development (Optional)
-# pytest>=7.4.0
-# pytest-asyncio>=0.21.0
-# pytest-cov>=4.1.0
-# black>=23.0.0
-# flake8>=6.0.0
-# mypy>=1.5.0
-# isort>=5.12.0
+# Database
+# No external dependencies needed for sqlite3 (built-in)
