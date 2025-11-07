@@ -291,7 +291,6 @@ class InteractiveSelector:
     ) -> Optional[str]:
         """Use fzf for selection."""
         import sys
-        import os
 
         try:
             # Build fzf command
@@ -314,16 +313,18 @@ class InteractiveSelector:
             if preview:
                 fzf_cmd.extend(['--preview', preview])
 
-            # Run fzf with proper terminal control
-            # Important: redirect stdin/stdout/stderr to /dev/tty to bypass prompt_toolkit
+            # Prepare input data
             input_data = '\n'.join(items)
 
-            # Open /dev/tty for direct terminal access
-            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+            # Run fzf with proper terminal control
+            # - input: provides items to fzf via stdin
+            # - stdout: capture the selection
+            # - stderr: redirect to /dev/tty for display
+            # - fzf automatically reads keyboard from /dev/tty when stdout is redirected
+            with open('/dev/tty', 'w') as tty_out:
                 result = subprocess.run(
                     fzf_cmd,
                     input=input_data,
-                    stdin=tty_in,
                     stdout=subprocess.PIPE,
                     stderr=tty_out,
                     text=True
@@ -337,6 +338,7 @@ class InteractiveSelector:
             return None
         except Exception as e:
             # Fallback if fzf fails
+            import sys
             print(f"[DEBUG] fzf error: {e}", file=sys.stderr)
             pass
 
