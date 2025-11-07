@@ -23,6 +23,23 @@ class InteractiveSelector:
     def __init__(self):
         self.has_fzf = shutil.which('fzf') is not None
 
+    def _get_attr(self, obj: Any, attr: str, default: Any = None) -> Any:
+        """
+        Get attribute from object or dict.
+
+        Args:
+            obj: Dictionary or object
+            attr: Attribute name
+            default: Default value if not found
+
+        Returns:
+            Attribute value or default
+        """
+        if isinstance(obj, dict):
+            return obj.get(attr, default)
+        else:
+            return getattr(obj, attr, default)
+
     def select_from_list(
         self,
         items: List[str],
@@ -53,18 +70,18 @@ class InteractiveSelector:
 
     def select_module(
         self,
-        modules: List[Dict[str, Any]],
+        modules: List[Any],
         auto_load_single: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Any]:
         """
         Interactive module selection with details.
 
         Args:
-            modules: List of module dictionaries
+            modules: List of module objects (ModuleMetadata) or dictionaries
             auto_load_single: Auto-select if only one module
 
         Returns:
-            Selected module dict or None
+            Selected module or None
         """
         if not modules:
             return None
@@ -72,13 +89,13 @@ class InteractiveSelector:
         if auto_load_single and len(modules) == 1:
             return modules[0]
 
-        # Format modules for display
+        # Format modules for display (handle both dicts and objects)
         lines = []
         for i, mod in enumerate(modules, 1):
-            path = mod.get('path', '')
-            name = mod.get('name', '')
-            desc = mod.get('description', '')[:50]
-            category = mod.get('category', '').upper()
+            path = self._get_attr(mod, 'path', '')
+            name = self._get_attr(mod, 'name', '')
+            desc = self._get_attr(mod, 'description', '')[:50]
+            category = self._get_attr(mod, 'category', '').upper()
 
             # Format: "1. [CATEGORY] path - description"
             line = f"{i:2d}. [{category:8s}] {path:30s} {desc}"
@@ -215,11 +232,13 @@ class InteractiveSelector:
 
         return None
 
-    def _simple_select_module(self, modules: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _simple_select_module(self, modules: List[Any]) -> Optional[Any]:
         """Simple module selection fallback."""
         print("\nAvailable modules:")
         for i, mod in enumerate(modules, 1):
-            print(f"  {i}. {mod.get('path')} - {mod.get('description', '')[:50]}")
+            path = self._get_attr(mod, 'path', '')
+            desc = self._get_attr(mod, 'description', '')[:50]
+            print(f"  {i}. {path} - {desc}")
 
         try:
             choice = input(f"\nSelect (1-{len(modules)}): ")
