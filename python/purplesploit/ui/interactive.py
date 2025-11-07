@@ -171,6 +171,117 @@ class InteractiveSelector:
 
         return None
 
+    def select_target(
+        self,
+        targets: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Interactive target selection.
+
+        Args:
+            targets: List of target dictionaries
+
+        Returns:
+            Selected target dict or None
+        """
+        if not targets:
+            return None
+
+        # Format targets for display
+        lines = []
+        for i, target in enumerate(targets, 1):
+            identifier = target.get('ip') or target.get('url', '')
+            name = target.get('name', '')
+            target_type = target.get('type', '').upper()
+
+            # Format: "1. [TYPE] identifier (name)"
+            if name:
+                line = f"{i:2d}. [{target_type:7s}] {identifier:25s} ({name})"
+            else:
+                line = f"{i:2d}. [{target_type:7s}] {identifier}"
+            lines.append(line)
+
+        if not self.has_fzf:
+            return self._simple_select_target(targets)
+
+        # Use fzf
+        selected_line = self._fzf_select(
+            lines,
+            prompt="Select Target: ",
+            multi=False,
+            preview=None
+        )
+
+        if selected_line:
+            # Extract index from selected line
+            try:
+                index = int(selected_line.split('.')[0].strip()) - 1
+                if 0 <= index < len(targets):
+                    return targets[index]
+            except (ValueError, IndexError):
+                pass
+
+        return None
+
+    def select_credential(
+        self,
+        credentials: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Interactive credential selection.
+
+        Args:
+            credentials: List of credential dictionaries
+
+        Returns:
+            Selected credential dict or None
+        """
+        if not credentials:
+            return None
+
+        # Format credentials for display
+        lines = []
+        for i, cred in enumerate(credentials, 1):
+            username = cred.get('username', '')
+            domain = cred.get('domain', '')
+            name = cred.get('name', '')
+            has_password = '✓' if cred.get('password') else '✗'
+            has_hash = '✓' if cred.get('hash') else '✗'
+
+            # Format: "1. DOMAIN\username (name) [Pass:✓ Hash:✗]"
+            if domain:
+                user_str = f"{domain}\\{username}"
+            else:
+                user_str = username
+
+            if name:
+                line = f"{i:2d}. {user_str:30s} ({name:15s}) [Pass:{has_password} Hash:{has_hash}]"
+            else:
+                line = f"{i:2d}. {user_str:30s} [Pass:{has_password} Hash:{has_hash}]"
+            lines.append(line)
+
+        if not self.has_fzf:
+            return self._simple_select_credential(credentials)
+
+        # Use fzf
+        selected_line = self._fzf_select(
+            lines,
+            prompt="Select Credential: ",
+            multi=False,
+            preview=None
+        )
+
+        if selected_line:
+            # Extract index from selected line
+            try:
+                index = int(selected_line.split('.')[0].strip()) - 1
+                if 0 <= index < len(credentials):
+                    return credentials[index]
+            except (ValueError, IndexError):
+                pass
+
+        return None
+
     def _fzf_select(
         self,
         items: List[str],
@@ -263,6 +374,50 @@ class InteractiveSelector:
                 index = int(choice) - 1
                 if 0 <= index < len(operations):
                     return operations[index]
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+
+        return None
+
+    def _simple_select_target(self, targets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Simple target selection fallback."""
+        print("\nAvailable targets:")
+        for i, target in enumerate(targets, 1):
+            identifier = target.get('ip') or target.get('url', '')
+            name = target.get('name', '')
+            if name:
+                print(f"  {i}. {identifier} ({name})")
+            else:
+                print(f"  {i}. {identifier}")
+
+        try:
+            choice = input(f"\nSelect (1-{len(targets)}): ")
+            if choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(targets):
+                    return targets[index]
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+
+        return None
+
+    def _simple_select_credential(self, credentials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Simple credential selection fallback."""
+        print("\nAvailable credentials:")
+        for i, cred in enumerate(credentials, 1):
+            username = cred.get('username', '')
+            domain = cred.get('domain', '')
+            if domain:
+                print(f"  {i}. {domain}\\{username}")
+            else:
+                print(f"  {i}. {username}")
+
+        try:
+            choice = input(f"\nSelect (1-{len(credentials)}): ")
+            if choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(credentials):
+                    return credentials[index]
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
 
