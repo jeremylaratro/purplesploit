@@ -5,14 +5,11 @@ WinRM protocol operations using NetExec.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from typing import Dict, Any, List
 
 
 class NXCWinRMModule(ExternalToolModule):
-    """
-    NetExec WinRM module for Windows Remote Management operations.
-
-    Supports authentication, command execution, and enumeration via WinRM.
-    """
+    """NetExec WinRM module for Windows Remote Management operations."""
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -24,7 +21,7 @@ class NXCWinRMModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "Windows Remote Management operations using NetExec"
+        return "WinRM operations with 7 commands"
 
     @property
     def author(self) -> str:
@@ -35,161 +32,71 @@ class NXCWinRMModule(ExternalToolModule):
         return "network"
 
     def _init_options(self):
-        """Initialize module-specific options."""
         super()._init_options()
-
         self.options.update({
-            "RHOST": {
-                "value": None,
-                "required": True,
-                "description": "Target host IP address",
-                "default": None
-            },
-            "RPORT": {
-                "value": "5985",
-                "required": False,
-                "description": "WinRM port (5985 HTTP, 5986 HTTPS)",
-                "default": "5985"
-            },
-            "USERNAME": {
-                "value": None,
-                "required": False,
-                "description": "Username for authentication",
-                "default": None
-            },
-            "PASSWORD": {
-                "value": None,
-                "required": False,
-                "description": "Password for authentication",
-                "default": None
-            },
-            "DOMAIN": {
-                "value": None,
-                "required": False,
-                "description": "Domain name",
-                "default": None
-            },
-            "HASH": {
-                "value": None,
-                "required": False,
-                "description": "NTLM hash for pass-the-hash",
-                "default": None
-            },
-            "COMMAND": {
-                "value": None,
-                "required": False,
-                "description": "Command to execute (-x flag)",
-                "default": None
-            },
-            "POWERSHELL": {
-                "value": None,
-                "required": False,
-                "description": "PowerShell command to execute (-X flag)",
-                "default": None
-            },
-            "MODULE": {
-                "value": None,
-                "required": False,
-                "description": "NXC module to run (-M flag)",
-                "default": None
-            },
-            "SSL": {
-                "value": "false",
-                "required": False,
-                "description": "Use SSL/TLS (port 5986)",
-                "default": "false"
-            }
+            "RHOST": {"value": None, "required": True, "description": "Target host IP", "default": None},
+            "USERNAME": {"value": None, "required": False, "description": "Username", "default": None},
+            "PASSWORD": {"value": None, "required": False, "description": "Password", "default": None},
+            "DOMAIN": {"value": None, "required": False, "description": "Domain", "default": "WORKGROUP"},
+            "HASH": {"value": None, "required": False, "description": "NTLM hash", "default": None},
         })
 
-    def build_command(self) -> str:
-        """
-        Build the nxc winrm command.
+    def get_operations(self) -> List[Dict[str, Any]]:
+        return [
+            {"name": "Test Authentication", "description": "Test WinRM authentication", "handler": "op_test_auth"},
+            {"name": "Execute Command", "description": "Execute Windows command", "handler": "op_exec_cmd"},
+            {"name": "Execute PowerShell", "description": "Execute PowerShell command", "handler": "op_exec_ps"},
+            {"name": "Get System Info", "description": "Run systeminfo", "handler": "op_sysinfo"},
+            {"name": "Check Privileges", "description": "Check user privileges", "handler": "op_privs"},
+            {"name": "List Local Users", "description": "List local users", "handler": "op_users"},
+            {"name": "Network Configuration", "description": "Get ipconfig", "handler": "op_ipconfig"},
+        ]
 
-        Returns:
-            Command string to execute
-        """
-        rhost = self.get_option("RHOST")
-        rport = self.get_option("RPORT")
+    def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
         password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
         hash_val = self.get_option("HASH")
-        command = self.get_option("COMMAND")
-        powershell = self.get_option("POWERSHELL")
-        module = self.get_option("MODULE")
-        ssl = self.get_option("SSL")
+        if not username:
+            return ""
+        auth = f"-u '{username}'"
+        if hash_val:
+            auth += f" -H '{hash_val}'"
+        elif password:
+            auth += f" -p '{password}'"
+        else:
+            auth += " -p ''"
+        return auth
 
-        # Base command
-        cmd = f"nxc winrm {rhost}"
+    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+        rhost = self.get_option("RHOST")
+        auth = self._build_auth()
+        cmd = f"nxc winrm {rhost} {auth}"
+        if extra_args:
+            cmd += f" {extra_args}"
+        return self.execute_command(cmd, timeout=180)
 
-        # Port
-        if rport:
-            cmd += f" --port {rport}"
+    def op_test_auth(self) -> Dict[str, Any]:
+        return self._execute_nxc()
 
-        # SSL
-        if ssl and ssl.lower() == "true":
-            cmd += " --ssl"
+    def op_exec_cmd(self) -> Dict[str, Any]:
+        cmd = input("Command: ")
+        return self._execute_nxc(f"-x '{cmd}'")
 
-        # Authentication
-        if username:
-            cmd += f" -u '{username}'"
+    def op_exec_ps(self) -> Dict[str, Any]:
+        ps = input("PowerShell command: ")
+        return self._execute_nxc(f"-X '{ps}'")
 
-            if password:
-                cmd += f" -p '{password}'"
-            elif hash_val:
-                cmd += f" -H '{hash_val}'"
-            else:
-                cmd += " -p ''"
+    def op_sysinfo(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'systeminfo'")
 
-        # Domain
-        if domain:
-            cmd += f" -d '{domain}'"
+    def op_privs(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'whoami /priv'")
 
-        # Command execution
-        if command:
-            cmd += f" -x '{command}'"
+    def op_users(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'net user'")
 
-        # PowerShell execution
-        if powershell:
-            cmd += f" -X '{powershell}'"
+    def op_ipconfig(self) -> Dict[str, Any]:
+        return self._execute_nxc("-x 'ipconfig /all'")
 
-        # Module execution
-        if module:
-            cmd += f" -M {module}"
-
-        return cmd
-
-    def parse_output(self, output: str) -> dict:
-        """
-        Parse nxc winrm output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "authentication": "unknown",
-            "admin_access": False,
-            "command_output": [],
-        }
-
-        # Parse output
-        for line in output.split('\n'):
-            line = line.strip()
-
-            # Check authentication
-            if "Pwn3d!" in line:
-                results["authentication"] = "admin"
-                results["admin_access"] = True
-            elif "[+]" in line:
-                results["authentication"] = "success"
-            elif "[-]" in line and ("LOGON_FAILURE" in line or "ACCESS_DENIED" in line):
-                results["authentication"] = "failed"
-
-            # Capture command output
-            if command and line and not line.startswith('['):
-                results["command_output"].append(line)
-
-        return results
+    def run(self) -> Dict[str, Any]:
+        return self.op_test_auth()

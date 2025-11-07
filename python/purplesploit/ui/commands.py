@@ -8,6 +8,7 @@ and utility operations.
 import shlex
 from typing import Dict, List, Callable
 from .display import Display
+from .interactive import InteractiveSelector
 
 
 class CommandHandler:
@@ -26,6 +27,7 @@ class CommandHandler:
         """
         self.framework = framework
         self.display = Display()
+        self.interactive = InteractiveSelector()
         self.commands = self._register_commands()
         self.last_search_results = []  # Store last search results for number selection
         self.current_operation_index = None  # Track selected operation
@@ -67,6 +69,8 @@ class CommandHandler:
             # Quick shortcuts
             "target": self.cmd_target_quick,  # Quick: target 192.168.1.1
             "cred": self.cmd_cred_quick,      # Quick: cred admin:password
+            "go": self.cmd_go,                # Super quick: go target creds operation
+            "quick": self.cmd_quick,          # Quick module load: quick smb auth
 
             # Utility commands
             "clear": self.cmd_clear,
@@ -881,3 +885,121 @@ class CommandHandler:
                 "success": False,
                 "error": f"Error executing operation: {str(e)}"
             }
+
+    def cmd_go(self, args: List[str]) -> bool:
+        """
+        Quick workflow: go <target> [username:password] [operation]
+        
+        Examples:
+          go 192.168.1.100                    # Set target and show operations
+          go 192.168.1.100 admin:pass        # Set target + creds, show operations
+          go 192.168.1.100 admin:pass 1      # Set target + creds, run operation #1
+        """
+        if not args:
+            self.display.print_error("Usage: go <target> [username:password] [operation]")
+            self.display.print_info("Examples:")
+            self.display.print_info("  go 192.168.1.100")
+            self.display.print_info("  go 192.168.1.100 admin:Password123")
+            self.display.print_info("  go 192.168.1.100 admin:pass 1")
+            return True
+
+        # Parse target
+        target = args[0]
+        self.cmd_target_quick([target])
+
+        # Parse credentials if provided
+        if len(args) >= 2 and ':' in args[1]:
+            self.cmd_cred_quick([args[1]])
+
+        # Parse operation if provided
+        if len(args) >= 3:
+            # Check if we have a module loaded
+            module = self.framework.session.current_module
+            if module and module.has_operations():
+                return self.cmd_run([args[2]])
+            else:
+                self.display.print_warning("No module loaded. Load a module first with 'use'")
+
+        # If no operation specified, show operations if module is loaded
+        module = self.framework.session.current_module
+        if module and module.has_operations():
+            self.display.print_info("\nModule loaded and ready. Available operations:")
+            operations = module.get_operations()
+            self._show_operations(operations)
+
+        return True
+
+    def cmd_quick(self, args: List[str]) -> bool:
+        """
+        Quick module shortcuts:
+        
+          quick smb                  # Load SMB, auto-set target/creds from context
+          quick smb shares           # Load SMB, run shares operation
+          quick ldap bloodhound      # Load LDAP, run bloodhound collection
+        """
+        if not args:
+            self.display.print_error("Usage: quick <module_type> [operation_filter]")
+            self.display.print_info("Examples:")
+            self.display.print_info("  quick smb")
+            self.display.print_info("  quick smb auth")
+            self.display.print_info("  quick ldap bloodhound")
+            return True
+
+        module_type = args[0].lower()
+        operation_filter = " ".join(args[1:]) if len(args) > 1 else None
+
+        # Map quick names to module paths
+        quick_map = {
+            'smb': 'network/nxc_smb',
+            'ldap': 'network/nxc_ldap',
+            'winrm': 'network/nxc_winrm',
+            'mssql': 'network/nxc_mssql',
+            'rdp': 'network/nxc_rdp',
+            'ssh': 'network/nxc_ssh',
+            'ferox': 'web/feroxbuster',
+            'sqlmap': 'web/sqlmap',
+        }
+
+        if module_type not in quick_map:
+            self.display.print_error(f"Unknown quick module: {module_type}")
+            self.display.print_info("Available: " + ", ".join(quick_map.keys()))
+            return True
+
+        # Load module
+        module_path = quick_map[module_type]
+        module = self.framework.use_module(module_path)
+
+        if not module:
+            self.display.print_error(f"Failed to load module: {module_path}")
+            return True
+
+        self.display.print_success(f"Loaded: {module.name}")
+
+        # Auto-populate from context
+        module.auto_set_from_context()
+
+        # Show what was auto-populated
+        if module.get_option('RHOST'):
+            self.display.print_info(f"  → RHOST = {module.get_option('RHOST')}")
+        if module.get_option('USERNAME'):
+            self.display.print_info(f"  → USERNAME = {module.get_option('USERNAME')}")
+
+        # Filter operations if specified
+        if module.has_operations() and operation_filter:
+            operations = module.get_operations()
+            filtered = [op for op in operations
+                       if operation_filter.lower() in op['name'].lower()
+                       or operation_filter.lower() in op['description'].lower()]
+
+            if filtered:
+                self.display.print_info(f"\nOperations matching '{operation_filter}':")
+                self._show_operations(filtered)
+            else:
+                self.display.print_warning(f"No operations matching '{operation_filter}'")
+                self.display.print_info("\nAll operations:")
+                self._show_operations(operations)
+        elif module.has_operations():
+            self.display.print_info("\nAvailable operations:")
+            self._show_operations(module.get_operations())
+
+        return True

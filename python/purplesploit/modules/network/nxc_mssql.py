@@ -1,18 +1,15 @@
 """
 NetExec (NXC) MSSQL Module
 
-Microsoft SQL Server operations using NetExec.
+MSSQL protocol operations using NetExec.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from typing import Dict, Any, List
 
 
 class NXCMSSQLModule(ExternalToolModule):
-    """
-    NetExec MSSQL module for Microsoft SQL Server testing.
-
-    Supports authentication, query execution, and MSSQL enumeration.
-    """
+    """NetExec MSSQL module for SQL Server operations."""
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -24,7 +21,7 @@ class NXCMSSQLModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "Microsoft SQL Server testing and enumeration using NetExec"
+        return "MSSQL operations with 7 commands"
 
     @property
     def author(self) -> str:
@@ -35,166 +32,72 @@ class NXCMSSQLModule(ExternalToolModule):
         return "network"
 
     def _init_options(self):
-        """Initialize module-specific options."""
         super()._init_options()
-
         self.options.update({
-            "RHOST": {
-                "value": None,
-                "required": True,
-                "description": "Target SQL Server IP address",
-                "default": None
-            },
-            "RPORT": {
-                "value": "1433",
-                "required": False,
-                "description": "SQL Server port",
-                "default": "1433"
-            },
-            "USERNAME": {
-                "value": None,
-                "required": False,
-                "description": "Username for authentication",
-                "default": None
-            },
-            "PASSWORD": {
-                "value": None,
-                "required": False,
-                "description": "Password for authentication",
-                "default": None
-            },
-            "DOMAIN": {
-                "value": None,
-                "required": False,
-                "description": "Domain name",
-                "default": None
-            },
-            "HASH": {
-                "value": None,
-                "required": False,
-                "description": "NTLM hash for pass-the-hash",
-                "default": None
-            },
-            "QUERY": {
-                "value": None,
-                "required": False,
-                "description": "SQL query to execute (-q flag)",
-                "default": None
-            },
-            "COMMAND": {
-                "value": None,
-                "required": False,
-                "description": "OS command to execute via xp_cmdshell (-x flag)",
-                "default": None
-            },
-            "LOCAL_AUTH": {
-                "value": "false",
-                "required": False,
-                "description": "Use local authentication",
-                "default": "false"
-            },
-            "MODULE": {
-                "value": None,
-                "required": False,
-                "description": "NXC module to run (-M flag)",
-                "default": None
-            }
+            "RHOST": {"value": None, "required": True, "description": "Target SQL server IP", "default": None},
+            "USERNAME": {"value": None, "required": False, "description": "SQL username", "default": None},
+            "PASSWORD": {"value": None, "required": False, "description": "SQL password", "default": None},
+            "DOMAIN": {"value": None, "required": False, "description": "Domain", "default": None},
+            "HASH": {"value": None, "required": False, "description": "NTLM hash", "default": None},
         })
 
-    def build_command(self) -> str:
-        """
-        Build the nxc mssql command.
+    def get_operations(self) -> List[Dict[str, Any]]:
+        return [
+            {"name": "Test Authentication", "description": "Test MSSQL authentication", "handler": "op_test_auth"},
+            {"name": "Get Version", "description": "Get SQL Server version", "handler": "op_version"},
+            {"name": "List Databases", "description": "List all databases", "handler": "op_list_dbs"},
+            {"name": "List Tables", "description": "List tables in database", "handler": "op_list_tables"},
+            {"name": "Check Privileges", "description": "Check user privileges", "handler": "op_privs"},
+            {"name": "Execute Command (xp_cmdshell)", "description": "Execute OS command via xp_cmdshell", "handler": "op_exec_cmd"},
+            {"name": "Enable xp_cmdshell", "description": "Enable xp_cmdshell", "handler": "op_enable_xpcmdshell"},
+        ]
 
-        Returns:
-            Command string to execute
-        """
-        rhost = self.get_option("RHOST")
-        rport = self.get_option("RPORT")
+    def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
         password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
         hash_val = self.get_option("HASH")
-        query = self.get_option("QUERY")
-        command = self.get_option("COMMAND")
-        local_auth = self.get_option("LOCAL_AUTH")
-        module = self.get_option("MODULE")
+        if not username:
+            return ""
+        auth = f"-u '{username}'"
+        if hash_val:
+            auth += f" -H '{hash_val}'"
+        elif password:
+            auth += f" -p '{password}'"
+        else:
+            auth += " -p ''"
+        return auth
 
-        # Base command
-        cmd = f"nxc mssql {rhost}"
+    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+        rhost = self.get_option("RHOST")
+        auth = self._build_auth()
+        cmd = f"nxc mssql {rhost} {auth}"
+        if extra_args:
+            cmd += f" {extra_args}"
+        return self.execute_command(cmd, timeout=180)
 
-        # Port
-        if rport and rport != "1433":
-            cmd += f" --port {rport}"
+    def op_test_auth(self) -> Dict[str, Any]:
+        return self._execute_nxc()
 
-        # Authentication
-        if username:
-            cmd += f" -u '{username}'"
+    def op_version(self) -> Dict[str, Any]:
+        return self._execute_nxc("-q 'SELECT @@version'")
 
-            if password:
-                cmd += f" -p '{password}'"
-            elif hash_val:
-                cmd += f" -H '{hash_val}'"
-            else:
-                cmd += " -p ''"
+    def op_list_dbs(self) -> Dict[str, Any]:
+        return self._execute_nxc("-q 'SELECT name FROM sys.databases'")
 
-        # Domain
-        if domain:
-            cmd += f" -d '{domain}'"
+    def op_list_tables(self) -> Dict[str, Any]:
+        db = input("Database name: ")
+        return self._execute_nxc(f"-q 'SELECT * FROM {db}.INFORMATION_SCHEMA.TABLES'")
 
-        # Local auth
-        if local_auth and local_auth.lower() == "true":
-            cmd += " --local-auth"
+    def op_privs(self) -> Dict[str, Any]:
+        return self._execute_nxc("-M mssql_priv")
 
-        # Query execution
-        if query:
-            cmd += f" -q \"{query}\""
+    def op_exec_cmd(self) -> Dict[str, Any]:
+        cmd = input("Command: ")
+        return self._execute_nxc(f"-x '{cmd}'")
 
-        # Command execution via xp_cmdshell
-        if command:
-            cmd += f" -x '{command}'"
+    def op_enable_xpcmdshell(self) -> Dict[str, Any]:
+        query = "EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;"
+        return self._execute_nxc(f'-q "{query}"')
 
-        # Module execution
-        if module:
-            cmd += f" -M {module}"
-
-        return cmd
-
-    def parse_output(self, output: str) -> dict:
-        """
-        Parse nxc mssql output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "authentication": "unknown",
-            "admin_access": False,
-            "query_results": [],
-            "command_output": [],
-        }
-
-        # Parse output
-        for line in output.split('\n'):
-            line = line.strip()
-
-            # Check authentication
-            if "Pwn3d!" in line:
-                results["authentication"] = "admin"
-                results["admin_access"] = True
-            elif "[+]" in line:
-                results["authentication"] = "success"
-            elif "[-]" in line and "STATUS_LOGON_FAILURE" in line:
-                results["authentication"] = "failed"
-
-            # Capture query results
-            if query and line and not line.startswith('['):
-                results["query_results"].append(line)
-
-            # Capture command output
-            if command and line and not line.startswith('['):
-                results["command_output"].append(line)
-
-        return results
+    def run(self) -> Dict[str, Any]:
+        return self.op_test_auth()
