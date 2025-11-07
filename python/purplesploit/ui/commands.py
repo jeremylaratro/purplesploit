@@ -128,18 +128,40 @@ class CommandHandler:
             "Module Commands": "",
             "search <query>": "Search for modules by name, description, or category",
             "use <module>": "Load a module by path (e.g., use web/feroxbuster)",
+            "use <number>": "Load a module from search/show results",
             "back": "Unload current module",
             "info": "Show information about current module",
             "options": "Show current module options",
             "set <option> <value>": "Set a module option",
             "unset <option>": "Clear a module option",
-            "run": "Execute the current module",
+            "run": "Execute the current module (interactive selection)",
+            "run <number>": "Execute a specific operation by number",
             "check": "Check if module can run without executing",
             "": "",
+            "Smart Search Commands": "",
+            "ops <query>": "Search for operations across all modules",
+            "recent": "Show recently used modules",
+            "": "",
             "Context Commands": "",
-            "targets [add|list|set|remove]": "Manage targets",
-            "creds [add|list|set|remove]": "Manage credentials",
-            "services [list|scan]": "View detected services",
+            "targets add <ip|url> [name]": "Add a target",
+            "targets list": "List all targets",
+            "targets select": "Interactive target selection (with fzf)",
+            "targets set <index>": "Set current target by index",
+            "targets remove <ip|url>": "Remove a target",
+            "": "",
+            "creds add <user:pass> [domain]": "Add credentials",
+            "creds list": "List all credentials",
+            "creds select": "Interactive credential selection (with fzf)",
+            "creds set <index>": "Set current credential by index",
+            "creds remove <user>": "Remove credentials",
+            "": "",
+            "services": "View detected services on targets",
+            "": "",
+            "Quick Shortcuts": "",
+            "target <ip|url>": "Quick: add and set target",
+            "cred <user:pass> [domain]": "Quick: add and set credential",
+            "quick <module> [filter]": "Quick: load module with auto-population",
+            "go <target> [creds] [op]": "All-in-one: set target, creds, run operation",
             "": "",
             "Show Commands": "",
             "show modules": "List all modules",
@@ -475,6 +497,35 @@ class CommandHandler:
             else:
                 self.display.print_warning("Target already exists")
 
+        elif subcommand == "select":
+            # Interactive selection
+            targets = self.framework.session.targets.list()
+            if not targets:
+                self.display.print_warning("No targets available. Add targets first with 'targets add'")
+                return True
+
+            selected = self.interactive.select_target(targets)
+            if selected:
+                # Find index and set as current
+                for i, target in enumerate(targets):
+                    if target == selected:
+                        self.framework.session.targets.current_index = i
+                        identifier = selected.get('ip') or selected.get('url')
+                        self.display.print_success(f"Selected target: {identifier}")
+
+                        # Auto-set in current module if loaded
+                        module = self.framework.session.current_module
+                        if module:
+                            if 'ip' in selected and "RHOST" in module.options:
+                                module.set_option("RHOST", selected['ip'])
+                                self.display.print_info(f"  → Set RHOST = {selected['ip']}")
+                            elif 'url' in selected and "URL" in module.options:
+                                module.set_option("URL", selected['url'])
+                                self.display.print_info(f"  → Set URL = {selected['url']}")
+                        break
+            else:
+                self.display.print_warning("No target selected")
+
         elif subcommand == "set":
             if len(args) < 2:
                 self.display.print_error("Usage: targets set <index|identifier>")
@@ -499,7 +550,7 @@ class CommandHandler:
 
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: targets [list|add|set|remove]")
+            self.display.print_info("Usage: targets [list|add|set|select|remove]")
 
         return True
 
@@ -531,6 +582,40 @@ class CommandHandler:
             else:
                 self.display.print_warning("Credential already exists")
 
+        elif subcommand == "select":
+            # Interactive selection
+            creds = self.framework.session.credentials.list()
+            if not creds:
+                self.display.print_warning("No credentials available. Add credentials first with 'creds add'")
+                return True
+
+            selected = self.interactive.select_credential(creds)
+            if selected:
+                # Find index and set as current
+                for i, cred in enumerate(creds):
+                    if cred == selected:
+                        self.framework.session.credentials.current_index = i
+                        self.display.print_success(f"Selected credential: {selected['username']}")
+
+                        # Auto-set in current module if loaded
+                        module = self.framework.session.current_module
+                        if module:
+                            if "USERNAME" in module.options:
+                                module.set_option("USERNAME", selected['username'])
+                                self.display.print_info(f"  → Set USERNAME = {selected['username']}")
+                            if selected.get('password') and "PASSWORD" in module.options:
+                                module.set_option("PASSWORD", selected['password'])
+                                self.display.print_info(f"  → Set PASSWORD = ****")
+                            if selected.get('domain') and "DOMAIN" in module.options:
+                                module.set_option("DOMAIN", selected['domain'])
+                                self.display.print_info(f"  → Set DOMAIN = {selected['domain']}")
+                            if selected.get('hash') and "HASH" in module.options:
+                                module.set_option("HASH", selected['hash'])
+                                self.display.print_info(f"  → Set HASH = ****")
+                        break
+            else:
+                self.display.print_warning("No credential selected")
+
         elif subcommand == "set":
             if len(args) < 2:
                 self.display.print_error("Usage: creds set <index|username>")
@@ -554,7 +639,7 @@ class CommandHandler:
 
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: creds [list|add|set|remove]")
+            self.display.print_info("Usage: creds [list|add|set|select|remove]")
 
         return True
 
