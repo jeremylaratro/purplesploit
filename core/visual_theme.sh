@@ -461,34 +461,29 @@ draw_shortcuts_bar() {
 
 show_enhanced_banner() {
     local workspace="${1:-default}"
-    local version="${2:-1.0}"
+    local version="${2:-3.3}"
+
+    # Source the banner module if not already loaded
+    if ! type show_banner &>/dev/null; then
+        local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+        source "$script_dir/lib/banner.sh" 2>/dev/null || true
+    fi
 
     echo -e ""
-    # Top border with gradient effect
-    echo -e "${BRIGHT_MAGENTA}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
-    # PURPLE line
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_MAGENTA}██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗${NC}       ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_MAGENTA}██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗${NC}      ${BRIGHT_MAGENTA}║${NC}"
-    # Transition to cyan
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${MAGENTA}██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝${NC}      ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${CYAN}██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝${NC}       ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_CYAN}██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║${NC}           ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}   ${BRIGHT_CYAN}╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝${NC}           ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
-    # SPLOIT in different gradient
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_CYAN}███████╗██████╗  █████╗ ███╗   ███╗███████╗${NC}${BRIGHT_GREEN}██╗    ██╗${NC} ${BRIGHT_YELLOW}██████╗${NC}    ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_CYAN}██╔════╝██╔══██╗██╔══██╗████╗ ████║██╔════╝${NC}${BRIGHT_GREEN}██║    ██║${NC}${BRIGHT_YELLOW}██╔═══██╗${NC}   ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${CYAN}█████╗  ██████╔╝███████║██╔████╔██║█████╗${NC}  ${GREEN}██║ █╗ ██║${NC}${YELLOW}██║   ██║${NC}   ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${CYAN}██╔══╝  ██╔══██╗██╔══██║██║╚██╔╝██║██╔══╝${NC}  ${GREEN}██║███╗██║${NC}${YELLOW}██║   ██║${NC}   ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_BLUE}██║     ██║  ██║██║  ██║██║ ╚═╝ ██║███████╗${NC}${BRIGHT_GREEN}╚███╔███╔╝${NC}${BRIGHT_YELLOW}╚██████╔╝${NC}   ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}         ${BRIGHT_BLUE}╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝${NC}${BRIGHT_GREEN} ╚══╝╚══╝${NC} ${BRIGHT_YELLOW}╚═════╝${NC}    ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
-    # Subtitle with color
-    echo -e "${BRIGHT_MAGENTA}║${NC}           ${DIM}${CYAN}Metasploit-Style Offensive Security Framework${NC}              ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}                ${DIM}Version ${version} | Workspace: ${BRIGHT_CYAN}${workspace}${NC}                     ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}║${NC}                                                                           ${BRIGHT_MAGENTA}║${NC}"
-    echo -e "${BRIGHT_MAGENTA}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+
+    # Display random ASCII art banner with magenta color
+    if type show_banner &>/dev/null; then
+        echo -e "${BRIGHT_MAGENTA}"
+        show_banner
+        echo -e "${NC}"
+    else
+        # Fallback if banner module not found
+        echo -e "${BRIGHT_MAGENTA}=== PurpleSploit Framework ===${NC}"
+    fi
+
+    # Subtitle with version and workspace
+    echo -e "${CYAN}              Offensive Security Framework | Console + TUI | Search. Select. Exploit.${NC}"
+    echo -e "${DIM}                      Version ${version} | Workspace: ${BRIGHT_CYAN}${workspace}${NC}"
     echo -e ""
 }
 
