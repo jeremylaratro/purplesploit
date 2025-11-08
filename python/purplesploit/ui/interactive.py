@@ -532,3 +532,75 @@ class InteractiveSelector:
             pass
 
         return None
+
+    def select_wordlist(
+        self,
+        category: str,
+        wordlists: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Interactive wordlist selection.
+
+        Args:
+            category: Wordlist category
+            wordlists: List of wordlist dictionaries
+
+        Returns:
+            Selected wordlist dict or None
+        """
+        if not wordlists:
+            return None
+
+        # Format wordlists for display
+        lines = []
+        for i, wl in enumerate(wordlists, 1):
+            name = wl.get('name', '')
+            path = wl.get('path', '')
+
+            # Format: "1. name - path"
+            line = f"{i:2d}. {name:30s} {path}"
+            lines.append(line)
+
+        if not self.has_fzf:
+            return self._simple_select_wordlist(wordlists)
+
+        # Use fzf
+        selected_line = self._fzf_select(
+            lines,
+            prompt=f"Select {category} Wordlist: ",
+            multi=False,
+            preview=None
+        )
+
+        if selected_line:
+            # Extract index from selected line
+            try:
+                index = int(selected_line.split('.')[0].strip()) - 1
+                if 0 <= index < len(wordlists):
+                    return wordlists[index]
+            except (ValueError, IndexError):
+                pass
+
+        return None
+
+    def _simple_select_wordlist(self, wordlists: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Simple wordlist selection fallback."""
+        try:
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable wordlists:", file=tty_out)
+                for i, wl in enumerate(wordlists, 1):
+                    name = wl.get('name', '')
+                    path = wl.get('path', '')
+                    print(f"  {i}. {name} - {path}", file=tty_out)
+
+                print(f"\nSelect (1-{len(wordlists)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(wordlists):
+                        return wordlists[index]
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+
+        return None
