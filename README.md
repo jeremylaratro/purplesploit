@@ -184,9 +184,15 @@ purplesploit> run                     # Execute selected module
 # Core dependencies
 apt install fzf ripgrep python3
 
-# Pentesting tools (install as needed)
-apt install nmap feroxbuster sqlmap
-pipx install netexec impacket
+# Pentesting tools  - recommended use with kali or parrot. Tools used include:
+```bash
+netexec
+wfuzz
+sqlmap
+feroxbuster
+nmap
+impacket
+httpx
 ```
 
 ### Setup
