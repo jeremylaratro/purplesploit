@@ -63,6 +63,7 @@ class CommandHandler:
             "targets": self.cmd_targets,
             "creds": self.cmd_creds,
             "services": self.cmd_services,
+            "wordlists": self.cmd_wordlists,
 
             # Enhanced search commands
             "ops": self.cmd_ops,  # Search operations globally
@@ -161,6 +162,8 @@ class CommandHandler:
 [green]targets list[/green]         List all targets
 [green]creds add <u:p>[/green]      Add credentials
 [green]creds select[/green]         Interactive credential picker
+[green]wordlists add <cat> <path>[/green]  Add wordlist by category
+[green]wordlists select <cat>[/green]      Select wordlist for category
 [green]services[/green]             View detected services
 [green]services select[/green]      Interactive service picker"""
 
@@ -772,6 +775,120 @@ class CommandHandler:
             self.display.print_info("\nTip: Use 'services select' for interactive selection")
 
         return True
+
+    def cmd_wordlists(self, args: List[str]) -> bool:
+        """Manage wordlists by category."""
+        if not args or args[0] == "list":
+            # Show all wordlists organized by category
+            all_wordlists = self.framework.session.wordlists.list()
+            self._display_wordlists(all_wordlists)
+            self.display.print_info("\nCategories: web_dir, dns_vhost, username, password, subdomain, parameter, api, general")
+            self.display.print_info("Usage: wordlists [list|add|remove|set|select] <category> [args]")
+            return True
+
+        subcommand = args[0].lower()
+
+        if subcommand == "add":
+            if len(args) < 3:
+                self.display.print_error("Usage: wordlists add <category> <path> [name]")
+                self.display.print_info("Categories: web_dir, dns_vhost, username, password, subdomain, parameter, api, general")
+                return True
+
+            category = args[1]
+            path = args[2]
+            name = args[3] if len(args) > 3 else None
+
+            if self.framework.session.wordlists.add(category, path, name):
+                self.display.print_success(f"Added wordlist to {category}: {path}")
+            else:
+                self.display.print_error(f"Failed to add wordlist (check path and category)")
+
+        elif subcommand == "remove":
+            if len(args) < 3:
+                self.display.print_error("Usage: wordlists remove <category> <path|name>")
+                return True
+
+            category = args[1]
+            identifier = args[2]
+
+            if self.framework.session.wordlists.remove(category, identifier):
+                self.display.print_success(f"Removed wordlist from {category}")
+            else:
+                self.display.print_error("Wordlist not found")
+
+        elif subcommand == "set":
+            if len(args) < 3:
+                self.display.print_error("Usage: wordlists set <category> <path|name|index>")
+                return True
+
+            category = args[1]
+            identifier = args[2]
+
+            if self.framework.session.wordlists.set_current(category, identifier):
+                wordlist = self.framework.session.wordlists.get_current(category)
+                self.display.print_success(f"Current {category} wordlist set to: {wordlist['name']}")
+            else:
+                self.display.print_error("Wordlist not found")
+
+        elif subcommand == "select":
+            if len(args) < 2:
+                self.display.print_error("Usage: wordlists select <category>")
+                return True
+
+            category = args[1]
+            wordlists_dict = self.framework.session.wordlists.list(category)
+
+            if not wordlists_dict or not wordlists_dict.get(category):
+                self.display.print_warning(f"No wordlists available in {category}. Add wordlists first.")
+                return True
+
+            wordlists = wordlists_dict[category]
+            selected = self.interactive.select_wordlist(category, wordlists)
+
+            if selected:
+                # Find index and set as current
+                for i, wl in enumerate(wordlists):
+                    if wl == selected:
+                        self.framework.session.wordlists.current_selections[category] = i
+                        self.display.print_success(f"Selected {category} wordlist: {selected['name']}")
+                        break
+            else:
+                self.display.print_warning("No wordlist selected")
+
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Usage: wordlists [list|add|remove|set|select] <category> [args]")
+
+        return True
+
+    def _display_wordlists(self, wordlists_dict: Dict) -> None:
+        """Display wordlists organized by category."""
+        from rich.table import Table
+        from rich import box
+
+        for category, wordlists in wordlists_dict.items():
+            if not wordlists:
+                continue
+
+            current_selection = self.framework.session.wordlists.current_selections.get(category)
+
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Name", style="green")
+            table.add_column("Path", style="white")
+            table.add_column("Status", style="yellow", width=10)
+
+            for i, wordlist in enumerate(wordlists):
+                status = "[✓]" if i == current_selection else ""
+                table.add_row(
+                    str(i),
+                    wordlist.get('name', 'Unknown'),
+                    wordlist.get('path', ''),
+                    status
+                )
+
+            self.display.console.print(f"\n[bold cyan]{category.upper()}[/bold cyan]")
+            self.display.console.print(table)
 
     def cmd_clear(self, args: List[str]) -> bool:
         """Clear the screen."""
