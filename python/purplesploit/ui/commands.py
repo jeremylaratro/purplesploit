@@ -125,69 +125,93 @@ class CommandHandler:
             return True
 
     def cmd_help(self, args: List[str]) -> bool:
-        """Show help information."""
-        help_text = {
-            "help, ?": "Show this help message",
-            "": "",
-            "Module Commands": "",
-            "search <query>": "Search for modules by name, description, or category",
-            "search select": "Interactive module selection from last search (with fzf)",
-            "module select": "Interactive module/operation selection with submenu (with fzf)",
-            "use <module>": "Load a module by path (e.g., use web/feroxbuster)",
-            "use <number>": "Load a module from search/show results",
-            "back": "Unload current module",
-            "info": "Show information about current module",
-            "options": "Show current module options",
-            "set <option> <value>": "Set a module option",
-            "unset <option>": "Clear a module option",
-            "run": "Execute the current module (interactive selection)",
-            "run <number>": "Execute a specific operation by number",
-            "check": "Check if module can run without executing",
-            "": "",
-            "Smart Search Commands": "",
-            "ops <query>": "Search for operations across all modules",
-            "ops select": "Interactive operation selection from last search (with fzf)",
-            "recent": "Show recently used modules",
-            "recent select": "Interactive selection from recent modules (with fzf)",
-            "": "",
-            "Context Commands": "",
-            "targets add <ip|url> [name]": "Add a target",
-            "targets list": "List all targets",
-            "targets select": "Interactive target selection (with fzf)",
-            "targets set <index>": "Set current target by index",
-            "targets remove <ip|url>": "Remove a target",
-            "": "",
-            "creds add <user:pass> [domain]": "Add credentials",
-            "creds list": "List all credentials",
-            "creds select": "Interactive credential selection (with fzf)",
-            "creds set <index>": "Set current credential by index",
-            "creds remove <user>": "Remove credentials",
-            "": "",
-            "services": "View detected services on targets",
-            "services select": "Interactive service selection (with fzf)",
-            "": "",
-            "Quick Shortcuts": "",
-            "target <ip|url>": "Quick: add and set target",
-            "cred <user:pass> [domain]": "Quick: add and set credential",
-            "quick <module> [filter]": "Quick: load module with auto-population",
-            "go <target> [creds] [op]": "All-in-one: set target, creds, run operation",
-            "": "",
-            "Show Commands": "",
-            "show modules": "List all modules with operations (tree view)",
-            "show options": "Show current module options",
-            "show targets": "List all targets",
-            "show creds": "List all credentials",
-            "show services": "List detected services",
-            "": "",
-            "Utility Commands": "",
-            "clear": "Clear the screen",
-            "history": "Show command history",
-            "stats": "Show framework statistics",
-            "interactive, i": "Launch interactive TUI menu",
-            "exit, quit": "Exit PurpleSploit",
-        }
+        """Show help information with enhanced visual layout."""
+        from rich.panel import Panel
+        from rich.columns import Columns
+        from rich import box
 
-        self.display.print_help(help_text)
+        self.display.console.print()
+        self.display.console.print("[bold magenta]═══════════════════════════════════════════════════════════════════[/bold magenta]")
+        self.display.console.print("[bold cyan]                        PURPLESPLOIT HELP                          [/bold cyan]")
+        self.display.console.print("[bold magenta]═══════════════════════════════════════════════════════════════════[/bold magenta]")
+        self.display.console.print()
+
+        # Module Commands Panel
+        module_help = """[cyan]search <query>[/cyan]          Search for modules
+[cyan]search select[/cyan]          Interactive module selection (fzf)
+[cyan]module select[/cyan]          Browse modules + operations (fzf)
+[cyan]use <module>[/cyan]            Load module (e.g., network/nxc_smb)
+[cyan]use <number>[/cyan]            Load from search results
+[cyan]back[/cyan]                   Unload current module
+[cyan]info[/cyan]                   Show module information
+[cyan]options[/cyan]                Show module options
+[cyan]set <opt> <val>[/cyan]        Set module option
+[cyan]run[/cyan]                    Execute module (interactive)
+[cyan]check[/cyan]                  Check if module can run"""
+
+        # Smart Search Panel
+        search_help = """[cyan]ops <query>[/cyan]             Search operations globally
+[cyan]ops select[/cyan]             Interactive operation selection
+[cyan]recent[/cyan]                 Show recently used modules
+[cyan]recent select[/cyan]          Interactive recent selection"""
+
+        # Context Commands Panel
+        context_help = """[green]targets add <ip>[/green]      Add a target
+[green]targets select[/green]       Interactive target picker (fzf)
+[green]targets list[/green]         List all targets
+[green]creds add <u:p>[/green]      Add credentials
+[green]creds select[/green]         Interactive credential picker
+[green]services[/green]             View detected services
+[green]services select[/green]      Interactive service picker"""
+
+        # Quick Shortcuts Panel
+        shortcuts_help = """[yellow]target <ip>[/yellow]          Quick add and set target
+[yellow]cred <user:pass>[/yellow]    Quick add and set credential
+[yellow]quick <module>[/yellow]      Quick load with auto-populate
+[yellow]go <tgt> <cred>[/yellow]     All-in-one workflow"""
+
+        # Show Commands Panel
+        show_help = """[magenta]show modules[/magenta]         List all (tree view)
+[magenta]show targets[/magenta]         List all targets
+[magenta]show creds[/magenta]           List all credentials
+[magenta]show services[/magenta]        List detected services"""
+
+        # Utility Commands Panel
+        utility_help = """[blue]clear[/blue]                  Clear the screen
+[blue]history[/blue]                Show command history
+[blue]stats[/blue]                  Show statistics
+[blue]interactive, i[/blue]         Launch TUI mode
+[blue]exit, quit[/blue]             Exit framework"""
+
+        # Display panels in columns
+        self.display.console.print(Panel(module_help, title="[bold cyan]📦 Module Commands[/bold cyan]",
+                                         border_style="cyan", box=box.ROUNDED, padding=(1, 2)))
+        self.display.console.print()
+
+        # Two column layout for search and context
+        col1 = Panel(search_help, title="[bold cyan]🔍 Smart Search[/bold cyan]",
+                    border_style="cyan", box=box.ROUNDED, padding=(1, 2))
+        col2 = Panel(context_help, title="[bold green]🎯 Context Management[/bold green]",
+                    border_style="green", box=box.ROUNDED, padding=(1, 2))
+        self.display.console.print(Columns([col1, col2], equal=True, expand=True))
+        self.display.console.print()
+
+        # Two column layout for shortcuts and show
+        col3 = Panel(shortcuts_help, title="[bold yellow]⚡ Quick Shortcuts[/bold yellow]",
+                    border_style="yellow", box=box.ROUNDED, padding=(1, 2))
+        col4 = Panel(show_help, title="[bold magenta]📋 Show Commands[/bold magenta]",
+                    border_style="magenta", box=box.ROUNDED, padding=(1, 2))
+        self.display.console.print(Columns([col3, col4], equal=True, expand=True))
+        self.display.console.print()
+
+        # Full width utility panel
+        self.display.console.print(Panel(utility_help, title="[bold blue]🔧 Utility Commands[/bold blue]",
+                                         border_style="blue", box=box.ROUNDED, padding=(1, 2)))
+
+        self.display.console.print()
+        self.display.console.print("[dim cyan]💡 Tip: Most commands support interactive selection with fzf - look for 'select' options[/dim cyan]")
+        self.display.console.print()
+
         return True
 
     def cmd_search(self, args: List[str]) -> bool:
