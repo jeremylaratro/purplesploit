@@ -31,6 +31,8 @@
 
 </div>
 
+> **⚠️ LEGAL DISCLAIMER**: This tool is for **authorized security testing and educational purposes only**. Unauthorized access to computer systems is illegal. See [DISCLAIMER.md](DISCLAIMER.md) for full terms and legal information. Use responsibly and ethically.
+
 ---
 
 ## 📖 Overview
