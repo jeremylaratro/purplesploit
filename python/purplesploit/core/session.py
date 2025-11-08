@@ -36,6 +36,7 @@ class Session:
         self.targets = TargetManager()
         self.credentials = CredentialManager()
         self.services = ServiceManager()
+        self.wordlists = WordlistManager()
 
         # Workspace and results
         self.workspace = {}
@@ -136,6 +137,7 @@ class Session:
             "targets": self.targets.export(),
             "credentials": self.credentials.export(),
             "services": self.services.export(),
+            "wordlists": self.wordlists.export(),
             "workspace": self.workspace,
             "variables": self.variables,
             "command_history": self.command_history,
@@ -155,6 +157,8 @@ class Session:
             self.credentials.import_data(data["credentials"])
         if "services" in data:
             self.services.import_data(data["services"])
+        if "wordlists" in data:
+            self.wordlists.import_data(data["wordlists"])
         if "workspace" in data:
             self.workspace = data["workspace"]
         if "variables" in data:
@@ -414,3 +418,167 @@ class ServiceManager:
     def import_data(self, data: Dict):
         """Import service data."""
         self.services = data.get("services", {})
+
+
+class WordlistManager:
+    """Manages wordlists organized by attack type/category."""
+
+    def __init__(self):
+        self.wordlists = {
+            "web_dir": [],       # Web directory/file fuzzing
+            "dns_vhost": [],     # DNS/VHost fuzzing
+            "username": [],      # Username wordlists
+            "password": [],      # Password wordlists
+            "subdomain": [],     # Subdomain enumeration
+            "parameter": [],     # Parameter fuzzing
+            "api": [],           # API endpoint discovery
+            "general": []        # General-purpose wordlists
+        }
+        self.current_selections = {
+            "web_dir": None,
+            "dns_vhost": None,
+            "username": None,
+            "password": None,
+            "subdomain": None,
+            "parameter": None,
+            "api": None,
+            "general": None
+        }
+
+    def add(self, category: str, wordlist_path: str, name: str = None) -> bool:
+        """
+        Add a wordlist to a category.
+
+        Args:
+            category: Wordlist category
+            wordlist_path: Path to wordlist file
+            name: Optional friendly name
+
+        Returns:
+            True if added successfully
+        """
+        if category not in self.wordlists:
+            return False
+
+        # Check for duplicates
+        for existing in self.wordlists[category]:
+            if existing.get('path') == wordlist_path:
+                return False
+
+        import os
+        if not os.path.isfile(wordlist_path):
+            return False
+
+        wordlist = {
+            'path': wordlist_path,
+            'name': name or os.path.basename(wordlist_path),
+            'added_at': datetime.now().isoformat()
+        }
+
+        self.wordlists[category].append(wordlist)
+        return True
+
+    def remove(self, category: str, identifier: str) -> bool:
+        """
+        Remove a wordlist from a category.
+
+        Args:
+            category: Wordlist category
+            identifier: Path or name of wordlist
+
+        Returns:
+            True if removed
+        """
+        if category not in self.wordlists:
+            return False
+
+        for i, wordlist in enumerate(self.wordlists[category]):
+            if wordlist.get('path') == identifier or wordlist.get('name') == identifier:
+                self.wordlists[category].pop(i)
+                return True
+        return False
+
+    def list(self, category: str = None) -> Dict[str, List[Dict]]:
+        """
+        Get wordlists.
+
+        Args:
+            category: Filter by category (returns all if None)
+
+        Returns:
+            Dictionary of wordlists by category
+        """
+        if category:
+            if category not in self.wordlists:
+                return {}
+            return {category: self.wordlists[category]}
+        return self.wordlists
+
+    def get_current(self, category: str) -> Optional[Dict]:
+        """
+        Get the currently selected wordlist for a category.
+
+        Args:
+            category: Wordlist category
+
+        Returns:
+            Wordlist dictionary or None
+        """
+        if category not in self.current_selections:
+            return None
+
+        selection_index = self.current_selections[category]
+        if selection_index is None:
+            return None
+
+        if category in self.wordlists and 0 <= selection_index < len(self.wordlists[category]):
+            return self.wordlists[category][selection_index]
+
+        return None
+
+    def set_current(self, category: str, identifier: str) -> bool:
+        """
+        Set the current wordlist for a category.
+
+        Args:
+            category: Wordlist category
+            identifier: Path, name, or index
+
+        Returns:
+            True if set successfully
+        """
+        if category not in self.wordlists:
+            return False
+
+        # Try as index first
+        try:
+            index = int(identifier)
+            if 0 <= index < len(self.wordlists[category]):
+                self.current_selections[category] = index
+                return True
+        except ValueError:
+            pass
+
+        # Try matching by identifier
+        for i, wordlist in enumerate(self.wordlists[category]):
+            if wordlist.get('path') == identifier or wordlist.get('name') == identifier:
+                self.current_selections[category] = i
+                return True
+
+        return False
+
+    def get_categories(self) -> List[str]:
+        """Get list of all wordlist categories."""
+        return list(self.wordlists.keys())
+
+    def export(self) -> Dict:
+        """Export wordlist data."""
+        return {
+            "wordlists": self.wordlists,
+            "current_selections": self.current_selections
+        }
+
+    def import_data(self, data: Dict):
+        """Import wordlist data."""
+        self.wordlists = data.get("wordlists", self.wordlists)
+        self.current_selections = data.get("current_selections", self.current_selections)
