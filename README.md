@@ -274,7 +274,9 @@ We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for:
 
 ## 📜 License
 
-MIT License - See [LICENSE](LICENSE) for details.
+**CC BY-NC-SA 4.0** (Non-Commercial) - See [LICENSE](LICENSE) for details.
+
+Free to use, modify, and share for non-commercial purposes. Commercial use requires permission.
 
 ---
 
