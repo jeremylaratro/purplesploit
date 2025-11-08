@@ -13,6 +13,14 @@ from rich import box
 from typing import Dict, List, Any, Optional
 import pandas as pd
 
+# Import banner module
+try:
+    from .banner import show_banner
+except ImportError:
+    # Fallback if banner module not found
+    def show_banner(variant=None):
+        return "=== PurpleSploit Framework ==="
+
 
 class Display:
     """
@@ -27,29 +35,15 @@ class Display:
         self.console = RichConsole(width=120, no_color=False)
 
     def print_banner(self):
-        """Print the PurpleSploit banner."""
-        banner = """[bold magenta]
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║  ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗ ██╗       ║
-║  ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗██║       ║
-║  ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝██║       ║
-║  ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝ ██║       ║
-║  ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║     ███████╗  ║
-║  ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝     ╚══════╝  ║
-║                                                                               ║
-║                   ██████╗ ██╗      ██████╗ ██╗████████╗                      ║
-║                   ██╔══██╗██║     ██╔═══██╗██║╚══██╔══╝                      ║
-║                   ██████╔╝██║     ██║   ██║██║   ██║                         ║
-║                   ██╔═══╝ ██║     ██║   ██║██║   ██║                         ║
-║                   ██║     ███████╗╚██████╔╝██║   ██║                         ║
-║                   ╚═╝     ╚══════╝ ╚═════╝ ╚═╝   ╚═╝                         ║
-║                                                                               ║
-║                  [bold cyan]Command Workflow Automation Framework[/bold cyan]                        ║
-║                              [dim cyan]by d0sf3t[/dim cyan]                                        ║
-║                           [dim]Version 3.3 - Console Mode[/dim]                         ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝[/bold magenta]
+        """Print the PurpleSploit banner with random variant."""
+        # Get random banner from the banner module
+        banner_text = show_banner()
+
+        # Print with magenta color
+        banner = f"""[bold magenta]{banner_text}[/bold magenta]
+
+[cyan]              Offensive Security Framework | Console + TUI | Search. Select. Exploit.[/cyan]
+[dim]                                Version 3.3 - Console Mode[/dim]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)
