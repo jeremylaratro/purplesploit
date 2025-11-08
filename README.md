@@ -1,70 +1,123 @@
-# PurpleSploit Framework v2.0
+# PurpleSploit Framework v3.0
 
 <div align="center">
 
 ```
-╔═══════════════════════════════════════════════════════════════════════════╗
-║   ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗       ║
-║   ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗      ║
-║   ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝      ║
-║   ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝       ║
-║   ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║           ║
-║   ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝           ║
-║                                                                           ║
-║         ███████╗██████╗  █████╗ ███╗   ███╗███████╗██╗    ██╗ ██████╗    ║
-║         ██╔════╝██╔══██╗██╔══██╗████╗ ████║██╔════╝██║    ██║██╔═══██╗   ║
-║         █████╗  ██████╔╝███████║██╔████╔██║█████╗  ██║ █╗ ██║██║   ██║   ║
-║         ██╔══╝  ██╔══██╗██╔══██║██║╚██╔╝██║██╔══╝  ██║███╗██║██║   ██║   ║
-║         ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║███████╗╚███╔███╔╝╚██████╔╝   ║
-║         ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝ ╚══╝╚══╝  ╚═════╝    ║
-╚═══════════════════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║     ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗         ║
+║     ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗        ║
+║     ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝        ║
+║     ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝         ║
+║     ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║             ║
+║     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝             ║
+║                                                                               ║
+║           ███████╗██████╗ ██╗      ██████╗ ██╗████████╗                      ║
+║           ██╔════╝██╔══██╗██║     ██╔═══██╗██║╚══██╔══╝                      ║
+║           ███████╗██████╔╝██║     ██║   ██║██║   ██║                         ║
+║           ╚════██║██╔═══╝ ██║     ██║   ██║██║   ██║                         ║
+║           ███████║██║     ███████╗╚██████╔╝██║   ██║                         ║
+║           ╚══════╝╚═╝     ╚══════╝ ╚═════╝ ╚═╝   ╚═╝                         ║
+║                                                                               ║
+║                  Hybrid Offensive Security Framework v3.0                    ║
+║                        Python Edition - Dual Interface                       ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Comprehensive Visual Pentesting Framework with Hybrid Architecture**
+**Comprehensive Offensive Security Framework with Console & TUI Modes**
 
-[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Architecture](#architecture)
+[Quick Start](#quick-start) • [Modes](#interface-modes) • [Features](#features) • [Documentation](#documentation)
 
 </div>
 
 ---
 
-## Overview
+## 📖 Overview
 
-PurpleSploit is a **visual, menu-driven pentesting framework** that combines the best of both worlds:
-- **Visual FZF-based TUI** for easy navigation and discovery
-- **Scalable framework backend** with workspaces, modules, and service analysis
-- **Comprehensive tool coverage** including NXC, Impacket, web tools, and more
+PurpleSploit is a **dual-interface offensive security framework** offering both Metasploit-style console and full-screen TUI modes:
 
-### Why PurpleSploit?
+### 🎯 Interface Modes
 
-- 🎯 **Visual Interface** - See all options at once, navigate with arrow keys
-- ⭐ **Service Detection** - Automatically highlights relevant tools for your target
-- 🔐 **Multi-Credential Management** - Store and switch between credential sets
-- 📁 **Workspace Organization** - Organize targets per-engagement
-- ⚡ **Background Jobs** - Run long scans without blocking
-- 🎨 **Hybrid Architecture** - Framework scalability + comprehensive tool coverage
-- 🚀 **Quick Keybinds** - Single-key shortcuts for common tasks
+#### **Console Mode** (Metasploit-Style)
+- Command-line interface with powerful shortcuts
+- Interactive fuzzy search (fzf) for modules/operations
+- Perfect for automation and scripting
+- **[📚 Console Mode Documentation](docs/console-mode/README.md)**
+
+#### **TUI Mode** (Full-Screen Menu)
+- Visual menu-driven interface
+- Mouse and keyboard navigation
+- Guided workflows with service detection
+- **[📚 TUI Mode Documentation](docs/tui-mode/README.md)**
+
+> **Both modes share the same context** - switch between them seamlessly!
 
 ---
 
-## Quick Start
+## ✨ Key Features
 
-### Launch PurpleSploit
+### Core Capabilities
+- 🔍 **Smart Module System** - Tree view with operation submenus
+- 🎯 **Interactive Selection** - fzf-powered fuzzy search everywhere
+- 📋 **Context Management** - Persistent targets, credentials, and workspace
+- ⚡ **Quick Workflows** - Rapid testing with smart shortcuts
+- 🔧 **Service Detection** - Auto-detect and highlight relevant tools
+- 📊 **Rich Output** - Beautiful tables and formatted display
 
+### Tool Coverage
+- **Network** - SMB, LDAP, WinRM, RDP, MSSQL, SSH (NetExec)
+- **Web** - Feroxbuster, SQLMap, Wfuzz, HTTPx
+- **Impacket** - PSExec, WMIExec, SecretsDump, Kerberoasting, ASREProast
+- **Recon** - Nmap, Service Analysis
+
+---
+
+## 🚀 Quick Start
+
+### Choose Your Interface
+
+#### **Console Mode** (Recommended for Power Users)
 ```bash
-./purplesploit-tui.sh
+cd /path/to/purplesploit
+python3 -m purplesploit.main
 ```
 
-That's it! The visual menu will guide you through everything.
+Quick workflow:
+```bash
+purplesploit> module select     # Interactive module browser
+purplesploit> target 192.168.1.100
+purplesploit> cred admin:pass
+purplesploit> run               # Interactive operation selection
+```
 
-### Quick Workflow
+**[📚 Full Console Mode Guide](docs/console-mode/README.md)**
 
-1. **Press `[s]`** → Select/switch target
-2. **Press `[c]`** → Select credentials
-3. **Navigate menu** → Use arrow keys to browse tools
-4. **Look for `●` markers** → These tools match detected services on your target
-5. **Select a tool** → Press Enter to see submenu options
-6. **Run and profit** → Tools execute and output appears
+#### **TUI Mode** (Full-Screen Visual Interface)
+```bash
+cd /path/to/purplesploit
+bash purplesploit-tui.sh
+```
+
+Navigate with:
+1. Arrow keys or number keys
+2. Select target/credentials in Settings
+3. Browse tool categories
+4. Execute operations
+
+**[📚 Full TUI Mode Guide](docs/tui-mode/README.md)**
+
+### Switching Between Modes
+
+**Console → TUI:**
+```bash
+purplesploit> interactive
+# or
+purplesploit> i
+```
+
+**TUI → Console:**
+Press `q` to exit TUI, then launch console with `python3 -m purplesploit.main`
 
 ---
 
