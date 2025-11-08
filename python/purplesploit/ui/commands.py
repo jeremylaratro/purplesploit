@@ -828,6 +828,33 @@ class CommandHandler:
         results = self._search_operations(query)
 
         if results:
+            # Group results by module for better organization
+            from collections import defaultdict
+            grouped = defaultdict(list)
+
+            for result in results:
+                module_key = result['module_path']
+                grouped[module_key].append(result)
+
+            # Display grouped results
+            self.display.console.print(f"\n[bold cyan]Found {len(results)} operations across {len(grouped)} modules matching '{query}':[/bold cyan]\n")
+
+            for module_path in sorted(grouped.keys()):
+                ops_list = grouped[module_path]
+                mod_name = ops_list[0]['module']  # All ops in group have same module name
+
+                # Module header
+                self.display.console.print(f"[bold green]▸ {mod_name}[/bold green] [dim]({module_path})[/dim]")
+
+                # List operations under this module
+                for i, result in enumerate(ops_list, 1):
+                    op_name = result['operation']
+                    op_desc = result['description']
+
+                    self.display.console.print(f"  [cyan]{i}.[/cyan] {op_name}")
+                    self.display.console.print(f"     [dim]{op_desc}[/dim]")
+
+                self.display.console.print()  # Blank line between modules
             # Store results for selection
             self.last_ops_results = results
 
