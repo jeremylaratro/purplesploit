@@ -240,10 +240,11 @@ bash purplesploit-tui.sh
 
 ## 📚 Documentation
 
-- **[Console Mode Guide](docs/console-mode/README.md)** - Full command reference
-- **[TUI Mode Guide](docs/tui-mode/README.md)** - Menu navigation and shortcuts
-- **[FEATURES.md](docs/FEATURES.md)** - Deep dive into capabilities
-- **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** - Add your own modules
+- **[Quick Start Guide](QUICKSTART.md)** - Get started in 5 minutes
+- **[Console Mode Guide](docs/console-mode/README.md)** - Metasploit-style CLI reference
+- **[TUI Mode Guide](docs/tui-mode/README.md)** - Full-screen menu interface
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - Add your own modules
+- **[Full Documentation](docs/)** - Complete guides and architecture
 
 ---
 
