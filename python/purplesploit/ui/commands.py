@@ -7,6 +7,7 @@ and utility operations.
 
 import shlex
 from typing import Dict, List, Callable
+from pathlib import Path
 from .display import Display
 from .interactive import InteractiveSelector
 
@@ -76,6 +77,8 @@ class CommandHandler:
             "clear": self.cmd_clear,
             "history": self.cmd_history,
             "stats": self.cmd_stats,
+            "interactive": self.cmd_interactive,  # Launch interactive TUI
+            "i": self.cmd_interactive,            # Alias for interactive
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -174,6 +177,7 @@ class CommandHandler:
             "clear": "Clear the screen",
             "history": "Show command history",
             "stats": "Show framework statistics",
+            "interactive, i": "Launch interactive TUI menu",
             "exit, quit": "Exit PurpleSploit",
         }
 
@@ -683,6 +687,42 @@ class CommandHandler:
         self.display.console.print(f"  Targets: {stats['targets']}")
         self.display.console.print(f"  Credentials: {stats['credentials']}")
         self.display.console.print(f"  Current Module: {stats['current_module'] or 'None'}")
+
+        return True
+
+    def cmd_interactive(self, args: List[str]) -> bool:
+        """Launch the interactive TUI menu."""
+        try:
+            # Import here to avoid circular imports
+            from purplesploit.tui.app_interactive import PurpleSploitInteractiveTUI
+
+            self.display.print_info("Launching interactive TUI menu...")
+
+            # Find project root by looking for purplesploit-tui.sh or use current directory
+            project_root = None
+            current = Path.cwd()
+            while current.parent != current:
+                if (current / "purplesploit-tui.sh").exists():
+                    project_root = current
+                    break
+                current = current.parent
+
+            # Launch interactive TUI
+            tui = PurpleSploitInteractiveTUI(project_root=project_root)
+            tui.display_banner()
+            tui.run()
+
+            # Clear screen and show console banner again after exiting TUI
+            self.display.print_banner()
+            self.display.print_info("Returned to console mode. Type 'help' for commands.")
+
+        except ImportError as e:
+            self.display.print_error(f"Failed to import interactive TUI: {e}")
+            self.display.print_info("Make sure the TUI components are properly installed.")
+        except Exception as e:
+            self.display.print_error(f"Error launching interactive mode: {e}")
+            import traceback
+            traceback.print_exc()
 
         return True
 
