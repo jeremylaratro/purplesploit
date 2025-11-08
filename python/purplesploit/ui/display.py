@@ -29,26 +29,26 @@ class Display:
     def print_banner(self):
         """Print the PurpleSploit banner."""
         banner = """
-[bold magenta]╔═══════════════════════════════════════════════════════════════════════════╗[/bold magenta]
-[bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [bold magenta]██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗[/bold magenta]       [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [bold magenta]██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗[/bold magenta]      [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [magenta]██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝[/magenta]      [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [cyan]██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝[/cyan]       [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [bold cyan]██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║[/bold cyan]           [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]   [bold cyan]╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝[/bold cyan]           [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [bold cyan]███████╗██████╗ ██╗      ██████╗ ██╗████████╗[/bold cyan]                       [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [cyan]██╔════╝██╔══██╗██║     ██╔═══██╗██║╚══██╔══╝[/cyan]                       [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [cyan]███████╗██████╔╝██║     ██║   ██║██║   ██║[/cyan]                          [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [blue]╚════██║██╔═══╝ ██║     ██║   ██║██║   ██║[/blue]                          [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [bold blue]███████║██║     ███████╗╚██████╔╝██║   ██║[/bold blue]                          [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]         [bold blue]╚══════╝╚═╝     ╚══════╝ ╚═════╝ ╚═╝   ╚═╝[/bold blue]                          [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]           [dim cyan]Metasploit-Style Offensive Security Framework[/dim cyan]              [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]                        [dim]Version 3.0 | Python Edition[/dim]                     [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
-[bold magenta]╚═══════════════════════════════════════════════════════════════════════════╝[/bold magenta]
+[bold magenta]╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║     ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗         ║
+║     ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗        ║
+║     ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝        ║
+║     ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝         ║
+║     ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║             ║
+║     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝             ║
+║                                                                               ║
+║           ███████╗██████╗ ██╗      ██████╗ ██╗████████╗                      ║
+║           ██╔════╝██╔══██╗██║     ██╔═══██╗██║╚══██╔══╝                      ║
+║           ███████╗██████╔╝██║     ██║   ██║██║   ██║                         ║
+║           ╚════██║██╔═══╝ ██║     ██║   ██║██║   ██║                         ║
+║           ███████║██║     ███████╗╚██████╔╝██║   ██║                         ║
+║           ╚══════╝╚═╝     ╚══════╝ ╚═════╝ ╚═╝   ╚═╝                         ║
+║                                                                               ║
+║              [bold cyan]Metasploit-Style Offensive Security Framework[/bold cyan]                  ║
+║                         [dim]Version 3.0 - Console Mode[/dim]                          ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝[/bold magenta]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)

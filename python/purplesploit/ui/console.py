@@ -65,8 +65,11 @@ class Console:
         # Print banner
         self.display.print_banner()
 
-        # Welcome message
-        self.display.print_info("Type 'help' for available commands")
+        # Welcome message with stats
+        stats = self.framework.get_stats()
+        self.display.console.print(f"[dim cyan]  ◆ {stats['modules']} modules loaded across {stats['categories']} categories[/dim cyan]")
+        self.display.console.print(f"[dim cyan]  ◆ Type [bold cyan]help[/bold cyan] for commands | [bold cyan]module select[/bold cyan] to browse interactively[/dim cyan]")
+        self.display.console.print(f"[dim cyan]  ◆ Quick start: [bold cyan]target[/bold cyan] <ip> → [bold cyan]cred[/bold cyan] <user:pass> → [bold cyan]module select[/bold cyan][/dim cyan]")
         self.display.console.print()
 
         # Main loop
