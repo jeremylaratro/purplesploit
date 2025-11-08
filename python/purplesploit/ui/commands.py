@@ -509,9 +509,51 @@ class CommandHandler:
     def cmd_run(self, args: List[str]) -> bool:
         """Run the current module or a specific operation."""
         module = self.framework.session.current_module
+
+        # If no module loaded, check if we can run from last ops results
         if not module:
-            self.display.print_error("No module loaded. Use 'use <module>' first")
-            return True
+            # Check if user provided a number and we have last ops results
+            if args and args[0].isdigit() and hasattr(self, 'last_ops_results') and self.last_ops_results:
+                op_index = int(args[0]) - 1
+                if 0 <= op_index < len(self.last_ops_results):
+                    result = self.last_ops_results[op_index]
+                    self.display.print_info(f"Loading module: {result['module_path']}")
+                    self.display.print_info(f"Running operation: {result['operation']}")
+
+                    # Load the module
+                    if not self.cmd_use([result['module_path']]):
+                        return True
+
+                    # Get the loaded module
+                    module = self.framework.session.current_module
+                    if not module:
+                        self.display.print_error("Failed to load module")
+                        return True
+
+                    # Find the operation by name
+                    operations = module.get_operations()
+                    operation = None
+                    for op in operations:
+                        if op['name'] == result['operation']:
+                            operation = op
+                            break
+
+                    if operation:
+                        results = self._execute_operation(module, operation)
+                        self.display.print_results(results)
+                        return True
+                    else:
+                        self.display.print_error(f"Operation not found: {result['operation']}")
+                        return True
+                else:
+                    self.display.print_error(f"Invalid operation number. Must be 1-{len(self.last_ops_results)}")
+                    self.display.print_info("Run 'ops <query>' first to search for operations")
+                    return True
+            else:
+                self.display.print_error("No module loaded. Use 'use <module>' first")
+                if hasattr(self, 'last_ops_results') and self.last_ops_results:
+                    self.display.print_info("Or use 'run <number>' to run an operation from your last ops search")
+                return True
 
         # Check if module has operations
         if module.has_operations():
@@ -1012,13 +1054,19 @@ class CommandHandler:
         results = self._search_operations(query)
 
         if results:
+            # Store results for selection and run command
+            self.last_ops_results = results
+
             # Group results by module for better organization
             from collections import defaultdict
             grouped = defaultdict(list)
 
-            for result in results:
+            # Track global index for numbering
+            result_index_map = {}
+            for idx, result in enumerate(results):
                 module_key = result['module_path']
                 grouped[module_key].append(result)
+                result_index_map[id(result)] = idx
 
             # Display grouped results
             self.display.console.print(f"\n[bold cyan]Found {len(results)} operations across {len(grouped)} modules matching '{query}':[/bold cyan]\n")
@@ -1030,31 +1078,18 @@ class CommandHandler:
                 # Module header
                 self.display.console.print(f"[bold green]▸ {mod_name}[/bold green] [dim]({module_path})[/dim]")
 
-                # List operations under this module
-                for i, result in enumerate(ops_list, 1):
+                # List operations under this module with global numbering
+                for result in ops_list:
+                    global_idx = results.index(result) + 1
                     op_name = result['operation']
                     op_desc = result['description']
 
-                    self.display.console.print(f"  [cyan]{i}.[/cyan] {op_name}")
+                    self.display.console.print(f"  [cyan]{global_idx}.[/cyan] {op_name}")
                     self.display.console.print(f"     [dim]{op_desc}[/dim]")
 
                 self.display.console.print()  # Blank line between modules
-            # Store results for selection
-            self.last_ops_results = results
 
-            self.display.console.print(f"\n[bold cyan]Found {len(results)} operations matching '{query}':[/bold cyan]\n")
-            for i, result in enumerate(results, 1):
-                mod_name = result['module']
-                mod_path = result['module_path']
-                op_name = result['operation']
-                op_desc = result['description']
-
-                self.display.console.print(f"  [dim]{i}.[/dim] [green]{mod_name}[/green]")
-                self.display.console.print(f"     Operation: {op_name}")
-                self.display.console.print(f"     {op_desc}")
-                self.display.console.print(f"     [dim]Path: {mod_path}[/dim]\n")
-
-            self.display.print_info("Tip: Use 'use <module_path>' to load the module or 'ops select' for interactive selection")
+            self.display.print_info("Tip: Use 'run <number>' to execute directly, 'use <module_path>' to load the module, or 'ops select' for interactive selection")
         else:
             self.display.print_warning(f"No operations found matching: {query}")
 
@@ -1222,9 +1257,15 @@ class CommandHandler:
                         operations = temp_module.get_operations()
                         for op in operations:
                             # Build searchable text including module context
+                            # Tokenize underscores and slashes for better keyword matching
+                            mod_path_tokenized = mod_path.replace('/', ' ').replace('_', ' ')
+                            name_tokenized = metadata.name.replace('/', ' ').replace('_', ' ')
+
                             searchable_text = ' '.join([
                                 mod_path,                    # e.g., "network/nxc_smb"
+                                mod_path_tokenized,          # e.g., "network nxc smb"
                                 metadata.name,               # e.g., "NetExec SMB"
+                                name_tokenized,              # e.g., "NetExec SMB"
                                 metadata.category,           # e.g., "network"
                                 op['name'],                  # e.g., "List Shares"
                                 op['description']            # e.g., "Enumerate SMB shares"
