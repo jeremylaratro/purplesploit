@@ -130,6 +130,7 @@ class CommandHandler:
             "": "",
             "Module Commands": "",
             "search <query>": "Search for modules by name, description, or category",
+            "search select": "Interactive module selection from last search (with fzf)",
             "use <module>": "Load a module by path (e.g., use web/feroxbuster)",
             "use <number>": "Load a module from search/show results",
             "back": "Unload current module",
@@ -143,7 +144,9 @@ class CommandHandler:
             "": "",
             "Smart Search Commands": "",
             "ops <query>": "Search for operations across all modules",
+            "ops select": "Interactive operation selection from last search (with fzf)",
             "recent": "Show recently used modules",
+            "recent select": "Interactive selection from recent modules (with fzf)",
             "": "",
             "Context Commands": "",
             "targets add <ip|url> [name]": "Add a target",
@@ -159,6 +162,7 @@ class CommandHandler:
             "creds remove <user>": "Remove credentials",
             "": "",
             "services": "View detected services on targets",
+            "services select": "Interactive service selection (with fzf)",
             "": "",
             "Quick Shortcuts": "",
             "target <ip|url>": "Quick: add and set target",
@@ -168,6 +172,7 @@ class CommandHandler:
             "": "",
             "Show Commands": "",
             "show modules": "List all modules",
+            "show modules select": "Interactive module selection (with fzf)",
             "show options": "Show current module options",
             "show targets": "List all targets",
             "show creds": "List all credentials",
@@ -188,7 +193,22 @@ class CommandHandler:
         """Enhanced search for modules with auto-load on single result."""
         if not args:
             self.display.print_error("Usage: search <query>")
+            self.display.print_info("       search select  # Interactive module selection from last search")
             self.display.print_info("Tip: Search looks at module name, description, category, and path")
+            return True
+
+        # Check for 'select' subcommand
+        if args[0].lower() == "select":
+            if not self.last_search_results:
+                self.display.print_error("No search results available. Run 'search <query>' first")
+                return True
+
+            # Interactive selection
+            selected = self.interactive.select_module(self.last_search_results, auto_load_single=False)
+            if selected:
+                return self.cmd_use([selected.path])
+            else:
+                self.display.print_warning("No module selected")
             return True
 
         query = " ".join(args)
@@ -206,7 +226,7 @@ class CommandHandler:
                 self.display.print_info(f"\n[Auto-loading single result...]")
                 return self.cmd_use([module_results[0].path])
             else:
-                self.display.print_info("\nTip: Use 'use <number>' to load a module")
+                self.display.print_info("\nTip: Use 'use <number>' to load a module or 'search select' for interactive selection")
         else:
             self.display.print_warning(f"No modules found matching: {query}")
             self.display.print_info("Tip: Use 'ops <query>' to search operations instead")
@@ -332,16 +352,29 @@ class CommandHandler:
     def cmd_show(self, args: List[str]) -> bool:
         """Show various information."""
         if not args:
-            self.display.print_error("Usage: show <modules|options|targets|creds|services>")
+            self.display.print_error("Usage: show <modules|options|targets|creds|services> [select]")
             return True
 
         what = args[0].lower()
 
         if what == "modules":
-            modules = self.framework.list_modules()
-            self.last_search_results = modules  # Store for number selection
-            self.display.print_modules_table(modules)
-            self.display.print_info("\nTip: Use 'use <number>' to load a module")
+            # Check for 'select' subcommand
+            if len(args) > 1 and args[1].lower() == "select":
+                modules = self.framework.list_modules()
+                if not modules:
+                    self.display.print_warning("No modules available")
+                    return True
+
+                selected = self.interactive.select_module(modules, auto_load_single=False)
+                if selected:
+                    return self.cmd_use([selected.path])
+                else:
+                    self.display.print_warning("No module selected")
+            else:
+                modules = self.framework.list_modules()
+                self.last_search_results = modules  # Store for number selection
+                self.display.print_modules_table(modules)
+                self.display.print_info("\nTip: Use 'use <number>' to load a module or 'show modules select' for interactive selection")
 
         elif what == "options":
             return self.cmd_options([])
@@ -649,8 +682,28 @@ class CommandHandler:
 
     def cmd_services(self, args: List[str]) -> bool:
         """View detected services."""
-        services = self.framework.session.services.services
-        self.display.print_services_table(services)
+        # Check for 'select' subcommand
+        if args and args[0].lower() == "select":
+            services = self.framework.session.services.services
+            if not services:
+                self.display.print_warning("No services available")
+                return True
+
+            selected = self.interactive.select_service(services)
+            if selected:
+                self.display.print_success(f"Selected service: {selected.get('target')}:{selected.get('port')} - {selected.get('name')}")
+
+                # Optionally set target based on service
+                if selected.get('target'):
+                    self.framework.session.targets.set_current(selected['target'])
+                    self.display.print_info(f"  → Set current target to {selected['target']}")
+            else:
+                self.display.print_warning("No service selected")
+        else:
+            services = self.framework.session.services.services
+            self.display.print_services_table(services)
+            self.display.print_info("\nTip: Use 'services select' for interactive selection")
+
         return True
 
     def cmd_clear(self, args: List[str]) -> bool:
@@ -740,13 +793,44 @@ class CommandHandler:
         """Search operations globally across all modules."""
         if not args:
             self.display.print_error("Usage: ops <query>")
+            self.display.print_info("       ops select  # Interactive operation selection from last search")
             self.display.print_info("Example: ops authentication")
+            return True
+
+        # Check for 'select' subcommand
+        if args[0].lower() == "select":
+            if not hasattr(self, 'last_ops_results') or not self.last_ops_results:
+                self.display.print_error("No operation search results available. Run 'ops <query>' first")
+                return True
+
+            # Format operations with module info for selection
+            formatted_ops = []
+            for result in self.last_ops_results:
+                formatted_ops.append({
+                    'name': f"{result['module']} - {result['operation']}",
+                    'description': result['description'],
+                    'module_path': result['module_path'],
+                    'handler': None  # Not needed for selection
+                })
+
+            selected = self.interactive.select_operation(formatted_ops)
+            if selected:
+                # Extract module path from the result
+                for result in self.last_ops_results:
+                    if f"{result['module']} - {result['operation']}" == selected['name']:
+                        self.display.print_info(f"Loading module: {result['module_path']}")
+                        return self.cmd_use([result['module_path']])
+            else:
+                self.display.print_warning("No operation selected")
             return True
 
         query = " ".join(args).lower()
         results = self._search_operations(query)
 
         if results:
+            # Store results for selection
+            self.last_ops_results = results
+
             self.display.console.print(f"\n[bold cyan]Found {len(results)} operations matching '{query}':[/bold cyan]\n")
             for i, result in enumerate(results, 1):
                 mod_name = result['module']
@@ -759,7 +843,7 @@ class CommandHandler:
                 self.display.console.print(f"     {op_desc}")
                 self.display.console.print(f"     [dim]Path: {mod_path}[/dim]\n")
 
-            self.display.print_info("Tip: Use 'use <module_path>' to load the module")
+            self.display.print_info("Tip: Use 'use <module_path>' to load the module or 'ops select' for interactive selection")
         else:
             self.display.print_warning(f"No operations found matching: {query}")
 
@@ -771,6 +855,7 @@ class CommandHandler:
 
         # Extract 'use' commands
         recent_modules = []
+        recent_module_objects = []
         for entry in reversed(history):
             cmd = entry.get('command', '')
             if cmd.startswith('use '):
@@ -779,8 +864,24 @@ class CommandHandler:
                     module_path = parts[1]
                     if module_path not in recent_modules:
                         recent_modules.append(module_path)
+                        # Get module metadata if available
+                        if module_path in self.framework.modules:
+                            recent_module_objects.append(self.framework.modules[module_path])
                     if len(recent_modules) >= 10:
                         break
+
+        # Check for 'select' subcommand
+        if args and args[0].lower() == "select":
+            if not recent_module_objects:
+                self.display.print_warning("No recent modules available")
+                return True
+
+            selected = self.interactive.select_module(recent_module_objects, auto_load_single=False)
+            if selected:
+                return self.cmd_use([selected.path])
+            else:
+                self.display.print_warning("No module selected")
+            return True
 
         if recent_modules:
             self.display.console.print("\n[bold cyan]Recently Used Modules:[/bold cyan]\n")
@@ -792,7 +893,7 @@ class CommandHandler:
                 else:
                     self.display.console.print(f"  [dim]{i}.[/dim] {mod_path}")
 
-            self.display.print_info("\nTip: Use 'use <number>' after running 'search' or 'recent'")
+            self.display.print_info("\nTip: Use 'use <number>' after running 'search' or 'recent select' for interactive selection")
         else:
             self.display.print_info("No recent modules found")
 

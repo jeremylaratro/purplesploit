@@ -458,3 +458,77 @@ class InteractiveSelector:
             pass
 
         return None
+
+    def select_service(
+        self,
+        services: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Interactive service selection.
+
+        Args:
+            services: List of service dictionaries
+
+        Returns:
+            Selected service dict or None
+        """
+        if not services:
+            return None
+
+        # Format services for display
+        lines = []
+        for i, service in enumerate(services, 1):
+            target = service.get('target', '')
+            port = service.get('port', '')
+            protocol = service.get('protocol', '')
+            name = service.get('name', '')
+            version = service.get('version', '')
+
+            # Format: "1. target:port/protocol - service version"
+            line = f"{i:2d}. {target:20s} {port:6s}/{protocol:5s} {name:15s} {version}"
+            lines.append(line)
+
+        if not self.has_fzf:
+            return self._simple_select_service(services)
+
+        # Use fzf
+        selected_line = self._fzf_select(
+            lines,
+            prompt="Select Service: ",
+            multi=False,
+            preview=None
+        )
+
+        if selected_line:
+            # Extract index from selected line
+            try:
+                index = int(selected_line.split('.')[0].strip()) - 1
+                if 0 <= index < len(services):
+                    return services[index]
+            except (ValueError, IndexError):
+                pass
+
+        return None
+
+    def _simple_select_service(self, services: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Simple service selection fallback."""
+        try:
+            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
+                print("\nAvailable services:", file=tty_out)
+                for i, service in enumerate(services, 1):
+                    target = service.get('target', '')
+                    port = service.get('port', '')
+                    name = service.get('name', '')
+                    print(f"  {i}. {target}:{port} - {name}", file=tty_out)
+
+                print(f"\nSelect (1-{len(services)}): ", file=tty_out, end='', flush=True)
+                choice = tty_in.readline().strip()
+
+                if choice.isdigit():
+                    index = int(choice) - 1
+                    if 0 <= index < len(services):
+                        return services[index]
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+
+        return None
