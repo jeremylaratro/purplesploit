@@ -461,7 +461,7 @@ draw_shortcuts_bar() {
 
 show_enhanced_banner() {
     local workspace="${1:-default}"
-    local version="${2:-3.3}"
+    local version="${2:-3.8}"
 
     # Source the banner module if not already loaded
     if ! type show_banner &>/dev/null; then

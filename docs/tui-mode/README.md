@@ -13,7 +13,7 @@
 ░░        ░░░ ░ ░   ░░   ░ ░░         ░ ░      ░   ░  ░  ░  ░░         ░ ░   ░ ░ ░ ▒   ▒ ░  ░
             ░        ░                  ░  ░   ░  ░      ░               ░  ░    ░ ░   ░
 
-                      Full-Screen TUI Mode | Version 3.3
+                      Full-Screen TUI Mode | Version 3.8
 ```
 
 **Full-screen terminal interface for interactive offensive security operations**

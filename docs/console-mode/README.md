@@ -13,7 +13,7 @@
 ░░        ░░░ ░ ░   ░░   ░ ░░         ░ ░      ░   ░  ░  ░  ░░         ░ ░   ░ ░ ░ ▒   ▒ ░  ░
             ░        ░                  ░  ░   ░  ░      ░               ░  ░    ░ ░   ░
 
-                    Metasploit-Style Console Mode | Version 3.3
+                    Metasploit-Style Console Mode | Version 3.8
 ```
 
 **Metasploit-inspired command-line interface for offensive security operations**
