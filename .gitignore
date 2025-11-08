@@ -4,11 +4,26 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv
 
 # IDE
 .vscode/
@@ -16,7 +31,107 @@ ENV/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# PurpleSploit Runtime Files
+# User workspace and data directories
+.purplesploit/
+*.db
+.pentest-credentials.db
+.pentest-targets.db
+.pentest-web-targets.db
+.pentest-ad-targets.db
+.pentest-services.db
+.pentest-nmap-results/
+
+# Output directories
+output/
+outputs/
+results/
+scans/
+loot/
+
+# Log files
+*.log
+logs/
+
+# Sensitive files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets
+credentials.txt
+passwords.txt
+hashes.txt
+
+# Configuration files that might contain secrets
+config.ini
+.env
+.env.*
+!.env.example
+local_config*
+
+# Database files
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+*.old
+
+# Nmap results
+*.nmap
+*.gnmap
+*.xml
+
+# Archive files (might contain sensitive data)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Compiled files
+*.pyc
+*.pyo
+*.class
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Testing
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
