@@ -23,7 +23,8 @@ class Display:
 
     def __init__(self):
         """Initialize display with Rich console."""
-        self.console = RichConsole()
+        # Set width to ensure banner doesn't wrap
+        self.console = RichConsole(width=120, no_color=False)
 
     def print_banner(self):
         """Print the PurpleSploit banner."""
@@ -45,11 +46,12 @@ class Display:
 [bold magenta]║[/bold magenta]         [bold blue]╚══════╝╚═╝     ╚══════╝ ╚═════╝ ╚═╝   ╚═╝[/bold blue]                          [bold magenta]║[/bold magenta]
 [bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
 [bold magenta]║[/bold magenta]           [dim cyan]Metasploit-Style Offensive Security Framework[/dim cyan]              [bold magenta]║[/bold magenta]
-[bold magenta]║[/bold magenta]                        [dim]Version 2.0 | Python Edition[/dim]                     [bold magenta]║[/bold magenta]
+[bold magenta]║[/bold magenta]                        [dim]Version 3.0 | Python Edition[/dim]                     [bold magenta]║[/bold magenta]
 [bold magenta]║[/bold magenta]                                                                           [bold magenta]║[/bold magenta]
 [bold magenta]╚═══════════════════════════════════════════════════════════════════════════╝[/bold magenta]
 """
-        self.console.print(banner)
+        # Print banner without wrapping to prevent cut-off
+        self.console.print(banner, overflow="ignore", no_wrap=True)
         self.console.print()
 
     def print_success(self, message: str):
