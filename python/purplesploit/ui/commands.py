@@ -691,34 +691,38 @@ class CommandHandler:
         return True
 
     def cmd_interactive(self, args: List[str]) -> bool:
-        """Launch the interactive TUI menu."""
+        """Launch the interactive TUI menu (bash version)."""
+        import subprocess
+        import os
+
         try:
-            # Import here to avoid circular imports
-            from purplesploit.tui.app_interactive import PurpleSploitInteractiveTUI
-
-            self.display.print_info("Launching interactive TUI menu...")
-
-            # Find project root by looking for purplesploit-tui.sh or use current directory
+            # Find project root by looking for purplesploit-tui.sh
             project_root = None
             current = Path.cwd()
             while current.parent != current:
-                if (current / "purplesploit-tui.sh").exists():
+                tui_script = current / "purplesploit-tui.sh"
+                if tui_script.exists():
                     project_root = current
                     break
                 current = current.parent
 
-            # Launch interactive TUI
-            tui = PurpleSploitInteractiveTUI(project_root=project_root)
-            tui.display_banner()
-            tui.run()
+            if not project_root:
+                self.display.print_error("Could not find purplesploit-tui.sh")
+                self.display.print_info("Make sure you're running from the PurpleSploit directory")
+                return True
+
+            tui_script = project_root / "purplesploit-tui.sh"
+            self.display.print_info("Launching interactive TUI menu...")
+
+            # Execute the bash TUI script
+            # Use os.system to properly handle terminal control
+            os.system(f'cd "{project_root}" && bash "{tui_script}"')
 
             # Clear screen and show console banner again after exiting TUI
+            self.display.console.clear()
             self.display.print_banner()
             self.display.print_info("Returned to console mode. Type 'help' for commands.")
 
-        except ImportError as e:
-            self.display.print_error(f"Failed to import interactive TUI: {e}")
-            self.display.print_info("Make sure the TUI components are properly installed.")
         except Exception as e:
             self.display.print_error(f"Error launching interactive mode: {e}")
             import traceback
@@ -878,14 +882,22 @@ class CommandHandler:
         """
         Search for operations across all modules.
 
+        Supports multi-word queries where all words must match somewhere in:
+        - Module path (e.g., "network/nxc_smb")
+        - Module name (e.g., "NetExec SMB")
+        - Operation name (e.g., "List Shares")
+        - Operation description
+
         Args:
-            query: Search term
+            query: Search term (can be multiple words)
 
         Returns:
             List of matching operations with module info
         """
         results = []
-        query_lower = query.lower()
+
+        # Split query into individual words for flexible matching
+        query_words = query.lower().split()
 
         for mod_path, metadata in self.framework.modules.items():
             # Load module to get operations
@@ -897,9 +909,17 @@ class CommandHandler:
                     if temp_module.has_operations():
                         operations = temp_module.get_operations()
                         for op in operations:
-                            # Check if query matches operation name or description
-                            if (query_lower in op['name'].lower() or
-                                query_lower in op['description'].lower()):
+                            # Build searchable text including module context
+                            searchable_text = ' '.join([
+                                mod_path,                    # e.g., "network/nxc_smb"
+                                metadata.name,               # e.g., "NetExec SMB"
+                                metadata.category,           # e.g., "network"
+                                op['name'],                  # e.g., "List Shares"
+                                op['description']            # e.g., "Enumerate SMB shares"
+                            ]).lower()
+
+                            # Check if ALL query words appear in searchable text
+                            if all(word in searchable_text for word in query_words):
                                 results.append({
                                     'module': metadata.name,
                                     'module_path': mod_path,
