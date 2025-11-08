@@ -6,7 +6,7 @@ and utility operations.
 """
 
 import shlex
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Any
 from pathlib import Path
 from .display import Display
 from .interactive import InteractiveSelector
@@ -47,6 +47,7 @@ class CommandHandler:
 
             # Module commands
             "search": self.cmd_search,
+            "module": self.cmd_module,  # Module management with select
             "use": self.cmd_use,
             "back": self.cmd_back,
             "info": self.cmd_info,
@@ -131,6 +132,7 @@ class CommandHandler:
             "Module Commands": "",
             "search <query>": "Search for modules by name, description, or category",
             "search select": "Interactive module selection from last search (with fzf)",
+            "module select": "Interactive module/operation selection with submenu (with fzf)",
             "use <module>": "Load a module by path (e.g., use web/feroxbuster)",
             "use <number>": "Load a module from search/show results",
             "back": "Unload current module",
@@ -171,8 +173,7 @@ class CommandHandler:
             "go <target> [creds] [op]": "All-in-one: set target, creds, run operation",
             "": "",
             "Show Commands": "",
-            "show modules": "List all modules",
-            "show modules select": "Interactive module selection (with fzf)",
+            "show modules": "List all modules with operations (tree view)",
             "show options": "Show current module options",
             "show targets": "List all targets",
             "show creds": "List all credentials",
@@ -232,6 +233,59 @@ class CommandHandler:
             self.display.print_info("Tip: Use 'ops <query>' to search operations instead")
 
         return True
+
+    def cmd_module(self, args: List[str]) -> bool:
+        """
+        Module management with interactive selection.
+
+        Usage: module select
+        """
+        if not args or args[0].lower() == "select":
+            # Get all modules
+            modules = self.framework.list_modules()
+            if not modules:
+                self.display.print_warning("No modules available")
+                return True
+
+            # Interactive module selection
+            selected_module = self.interactive.select_module(modules, auto_load_single=False)
+            if not selected_module:
+                self.display.print_warning("No module selected")
+                return True
+
+            # Load the module
+            module = self.framework.use_module(selected_module.path)
+            if not module:
+                self.display.print_error(f"Failed to load module: {selected_module.path}")
+                return True
+
+            self.display.print_success(f"Loaded module: {module.name}")
+
+            # Check if module has operations - if so, show submenu
+            if module.has_operations():
+                operations = module.get_operations()
+                self.display.print_info(f"\nThis module has {len(operations)} operations")
+
+                # Interactive operation selection
+                selected_operation = self.interactive.select_operation(operations)
+
+                if selected_operation:
+                    # Execute the selected operation
+                    self.display.print_info(f"Running: {selected_operation['name']}")
+                    results = self._execute_operation(module, selected_operation)
+                    self.display.print_results(results)
+                else:
+                    self.display.print_info("No operation selected - module loaded")
+                    self.display.print_info("Type 'run' to select an operation or 'options' to view module options")
+            else:
+                self.display.print_info("Type 'options' to view module options")
+                self.display.print_info("Type 'run' to execute the module")
+
+            return True
+        else:
+            self.display.print_error("Usage: module select")
+            return True
+
     def cmd_use(self, args: List[str]) -> bool:
         """Smart module loading with optional operation filtering."""
         if not args:
@@ -352,29 +406,18 @@ class CommandHandler:
     def cmd_show(self, args: List[str]) -> bool:
         """Show various information."""
         if not args:
-            self.display.print_error("Usage: show <modules|options|targets|creds|services> [select]")
+            self.display.print_error("Usage: show <modules|options|targets|creds|services>")
             return True
 
         what = args[0].lower()
 
         if what == "modules":
-            # Check for 'select' subcommand
-            if len(args) > 1 and args[1].lower() == "select":
-                modules = self.framework.list_modules()
-                if not modules:
-                    self.display.print_warning("No modules available")
-                    return True
+            modules = self.framework.list_modules()
+            self.last_search_results = modules  # Store for number selection
 
-                selected = self.interactive.select_module(modules, auto_load_single=False)
-                if selected:
-                    return self.cmd_use([selected.path])
-                else:
-                    self.display.print_warning("No module selected")
-            else:
-                modules = self.framework.list_modules()
-                self.last_search_results = modules  # Store for number selection
-                self.display.print_modules_table(modules)
-                self.display.print_info("\nTip: Use 'use <number>' to load a module or 'show modules select' for interactive selection")
+            # Display modules with operations in tree view
+            self._show_modules_tree(modules)
+            self.display.print_info("\nTip: Use 'use <number>' to load a module or 'module select' for interactive selection")
 
         elif what == "options":
             return self.cmd_options([])
@@ -1033,6 +1076,77 @@ class CommandHandler:
         return results
 
     # Helper methods
+    def _show_modules_tree(self, modules: List[Any]) -> None:
+        """
+        Display modules with their operations in a tree view.
+
+        Args:
+            modules: List of module metadata objects
+        """
+        from rich.table import Table
+        from rich import box
+
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=5)
+        table.add_column("Category", style="yellow", width=10)
+        table.add_column("Module / Operation", style="white")
+        table.add_column("Description", style="white")
+
+        item_number = 1
+        for mod in modules:
+            path = self._get_attr(mod, 'path', '')
+            name = self._get_attr(mod, 'name', '')
+            desc = self._get_attr(mod, 'description', '')
+            category = self._get_attr(mod, 'category', '').upper()
+
+            # Add module row
+            table.add_row(
+                str(item_number),
+                f"[{category}]",
+                f"[green]{path}[/green]",
+                desc
+            )
+            item_number += 1
+
+            # Try to get operations for this module
+            try:
+                module_class = self._get_attr(mod, 'instance', None)
+                if module_class:
+                    temp_module = module_class(self.framework)
+                    if temp_module.has_operations():
+                        operations = temp_module.get_operations()
+                        for op in operations:
+                            op_name = op.get('name', '')
+                            op_desc = op.get('description', '')
+                            # Add indented operation row
+                            table.add_row(
+                                "",
+                                "",
+                                f"  └─ [cyan]{op_name}[/cyan]",
+                                f"[dim]{op_desc}[/dim]"
+                            )
+            except Exception:
+                pass  # Skip if can't load operations
+
+        self.display.console.print(table)
+
+    def _get_attr(self, obj: Any, attr: str, default: Any = None) -> Any:
+        """
+        Get attribute from object or dict.
+
+        Args:
+            obj: Dictionary or object
+            attr: Attribute name
+            default: Default value if not found
+
+        Returns:
+            Attribute value or default
+        """
+        if isinstance(obj, dict):
+            return obj.get(attr, default)
+        else:
+            return getattr(obj, attr, default)
+
     # Helper methods
     def _show_operations(self, operations: List[Dict]) -> None:
         """
