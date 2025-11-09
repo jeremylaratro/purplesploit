@@ -64,12 +64,10 @@ run
 - run relevant modules
 - continue
 
-1. Interactive selection use select keyword:
+Interactive selection use select keyword:
 ```bash
 {keyword} select 
 ```
-
-2. 
 
 ---
 
