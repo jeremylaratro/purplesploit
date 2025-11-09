@@ -28,6 +28,13 @@
 
 </div>
 
+### Why?
+This project is the result of multiple personal objectives that converged, having been wanting to make something that:
+1. is highly useful - something that I would realistically use every day whether for pentesting profesionally or for CTFs.
+2. automates, or makes a real world process that I use more efficient.
+3. involves architecting a modular, scalable tool or framework.
+The result is purplesploit, a tool based off the concept of metasploit but focused on efficiency and automation of pentesting workflows.     
+
 > **⚠️ LEGAL DISCLAIMER**: This tool is for **authorized security testing and educational purposes only**. Unauthorized access to computer systems is illegal. See [DISCLAIMER.md](DISCLAIMER.md) for full terms. Use responsibly and ethically.
 
 #### Tools included
