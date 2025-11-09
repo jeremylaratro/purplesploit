@@ -59,8 +59,8 @@ run
 
 #### Test workflow example TL;DR: 
 - run nmap scan - tool parses it, identifies existing services and web services
--     auto adds all web ip:port pairs to web module dictionary to choose from
--     auto identifies running services, then run "search relevant" and only the discovered service modules will appear
+    - auto adds all web ip:port pairs to web module dictionary to choose from
+    - auto identifies running services, then run "search relevant" and only the discovered service modules will appear
 - run relevant modules
 - continue
 
