@@ -22,7 +22,7 @@
     ╚═══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Metasploit-style framework with fuzzy search everywhere**
+**Metasploit-inspired framework for tool/workflow efficiency, with an emphasis on usability**
 
 [Quick Start](#-quick-start) • [Key Features](#-the-power-trio) • [Installation](#-installation) • [Docs](docs/)
 
@@ -30,9 +30,50 @@
 
 > **⚠️ LEGAL DISCLAIMER**: This tool is for **authorized security testing and educational purposes only**. Unauthorized access to computer systems is illegal. See [DISCLAIMER.md](DISCLAIMER.md) for full terms. Use responsibly and ethically.
 
+#### Tools included
+
+| Category | Tools |
+|----------|-------|
+| **Web** | Feroxbuster, SQLMap, Wfuzz, HTTPx |
+| **Network (NXC)** | SMB, LDAP, WinRM, RDP, MSSQL, SSH |
+| **Impacket** | PSExec, WMIExec, SecretsDump, Kerberoast |
+| **Recon** | Nmap with auto-service detection |
+
+**50+ operations** across all categories. Add your own with `.psm` modules.
+
+
+#### What it does TL;DR
+- makes workflow efficient - no typing commands, credential application across all tools, auto analysis of scans
+
+#### Usage TL;DR:
+search {item} - main search items
+ops {items} - search individual run items
+{item} select - interactive search with keyboard/mouse selection
+
+#### Command workflow TL;DR
+target select -- add and select new target
+creds select - add and select creds
+module select - select a module
+options - verify info
+run
+
+#### Test workflow example TL;DR: 
+- run nmap scan - tool parses it, identifies existing services and web services
+-     auto adds all web ip:port pairs to web module dictionary to choose from
+-     auto identifies running services, then run "search relevant" and only the discovered service modules will appear
+- run relevant modules
+- continue
+
+1. Interactive selection use select keyword:
+```bash
+{keyword} select 
+```
+
+2. 
+
 ---
 
-## 🎯 The Power Trio
+## 🎯 Main Features
 
 ### 1. 🔍 `search` - Find Anything Instantly
 Fuzzy search across **all** modules and operations using fzf:
@@ -134,16 +175,6 @@ purplesploit> jobs                    # Background execution
 purplesploit> jobs list              # Monitor running scans
 ```
 
-### 🧩 Module Categories
-
-| Category | Tools |
-|----------|-------|
-| **Web** | Feroxbuster, SQLMap, Wfuzz, HTTPx |
-| **Network (NXC)** | SMB, LDAP, WinRM, RDP, MSSQL, SSH |
-| **Impacket** | PSExec, WMIExec, SecretsDump, Kerberoast |
-| **Recon** | Nmap with auto-service detection |
-
-**50+ operations** across all categories. Add your own with `.psm` modules.
 
 ---
 
