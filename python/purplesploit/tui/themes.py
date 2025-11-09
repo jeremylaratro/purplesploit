@@ -76,7 +76,7 @@ BANNER = """[bold magenta]
 ║                                                                               ║
 ║                  [bold cyan]Command Workflow Automation Framework[/bold cyan]                        ║
 ║                              [dim cyan]by d0sf3t[/dim cyan]                                        ║
-║                            [dim]Version 3.3 - TUI Mode[/dim]                           ║
+║                            [dim]Version 3.8 - TUI Mode[/dim]                           ║
 ║                                                                               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝[/bold magenta]
 """
