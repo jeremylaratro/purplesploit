@@ -39,7 +39,7 @@
 | **Impacket** | PSExec, WMIExec, SecretsDump, Kerberoast |
 | **Recon** | Nmap with auto-service detection |
 
-**50+ operations** across all categories. Add your own with `.psm` modules.
+**50+ operations** across all categories.
 
 
 #### What it does TL;DR
