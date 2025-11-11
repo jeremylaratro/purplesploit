@@ -377,7 +377,7 @@ class CommandHandler:
                         if matching_subcategory:
                             # Filter by subcategory
                             filtered_ops = module.get_operations_by_subcategory(matching_subcategory)
-                            self.display.print_info(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]", markup=True)
+                            self.display.console.print(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]")
                             self._show_operations(filtered_ops)
                             self.display.print_info(f"\nTip: Use 'run <number>' to execute an operation")
                         else:
@@ -559,7 +559,7 @@ class CommandHandler:
             if matching_subcategory:
                 # Filter by subcategory
                 filtered_ops = module.get_operations_by_subcategory(matching_subcategory)
-                self.display.print_info(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]", markup=True)
+                self.display.console.print(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]")
                 self._show_operations(filtered_ops)
             else:
                 # Filter by name/description
