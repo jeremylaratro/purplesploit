@@ -33,6 +33,22 @@ class CommandHandler:
         self.last_search_results = []  # Store last search results for number selection
         self.current_operation_index = None  # Track selected operation
 
+        # Service name shortcuts - maps service names to module paths
+        self.service_shortcuts = {
+            'smb': 'network/nxc_smb',
+            'ldap': 'network/nxc_ldap',
+            'winrm': 'network/nxc_winrm',
+            'mssql': 'network/nxc_mssql',
+            'rdp': 'network/nxc_rdp',
+            'ssh': 'network/nxc_ssh',
+            'nmap': 'recon/nmap',
+            'feroxbuster': 'web/feroxbuster',
+            'ferox': 'web/feroxbuster',
+            'sqlmap': 'web/sqlmap',
+            'wfuzz': 'web/wfuzz',
+            'httpx': 'web/httpx',
+        }
+
     def _register_commands(self) -> Dict[str, Callable]:
         """
         Register all available commands.
@@ -68,6 +84,8 @@ class CommandHandler:
             # Enhanced search commands
             "ops": self.cmd_ops,  # Search operations globally
             "recent": self.cmd_recent,  # Show recent modules
+            "l": self.cmd_show_ops,  # Show operations (short alias)
+            "operations": self.cmd_show_ops,  # Show operations
 
             # Quick shortcuts
             "target": self.cmd_target_quick,  # Quick: target 192.168.1.1
@@ -79,6 +97,7 @@ class CommandHandler:
             "clear": self.cmd_clear,
             "history": self.cmd_history,
             "stats": self.cmd_stats,
+            "hosts": self.cmd_hosts,              # Generate hosts file
             "interactive": self.cmd_interactive,  # Launch interactive TUI
             "i": self.cmd_interactive,            # Alias for interactive
             "exit": self.cmd_exit,
@@ -314,23 +333,29 @@ class CommandHandler:
             return True
 
     def cmd_use(self, args: List[str]) -> bool:
-        """Smart module loading with optional operation filtering."""
+        """Smart module loading with optional operation/subcategory filtering."""
         if not args:
-            self.display.print_error("Usage: use <module_path | number> [operation_filter]")
+            self.display.print_error("Usage: use <module_path | number> [operation_filter | subcategory]")
             self.display.print_info("Examples:")
             self.display.print_info("  use network/nxc_smb")
             self.display.print_info("  use 1                  # Select from search results")
-            self.display.print_info("  use smb auth           # Load SMB module, show auth operations")
+            self.display.print_info("  use smb auth           # Load SMB module, show auth subcategory")
+            self.display.print_info("  use smb shares         # Load SMB module, show shares subcategory")
             return True
 
         # Check for multi-word usage like "use smb auth"
         if len(args) >= 2 and not args[0].isdigit():
             # Try to find module matching first part
-            potential_module = args[0]
+            potential_module = args[0].lower()
             filter_term = " ".join(args[1:])
 
-            # Search for module
-            results = self.framework.search_modules(potential_module)
+            # Check if it's a service shortcut first
+            if potential_module in self.service_shortcuts:
+                module_path = self.service_shortcuts[potential_module]
+                results = [mod for mod in self.framework.list_modules() if mod.path == module_path]
+            else:
+                # Search for module
+                results = self.framework.search_modules(potential_module)
             if len(results) == 1:
                 module_path = results[0].path
                 module = self.framework.use_module(module_path)
@@ -340,19 +365,36 @@ class CommandHandler:
 
                     if module.has_operations():
                         operations = module.get_operations()
-                        # Filter operations by the filter term
-                        filtered_ops = [op for op in operations
-                                       if filter_term.lower() in op['name'].lower()
-                                       or filter_term.lower() in op['description'].lower()]
 
-                        if filtered_ops:
-                            self.display.print_info(f"\nShowing operations matching '{filter_term}':")
+                        # Check if filter_term matches a subcategory
+                        subcategories = module.get_subcategories()
+                        matching_subcategory = None
+                        for subcat in subcategories:
+                            if filter_term.lower() == subcat.lower() or filter_term.lower() in subcat.lower():
+                                matching_subcategory = subcat
+                                break
+
+                        if matching_subcategory:
+                            # Filter by subcategory
+                            filtered_ops = module.get_operations_by_subcategory(matching_subcategory)
+                            self.display.print_info(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]", markup=True)
                             self._show_operations(filtered_ops)
-                            self.display.print_info("\nTip: Use 'run <number>' to execute an operation")
+                            self.display.print_info(f"\nTip: Use 'run <number>' to execute an operation")
                         else:
-                            self.display.print_warning(f"No operations matching '{filter_term}'")
-                            self.display.print_info("\nShowing all operations:")
-                            self._show_operations(operations)
+                            # Filter operations by name/description
+                            filtered_ops = [op for op in operations
+                                           if filter_term.lower() in op['name'].lower()
+                                           or filter_term.lower() in op['description'].lower()
+                                           or filter_term.lower() == op.get('subcategory', '').lower()]
+
+                            if filtered_ops:
+                                self.display.print_info(f"\nShowing operations matching '{filter_term}':")
+                                self._show_operations(filtered_ops)
+                                self.display.print_info("\nTip: Use 'run <number>' to execute an operation")
+                            else:
+                                self.display.print_warning(f"No operations matching '{filter_term}'")
+                                self.display.print_info("\nShowing all operations:")
+                                self._show_operations(operations)
                     return True
             elif len(results) > 1:
                 self.display.print_error(f"Multiple modules match '{potential_module}'. Be more specific:")
@@ -362,8 +404,11 @@ class CommandHandler:
 
         module_identifier = args[0]
 
+        # Check if it's a service shortcut
+        if module_identifier.lower() in self.service_shortcuts:
+            module_path = self.service_shortcuts[module_identifier.lower()]
         # Check if it's a number (selecting from search results)
-        if module_identifier.isdigit():
+        elif module_identifier.isdigit():
             index = int(module_identifier) - 1  # Convert to 0-based index
 
             if not self.last_search_results:
@@ -428,12 +473,19 @@ class CommandHandler:
 
         options = module.show_options()
         self.display.print_options_table(options)
+
+        # Show default command if available
+        default_cmd = module.get_default_command()
+        if default_cmd:
+            self.display.console.print("[bold cyan]Default Command:[/bold cyan]")
+            self.display.console.print(f"[dim]$ [/dim]{default_cmd}\n")
+
         return True
 
     def cmd_show(self, args: List[str]) -> bool:
         """Show various information."""
         if not args:
-            self.display.print_error("Usage: show <modules|options|targets|creds|services>")
+            self.display.print_error("Usage: show <modules|options|targets|creds|services|ops>")
             return True
 
         what = args[0].lower()
@@ -461,9 +513,80 @@ class CommandHandler:
             services = self.framework.session.services.services
             self.display.print_services_table(services)
 
+        elif what == "ops" or what == "operations":
+            return self.cmd_show_ops([])
+
         else:
             self.display.print_error(f"Unknown show option: {what}")
 
+        return True
+
+    def cmd_show_ops(self, args: List[str]) -> bool:
+        """
+        Show operations for the current module.
+
+        Supports optional subcategory filtering:
+        - show ops              # Show all operations
+        - show ops auth         # Show only auth operations
+        - l                     # Short alias - show all operations
+        - l auth                # Short alias - show auth operations
+        """
+        module = self.framework.session.current_module
+
+        if not module:
+            self.display.print_error("No module loaded. Use 'use <module>' first")
+            return True
+
+        if not module.has_operations():
+            self.display.print_warning("Current module does not have operations")
+            self.display.print_info("Try 'show options' to see module options instead")
+            return True
+
+        operations = module.get_operations()
+
+        # Check if subcategory filter provided
+        if args:
+            filter_term = " ".join(args).lower()
+
+            # Check if it matches a subcategory
+            subcategories = module.get_subcategories()
+            matching_subcategory = None
+            for subcat in subcategories:
+                if filter_term == subcat.lower() or filter_term in subcat.lower():
+                    matching_subcategory = subcat
+                    break
+
+            if matching_subcategory:
+                # Filter by subcategory
+                filtered_ops = module.get_operations_by_subcategory(matching_subcategory)
+                self.display.print_info(f"\n[bold cyan]{matching_subcategory.upper()} Operations:[/bold cyan]", markup=True)
+                self._show_operations(filtered_ops)
+            else:
+                # Filter by name/description
+                filtered_ops = [op for op in operations
+                               if filter_term in op['name'].lower()
+                               or filter_term in op['description'].lower()
+                               or filter_term == op.get('subcategory', '').lower()]
+
+                if filtered_ops:
+                    self.display.print_info(f"\nOperations matching '{filter_term}':")
+                    self._show_operations(filtered_ops)
+                else:
+                    self.display.print_warning(f"No operations matching '{filter_term}'")
+                    self.display.print_info("\nShowing all operations:")
+                    self._show_operations(operations)
+        else:
+            # Show all operations
+            self.display.print_info(f"\n{module.name} Operations:")
+
+            # Show available subcategories if they exist
+            subcategories = module.get_subcategories()
+            if subcategories:
+                self.display.console.print(f"[dim]Subcategories: {', '.join(subcategories)}[/dim]\n")
+
+            self._show_operations(operations)
+
+        self.display.print_info("\nTip: Use 'run <number>' to execute an operation")
         return True
 
     def cmd_set(self, args: List[str]) -> bool:
@@ -1009,6 +1132,199 @@ class CommandHandler:
 
         return True
 
+    def cmd_hosts(self, args: List[str]) -> bool:
+        """
+        Generate /etc/hosts file entries from session targets.
+
+        Usage:
+            hosts                    # Show hosts entries
+            hosts export <file>      # Export to file
+            hosts append <file>      # Append to file
+            hosts sudo               # Append to /etc/hosts (requires sudo)
+        """
+        if not args:
+            # Just display the hosts entries
+            targets = self.framework.session.targets.list()
+
+            if not targets:
+                self.display.print_warning("No targets configured")
+                self.display.print_info("Add targets with 'targets add <ip> [hostname]'")
+                return True
+
+            # Generate hosts entries
+            entries = []
+            for target in targets:
+                ip = target.get('ip')
+                name = target.get('name')
+
+                if ip:
+                    if name:
+                        entries.append(f"{ip}\t{name}")
+                    else:
+                        # Generate a default name from IP
+                        hostname = f"target-{ip.replace('.', '-')}"
+                        entries.append(f"{ip}\t{hostname}")
+
+            if entries:
+                self.display.console.print("\n[bold cyan]Generated /etc/hosts entries:[/bold cyan]\n")
+                for entry in entries:
+                    self.display.console.print(f"  {entry}")
+                self.display.console.print()
+
+                self.display.print_info("Commands:")
+                self.display.print_info("  hosts export <file>      # Export to file")
+                self.display.print_info("  hosts append <file>      # Append to existing file")
+                self.display.print_info("  hosts sudo               # Append to /etc/hosts (requires sudo)")
+            else:
+                self.display.print_warning("No valid targets with IP addresses found")
+
+            return True
+
+        subcommand = args[0].lower()
+
+        if subcommand == "export":
+            if len(args) < 2:
+                self.display.print_error("Usage: hosts export <file>")
+                return True
+
+            output_file = args[1]
+            targets = self.framework.session.targets.list()
+
+            if not targets:
+                self.display.print_warning("No targets configured")
+                return True
+
+            # Generate entries
+            entries = []
+            for target in targets:
+                ip = target.get('ip')
+                name = target.get('name')
+
+                if ip:
+                    if name:
+                        entries.append(f"{ip}\t{name}")
+                    else:
+                        hostname = f"target-{ip.replace('.', '-')}"
+                        entries.append(f"{ip}\t{hostname}")
+
+            if entries:
+                try:
+                    with open(output_file, 'w') as f:
+                        f.write("# PurpleSploit generated hosts file\n")
+                        f.write("# Generated from session targets\n\n")
+                        for entry in entries:
+                            f.write(entry + "\n")
+
+                    self.display.print_success(f"Hosts file exported to: {output_file}")
+                    self.display.print_info(f"Entries: {len(entries)}")
+                except Exception as e:
+                    self.display.print_error(f"Failed to export hosts file: {e}")
+            else:
+                self.display.print_warning("No valid targets with IP addresses found")
+
+        elif subcommand == "append":
+            if len(args) < 2:
+                self.display.print_error("Usage: hosts append <file>")
+                return True
+
+            output_file = args[1]
+            targets = self.framework.session.targets.list()
+
+            if not targets:
+                self.display.print_warning("No targets configured")
+                return True
+
+            # Generate entries
+            entries = []
+            for target in targets:
+                ip = target.get('ip')
+                name = target.get('name')
+
+                if ip:
+                    if name:
+                        entries.append(f"{ip}\t{name}")
+                    else:
+                        hostname = f"target-{ip.replace('.', '-')}"
+                        entries.append(f"{ip}\t{hostname}")
+
+            if entries:
+                try:
+                    with open(output_file, 'a') as f:
+                        f.write("\n# PurpleSploit generated entries\n")
+                        for entry in entries:
+                            f.write(entry + "\n")
+
+                    self.display.print_success(f"Hosts entries appended to: {output_file}")
+                    self.display.print_info(f"Entries: {len(entries)}")
+                except Exception as e:
+                    self.display.print_error(f"Failed to append hosts file: {e}")
+            else:
+                self.display.print_warning("No valid targets with IP addresses found")
+
+        elif subcommand == "sudo":
+            # Append to /etc/hosts with sudo
+            targets = self.framework.session.targets.list()
+
+            if not targets:
+                self.display.print_warning("No targets configured")
+                return True
+
+            # Generate entries
+            entries = []
+            for target in targets:
+                ip = target.get('ip')
+                name = target.get('name')
+
+                if ip:
+                    if name:
+                        entries.append(f"{ip}\t{name}")
+                    else:
+                        hostname = f"target-{ip.replace('.', '-')}"
+                        entries.append(f"{ip}\t{hostname}")
+
+            if entries:
+                self.display.print_warning("This will modify /etc/hosts and requires sudo privileges")
+                confirm = input("Continue? (y/n): ")
+
+                if confirm.lower() != 'y':
+                    self.display.print_info("Operation cancelled")
+                    return True
+
+                try:
+                    import tempfile
+                    import subprocess
+
+                    # Create temporary file with entries
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.hosts') as tmp:
+                        tmp.write("\n# PurpleSploit generated entries\n")
+                        for entry in entries:
+                            tmp.write(entry + "\n")
+                        tmp_path = tmp.name
+
+                    # Append to /etc/hosts using sudo and tee
+                    cmd = f"sudo bash -c 'cat {tmp_path} >> /etc/hosts'"
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+                    # Clean up temp file
+                    import os
+                    os.unlink(tmp_path)
+
+                    if result.returncode == 0:
+                        self.display.print_success("Hosts entries appended to /etc/hosts")
+                        self.display.print_info(f"Entries: {len(entries)}")
+                    else:
+                        self.display.print_error(f"Failed to append to /etc/hosts: {result.stderr}")
+                except Exception as e:
+                    self.display.print_error(f"Failed to append to /etc/hosts: {e}")
+            else:
+                self.display.print_warning("No valid targets with IP addresses found")
+
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Usage: hosts [export|append|sudo] [file]")
+
+        return True
+
     def cmd_exit(self, args: List[str]) -> bool:
         """Exit the framework."""
         self.display.print_info("Exiting PurpleSploit...")
@@ -1267,6 +1583,7 @@ class CommandHandler:
                                 metadata.name,               # e.g., "NetExec SMB"
                                 name_tokenized,              # e.g., "NetExec SMB"
                                 metadata.category,           # e.g., "network"
+                                op.get('subcategory', ''),   # e.g., "authentication"
                                 op['name'],                  # e.g., "List Shares"
                                 op['description']            # e.g., "Enumerate SMB shares"
                             ]).lower()
@@ -1359,27 +1676,57 @@ class CommandHandler:
     # Helper methods
     def _show_operations(self, operations: List[Dict]) -> None:
         """
-        Display operations menu in a formatted table.
+        Display operations menu in a formatted table, grouped by subcategory if available.
 
         Args:
             operations: List of operation dictionaries
         """
         from rich.table import Table
         from rich import box
+        from collections import defaultdict
 
-        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
-        table.add_column("#", style="dim", width=4)
-        table.add_column("Operation", style="green")
-        table.add_column("Description", style="white")
+        # Check if operations have subcategories
+        has_subcategories = any(op.get('subcategory') for op in operations)
 
-        for i, op in enumerate(operations, 1):
-            table.add_row(
-                str(i),
-                op.get('name', 'Unknown'),
-                op.get('description', 'No description')
-            )
+        if has_subcategories:
+            # Group operations by subcategory
+            grouped = defaultdict(list)
+            for i, op in enumerate(operations, 1):
+                subcategory = op.get('subcategory', 'Other')
+                grouped[subcategory].append((i, op))
 
-        self.display.console.print(table)
+            # Display grouped operations
+            for subcategory in sorted(grouped.keys()):
+                self.display.console.print(f"\n[bold yellow]═══ {subcategory.upper()} ═══[/bold yellow]")
+
+                table = Table(box=box.SIMPLE, show_header=False, show_edge=False, pad_edge=False)
+                table.add_column("#", style="dim", width=4)
+                table.add_column("Operation", style="green")
+                table.add_column("Description", style="white")
+
+                for idx, op in grouped[subcategory]:
+                    table.add_row(
+                        str(idx),
+                        op.get('name', 'Unknown'),
+                        op.get('description', 'No description')
+                    )
+
+                self.display.console.print(table)
+        else:
+            # Original flat display
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Operation", style="green")
+            table.add_column("Description", style="white")
+
+            for i, op in enumerate(operations, 1):
+                table.add_row(
+                    str(i),
+                    op.get('name', 'Unknown'),
+                    op.get('description', 'No description')
+                )
+
+            self.display.console.print(table)
 
     def _execute_operation(self, module, operation: Dict) -> Dict:
         """

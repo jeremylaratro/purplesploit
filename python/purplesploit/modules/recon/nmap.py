@@ -104,6 +104,24 @@ class NmapModule(ExternalToolModule):
                 "required": False,
                 "description": "Minimum packets per second",
                 "default": None
+            },
+            "MAX_RTT_TIMEOUT": {
+                "value": None,
+                "required": False,
+                "description": "Maximum round-trip time timeout (e.g., 100ms)",
+                "default": None
+            },
+            "MAX_RETRIES": {
+                "value": None,
+                "required": False,
+                "description": "Maximum port scan probe retransmissions",
+                "default": None
+            },
+            "HOST_TIMEOUT": {
+                "value": None,
+                "required": False,
+                "description": "Give up on host after this long (e.g., 30m)",
+                "default": None
             }
         })
 
@@ -125,6 +143,9 @@ class NmapModule(ExternalToolModule):
         os_detection = self.get_option("OS_DETECTION")
         version_intensity = self.get_option("VERSION_INTENSITY")
         min_rate = self.get_option("MIN_RATE")
+        max_rtt_timeout = self.get_option("MAX_RTT_TIMEOUT")
+        max_retries = self.get_option("MAX_RETRIES")
+        host_timeout = self.get_option("HOST_TIMEOUT")
 
         # Base command
         cmd = f"nmap"
@@ -151,9 +172,18 @@ class NmapModule(ExternalToolModule):
         if version_intensity:
             cmd += f" --version-intensity {version_intensity}"
 
-        # Min rate
+        # Performance options
         if min_rate:
             cmd += f" --min-rate {min_rate}"
+
+        if max_rtt_timeout:
+            cmd += f" --max-rtt-timeout {max_rtt_timeout}"
+
+        if max_retries:
+            cmd += f" --max-retries {max_retries}"
+
+        if host_timeout:
+            cmd += f" --host-timeout {host_timeout}"
 
         # Scripts
         if script:

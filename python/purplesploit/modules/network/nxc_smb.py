@@ -81,65 +81,73 @@ class NXCSMBModule(ExternalToolModule):
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
-        Get list of SMB operations organized by category.
+        Get list of SMB operations organized by subcategory.
+
+        Subcategories:
+        - authentication: Authentication and credential testing
+        - enumeration: Information gathering and reconnaissance
+        - shares: Share browsing and file operations
+        - execution: Command and script execution
+        - credentials: Credential dumping and extraction
+        - vulnerability: Vulnerability scanning and exploitation
 
         Returns:
-            List of operation dictionaries
+            List of operation dictionaries with subcategory tags
         """
         return [
             # === Authentication Operations ===
-            {"name": "Test Authentication", "description": "Test basic SMB authentication", "handler": "op_test_auth"},
-            {"name": "Test with Domain", "description": "Test authentication with domain", "handler": "op_test_domain"},
-            {"name": "Pass-the-Hash", "description": "Authenticate using NTLM hash", "handler": "op_pass_the_hash"},
-            {"name": "Local Authentication", "description": "Test local authentication (--local-auth)", "handler": "op_local_auth"},
+            {"name": "Test Authentication", "description": "Test basic SMB authentication", "handler": "op_test_auth", "subcategory": "authentication"},
+            {"name": "Test with Domain", "description": "Test authentication with domain", "handler": "op_test_domain", "subcategory": "authentication"},
+            {"name": "Pass-the-Hash", "description": "Authenticate using NTLM hash", "handler": "op_pass_the_hash", "subcategory": "authentication"},
+            {"name": "Local Authentication", "description": "Test local authentication (--local-auth)", "handler": "op_local_auth", "subcategory": "authentication"},
 
             # === Enumeration Operations ===
-            {"name": "List Shares", "description": "Enumerate SMB shares", "handler": "op_list_shares"},
-            {"name": "Enumerate Users", "description": "Enumerate domain/local users", "handler": "op_enum_users"},
-            {"name": "Enumerate Local Users", "description": "Enumerate local users only", "handler": "op_enum_local_users"},
-            {"name": "Enumerate Groups", "description": "Enumerate domain groups", "handler": "op_enum_groups"},
-            {"name": "Password Policy", "description": "Get domain password policy", "handler": "op_password_policy"},
-            {"name": "Active Sessions", "description": "Enumerate active sessions", "handler": "op_active_sessions"},
-            {"name": "Logged On Users", "description": "Enumerate logged on users", "handler": "op_loggedon_users"},
-            {"name": "RID Bruteforce", "description": "Bruteforce RIDs to enumerate users", "handler": "op_rid_brute"},
-            {"name": "List Disks", "description": "List available disks", "handler": "op_list_disks"},
-            {"name": "Full Enumeration", "description": "Run all enumeration checks", "handler": "op_full_enum"},
+            {"name": "List Shares", "description": "Enumerate SMB shares", "handler": "op_list_shares", "subcategory": "enumeration"},
+            {"name": "Enumerate Users", "description": "Enumerate domain/local users", "handler": "op_enum_users", "subcategory": "enumeration"},
+            {"name": "Enumerate Local Users", "description": "Enumerate local users only", "handler": "op_enum_local_users", "subcategory": "enumeration"},
+            {"name": "Enumerate Groups", "description": "Enumerate domain groups", "handler": "op_enum_groups", "subcategory": "enumeration"},
+            {"name": "Password Policy", "description": "Get domain password policy", "handler": "op_password_policy", "subcategory": "enumeration"},
+            {"name": "Active Sessions", "description": "Enumerate active sessions", "handler": "op_active_sessions", "subcategory": "enumeration"},
+            {"name": "Logged On Users", "description": "Enumerate logged on users", "handler": "op_loggedon_users", "subcategory": "enumeration"},
+            {"name": "RID Bruteforce", "description": "Bruteforce RIDs to enumerate users", "handler": "op_rid_brute", "subcategory": "enumeration"},
+            {"name": "List Disks", "description": "List available disks", "handler": "op_list_disks", "subcategory": "enumeration"},
+            {"name": "Full Enumeration", "description": "Run all enumeration checks", "handler": "op_full_enum", "subcategory": "enumeration"},
 
             # === Share Operations ===
-            {"name": "Browse & Download (Interactive)", "description": "Spider and download files interactively", "handler": "op_browse_download"},
-            {"name": "Download All Files", "description": "Recursively download all files from shares", "handler": "op_download_all"},
-            {"name": "Download by Pattern", "description": "Download files matching pattern (e.g., *.xlsx)", "handler": "op_download_pattern"},
-            {"name": "Spider Only (No Download)", "description": "List files without downloading", "handler": "op_spider_only"},
-            {"name": "Spider Specific Share", "description": "Spider a specific share name", "handler": "op_spider_share"},
-            {"name": "Download Specific File", "description": "Download file from manual path", "handler": "op_download_file"},
-            {"name": "Upload File", "description": "Upload file to target", "handler": "op_upload_file"},
+            {"name": "Browse & Download (Interactive)", "description": "Spider and download files interactively", "handler": "op_browse_download", "subcategory": "shares"},
+            {"name": "Download All Files", "description": "Recursively download all files from shares", "handler": "op_download_all", "subcategory": "shares"},
+            {"name": "Download by Pattern", "description": "Download files matching pattern (e.g., *.xlsx)", "handler": "op_download_pattern", "subcategory": "shares"},
+            {"name": "Spider Only (No Download)", "description": "List files without downloading", "handler": "op_spider_only", "subcategory": "shares"},
+            {"name": "Spider Specific Share", "description": "Spider a specific share name", "handler": "op_spider_share", "subcategory": "shares"},
+            {"name": "Download Specific File", "description": "Download file from manual path", "handler": "op_download_file", "subcategory": "shares"},
+            {"name": "Upload File", "description": "Upload file to target", "handler": "op_upload_file", "subcategory": "shares"},
 
             # === Execution Operations ===
-            {"name": "Execute Command (CMD)", "description": "Execute Windows command", "handler": "op_exec_cmd"},
-            {"name": "Execute PowerShell", "description": "Execute PowerShell command", "handler": "op_exec_ps"},
-            {"name": "Get System Info", "description": "Run systeminfo command", "handler": "op_system_info"},
-            {"name": "List Processes", "description": "List running processes", "handler": "op_list_processes"},
-            {"name": "Network Configuration", "description": "Get network config (ipconfig)", "handler": "op_network_config"},
-            {"name": "List Administrators", "description": "List local administrators", "handler": "op_list_admins"},
-            {"name": "Check Privileges", "description": "Check current privileges (whoami /priv)", "handler": "op_check_privs"},
+            {"name": "Execute Command (CMD)", "description": "Execute Windows command", "handler": "op_exec_cmd", "subcategory": "execution"},
+            {"name": "Execute PowerShell", "description": "Execute PowerShell command", "handler": "op_exec_ps", "subcategory": "execution"},
+            {"name": "Get System Info", "description": "Run systeminfo command", "handler": "op_system_info", "subcategory": "execution"},
+            {"name": "List Processes", "description": "List running processes", "handler": "op_list_processes", "subcategory": "execution"},
+            {"name": "Network Configuration", "description": "Get network config (ipconfig)", "handler": "op_network_config", "subcategory": "execution"},
+            {"name": "List Administrators", "description": "List local administrators", "handler": "op_list_admins", "subcategory": "execution"},
+            {"name": "Check Privileges", "description": "Check current privileges (whoami /priv)", "handler": "op_check_privs", "subcategory": "execution"},
 
             # === Credential Dumping ===
-            {"name": "Dump SAM Database", "description": "Dump SAM hashes (local users)", "handler": "op_dump_sam"},
-            {"name": "Dump LSA Secrets", "description": "Dump LSA secrets", "handler": "op_dump_lsa"},
-            {"name": "Dump NTDS (DC Only)", "description": "Dump NTDS.dit from Domain Controller", "handler": "op_dump_ntds"},
-            {"name": "Dump All (SAM+LSA+NTDS)", "description": "Dump everything", "handler": "op_dump_all"},
-            {"name": "Lsassy (Memory Dump)", "description": "Dump credentials from lsass memory", "handler": "op_lsassy"},
-            {"name": "Nanodump", "description": "Nanodump lsass", "handler": "op_nanodump"},
-            {"name": "WiFi Passwords", "description": "Extract WiFi passwords", "handler": "op_wifi"},
+            {"name": "Dump SAM Database", "description": "Dump SAM hashes (local users)", "handler": "op_dump_sam", "subcategory": "credentials"},
+            {"name": "Dump LSA Secrets", "description": "Dump LSA secrets", "handler": "op_dump_lsa", "subcategory": "credentials"},
+            {"name": "Dump NTDS (DC Only)", "description": "Dump NTDS.dit from Domain Controller", "handler": "op_dump_ntds", "subcategory": "credentials"},
+            {"name": "Dump All (SAM+LSA+NTDS)", "description": "Dump everything", "handler": "op_dump_all", "subcategory": "credentials"},
+            {"name": "Lsassy (Memory Dump)", "description": "Dump credentials from lsass memory", "handler": "op_lsassy", "subcategory": "credentials"},
+            {"name": "Nanodump", "description": "Nanodump lsass", "handler": "op_nanodump", "subcategory": "credentials"},
+            {"name": "WiFi Passwords", "description": "Extract WiFi passwords", "handler": "op_wifi", "subcategory": "credentials"},
 
             # === Vulnerability Checks ===
-            {"name": "MS17-010 (EternalBlue)", "description": "Check for EternalBlue vulnerability", "handler": "op_ms17_010"},
-            {"name": "Zerologon (CVE-2020-1472)", "description": "Check for Zerologon vulnerability", "handler": "op_zerologon"},
-            {"name": "PetitPotam", "description": "Check for PetitPotam vulnerability", "handler": "op_petitpotam"},
-            {"name": "NoPac (CVE-2021-42278)", "description": "Check for NoPac vulnerability", "handler": "op_nopac"},
-            {"name": "SMBGhost (CVE-2020-0796)", "description": "Check for SMBGhost vulnerability", "handler": "op_smbghost"},
-            {"name": "PrintNightmare", "description": "Check for PrintNightmare vulnerability", "handler": "op_printnightmare"},
-            {"name": "All Vulnerability Checks", "description": "Run all vulnerability checks", "handler": "op_all_vulns"},
+            {"name": "MS17-010 (EternalBlue)", "description": "Check for EternalBlue vulnerability", "handler": "op_ms17_010", "subcategory": "vulnerability"},
+            {"name": "Zerologon (CVE-2020-1472)", "description": "Check for Zerologon vulnerability", "handler": "op_zerologon", "subcategory": "vulnerability"},
+            {"name": "PetitPotam", "description": "Check for PetitPotam vulnerability", "handler": "op_petitpotam", "subcategory": "vulnerability"},
+            {"name": "NoPac (CVE-2021-42278)", "description": "Check for NoPac vulnerability", "handler": "op_nopac", "subcategory": "vulnerability"},
+            {"name": "SMBGhost (CVE-2020-0796)", "description": "Check for SMBGhost vulnerability", "handler": "op_smbghost", "subcategory": "vulnerability"},
+            {"name": "PrintNightmare", "description": "Check for PrintNightmare vulnerability", "handler": "op_printnightmare", "subcategory": "vulnerability"},
+            {"name": "All Vulnerability Checks", "description": "Run all vulnerability checks", "handler": "op_all_vulns", "subcategory": "vulnerability"},
         ]
 
     def _build_auth(self) -> str:
