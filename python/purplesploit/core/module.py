@@ -182,6 +182,16 @@ class BaseModule(ABC):
         """
         return self.options
 
+    def get_default_command(self) -> str:
+        """
+        Get the default command that would be executed with current options.
+        Override in subclass to provide command preview.
+
+        Returns:
+            Command string or empty string if not applicable
+        """
+        return ""
+
     def log(self, message: str, level: str = "info"):
         """
         Log a message through the framework.
@@ -283,6 +293,7 @@ class BaseModule(ABC):
             - name: Operation name
             - description: Short description
             - handler: Method name (string) or callable
+            - subcategory: Optional subcategory (e.g., 'authentication', 'shares', 'enumeration')
 
         If this returns an empty list, the module uses traditional run() method.
         If it returns operations, the user must select an operation before running.
@@ -292,6 +303,37 @@ class BaseModule(ABC):
     def has_operations(self) -> bool:
         """Check if module has granular operations/submenu."""
         return len(self.get_operations()) > 0
+
+    def get_subcategories(self) -> List[str]:
+        """
+        Get list of unique subcategories from operations.
+
+        Returns:
+            Sorted list of unique subcategory names
+        """
+        operations = self.get_operations()
+        subcategories = set()
+        for op in operations:
+            if 'subcategory' in op and op['subcategory']:
+                subcategories.add(op['subcategory'])
+        return sorted(subcategories)
+
+    def get_operations_by_subcategory(self, subcategory: str = None) -> List[Dict[str, Any]]:
+        """
+        Get operations filtered by subcategory.
+
+        Args:
+            subcategory: Subcategory to filter by (None returns all)
+
+        Returns:
+            List of operation dictionaries
+        """
+        operations = self.get_operations()
+        if subcategory is None:
+            return operations
+
+        return [op for op in operations
+                if op.get('subcategory', '').lower() == subcategory.lower()]
 
 
 class ExternalToolModule(BaseModule):
@@ -372,6 +414,18 @@ class ExternalToolModule(BaseModule):
                 "error": str(e),
                 "command": command
             }
+
+    def get_default_command(self) -> str:
+        """
+        Get the default command that would be executed.
+
+        Returns:
+            Command string
+        """
+        try:
+            return self.build_command()
+        except Exception:
+            return ""
 
     def run(self) -> Dict[str, Any]:
         """
