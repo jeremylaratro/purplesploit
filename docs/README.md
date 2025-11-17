@@ -1,12 +1,14 @@
 # PurpleSploit Documentation
 
-Complete documentation for the PurpleSploit framework.
+Complete documentation for PurpleSploit Framework v5.0.0.
 
 ## 📚 Quick Links
 
 - **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Main README](../README.md)** - Project overview and features
 - **[Disclaimer](../DISCLAIMER.md)** - Legal and authorized use requirements
+- **[Changelog](../CHANGELOG.md)** - Version history and changes
+- **[Version Control](VERSION_CONTROL.md)** - Documentation versioning policy
 
 ## 🎯 Interface Guides
 
@@ -24,6 +26,7 @@ Complete documentation for the PurpleSploit framework.
 
 - **[Contributing Guide](CONTRIBUTING.md)** - Add modules and contribute
 - **[Architecture](ARCHITECTURE.md)** - Framework design and structure
+- **[Module Template](examples/MODULE_TEMPLATE.psm)** - Template for creating custom modules
 
 ## 📦 Module Documentation
 
@@ -33,9 +36,14 @@ Module-specific documentation is located in their respective directories:
 - `modules/impacket/` - Impacket tools integration
 - `modules/web/` - Web application testing
 
-## 🗃️ Archive
+## 📖 Version Information
 
-Historical and technical documentation can be found in the `archive/` directory.
+**Current Version**: 5.0.0
+
+This documentation reflects the current version only. For historical versions:
+- See [CHANGELOG.md](../CHANGELOG.md) for version history
+- Use `git tag` to view specific release versions
+- Read [VERSION_CONTROL.md](VERSION_CONTROL.md) for versioning policy
 
 ---
 
