@@ -43,7 +43,7 @@ class Display:
         banner = f"""[bold magenta]{banner_text}[/bold magenta]
 
 [cyan]              Offensive Security Framework | Console + TUI | Search. Select. Exploit.[/cyan]
-[dim]                                Version 3.8 - Console Mode[/dim]
+[dim]                                Version 5.0.0 - Console Mode[/dim]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)
