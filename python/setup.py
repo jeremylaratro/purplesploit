@@ -11,7 +11,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="purplesploit",
-    version="5.0.0",
+    version="5.1.0",
     author="PurpleSploit Team",
     author_email="purplesploit@example.com",
     description="Hybrid pentesting framework - Python advanced features",
@@ -72,8 +72,6 @@ setup(
         "console_scripts": [
             "purplesploit-api=purplesploit.api.server:main",
             "purplesploit-web=purplesploit.web.dashboard:main",
-            "purplesploit-pro=purplesploit.tui.app:main",
-            "purplesploit-rich=purplesploit.tui.app:main",
             "purplesploit-report=purplesploit.reporting.cli:main",
         ],
     },

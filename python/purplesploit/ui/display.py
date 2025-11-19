@@ -42,8 +42,8 @@ class Display:
         # Print with magenta color
         banner = f"""[bold magenta]{banner_text}[/bold magenta]
 
-[cyan]              Offensive Security Framework | Console + TUI | Search. Select. Exploit.[/cyan]
-[dim]                                Version 5.0.0 - Console Mode[/dim]
+[cyan]              Offensive Security Framework | Search. Select. Exploit.[/cyan]
+[dim]                                Version 5.1.0 - Console Mode[/dim]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)
