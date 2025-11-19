@@ -5,6 +5,32 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2025-11-19
+
+### Added
+- **Shell Command**: New `shell` command for localhost terminal access
+  - Drop directly into system shell from PurpleSploit
+  - CTRL+D navigation to return to framework
+  - Execute single commands or launch interactive shell
+  - Respects user's $SHELL environment variable
+
+## [5.1.0] - 2025-11-19
+
+### Added
+- **Ligolo-ng Integration**: New `ligolo` command for seamless ligolo-ng proxy tunneling
+  - Full ligolo-ng dashboard access from within PurpleSploit
+  - CTRL+D navigation to return to PurpleSploit
+  - Complete ligolo functionality including route management
+  - Auto-detection of ligolo-ng installation
+
+### Removed
+- TUI mode components and dependencies (console-only version)
+- Interactive TUI command and related bash scripts
+
+### Changed
+- Simplified setup.py entry points (removed TUI references)
+- Updated banner to reflect console-only interface
+
 ## [5.0.0] - 2025-11-17
 
 ### Changed

@@ -4,9 +4,9 @@ This document describes the version control and documentation management system 
 
 ## Current Version
 
-**PurpleSploit v5.0.0**
+**PurpleSploit v5.2.0**
 
-The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "5.0.0"`.
+The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "5.2.0"`.
 
 ## Version Control Policy
 
