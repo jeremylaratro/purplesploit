@@ -1,6 +1,6 @@
-# PurpleSploit Quick Start Guide
+# PurpleSploit v6.0.0 Quick Start Guide
 
-Get started with PurpleSploit in 5 minutes! Choose your preferred interface:
+Get started with PurpleSploit in 5 minutes! Pure Python edition with enhanced auto-completion.
 
 ## 🚀 Installation
 
@@ -21,27 +21,28 @@ cd purplesploit
 
 ---
 
-## 🎯 Choose Your Interface
+## 🎯 Starting the Framework
 
-PurpleSploit offers two interfaces:
-
-### Console Mode (Metasploit-Style CLI)
-**Best for:** Power users, scripting, automation
+### Launch PurpleSploit
+**Pure Python interface with enhanced dropdown auto-completion**
 
 ```bash
+# Using Python module
 python3 -m purplesploit.main
+
+# Or using the launcher script
+./purplesploit-python
 ```
 
-### TUI Mode (Full-Screen Menu)
-**Best for:** Visual exploration, beginners, interactive workflows
-
-```bash
-bash purplesploit-tui.sh
-```
+### New in v6.0.0
+- **Enhanced Auto-Completion**: Context-aware dropdown menu with suggestions
+- **Pure Python**: All bash/TUI components removed for better performance
+- **Dynamic Suggestions**: Includes modules, targets, operations, and common commands
+- **Improved History**: Better command history with auto-suggestions
 
 ---
 
-## 📋 Console Mode Workflow
+## 📋 Framework Workflow
 
 ### Basic Commands
 
@@ -90,35 +91,33 @@ purplesploit> go 192.168.1.100 admin:pass
 
 ---
 
-## 🖥️ TUI Mode Workflow
+## 🎨 Enhanced Auto-Completion
 
-### Navigation
+### Dropdown Menu Features
+
+PurpleSploit v6.0.0 includes an enhanced dropdown auto-completion menu:
+
+- **Context-Aware**: Suggestions based on current state
+- **Module Paths**: Auto-complete all available module paths
+- **Target IPs**: Suggests previously added targets
+- **Common Operations**: auth, enum, shares, dump, spray, etc.
+- **Real-Time Updates**: Completer updates as you add targets/modules
+
+### Using Auto-Completion
 
 ```bash
-# Start TUI
-bash purplesploit-tui.sh
+# Start typing and press TAB to see suggestions
+purplesploit> tar[TAB]
+  → target, targets
 
-# Navigation keys:
-# - Numbers (1-9) to select menu items
-# - 'b' or 'back' to go back
-# - 'q' or 'quit' to exit
+# Tab through module paths
+purplesploit> use net[TAB]
+  → network/nxc_smb, network/nxc_ldap, network/nxc_winrm...
+
+# Auto-suggest from history
+purplesploit> [Type previous command]
+  → Grayed suggestion appears automatically
 ```
-
-### First Steps
-
-1. **Configure Settings** → Select "Settings" from main menu
-2. **Add Target** → Manage Targets → (a)dd → Enter IP
-3. **Set Credentials** → Manage Credentials → (u)sername/password
-4. **Run Scan** → Run Service Scan → Choose scan type
-5. **Execute Tools** → Back to main menu → Select tool category
-
-### Service Detection
-
-After scanning, TUI highlights relevant tools:
-- 🗄️ **SMB** - Green when detected
-- 📁 **LDAP** - Service-aware highlighting
-- 🖥️ **WinRM** - Auto-detected protocols
-- 🗃️ **MSSQL** - Focus on available services
 
 ---
 
@@ -126,7 +125,6 @@ After scanning, TUI highlights relevant tools:
 
 ### Quick SMB Enumeration
 
-**Console Mode:**
 ```bash
 purplesploit> target 10.10.10.100
 purplesploit> cred guest:
@@ -135,14 +133,8 @@ purplesploit> use 1
 purplesploit(nxc_smb)> run
 ```
 
-**TUI Mode:**
-1. Settings → Manage Targets → Add `10.10.10.100`
-2. Settings → Manage Credentials → guest (no password)
-3. Main Menu → SMB Operations → List Shares
-
 ### Domain Enumeration
 
-**Console Mode:**
 ```bash
 purplesploit> target 10.10.10.100
 purplesploit> cred DOMAIN/user:password
@@ -150,14 +142,8 @@ purplesploit> ops bloodhound
 purplesploit> ops select    # Pick LDAP Bloodhound
 ```
 
-**TUI Mode:**
-1. Settings → Add target + domain credentials
-2. Settings → Run Service Scan
-3. Main Menu → LDAP Operations → Bloodhound Collection
-
 ### Password Spraying
 
-**Console Mode:**
 ```bash
 purplesploit> target 10.10.10.0/24
 purplesploit> cred admin:Winter2024!
@@ -166,32 +152,46 @@ purplesploit(nxc_smb)> run
   → Select "Password Spray"
 ```
 
-**TUI Mode:**
-1. Settings → Manage Targets → Add CIDR range
-2. Settings → Set credential
-3. Main Menu → SMB Operations → Password Spray
+### Using Ligolo-ng for Pivoting
+
+```bash
+purplesploit> ligolo
+# Full ligolo-ng interface launches
+# Press CTRL+D to return to PurpleSploit
+```
+
+### Quick Shell Access
+
+```bash
+purplesploit> shell
+# Drops to localhost shell
+# Press CTRL+D to return to PurpleSploit
+```
 
 ---
 
 ## 💡 Pro Tips
 
-### Console Mode
-1. Use `{}` for interactive selection: `target {}`, `cred {}`, `run {}`
-2. Tab completion works for module paths
-3. `recent` shows recently used modules
-4. `workspace <name>` organizes engagement data
+### Power User Features
+1. **Interactive Selection**: Use `{}` for menus: `target {}`, `cred {}`, `run {}`
+2. **Tab Completion**: Works for module paths, commands, and operations
+3. **Recent Modules**: `recent` shows recently used modules
+4. **Workspaces**: `workspace <name>` organizes engagement data
+5. **Quick Commands**: `ligolo` for pivoting, `shell` for localhost shell
 
-### TUI Mode
-1. Service icons turn green when detected - focus there!
-2. Context panel (top) always shows current target/creds
-3. Press `i` to switch to console mode anytime
-4. Use `back` repeatedly to navigate up menu tree
+### Auto-Completion Tips
+1. Press TAB to see all available options
+2. Start typing to filter suggestions
+3. Use arrow keys to navigate dropdown menu
+4. ESC to cancel selection
+5. Completer updates dynamically as you work
 
-### Both Modes
+### Workflow Optimization
 1. Workspaces keep engagement data separate
 2. All data stored in `~/.purplesploit/`
 3. Scan results auto-populate service detection
 4. Use Kali/Parrot for best tool compatibility
+5. Command history persists across sessions
 
 ---
 
@@ -237,9 +237,9 @@ Ensure you're running as root/sudo for network scans
 ## 📚 Next Steps
 
 - **[Full README](README.md)** - Complete feature list
-- **[Console Mode Guide](docs/console-mode/README.md)** - Advanced commands
-- **[TUI Mode Guide](docs/tui-mode/README.md)** - Menu reference
-- **[Contributing](docs/CONTRIBUTING.md)** - Add your own modules
+- **[Console Guide](docs/console-mode/README.md)** - Advanced commands
+- **[Contributing](docs/CONTRIBUTING.md)** - Add your own Python modules
+- **[Architecture](docs/ARCHITECTURE.md)** - Framework internals
 
 ---
 
@@ -257,6 +257,8 @@ Ensure you're running as root/sudo for network scans
 
 **Happy Hacking! 🎯**
 
-*Choose your weapon: Console for speed, TUI for exploration*
+*Pure Python. Enhanced Auto-Completion. Built for Speed.*
+
+**Version 6.0.0 - Python Edition**
 
 </div>

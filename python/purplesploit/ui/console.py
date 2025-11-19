@@ -5,9 +5,9 @@ Interactive REPL console with prompt_toolkit integration.
 """
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit.history import FileHistory, InMemoryHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import WordCompleter, merge_completers, FuzzyCompleter
 from prompt_toolkit.styles import Style
 from pathlib import Path
 
@@ -19,8 +19,8 @@ class Console:
     """
     Interactive console for PurpleSploit.
 
-    Provides a Metasploit-style REPL with command completion, history, and
-    context-aware prompting.
+    Provides a Metasploit-style REPL with enhanced command completion, history, and
+    context-aware prompting with dropdown menu support.
     """
 
     def __init__(self, framework):
@@ -39,26 +39,75 @@ class Console:
         history_path = Path.home() / ".purplesploit" / "history"
         history_path.parent.mkdir(exist_ok=True)
 
-        # Setup prompt session
+        # Setup prompt session with file history
         self.session = PromptSession(
             history=FileHistory(str(history_path)),
             auto_suggest=AutoSuggestFromHistory(),
             enable_history_search=True,
         )
 
-        # Command completer
-        commands = list(self.command_handler.commands.keys())
-        self.completer = WordCompleter(
-            commands,
-            ignore_case=True,
-            sentence=True
-        )
+        # Setup auto-completion with dropdown menu
+        self.completer = self._create_completer()
 
-        # Prompt style
+        # Prompt style with enhanced dropdown menu colors
         self.prompt_style = Style.from_dict({
-            'prompt': '#ff00ff bold',  # Magenta
-            'module': '#00ffff',        # Cyan
+            'prompt': '#ff00ff bold',      # Magenta prompt
+            'module': '#00ffff',            # Cyan module name
+            'completion-menu': 'bg:#1a1a1a #00ff00',  # Dark bg, green text
+            'completion-menu.completion': 'bg:#1a1a1a #00ff00',
+            'completion-menu.completion.current': 'bg:#00ff00 #000000 bold',  # Inverted for current
+            'scrollbar.background': 'bg:#333333',
+            'scrollbar.button': 'bg:#00ff00',
         })
+
+    def _create_completer(self) -> WordCompleter:
+        """
+        Create dynamic command completer with context-aware suggestions.
+
+        Returns:
+            WordCompleter with all available commands and context items
+        """
+        # Base commands from command handler
+        commands = list(self.command_handler.commands.keys())
+
+        # Add common subcommands and options
+        suggestions = commands.copy()
+        suggestions.extend([
+            'select', 'list', 'add', 'remove', 'set',
+            'auth', 'enum', 'shares', 'users', 'groups',
+            'bloodhound', 'dump', 'spray', 'brute',
+        ])
+
+        # Add module paths if available
+        try:
+            modules = self.framework.list_modules()
+            module_paths = [m.path for m in modules]
+            suggestions.extend(module_paths)
+        except:
+            pass
+
+        # Add target IPs if available
+        try:
+            targets = self.framework.session.targets.list()
+            target_ips = [t.get('ip') or t.get('url', '') for t in targets if t.get('ip') or t.get('url')]
+            suggestions.extend(target_ips)
+        except:
+            pass
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_suggestions = []
+        for item in suggestions:
+            if item and item not in seen:
+                seen.add(item)
+                unique_suggestions.append(item)
+
+        return WordCompleter(
+            unique_suggestions,
+            ignore_case=True,
+            sentence=True,
+            match_middle=True
+        )
 
     def start(self):
         """Start the console REPL loop."""
@@ -78,12 +127,16 @@ class Console:
                 # Get prompt text
                 prompt_text = self._get_prompt()
 
-                # Get user input
+                # Update completer with current context
+                self.completer = self._create_completer()
+
+                # Get user input with enhanced dropdown menu
                 user_input = self.session.prompt(
                     prompt_text,
                     completer=self.completer,
                     style=self.prompt_style,
-                    complete_while_typing=True
+                    complete_while_typing=True,
+                    complete_in_thread=True
                 )
 
                 # Execute command
