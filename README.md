@@ -1,4 +1,4 @@
-# PurpleSploit Framework v5.2.0
+# PurpleSploit Framework v6.0.0
 
 <div align="center">
 
@@ -22,9 +22,9 @@
     ╚═══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Metasploit-inspired framework for tool/workflow efficiency, with an emphasis on usability**
+**Pure Python pentesting framework for tool/workflow efficiency, with an emphasis on usability**
 
-[Quick Start](#-quick-start) • [Key Features](#-the-power-trio) • [Installation](#-installation) • [Docs](docs/)
+[Quick Start](#-quick-start) • [Key Features](#-key-features) • [Installation](#-installation) • [Docs](docs/)
 
 </div>
 
@@ -131,10 +131,13 @@ purplesploit> workspace {}
 
 ## 🚀 Quick Start
 
-### Console Mode (Recommended)
+### Start the Framework
 ```bash
-# Start the framework
+# Start the Python framework
 python3 -m purplesploit.main
+
+# Or use the launcher script
+./purplesploit-python
 
 # Workflow example
 purplesploit> target 192.168.1.100
@@ -143,14 +146,12 @@ purplesploit> search smb shares        # Fuzzy search
 purplesploit> run {}                   # Interactive select
 ```
 
-### TUI Mode (Full-Screen Menu)
-```bash
-bash purplesploit-tui.sh
-```
-- Visual menu navigation
-- Keyboard shortcuts (`t`=targets, `c`=creds, `j`=jobs)
-- Service detection highlighting
-- Switch to console anytime with `i`
+### Enhanced Features (v6.0.0)
+- **Dropdown Auto-Completion**: Context-aware command suggestions with enhanced dropdown menu
+- **Pure Python**: Completely rewritten in Python for better performance and maintainability
+- **Dynamic Completions**: Auto-complete includes modules, targets, and common operations
+- **Ligolo Integration**: Seamless proxy tunneling with `ligolo` command
+- **Shell Access**: Quick localhost shell access with `shell` command
 
 ---
 
@@ -260,45 +261,55 @@ bash purplesploit-tui.sh
 
 ---
 
-## 🎨 Interface Comparison
+## 🎨 Interface Features
 
-| Feature | Console Mode | TUI Mode |
-|---------|--------------|----------|
-| **Best For** | Power users, automation | Visual exploration |
-| **Navigation** | Type commands | Menu + keyboard |
-| **Speed** | Instant (if you know it) | Visual guidance |
-| **Scripting** | Yes | No |
-| **Search** | `search`, `ops`, `{}` | Built-in menus |
-
-**Switch anytime**: Use `interactive` command in console or `q` to exit TUI.
+| Feature | Description |
+|---------|-------------|
+| **Auto-Completion** | Enhanced dropdown menu with context-aware suggestions |
+| **Navigation** | Type commands or use interactive selectors with `{}` |
+| **Speed** | Instant command execution with fuzzy search |
+| **Scripting** | Full Python API for automation |
+| **Search** | `search`, `ops`, `{}` for finding anything |
+| **History** | Command history with suggestions from past commands |
 
 ---
 
 ## 📚 Documentation
 
 - **[Quick Start Guide](QUICKSTART.md)** - Get started in 5 minutes
-- **[Console Mode Guide](docs/console-mode/README.md)** - Metasploit-style CLI reference
-- **[TUI Mode Guide](docs/tui-mode/README.md)** - Full-screen menu interface
+- **[Console Guide](docs/console-mode/README.md)** - Complete CLI reference
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Add your own modules
-- **[Full Documentation](docs/)** - Complete guides and architecture
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and internals
+- **[Full Documentation](docs/)** - Complete guides and API reference
 
 ---
 
 ## 🔧 Creating Custom Modules
 
-Drop a `.psm` file in `modules/` and it auto-loads:
+Create Python modules that integrate seamlessly:
 
-```bash
-# modules/custom/my_tool.psm
-MODULE_NAME="custom/my_tool"
-MODULE_CATEGORY="custom"
-MODULE_DESCRIPTION="My custom scanner"
-MODULE_TOOL="nmap"
-REQUIRED_VARS="RHOST"
-COMMAND_TEMPLATE="nmap -sV -p- ${RHOST}"
+```python
+# python/purplesploit/modules/custom/my_scanner.py
+from purplesploit.core.module import ExternalToolModule
+
+class MyScanner(ExternalToolModule):
+    def __init__(self, framework):
+        super().__init__(framework)
+        self.name = "Custom Scanner"
+        self.description = "My custom scanning tool"
+        self.category = "custom"
+
+        # Define options
+        self.options = {
+            'RHOST': {'value': None, 'required': True, 'description': 'Target host'},
+        }
+
+    def run(self):
+        target = self.get_option('RHOST')
+        return self.execute_command(f'nmap -sV {target}')
 ```
 
-See [MODULE_TEMPLATE.psm](MODULE_TEMPLATE.psm) for full examples.
+See [Contributing Guide](docs/CONTRIBUTING.md) for full module development guide.
 
 ---
 

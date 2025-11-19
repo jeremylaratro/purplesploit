@@ -4,9 +4,9 @@ This document describes the version control and documentation management system 
 
 ## Current Version
 
-**PurpleSploit v5.2.0**
+**PurpleSploit v6.0.0**
 
-The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "5.2.0"`.
+The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "6.0.0"`.
 
 ## Version Control Policy
 
@@ -34,8 +34,15 @@ Historical version information is tracked in:
    - Use `git tag` for version tags
 
 3. **Git Tags**
-   - Major releases are tagged (e.g., `v5.0.0`, `v4.5.0`)
+   - Major releases are tagged (e.g., `v6.0.0`, `v5.2.0`, `v5.0.0`)
    - Use `git checkout <tag>` to view code at specific versions
+
+## Recent Major Versions
+
+- **v6.0.0** (2025-11-19): Pure Python edition, removed bash/TUI components, enhanced auto-completion
+- **v5.2.0** (2025-11-19): Shell command integration
+- **v5.1.0** (2025-11-19): Ligolo-ng integration
+- **v5.0.0** (2025-11-17): Complete SMB module restructure, documentation cleanup
 
 ## Documentation Structure
 
@@ -50,12 +57,13 @@ purplesploit/
 │   ├── VERSION_CONTROL.md      # This file
 │   ├── CONTRIBUTING.md         # Contribution guidelines
 │   ├── ARCHITECTURE.md         # System architecture
-│   ├── console-mode/
-│   │   └── README.md           # Console interface guide
-│   ├── tui-mode/
-│   │   └── README.md           # TUI interface guide
-│   └── examples/
-│       └── MODULE_TEMPLATE.psm # Module creation template
+│   └── console-mode/
+│       └── README.md           # Console interface guide
+├── python/
+│   └── purplesploit/
+│       ├── modules/            # Python module implementations
+│       ├── core/               # Core framework
+│       └── ui/                 # User interface
 ├── modules/
 │   ├── nxc/
 │   │   └── README.md           # NetExec module docs
@@ -74,8 +82,7 @@ Update the version in these files:
 - `python/purplesploit/__init__.py` → `__version__ = "X.Y.Z"`
 - `python/setup.py` → `version="X.Y.Z"`
 - `python/purplesploit/main.py` → `version='PurpleSploit X.Y.Z'`
-- `python/purplesploit/ui/display.py` → `Version X.Y.Z - Console Mode`
-- `python/purplesploit/tui/themes.py` → `Version X.Y.Z - TUI Mode`
+- `python/purplesploit/ui/display.py` → `Version X.Y.Z - Python Edition`
 - `README.md` → `# PurpleSploit Framework vX.Y.Z`
 
 ### 2. Update CHANGELOG.md
@@ -187,6 +194,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2025-11-17 (v5.0.0)
+**Last Updated**: 2025-11-19 (v6.0.0)
 
 For questions about documentation versioning, see the [Contributing Guide](CONTRIBUTING.md).
