@@ -45,7 +45,7 @@ For more information, visit: https://github.com/jeremylaratro/purplesploit
     parser.add_argument(
         '--version',
         action='version',
-        version='PurpleSploit 5.2.0'
+        version='PurpleSploit 6.0.0'
     )
 
     args = parser.parse_args()
