@@ -98,8 +98,8 @@ class CommandHandler:
             "history": self.cmd_history,
             "stats": self.cmd_stats,
             "hosts": self.cmd_hosts,              # Generate hosts file
-            "interactive": self.cmd_interactive,  # Launch interactive TUI
-            "i": self.cmd_interactive,            # Alias for interactive
+            "ligolo": self.cmd_ligolo,            # Launch ligolo-ng
+            "shell": self.cmd_shell,              # Drop to localhost shell
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -202,7 +202,8 @@ class CommandHandler:
         utility_help = """[blue]clear[/blue]                  Clear the screen
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
-[blue]interactive, i[/blue]         Launch TUI mode
+[blue]ligolo[/blue]                 Launch ligolo-ng (CTRL+D to return)
+[blue]shell[/blue]                  Drop to localhost shell (CTRL+D to return)
 [blue]exit, quit[/blue]             Exit framework"""
 
         # Display panels in columns
@@ -1092,41 +1093,102 @@ class CommandHandler:
 
         return True
 
-    def cmd_interactive(self, args: List[str]) -> bool:
-        """Launch the interactive TUI menu (bash version)."""
+    def cmd_ligolo(self, args: List[str]) -> bool:
+        """
+        Launch ligolo-ng interface.
+
+        Usage:
+            ligolo                    # Launch ligolo-ng proxy interface
+            ligolo --help             # Show ligolo-ng help
+
+        Press CTRL+D to return to PurpleSploit.
+        """
+        import subprocess
+        import os
+        import shutil
+
+        # Check if ligolo-ng is installed
+        ligolo_cmd = None
+        for cmd in ["ligolo-ng", "ligolo", "ligolo-proxy"]:
+            if shutil.which(cmd):
+                ligolo_cmd = cmd
+                break
+
+        if not ligolo_cmd:
+            self.display.print_error("ligolo-ng not found in PATH")
+            self.display.print_info("Install ligolo-ng:")
+            self.display.print_info("  Download: https://github.com/nicocha30/ligolo-ng/releases")
+            self.display.print_info("  Or build: go install github.com/nicocha30/ligolo-ng/cmd/proxy@latest")
+            return True
+
+        try:
+            self.display.print_info("Launching ligolo-ng...")
+            self.display.print_info("Press CTRL+D (EOF) to return to PurpleSploit")
+            self.display.console.print()
+
+            # Build command with args if provided
+            cmd_args = [ligolo_cmd] + args if args else [ligolo_cmd]
+
+            # Launch ligolo-ng with full terminal control
+            # Using os.system for proper terminal handling
+            cmd_str = " ".join(cmd_args)
+            os.system(cmd_str)
+
+            # User returned (via CTRL+D or exit)
+            self.display.console.print()
+            self.display.print_success("Returned to PurpleSploit")
+
+        except KeyboardInterrupt:
+            self.display.console.print()
+            self.display.print_info("ligolo-ng interrupted, returning to PurpleSploit")
+        except Exception as e:
+            self.display.print_error(f"Error launching ligolo-ng: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def cmd_shell(self, args: List[str]) -> bool:
+        """
+        Drop to localhost shell.
+
+        Usage:
+            shell                     # Launch bash shell
+            shell [command]           # Execute command in shell
+
+        Press CTRL+D to return to PurpleSploit.
+        """
         import subprocess
         import os
 
         try:
-            # Find project root by looking for purplesploit-tui.sh
-            project_root = None
-            current = Path.cwd()
-            while current.parent != current:
-                tui_script = current / "purplesploit-tui.sh"
-                if tui_script.exists():
-                    project_root = current
-                    break
-                current = current.parent
-
-            if not project_root:
-                self.display.print_error("Could not find purplesploit-tui.sh")
-                self.display.print_info("Make sure you're running from the PurpleSploit directory")
+            if args:
+                # Execute single command
+                cmd = " ".join(args)
+                self.display.print_info(f"Executing: {cmd}")
+                result = subprocess.run(cmd, shell=True)
                 return True
+            else:
+                # Launch interactive shell
+                self.display.print_info("Dropping to localhost shell...")
+                self.display.print_info("Press CTRL+D (EOF) to return to PurpleSploit")
+                self.display.console.print()
 
-            tui_script = project_root / "purplesploit-tui.sh"
-            self.display.print_info("Launching interactive TUI menu...")
+                # Get user's shell or default to bash
+                user_shell = os.environ.get('SHELL', '/bin/bash')
 
-            # Execute the bash TUI script
-            # Use os.system to properly handle terminal control
-            os.system(f'cd "{project_root}" && bash "{tui_script}"')
+                # Launch shell with full terminal control
+                os.system(user_shell)
 
-            # Clear screen and show console banner again after exiting TUI
-            self.display.console.clear()
-            self.display.print_banner()
-            self.display.print_info("Returned to console mode. Type 'help' for commands.")
+                # User returned (via CTRL+D or exit)
+                self.display.console.print()
+                self.display.print_success("Returned to PurpleSploit")
 
+        except KeyboardInterrupt:
+            self.display.console.print()
+            self.display.print_info("Shell interrupted, returning to PurpleSploit")
         except Exception as e:
-            self.display.print_error(f"Error launching interactive mode: {e}")
+            self.display.print_error(f"Error launching shell: {e}")
             import traceback
             traceback.print_exc()
 
