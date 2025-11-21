@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from purplesploit.models.database import (
     db_manager,
-    Credential, Target, WebTarget, ADTarget, Service,
+    Credential, Target, WebTarget, ADTarget, Service, Exploit,
     CredentialCreate, CredentialResponse,
     TargetCreate, TargetResponse,
     ServiceResponse
@@ -359,6 +359,90 @@ async def get_stats_overview():
         }
     finally:
         session.close()
+
+
+# ============================================================================
+# Target Analysis API
+# ============================================================================
+
+class ExploitResponse(BaseModel):
+    """Response model for exploits"""
+    id: int
+    target: str
+    service: str
+    port: int
+    version: Optional[str]
+    exploit_title: str
+    exploit_path: Optional[str]
+    edb_id: Optional[str]
+    platform: Optional[str]
+    exploit_type: Optional[str]
+    created_at: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class TargetAnalysisResponse(BaseModel):
+    """Complete analysis of a target"""
+    target: TargetResponse
+    services: List[ServiceResponse]
+    exploits: List[ExploitResponse]
+    exploit_count: int
+    service_count: int
+    critical_services: List[str]
+
+
+@app.get("/api/analysis/{target}", response_model=TargetAnalysisResponse)
+async def get_target_analysis(target: str):
+    """Get comprehensive analysis of a target including services and exploits"""
+    # Get target info
+    target_session = db_manager.get_targets_session()
+    try:
+        db_target = target_session.query(Target).filter(Target.ip == target).first()
+        if not db_target:
+            raise HTTPException(status_code=404, detail="Target not found")
+        target_info = TargetResponse.from_orm(db_target)
+    finally:
+        target_session.close()
+
+    # Get services for target
+    services = db_manager.get_services_for_target(target)
+    services_list = [ServiceResponse.from_orm(s) for s in services]
+
+    # Get exploits for target
+    exploits = db_manager.get_exploits_for_target(target)
+    exploits_list = [ExploitResponse.from_orm(e) for e in exploits]
+
+    # Identify critical services
+    critical_services = []
+    critical_service_names = ['smb', 'rdp', 'mssql', 'ssh', 'telnet', 'ftp']
+    for service in services:
+        if service.service in critical_service_names:
+            critical_services.append(f"{service.service}:{service.port}")
+
+    return TargetAnalysisResponse(
+        target=target_info,
+        services=services_list,
+        exploits=exploits_list,
+        exploit_count=len(exploits_list),
+        service_count=len(services_list),
+        critical_services=critical_services
+    )
+
+
+@app.get("/api/exploits", response_model=List[ExploitResponse])
+async def get_all_exploits():
+    """Get all exploits"""
+    exploits = db_manager.get_all_exploits()
+    return [ExploitResponse.from_orm(e) for e in exploits]
+
+
+@app.get("/api/exploits/target/{target}", response_model=List[ExploitResponse])
+async def get_exploits_for_target(target: str):
+    """Get all exploits for a specific target"""
+    exploits = db_manager.get_exploits_for_target(target)
+    return [ExploitResponse.from_orm(e) for e in exploits]
 
 
 # ============================================================================
