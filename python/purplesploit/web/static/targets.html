@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Targets - PurpleSploit</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>🔮 PurpleSploit</h1>
+            <span class="version">v2.0.0</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/static/targets.html" class="active">Targets</a></li>
+            <li><a href="/static/exploits.html">Exploits</a></li>
+            <li><a href="/api/docs" target="_blank">API Docs</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <header class="page-header">
+            <h2>All Targets</h2>
+            <p class="subtitle">Discovered targets and comprehensive analysis</p>
+        </header>
+
+        <div class="section">
+            <div class="card">
+                <div class="filter-bar">
+                    <input type="text" id="search-input" placeholder="Search targets..." class="search-input">
+                    <select id="service-filter" class="filter-select">
+                        <option value="">All Services</option>
+                    </select>
+                </div>
+
+                <div id="targets-grid" class="targets-grid">
+                    <div class="loading">Loading targets...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 PurpleSploit - Pentesting Framework</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        let allTargets = [];
+        let allServices = {};
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadTargets();
+
+            // Setup filters
+            document.getElementById('search-input').addEventListener('input', filterTargets);
+            document.getElementById('service-filter').addEventListener('change', filterTargets);
+        });
+
+        async function loadTargets() {
+            try {
+                const targets = await API.getTargets();
+                allTargets = targets;
+
+                // Load services for each target
+                for (const target of targets) {
+                    allServices[target.ip] = await API.getServicesForTarget(target.ip);
+                }
+
+                // Populate service filter
+                populateServiceFilter();
+
+                // Display targets
+                displayTargets(targets);
+            } catch (error) {
+                console.error('Error loading targets:', error);
+                document.getElementById('targets-grid').innerHTML =
+                    '<div class="error">Failed to load targets. Make sure the API server is running.</div>';
+            }
+        }
+
+        function populateServiceFilter() {
+            const services = new Set();
+            Object.values(allServices).forEach(serviceList => {
+                serviceList.forEach(s => services.add(s.service));
+            });
+
+            const select = document.getElementById('service-filter');
+            Array.from(services).sort().forEach(service => {
+                const option = document.createElement('option');
+                option.value = service;
+                option.textContent = service.toUpperCase();
+                select.appendChild(option);
+            });
+        }
+
+        function filterTargets() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const serviceFilter = document.getElementById('service-filter').value;
+
+            const filtered = allTargets.filter(target => {
+                const matchesSearch = target.name.toLowerCase().includes(searchTerm) ||
+                                     target.ip.includes(searchTerm) ||
+                                     (target.description && target.description.toLowerCase().includes(searchTerm));
+
+                const targetServices = allServices[target.ip] || [];
+                const matchesService = !serviceFilter ||
+                                      targetServices.some(s => s.service === serviceFilter);
+
+                return matchesSearch && matchesService;
+            });
+
+            displayTargets(filtered);
+        }
+
+        async function displayTargets(targets) {
+            const container = document.getElementById('targets-grid');
+
+            if (targets.length === 0) {
+                container.innerHTML = '<div class="empty">No targets found</div>';
+                return;
+            }
+
+            const cards = await Promise.all(targets.map(async target => {
+                const services = allServices[target.ip] || [];
+                const exploits = await API.getExploitsForTarget(target.ip);
+
+                const criticalServices = services.filter(s =>
+                    ['smb', 'rdp', 'ssh', 'telnet', 'ftp', 'mssql'].includes(s.service)
+                );
+
+                return `
+                    <div class="target-card">
+                        <div class="target-header">
+                            <h3>${target.name}</h3>
+                            <code class="ip-address">${target.ip}</code>
+                        </div>
+
+                        ${target.description ? `<p class="target-description">${target.description}</p>` : ''}
+
+                        <div class="target-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Services</span>
+                                <span class="stat-value">${services.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Exploits</span>
+                                <span class="stat-value ${exploits.length > 0 ? 'critical' : ''}">${exploits.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Critical</span>
+                                <span class="stat-value ${criticalServices.length > 0 ? 'warning' : ''}">${criticalServices.length}</span>
+                            </div>
+                        </div>
+
+                        ${services.length > 0 ? `
+                        <div class="services-list">
+                            <h4>Discovered Services:</h4>
+                            <div class="service-badges">
+                                ${services.slice(0, 8).map(s => `
+                                    <span class="service-badge ${criticalServices.includes(s) ? 'critical' : ''}">
+                                        ${s.service}:${s.port}
+                                    </span>
+                                `).join('')}
+                                ${services.length > 8 ? `<span class="service-badge">+${services.length - 8} more</span>` : ''}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${exploits.length > 0 ? `
+                        <div class="exploits-summary">
+                            <span class="badge badge-danger">⚠️ ${exploits.length} Potential Exploit${exploits.length > 1 ? 's' : ''} Found</span>
+                        </div>
+                        ` : ''}
+
+                        <div class="target-actions">
+                            <a href="/static/target.html?ip=${target.ip}" class="btn btn-primary">View Full Analysis</a>
+                        </div>
+                    </div>
+                `;
+            }));
+
+            container.innerHTML = cards.join('');
+        }
+    </script>
+</body>
+</html>

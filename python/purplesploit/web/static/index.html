@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurpleSploit - Target Analysis Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>🔮 PurpleSploit</h1>
+            <span class="version">v2.0.0</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/" class="active">Dashboard</a></li>
+            <li><a href="/static/targets.html">Targets</a></li>
+            <li><a href="/static/exploits.html">Exploits</a></li>
+            <li><a href="/api/docs" target="_blank">API Docs</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <header class="page-header">
+            <h2>Target Analysis Dashboard</h2>
+            <p class="subtitle">Comprehensive pentesting reconnaissance and exploit discovery</p>
+        </header>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-targets">0</div>
+                    <div class="stat-label">Total Targets</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔧</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-services">0</div>
+                    <div class="stat-label">Services Discovered</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">💣</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-exploits">0</div>
+                    <div class="stat-label">Potential Exploits</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔑</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-credentials">0</div>
+                    <div class="stat-label">Credentials</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Distribution -->
+        <div class="section">
+            <h3>Service Distribution</h3>
+            <div class="card">
+                <div id="services-chart" class="chart-container">
+                    <div class="loading">Loading services data...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Targets -->
+        <div class="section">
+            <div class="section-header">
+                <h3>Targets Overview</h3>
+                <a href="/static/targets.html" class="btn btn-secondary">View All</a>
+            </div>
+            <div class="card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Target</th>
+                            <th>IP Address</th>
+                            <th>Services</th>
+                            <th>Exploits</th>
+                            <th>Critical Services</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="targets-table">
+                        <tr>
+                            <td colspan="6" class="loading">Loading targets...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Exploits -->
+        <div class="section">
+            <div class="section-header">
+                <h3>Recent Exploit Discoveries</h3>
+                <a href="/static/exploits.html" class="btn btn-secondary">View All</a>
+            </div>
+            <div class="card">
+                <div id="recent-exploits">
+                    <div class="loading">Loading exploits...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 PurpleSploit - Pentesting Framework | <a href="https://github.com/jeremylaratro/purplesploit" target="_blank">GitHub</a></p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize dashboard on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboard();
+        });
+
+        async function loadDashboard() {
+            try {
+                // Load overview stats
+                const stats = await API.getStats();
+                updateStats(stats);
+
+                // Load targets
+                const targets = await API.getTargets();
+                displayTargetsTable(targets.slice(0, 10)); // Show first 10
+
+                // Load recent exploits
+                const exploits = await API.getExploits();
+                displayRecentExploits(exploits.slice(0, 5)); // Show first 5
+
+                // Display services chart
+                displayServicesChart(stats.services_by_type);
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showError('Failed to load dashboard data');
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('total-targets').textContent = stats.total_targets;
+            document.getElementById('total-services').textContent = stats.total_services;
+            document.getElementById('total-exploits').textContent = stats.total_exploits || 0;
+            document.getElementById('total-credentials').textContent = stats.total_credentials;
+        }
+
+        function displayTargetsTable(targets) {
+            const tbody = document.getElementById('targets-table');
+            if (targets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No targets found. Run nmap scan to discover targets.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = targets.map(target => `
+                <tr>
+                    <td><strong>${target.name}</strong></td>
+                    <td><code>${target.ip}</code></td>
+                    <td><span class="badge badge-info" id="services-${target.ip}">0</span></td>
+                    <td><span class="badge badge-warning" id="exploits-${target.ip}">0</span></td>
+                    <td id="critical-${target.ip}">-</td>
+                    <td>
+                        <a href="/static/target.html?ip=${target.ip}" class="btn btn-sm">View Analysis</a>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Load service/exploit counts for each target
+            targets.forEach(async (target) => {
+                try {
+                    const services = await API.getServicesForTarget(target.ip);
+                    document.getElementById(`services-${target.ip}`).textContent = services.length;
+
+                    const exploits = await API.getExploitsForTarget(target.ip);
+                    document.getElementById(`exploits-${target.ip}`).textContent = exploits.length;
+
+                    // Show critical services
+                    const critical = services.filter(s =>
+                        ['smb', 'rdp', 'ssh', 'telnet', 'ftp', 'mssql'].includes(s.service)
+                    );
+                    if (critical.length > 0) {
+                        document.getElementById(`critical-${target.ip}`).innerHTML =
+                            critical.map(s => `<span class="badge badge-danger">${s.service}:${s.port}</span>`).join(' ');
+                    }
+                } catch (error) {
+                    console.error(`Error loading data for ${target.ip}:`, error);
+                }
+            });
+        }
+
+        function displayServicesChart(servicesByType) {
+            const container = document.getElementById('services-chart');
+            if (!servicesByType || Object.keys(servicesByType).length === 0) {
+                container.innerHTML = '<div class="empty">No services discovered yet</div>';
+                return;
+            }
+
+            const total = Object.values(servicesByType).reduce((sum, count) => sum + count, 0);
+            const sorted = Object.entries(servicesByType).sort((a, b) => b[1] - a[1]);
+
+            container.innerHTML = sorted.map(([service, count]) => {
+                const percentage = (count / total * 100).toFixed(1);
+                return `
+                    <div class="chart-bar">
+                        <div class="bar-label">
+                            <span class="service-name">${service}</span>
+                            <span class="service-count">${count} (${percentage}%)</span>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function displayRecentExploits(exploits) {
+            const container = document.getElementById('recent-exploits');
+            if (exploits.length === 0) {
+                container.innerHTML = '<div class="empty">No exploits discovered yet. Run nmap parser with searchsploit enabled.</div>';
+                return;
+            }
+
+            container.innerHTML = exploits.map(exploit => `
+                <div class="exploit-item">
+                    <div class="exploit-header">
+                        <span class="exploit-title">${exploit.exploit_title}</span>
+                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${exploit.edb_id}</span>` : ''}
+                    </div>
+                    <div class="exploit-meta">
+                        <span><strong>Target:</strong> ${exploit.target}</span>
+                        <span><strong>Service:</strong> ${exploit.service}:${exploit.port}</span>
+                        ${exploit.version ? `<span><strong>Version:</strong> ${exploit.version}</span>` : ''}
+                    </div>
+                    ${exploit.exploit_path ? `<div class="exploit-path"><code>${exploit.exploit_path}</code></div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function showError(message) {
+            console.error(message);
+            // You could add a toast notification here
+        }
+    </script>
+</body>
+</html>
