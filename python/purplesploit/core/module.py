@@ -6,8 +6,14 @@ abstract methods and properties.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
+from purplesploit.core.parameters import (
+    get_parameter_registry,
+    get_profile_registry,
+    Parameter,
+    ParameterProfile
+)
 
 
 @dataclass
@@ -38,7 +44,11 @@ class BaseModule(ABC):
         """
         self.framework = framework
         self.options = {}
+        self.parameters: Dict[str, Parameter] = {}
+        self._parameter_registry = get_parameter_registry()
+        self._profile_registry = get_profile_registry()
         self._init_options()
+        self._init_parameters()
 
     @property
     @abstractmethod
@@ -81,9 +91,41 @@ class BaseModule(ABC):
         """
         return []
 
+    @property
+    def parameter_profiles(self) -> List[str]:
+        """
+        List of parameter profile names to use for this module.
+
+        Override in subclass to specify which parameter profiles this module uses.
+        Profiles define which parameters are relevant for this module.
+
+        Examples:
+            - ["web_scan_basic"] - Basic web scanning
+            - ["smb_auth", "smb_shares"] - SMB authentication and share operations
+            - ["ldap_query"] - LDAP query operations
+
+        Returns:
+            List of profile names from ProfileRegistry
+        """
+        return []
+
+    @property
+    def custom_parameters(self) -> List[str]:
+        """
+        List of custom parameter names to add beyond profiles.
+
+        Override in subclass to add additional parameters not in any profile.
+
+        Returns:
+            List of parameter names from ParameterRegistry
+        """
+        return []
+
     def _init_options(self):
         """
         Initialize module options. Override in subclass to add custom options.
+
+        DEPRECATED: Use parameter_profiles and custom_parameters properties instead.
 
         Option format:
         {
@@ -95,27 +137,58 @@ class BaseModule(ABC):
             }
         }
         """
-        # Common options that most modules use
-        self.options = {
-            "RHOST": {
-                "value": None,
-                "required": False,
-                "description": "Target host IP address",
-                "default": None
-            },
-            "RPORT": {
-                "value": None,
-                "required": False,
-                "description": "Target port",
-                "default": None
-            },
-            "URL": {
-                "value": None,
-                "required": False,
-                "description": "Target URL",
-                "default": None
-            },
-        }
+        # Legacy support: Common options that most modules use
+        # New modules should use parameter_profiles instead
+        if not self.parameter_profiles and not self.custom_parameters:
+            self.options = {
+                "RHOST": {
+                    "value": None,
+                    "required": False,
+                    "description": "Target host IP address",
+                    "default": None
+                },
+                "RPORT": {
+                    "value": None,
+                    "required": False,
+                    "description": "Target port",
+                    "default": None
+                },
+                "URL": {
+                    "value": None,
+                    "required": False,
+                    "description": "Target URL",
+                    "default": None
+                },
+            }
+
+    def _init_parameters(self):
+        """
+        Initialize module parameters from profiles.
+
+        This method loads parameters based on the parameter_profiles and
+        custom_parameters properties. Parameters are loaded from the central
+        registry and only relevant parameters are shown.
+        """
+        # If module uses legacy options system, convert to parameters
+        if self.options and not self.parameter_profiles:
+            return
+
+        # Load parameters from profiles
+        for profile_name in self.parameter_profiles:
+            profile = self._profile_registry.get(profile_name)
+            if profile:
+                params = profile.get_parameters(self._parameter_registry)
+                self.parameters.update(params)
+
+        # Load custom parameters
+        for param_name in self.custom_parameters:
+            param = self._parameter_registry.get_copy(param_name)
+            if param:
+                self.parameters[param_name] = param
+
+        # Convert parameters to legacy options format for backward compatibility
+        for name, param in self.parameters.items():
+            self.options[name] = param.to_dict()
 
     def set_option(self, key: str, value: Any) -> bool:
         """
@@ -133,7 +206,12 @@ class BaseModule(ABC):
             self.log(f"Unknown option: {key}", "error")
             return False
 
+        # Update both legacy options and new parameters
         self.options[key]["value"] = value
+
+        if key in self.parameters:
+            self.parameters[key].value = value
+
         return True
 
     def get_option(self, key: str) -> Any:
@@ -150,6 +228,11 @@ class BaseModule(ABC):
         if key not in self.options:
             return None
 
+        # Prefer parameter system if available
+        if key in self.parameters:
+            return self.parameters[key].get_value()
+
+        # Fall back to legacy options
         option = self.options[key]
         value = option.get("value")
 
@@ -165,11 +248,20 @@ class BaseModule(ABC):
         Returns:
             Tuple of (is_valid, error_message)
         """
-        for key, option in self.options.items():
-            if option.get("required", False):
-                value = option.get("value")
-                if value is None or value == "":
-                    return False, f"Required option not set: {key}"
+        # Validate new parameter system if available
+        if self.parameters:
+            for name, param in self.parameters.items():
+                is_valid, error = param.validate()
+                if not is_valid:
+                    return False, error
+
+        # Fall back to legacy validation
+        else:
+            for key, option in self.options.items():
+                if option.get("required", False):
+                    value = option.get("value")
+                    if value is None or value == "":
+                        return False, f"Required option not set: {key}"
 
         return True, ""
 

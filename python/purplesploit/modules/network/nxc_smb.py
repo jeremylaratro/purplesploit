@@ -42,42 +42,23 @@ class NXCSMBModule(ExternalToolModule):
     def category(self) -> str:
         return "network"
 
-    def _init_options(self):
-        """Initialize module-specific options."""
-        super()._init_options()
+    @property
+    def parameter_profiles(self) -> List[str]:
+        """
+        Use SMB authentication, shares, and execution profiles.
 
-        self.options.update({
-            "RHOST": {
-                "value": None,
-                "required": True,
-                "description": "Target host IP address or hostname",
-                "default": None
-            },
-            "USERNAME": {
-                "value": None,
-                "required": False,
-                "description": "Username for authentication",
-                "default": None
-            },
-            "PASSWORD": {
-                "value": None,
-                "required": False,
-                "description": "Password for authentication",
-                "default": None
-            },
-            "DOMAIN": {
-                "value": None,
-                "required": False,
-                "description": "Domain name",
-                "default": "WORKGROUP"
-            },
-            "HASH": {
-                "value": None,
-                "required": False,
-                "description": "NTLM hash for pass-the-hash",
-                "default": None
-            },
-        })
+        This module supports multiple SMB operations, so we include
+        all relevant SMB profiles to provide comprehensive parameter coverage.
+        """
+        return ["smb_auth", "smb_shares", "smb_execution"]
+
+    def _init_parameters(self):
+        """Set RHOST as required parameter."""
+        super()._init_parameters()
+        # Make RHOST required for SMB operations
+        if "RHOST" in self.parameters:
+            self.parameters["RHOST"].required = True
+            self.options["RHOST"]["required"] = True
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
