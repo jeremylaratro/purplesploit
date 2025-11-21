@@ -36,18 +36,20 @@ class FeroxbusterModule(ExternalToolModule):
     def category(self) -> str:
         return "web"
 
-    def _init_options(self):
-        """Initialize module-specific options."""
-        super()._init_options()
+    @property
+    def parameter_profiles(self) -> List[str]:
+        """Use web scanning parameter profile."""
+        return ["web_scan_advanced"]
 
-        self.options.update({
-            "URL": {
-                "value": None,
-                "required": True,
-                "description": "Target URL",
-                "default": None
-            },
-        })
+    # Legacy _init_options removed - now using parameter profiles
+
+    def _init_parameters(self):
+        """Set URL as required parameter."""
+        super()._init_parameters()
+        # Make URL required for web scanning
+        if "URL" in self.parameters:
+            self.parameters["URL"].required = True
+            self.options["URL"]["required"] = True
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
@@ -99,18 +101,26 @@ class FeroxbusterModule(ExternalToolModule):
 
     def op_deep_scan(self) -> Dict[str, Any]:
         """Deep scan with custom extensions."""
-        exts = input("Extensions (e.g., php,html,js,txt) [default: php,html,js,txt,asp,aspx,jsp]: ")
+        # Use EXTENSIONS parameter from profile
+        exts = self.get_option("EXTENSIONS")
         if not exts:
             exts = "php,html,js,txt,asp,aspx,jsp"
 
-        self.log(f"Deep scan with extensions: {exts}", "info")
-        return self._execute_feroxbuster(f"-x '{exts}' -t 50")
+        # Use THREADS parameter from profile
+        threads = self.get_option("THREADS") or 50
+
+        self.log(f"Deep scan with extensions: {exts}, threads: {threads}", "info")
+        return self._execute_feroxbuster(f"-x '{exts}' -t {threads}")
 
     def op_custom_wordlist(self) -> Dict[str, Any]:
         """Scan with custom wordlist."""
-        wordlist = input("Wordlist path: ")
+        # Use WORDLIST parameter from profile
+        wordlist = self.get_option("WORDLIST")
         if not wordlist:
-            return {"success": False, "error": "Wordlist path required"}
+            # Prompt if not set
+            wordlist = input("Wordlist path: ")
+            if not wordlist:
+                return {"success": False, "error": "Wordlist path required"}
 
         import os
         if not os.path.isfile(wordlist):
