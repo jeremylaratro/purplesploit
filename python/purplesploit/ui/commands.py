@@ -100,6 +100,7 @@ class CommandHandler:
             "hosts": self.cmd_hosts,              # Generate hosts file
             "ligolo": self.cmd_ligolo,            # Launch ligolo-ng
             "shell": self.cmd_shell,              # Drop to localhost shell
+            "webserver": self.cmd_webserver,      # Start/stop web server
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -202,6 +203,7 @@ class CommandHandler:
         utility_help = """[blue]clear[/blue]                  Clear the screen
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
+[blue]webserver start[/blue]        Start web portal and API server
 [blue]ligolo[/blue]                 Launch ligolo-ng (CTRL+D to return)
 [blue]shell[/blue]                  Drop to localhost shell (CTRL+D to return)
 [blue]exit, quit[/blue]             Exit framework"""
@@ -1191,6 +1193,90 @@ class CommandHandler:
             self.display.print_error(f"Error launching shell: {e}")
             import traceback
             traceback.print_exc()
+
+        return True
+
+    def cmd_webserver(self, args: List[str]) -> bool:
+        """
+        Start the PurpleSploit web portal and API server.
+
+        Usage:
+            webserver start              # Start the web server (default)
+            webserver start --reload     # Start with auto-reload enabled
+            webserver start --port 8080  # Start on custom port
+
+        Press CTRL+C to stop the server.
+        """
+        import sys
+        import subprocess
+        from pathlib import Path
+
+        # Default action is start
+        action = args[0].lower() if args else "start"
+
+        if action == "start":
+            # Parse additional arguments
+            port = 5000
+            reload_mode = False
+            host = "0.0.0.0"
+
+            # Parse flags
+            i = 1
+            while i < len(args):
+                if args[i] == "--reload":
+                    reload_mode = True
+                elif args[i] == "--port" and i + 1 < len(args):
+                    try:
+                        port = int(args[i + 1])
+                        i += 1
+                    except ValueError:
+                        self.display.print_error(f"Invalid port number: {args[i + 1]}")
+                        return True
+                elif args[i] == "--host" and i + 1 < len(args):
+                    host = args[i + 1]
+                    i += 1
+                i += 1
+
+            try:
+                # Import and start the server
+                from purplesploit.api.server import main as server_main
+
+                self.display.console.print()
+                self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
+                self.display.console.print("[bold cyan]            🔮 PurpleSploit Web Portal & API Server[/bold cyan]")
+                self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
+                self.display.console.print()
+                self.display.console.print(f"[green]Starting server on {host}:{port}...[/green]")
+                self.display.console.print(f"[cyan]Web Portal:[/cyan] http://localhost:{port}")
+                self.display.console.print(f"[cyan]API Docs:  [/cyan] http://localhost:{port}/api/docs")
+                self.display.console.print()
+                if reload_mode:
+                    self.display.console.print("[yellow]Auto-reload:[/yellow] Enabled")
+                self.display.console.print("[dim]Press CTRL+C to stop[/dim]")
+                self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
+                self.display.console.print()
+
+                # Start the server
+                server_main(host=host, port=port, reload=reload_mode)
+
+            except KeyboardInterrupt:
+                self.display.console.print()
+                self.display.print_info("Shutting down web server...")
+                return True
+            except ImportError as e:
+                self.display.print_error(f"Failed to import server module: {e}")
+                self.display.print_info("Make sure FastAPI and uvicorn are installed:")
+                self.display.print_info("  pip install fastapi uvicorn")
+                return True
+            except Exception as e:
+                self.display.print_error(f"Error starting web server: {e}")
+                import traceback
+                traceback.print_exc()
+                return True
+
+        else:
+            self.display.print_error(f"Unknown webserver command: {action}")
+            self.display.print_info("Usage: webserver start [--reload] [--port PORT] [--host HOST]")
 
         return True
 
