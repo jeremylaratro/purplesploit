@@ -164,6 +164,34 @@ The web portal uses these API endpoints (also available for direct access):
 
 ## Troubleshooting
 
+### Database Error: "file is not a database"
+
+If you see: `sqlite3.DatabaseError: file is not a database`
+
+**This means one or more database files are corrupted.**
+
+**Quick Fix**: Run the database reset tool:
+```bash
+cd /path/to/purplesploit
+python reset-databases.py
+```
+
+This will:
+1. Check all database files
+2. Remove corrupted ones
+3. Create fresh, clean databases
+
+⚠️ **Note**: This will delete all your saved data (targets, services, exploits).
+
+**Manual Fix**: Remove corrupted databases manually:
+```bash
+rm -rf ~/.purplesploit/*.db
+```
+
+Then restart the server - databases will be recreated automatically.
+
+**Automatic Fix**: The server now auto-detects corrupted databases and removes them on startup!
+
 ### Static Files Not Found
 
 If you see: `[WARNING] Web portal static files not found`
@@ -198,6 +226,7 @@ Make sure you have:
 1. Run nmap scans and parsed them
 2. Data is stored in `~/.purplesploit/` databases
 3. Server is accessing the correct database files
+4. Databases are not corrupted (see "Database Error" above)
 
 ---
 
