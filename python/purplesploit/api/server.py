@@ -40,9 +40,33 @@ app.add_middleware(
 )
 
 # Mount static files for web portal
-STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
-if STATIC_DIR.exists():
+# Try multiple paths to support both installed package and running from repo
+def find_static_dir():
+    """Find the static files directory"""
+    # Path 1: Installed package or running from python/ directory
+    static_dir = Path(__file__).parent.parent / "web" / "static"
+    if static_dir.exists():
+        return static_dir
+
+    # Path 2: Running from repo root (e.g., python -m purplesploit.api.server from repo root)
+    repo_static = Path(__file__).parent.parent.parent.parent / "python" / "purplesploit" / "web" / "static"
+    if repo_static.exists():
+        return repo_static
+
+    # Path 3: Check if we're in the repo's python directory
+    alt_static = Path(__file__).parent.parent / "web" / "static"
+    if alt_static.exists():
+        return alt_static
+
+    return None
+
+STATIC_DIR = find_static_dir()
+if STATIC_DIR:
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    print(f"[INFO] Serving web portal from: {STATIC_DIR}")
+else:
+    print("[WARNING] Web portal static files not found. API-only mode enabled.")
+
 
 
 # ============================================================================
