@@ -32,6 +32,7 @@ class CommandHandler:
         self.commands = self._register_commands()
         self.last_search_results = []  # Store last search results for number selection
         self.current_operation_index = None  # Track selected operation
+        self.webserver_process = None  # Track background webserver process
 
         # Service name shortcuts - maps service names to module paths
         self.service_shortcuts = {
@@ -203,7 +204,9 @@ class CommandHandler:
         utility_help = """[blue]clear[/blue]                  Clear the screen
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
-[blue]webserver start[/blue]        Start web portal and API server
+[blue]webserver start[/blue]        Start web portal in background
+[blue]webserver stop[/blue]         Stop web portal
+[blue]webserver status[/blue]       Check web portal status
 [blue]ligolo[/blue]                 Launch ligolo-ng (CTRL+D to return)
 [blue]shell[/blue]                  Drop to localhost shell (CTRL+D to return)
 [blue]exit, quit[/blue]             Exit framework"""
@@ -1198,34 +1201,38 @@ class CommandHandler:
 
     def cmd_webserver(self, args: List[str]) -> bool:
         """
-        Start the PurpleSploit web portal and API server.
+        Manage the PurpleSploit web portal and API server.
 
         Usage:
-            webserver start              # Start the web server (default)
-            webserver start --reload     # Start with auto-reload enabled
+            webserver start              # Start the web server in background (default)
             webserver start --port 8080  # Start on custom port
+            webserver stop               # Stop the running web server
+            webserver status             # Check web server status
 
-        Press CTRL+C to stop the server.
+        The server runs in the background so you can continue using PurpleSploit.
         """
-        import sys
-        import subprocess
+        import multiprocessing
+        import time
         from pathlib import Path
 
         # Default action is start
         action = args[0].lower() if args else "start"
 
         if action == "start":
+            # Check if already running
+            if self.webserver_process and self.webserver_process.is_alive():
+                self.display.print_warning("Web server is already running")
+                self.display.print_info("Use 'webserver stop' to stop it first")
+                return True
+
             # Parse additional arguments
             port = 5000
-            reload_mode = False
             host = "0.0.0.0"
 
             # Parse flags
             i = 1
             while i < len(args):
-                if args[i] == "--reload":
-                    reload_mode = True
-                elif args[i] == "--port" and i + 1 < len(args):
+                if args[i] == "--port" and i + 1 < len(args):
                     try:
                         port = int(args[i + 1])
                         i += 1
@@ -1238,45 +1245,102 @@ class CommandHandler:
                 i += 1
 
             try:
-                # Import and start the server
-                from purplesploit.api.server import main as server_main
+                # Check if dependencies are available
+                try:
+                    import uvicorn
+                    import fastapi
+                except ImportError as e:
+                    self.display.print_error(f"Missing dependencies: {e}")
+                    self.display.print_info("Install with: pip install fastapi uvicorn")
+                    return True
 
+                # Create and start background process
                 self.display.console.print()
                 self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
-                self.display.console.print("[bold cyan]            🔮 PurpleSploit Web Portal & API Server[/bold cyan]")
-                self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
-                self.display.console.print()
-                self.display.console.print(f"[green]Starting server on {host}:{port}...[/green]")
-                self.display.console.print(f"[cyan]Web Portal:[/cyan] http://localhost:{port}")
-                self.display.console.print(f"[cyan]API Docs:  [/cyan] http://localhost:{port}/api/docs")
-                self.display.console.print()
-                if reload_mode:
-                    self.display.console.print("[yellow]Auto-reload:[/yellow] Enabled")
-                self.display.console.print("[dim]Press CTRL+C to stop[/dim]")
+                self.display.console.print("[bold cyan]       🔮 Starting PurpleSploit Web Portal & API Server[/bold cyan]")
                 self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
                 self.display.console.print()
 
-                # Start the server
-                server_main(host=host, port=port, reload=reload_mode)
+                # Start server in background process
+                def run_server():
+                    """Background server process"""
+                    import sys
+                    import uvicorn
 
-            except KeyboardInterrupt:
+                    # Redirect stdout/stderr to avoid output pollution
+                    # but still allow uvicorn to log
+                    uvicorn.run(
+                        "purplesploit.api.server:app",
+                        host=host,
+                        port=port,
+                        reload=False,
+                        log_level="info"
+                    )
+
+                # Create and start the process
+                self.webserver_process = multiprocessing.Process(
+                    target=run_server,
+                    daemon=True,
+                    name="purplesploit-webserver"
+                )
+                self.webserver_process.start()
+
+                # Give it a moment to start
+                time.sleep(1.5)
+
+                # Check if it started successfully
+                if self.webserver_process.is_alive():
+                    self.display.console.print(f"[green]✓ Server started successfully on {host}:{port}[/green]")
+                    self.display.console.print()
+                    self.display.console.print(f"[cyan]Web Portal:[/cyan] http://localhost:{port}")
+                    self.display.console.print(f"[cyan]API Docs:  [/cyan] http://localhost:{port}/api/docs")
+                    self.display.console.print()
+                    self.display.console.print("[dim]Server is running in the background[/dim]")
+                    self.display.console.print("[dim]Use 'webserver stop' to stop the server[/dim]")
+                    self.display.console.print("[dim]Use 'webserver status' to check server status[/dim]")
+                else:
+                    self.display.print_error("Failed to start web server")
+                    self.webserver_process = None
+
+                self.display.console.print("[bold magenta]" + "=" * 70 + "[/bold magenta]")
                 self.display.console.print()
-                self.display.print_info("Shutting down web server...")
-                return True
-            except ImportError as e:
-                self.display.print_error(f"Failed to import server module: {e}")
-                self.display.print_info("Make sure FastAPI and uvicorn are installed:")
-                self.display.print_info("  pip install fastapi uvicorn")
-                return True
+
             except Exception as e:
                 self.display.print_error(f"Error starting web server: {e}")
                 import traceback
                 traceback.print_exc()
+                self.webserver_process = None
                 return True
+
+        elif action == "stop":
+            if not self.webserver_process or not self.webserver_process.is_alive():
+                self.display.print_warning("Web server is not running")
+                return True
+
+            self.display.print_info("Stopping web server...")
+            self.webserver_process.terminate()
+            self.webserver_process.join(timeout=5)
+
+            if self.webserver_process.is_alive():
+                self.display.print_warning("Server didn't stop gracefully, forcing shutdown...")
+                self.webserver_process.kill()
+                self.webserver_process.join()
+
+            self.webserver_process = None
+            self.display.print_success("Web server stopped")
+
+        elif action == "status":
+            if self.webserver_process and self.webserver_process.is_alive():
+                self.display.print_success(f"Web server is running (PID: {self.webserver_process.pid})")
+                self.display.print_info("Access at: http://localhost:5000")
+                self.display.print_info("API docs: http://localhost:5000/api/docs")
+            else:
+                self.display.print_info("Web server is not running")
+                self.display.print_info("Use 'webserver start' to start it")
 
         else:
             self.display.print_error(f"Unknown webserver command: {action}")
-            self.display.print_info("Usage: webserver start [--reload] [--port PORT] [--host HOST]")
+            self.display.print_info("Usage: webserver [start|stop|status] [--port PORT] [--host HOST]")
 
         return True
 
@@ -1476,7 +1540,19 @@ class CommandHandler:
     def cmd_exit(self, args: List[str]) -> bool:
         """Exit the framework."""
         self.display.print_info("Exiting PurpleSploit...")
+        # Clean up webserver if running
+        self.cleanup()
         return False
+
+    def cleanup(self):
+        """Cleanup resources before exit."""
+        # Stop webserver if running
+        if self.webserver_process and self.webserver_process.is_alive():
+            self.display.print_info("Stopping web server...")
+            self.webserver_process.terminate()
+            self.webserver_process.join(timeout=3)
+            if self.webserver_process.is_alive():
+                self.webserver_process.kill()
 
 
     def cmd_ops(self, args: List[str]) -> bool:
