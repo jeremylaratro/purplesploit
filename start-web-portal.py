@@ -30,7 +30,9 @@ try:
     print("=" * 70)
     print()
 
-    main()
+    # Note: This script is deprecated. Use 'purplesploit' CLI with 'webserver start' command instead
+    # For backward compatibility, we'll still support it but without reload mode to avoid multiprocessing issues
+    main(reload=False)
 
 except ImportError as e:
     print(f"Error: Failed to import purplesploit module: {e}")
