@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Target Analysis - PurpleSploit</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>🔮 PurpleSploit</h1>
+            <span class="version">v2.0.0</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/static/targets.html">Targets</a></li>
+            <li><a href="/static/exploits.html">Exploits</a></li>
+            <li><a href="/api/docs" target="_blank">API Docs</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="/static/targets.html">← Back to Targets</a>
+        </div>
+
+        <div id="analysis-content">
+            <div class="loading">Loading target analysis...</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 PurpleSploit - Pentesting Framework</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetIP = urlParams.get('ip');
+
+            if (!targetIP) {
+                document.getElementById('analysis-content').innerHTML =
+                    '<div class="error">No target IP specified</div>';
+                return;
+            }
+
+            try {
+                const analysis = await API.getTargetAnalysis(targetIP);
+                displayAnalysis(analysis);
+            } catch (error) {
+                console.error('Error loading target analysis:', error);
+                document.getElementById('analysis-content').innerHTML =
+                    '<div class="error">Failed to load target analysis. Target may not exist.</div>';
+            }
+        });
+
+        function displayAnalysis(analysis) {
+            const container = document.getElementById('analysis-content');
+
+            container.innerHTML = `
+                <header class="page-header">
+                    <div>
+                        <h2>${analysis.target.name}</h2>
+                        <p class="subtitle">
+                            <code>${analysis.target.ip}</code>
+                            ${analysis.target.description ? ` - ${analysis.target.description}` : ''}
+                        </p>
+                    </div>
+                </header>
+
+                <!-- Quick Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card ${analysis.service_count > 0 ? '' : 'empty'}">
+                        <div class="stat-icon">🔧</div>
+                        <div class="stat-content">
+                            <div class="stat-value">${analysis.service_count}</div>
+                            <div class="stat-label">Services</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card ${analysis.exploit_count > 0 ? 'warning' : 'empty'}">
+                        <div class="stat-icon">💣</div>
+                        <div class="stat-content">
+                            <div class="stat-value">${analysis.exploit_count}</div>
+                            <div class="stat-label">Exploits</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card ${analysis.critical_services.length > 0 ? 'danger' : 'empty'}">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-content">
+                            <div class="stat-value">${analysis.critical_services.length}</div>
+                            <div class="stat-label">Critical Services</div>
+                        </div>
+                    </div>
+                </div>
+
+                ${analysis.critical_services.length > 0 ? `
+                <div class="section">
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Critical Services Detected:</strong>
+                        ${analysis.critical_services.map(s => `<code>${s}</code>`).join(', ')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Services Section -->
+                <div class="section">
+                    <h3>Discovered Services (${analysis.service_count})</h3>
+                    <div class="card">
+                        ${analysis.services.length > 0 ? `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Port</th>
+                                    <th>Version</th>
+                                    <th>Exploits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${analysis.services.map(service => {
+                                    const serviceExploits = analysis.exploits.filter(e =>
+                                        e.service === service.service && e.port === service.port
+                                    );
+                                    const isCritical = analysis.critical_services.some(cs => cs.includes(service.service));
+
+                                    return `
+                                    <tr>
+                                        <td>
+                                            <strong class="${isCritical ? 'text-danger' : ''}">${service.service}</strong>
+                                            ${isCritical ? ' <span class="badge badge-danger">CRITICAL</span>' : ''}
+                                        </td>
+                                        <td><code>${service.port}</code></td>
+                                        <td>${service.version || '<em>Unknown</em>'}</td>
+                                        <td>
+                                            ${serviceExploits.length > 0 ?
+                                                `<span class="badge badge-warning">${serviceExploits.length} found</span>` :
+                                                '<span class="badge badge-success">None</span>'
+                                            }
+                                        </td>
+                                    </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        ` : '<div class="empty">No services discovered yet</div>'}
+                    </div>
+                </div>
+
+                <!-- Exploits Section -->
+                <div class="section">
+                    <h3>Potential Exploits (${analysis.exploit_count})</h3>
+                    <div class="card">
+                        ${analysis.exploits.length > 0 ? `
+                        <div class="exploits-list">
+                            ${analysis.exploits.map(exploit => `
+                            <div class="exploit-card">
+                                <div class="exploit-header">
+                                    <h4>${exploit.exploit_title}</h4>
+                                    <div class="exploit-badges">
+                                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${exploit.edb_id}</span>` : ''}
+                                        ${exploit.platform ? `<span class="badge badge-secondary">${exploit.platform}</span>` : ''}
+                                        ${exploit.exploit_type ? `<span class="badge badge-secondary">${exploit.exploit_type}</span>` : ''}
+                                    </div>
+                                </div>
+
+                                <div class="exploit-details">
+                                    <div class="detail-row">
+                                        <span class="detail-label">Service:</span>
+                                        <span class="detail-value"><strong>${exploit.service}:${exploit.port}</strong></span>
+                                    </div>
+                                    ${exploit.version ? `
+                                    <div class="detail-row">
+                                        <span class="detail-label">Version:</span>
+                                        <span class="detail-value"><code>${exploit.version}</code></span>
+                                    </div>
+                                    ` : ''}
+                                    ${exploit.exploit_path ? `
+                                    <div class="detail-row">
+                                        <span class="detail-label">Path:</span>
+                                        <span class="detail-value"><code class="exploit-path">${exploit.exploit_path}</code></span>
+                                    </div>
+                                    ` : ''}
+                                </div>
+
+                                ${exploit.edb_id ? `
+                                <div class="exploit-actions">
+                                    <a href="https://www.exploit-db.com/exploits/${exploit.edb_id}" target="_blank" class="btn btn-sm btn-secondary">
+                                        View on Exploit-DB →
+                                    </a>
+                                </div>
+                                ` : ''}
+                            </div>
+                            `).join('')}
+                        </div>
+                        ` : '<div class="empty">No exploits discovered yet. Run nmap parser with searchsploit enabled to discover potential exploits.</div>'}
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                ${analysis.exploit_count > 0 || analysis.critical_services.length > 0 ? `
+                <div class="section">
+                    <h3>Security Recommendations</h3>
+                    <div class="card">
+                        <ul class="recommendations-list">
+                            ${analysis.exploit_count > 0 ? `
+                            <li class="warning">
+                                <strong>⚠️ ${analysis.exploit_count} potential exploit(s) found.</strong>
+                                Review and test each exploit in a controlled environment. Verify service versions and apply patches.
+                            </li>
+                            ` : ''}
+                            ${analysis.critical_services.length > 0 ? `
+                            <li class="danger">
+                                <strong>🔴 Critical services detected:</strong> ${analysis.critical_services.join(', ')}.
+                                Ensure these services are properly secured, use strong authentication, and limit exposure.
+                            </li>
+                            ` : ''}
+                            ${analysis.services.some(s => !s.version) ? `
+                            <li class="info">
+                                <strong>ℹ️ Some services don't have version information.</strong>
+                                Run a more detailed scan (nmap -sV) to detect versions and discover potential vulnerabilities.
+                            </li>
+                            ` : ''}
+                        </ul>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+        }
+    </script>
+</body>
+</html>
