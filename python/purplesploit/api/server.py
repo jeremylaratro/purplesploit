@@ -9,7 +9,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from purplesploit.models.database import (
@@ -37,6 +38,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for web portal
+STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ============================================================================
@@ -76,15 +82,21 @@ class WorkspaceInfo(BaseModel):
 # Health & Status
 # ============================================================================
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint"""
-    return {
-        "name": "PurpleSploit API",
-        "version": "2.0.0",
-        "status": "operational",
-        "docs": "/api/docs"
-    }
+    """Serve the main web portal dashboard"""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    else:
+        # Fallback to API info if static files not available
+        return JSONResponse({
+            "name": "PurpleSploit API",
+            "version": "2.0.0",
+            "status": "operational",
+            "docs": "/api/docs",
+            "web_portal": "Static files not found. Run from installed package."
+        })
 
 
 @app.get("/api/health")
