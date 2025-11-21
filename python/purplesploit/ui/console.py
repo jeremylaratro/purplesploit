@@ -184,5 +184,7 @@ class Console:
     def _cleanup(self):
         """Cleanup before exit."""
         self.display.print_info("Cleaning up...")
+        # Clean up command handler resources (e.g., web server)
+        self.command_handler.cleanup()
         self.framework.cleanup()
         self.display.print_info("Goodbye!")
