@@ -223,6 +223,9 @@ class DatabaseManager:
         # Ensure database directory exists
         DB_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Check for corrupted databases and remove them
+        self._check_and_fix_databases()
+
         # Create engines for each database
         self.engines = {
             "credentials": create_engine(f"sqlite:///{CREDENTIALS_DB}"),
@@ -242,14 +245,52 @@ class DatabaseManager:
         # Create tables if they don't exist
         self._create_tables()
 
+    def _check_and_fix_databases(self):
+        """Check database files and remove corrupted ones"""
+        import sqlite3
+
+        db_files = {
+            "credentials": CREDENTIALS_DB,
+            "targets": TARGETS_DB,
+            "web_targets": WEB_TARGETS_DB,
+            "ad_targets": AD_TARGETS_DB,
+            "services": SERVICES_DB,
+            "exploits": EXPLOITS_DB,
+        }
+
+        for name, db_path in db_files.items():
+            if db_path.exists():
+                try:
+                    # Try to open the database
+                    conn = sqlite3.connect(str(db_path))
+                    cursor = conn.cursor()
+                    # Try a simple query to verify it's a valid database
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+                    conn.close()
+                except sqlite3.DatabaseError:
+                    # Database is corrupted, remove it
+                    print(f"[WARNING] Corrupted database detected: {db_path}")
+                    print(f"[INFO] Removing and will recreate: {name}.db")
+                    db_path.unlink()
+                except Exception as e:
+                    print(f"[WARNING] Error checking {name}.db: {e}")
+                    print(f"[INFO] Removing and will recreate: {name}.db")
+                    if db_path.exists():
+                        db_path.unlink()
+
     def _create_tables(self):
         """Create all tables"""
-        Base.metadata.create_all(self.engines["credentials"], tables=[Credential.__table__])
-        Base.metadata.create_all(self.engines["targets"], tables=[Target.__table__])
-        Base.metadata.create_all(self.engines["web_targets"], tables=[WebTarget.__table__])
-        Base.metadata.create_all(self.engines["ad_targets"], tables=[ADTarget.__table__])
-        Base.metadata.create_all(self.engines["services"], tables=[Service.__table__])
-        Base.metadata.create_all(self.engines["exploits"], tables=[Exploit.__table__])
+        try:
+            Base.metadata.create_all(self.engines["credentials"], tables=[Credential.__table__])
+            Base.metadata.create_all(self.engines["targets"], tables=[Target.__table__])
+            Base.metadata.create_all(self.engines["web_targets"], tables=[WebTarget.__table__])
+            Base.metadata.create_all(self.engines["ad_targets"], tables=[ADTarget.__table__])
+            Base.metadata.create_all(self.engines["services"], tables=[Service.__table__])
+            Base.metadata.create_all(self.engines["exploits"], tables=[Exploit.__table__])
+        except Exception as e:
+            print(f"[ERROR] Failed to create database tables: {e}")
+            print("[INFO] Try removing ~/.purplesploit/*.db and restart")
+            raise
 
     def get_session(self, db_name: str) -> Session:
         """Get a database session"""
