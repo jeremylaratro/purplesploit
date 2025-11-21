@@ -485,14 +485,24 @@ async def get_exploits_for_target(target: str):
 # Main Entry Point
 # ============================================================================
 
-def main():
-    """Run the API server"""
+def main(host="0.0.0.0", port=5000, reload=False):
+    """
+    Run the API server
+
+    Args:
+        host: Host to bind to (default: 0.0.0.0)
+        port: Port to bind to (default: 5000)
+        reload: Enable auto-reload on code changes (default: False)
+    """
     import uvicorn
+
+    # Only use reload with workers if explicitly enabled
+    # This avoids multiprocessing issues when called programmatically
     uvicorn.run(
         "purplesploit.api.server:app",
-        host="0.0.0.0",
-        port=5000,
-        reload=True,
+        host=host,
+        port=port,
+        reload=reload,
         log_level="info"
     )
 
