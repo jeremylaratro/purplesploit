@@ -22,6 +22,7 @@ TARGETS_DB = DB_DIR / "targets.db"
 WEB_TARGETS_DB = DB_DIR / "web_targets.db"
 AD_TARGETS_DB = DB_DIR / "ad_targets.db"
 SERVICES_DB = DB_DIR / "services.db"
+EXPLOITS_DB = DB_DIR / "exploits.db"
 
 
 # ============================================================================
@@ -123,6 +124,39 @@ class Service(Base):
         }
 
 
+class Exploit(Base):
+    """Exploit/vulnerability information from searchsploit"""
+    __tablename__ = "exploits"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target = Column(String)
+    service = Column(String)
+    port = Column(Integer)
+    version = Column(String)
+    exploit_title = Column(Text)
+    exploit_path = Column(String)
+    edb_id = Column(String)
+    platform = Column(String)
+    exploit_type = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "target": self.target,
+            "service": self.service,
+            "port": self.port,
+            "version": self.version,
+            "exploit_title": self.exploit_title,
+            "exploit_path": self.exploit_path,
+            "edb_id": self.edb_id,
+            "platform": self.platform,
+            "exploit_type": self.exploit_type,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # ============================================================================
 # Pydantic Schemas (for API validation)
 # ============================================================================
@@ -196,6 +230,7 @@ class DatabaseManager:
             "web_targets": create_engine(f"sqlite:///{WEB_TARGETS_DB}"),
             "ad_targets": create_engine(f"sqlite:///{AD_TARGETS_DB}"),
             "services": create_engine(f"sqlite:///{SERVICES_DB}"),
+            "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}"),
         }
 
         # Create session makers
@@ -214,6 +249,7 @@ class DatabaseManager:
         Base.metadata.create_all(self.engines["web_targets"], tables=[WebTarget.__table__])
         Base.metadata.create_all(self.engines["ad_targets"], tables=[ADTarget.__table__])
         Base.metadata.create_all(self.engines["services"], tables=[Service.__table__])
+        Base.metadata.create_all(self.engines["exploits"], tables=[Exploit.__table__])
 
     def get_session(self, db_name: str) -> Session:
         """Get a database session"""
@@ -238,6 +274,10 @@ class DatabaseManager:
     def get_services_session(self) -> Session:
         """Get services database session"""
         return self.get_session("services")
+
+    def get_exploits_session(self) -> Session:
+        """Get exploits database session"""
+        return self.get_session("exploits")
 
     # Convenience methods
     def get_all_credentials(self) -> List[Credential]:
@@ -285,6 +325,47 @@ class DatabaseManager:
             session.commit()
             session.refresh(db_target)
             return db_target
+        finally:
+            session.close()
+
+    def add_exploit(self, target: str, service: str, port: int, version: str,
+                    exploit_title: str, exploit_path: str = None,
+                    edb_id: str = None, platform: str = None,
+                    exploit_type: str = None) -> Exploit:
+        """Add an exploit/vulnerability"""
+        session = self.get_exploits_session()
+        try:
+            exploit = Exploit(
+                target=target,
+                service=service,
+                port=port,
+                version=version,
+                exploit_title=exploit_title,
+                exploit_path=exploit_path,
+                edb_id=edb_id,
+                platform=platform,
+                exploit_type=exploit_type
+            )
+            session.add(exploit)
+            session.commit()
+            session.refresh(exploit)
+            return exploit
+        finally:
+            session.close()
+
+    def get_exploits_for_target(self, target: str) -> List[Exploit]:
+        """Get all exploits for a target"""
+        session = self.get_exploits_session()
+        try:
+            return session.query(Exploit).filter(Exploit.target == target).all()
+        finally:
+            session.close()
+
+    def get_all_exploits(self) -> List[Exploit]:
+        """Get all exploits"""
+        session = self.get_exploits_session()
+        try:
+            return session.query(Exploit).all()
         finally:
             session.close()
 

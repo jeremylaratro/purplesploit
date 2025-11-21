@@ -2,10 +2,13 @@
 Nmap XML Parser Module
 
 Parses nmap XML output and populates the service database with detected services.
+Also runs searchsploit on discovered service versions to find potential exploits.
 """
 
 import xml.etree.ElementTree as ET
-from typing import Dict, Any, List
+import subprocess
+import re
+from typing import Dict, Any, List, Tuple
 from ..core.module import BaseModule
 
 
@@ -18,7 +21,7 @@ class NmapParser(BaseModule):
 
     @property
     def description(self) -> str:
-        return "Parse nmap XML output files and populate service database"
+        return "Parse nmap XML output files, populate service database, and run searchsploit on discovered services"
 
     @property
     def author(self) -> str:
@@ -42,8 +45,76 @@ class NmapParser(BaseModule):
                 "required": False,
                 "description": "Automatically add discovered hosts as targets",
                 "default": "true"
+            },
+            "RUN_SEARCHSPLOIT": {
+                "value": "true",
+                "required": False,
+                "description": "Run searchsploit on discovered service versions",
+                "default": "true"
             }
         }
+
+    def _run_searchsploit(self, service: str, version: str) -> List[Tuple[str, str, str]]:
+        """
+        Run searchsploit on a service/version and parse results.
+
+        Args:
+            service: Service name (e.g., "Apache", "OpenSSH")
+            version: Service version (e.g., "2.4.41", "7.2p2")
+
+        Returns:
+            List of tuples containing (exploit_title, exploit_path, edb_id)
+        """
+        if not version:
+            return []
+
+        search_query = f"{service} {version}"
+
+        try:
+            # Run searchsploit
+            result = subprocess.run(
+                ["searchsploit", "--colour", search_query],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                return []
+
+            # Parse output
+            exploits = []
+            lines = result.stdout.split('\n')
+
+            for line in lines:
+                # Skip header lines and separators
+                if '---' in line or 'Exploit Title' in line or not line.strip():
+                    continue
+
+                # Extract exploit info using regex
+                # Format: Title | Path
+                match = re.search(r'^(.+?)\s+\|\s+(.+)$', line)
+                if match:
+                    title = match.group(1).strip()
+                    path = match.group(2).strip()
+
+                    # Extract EDB-ID if present
+                    edb_match = re.search(r'EDB-ID:\s*(\d+)', line)
+                    edb_id = edb_match.group(1) if edb_match else None
+
+                    exploits.append((title, path, edb_id))
+
+            return exploits
+
+        except subprocess.TimeoutExpired:
+            self.log(f"Searchsploit timed out for {search_query}", "warning")
+            return []
+        except FileNotFoundError:
+            self.log("Searchsploit not found. Install exploitdb to enable exploit search.", "warning")
+            return []
+        except Exception as e:
+            self.log(f"Error running searchsploit: {str(e)}", "error")
+            return []
 
     def run(self) -> Dict[str, Any]:
         """
@@ -54,6 +125,7 @@ class NmapParser(BaseModule):
         """
         xml_file = self.get_option("XML_FILE")
         auto_add = self.get_option("AUTO_ADD_TARGETS").lower() == "true"
+        run_searchsploit = self.get_option("RUN_SEARCHSPLOIT").lower() == "true"
 
         try:
             # Parse XML file
@@ -63,6 +135,7 @@ class NmapParser(BaseModule):
             hosts_processed = 0
             services_found = 0
             targets_added = 0
+            exploits_found = 0
 
             # Process each host
             for host in root.findall('.//host'):
@@ -156,15 +229,40 @@ class NmapParser(BaseModule):
 
                             services_found += 1
 
+                            # Run searchsploit if enabled and version is available
+                            if run_searchsploit and version_str:
+                                self.log(f"Running searchsploit for {product} {service_version}...", "info")
+                                exploits = self._run_searchsploit(product or service_name, service_version)
+
+                                # Store exploit results
+                                for exploit_title, exploit_path, edb_id in exploits:
+                                    try:
+                                        self.framework.database.add_exploit(
+                                            target=ip_addr,
+                                            service=mapped_service,
+                                            port=port_id,
+                                            version=version_str,
+                                            exploit_title=exploit_title,
+                                            exploit_path=exploit_path,
+                                            edb_id=edb_id
+                                        )
+                                        exploits_found += 1
+                                    except Exception as e:
+                                        self.log(f"Error storing exploit: {str(e)}", "error")
+
+                                if exploits:
+                                    self.log(f"Found {len(exploits)} potential exploits for {product} {service_version}", "success")
+
             return {
                 "success": True,
                 "output": f"Parsed nmap results successfully",
                 "data": {
                     "hosts_processed": hosts_processed,
                     "services_found": services_found,
-                    "targets_added": targets_added
+                    "targets_added": targets_added,
+                    "exploits_found": exploits_found
                 },
-                "message": f"Processed {hosts_processed} hosts, found {services_found} services"
+                "message": f"Processed {hosts_processed} hosts, found {services_found} services, discovered {exploits_found} potential exploits"
             }
 
         except ET.ParseError as e:
