@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
-from purplesploit.models.database import db_manager
+from purplesploit.core.database import Database
 
 # Get template directory
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -35,6 +35,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize database
+db = Database()
+
 
 # ============================================================================
 # Routes
@@ -43,20 +46,36 @@ app.add_middleware(
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
     """Main dashboard page"""
-    # Get statistics
-    targets = db_manager.get_all_targets()
-    credentials = db_manager.get_all_credentials()
+    # Get statistics from core database
+    raw_targets = db.get_targets()
+    credentials = db.get_credentials()
+    raw_services = db.get_services()
 
-    session = db_manager.get_services_session()
-    try:
-        services = session.query(db_manager.Service).all()
-    finally:
-        session.close()
+    # Transform targets to match template expectations (use identifier as ip)
+    targets = []
+    for t in raw_targets:
+        target_data = {
+            'name': t.get('name') or t.get('identifier'),
+            'ip': t.get('identifier'),
+            'description': t.get('metadata', {}).get('description', '') if isinstance(t.get('metadata'), dict) else ''
+        }
+        targets.append(type('obj', (object,), target_data))
+
+    # Transform services to match template expectations
+    services = []
+    for s in raw_services:
+        service_data = {
+            'target': s.get('target'),
+            'service': s.get('service'),
+            'port': s.get('port'),
+            'version': s.get('version')
+        }
+        services.append(type('obj', (object,), service_data))
 
     # Group services by type
     service_counts = {}
-    for service in services:
-        service_type = service.service
+    for service in raw_services:
+        service_type = service.get('service', 'unknown')
         service_counts[service_type] = service_counts.get(service_type, 0) + 1
 
     return templates.TemplateResponse("dashboard.html", {
@@ -73,13 +92,35 @@ async def dashboard_home(request: Request):
 @app.get("/targets", response_class=HTMLResponse)
 async def targets_page(request: Request):
     """Targets management page"""
-    targets = db_manager.get_all_targets()
+    raw_targets = db.get_targets()
+
+    # Transform targets to match template expectations
+    targets = []
+    for t in raw_targets:
+        target_data = {
+            'name': t.get('name') or t.get('identifier'),
+            'ip': t.get('identifier'),
+            'description': t.get('metadata', {}).get('description', '') if isinstance(t.get('metadata'), dict) else ''
+        }
+        targets.append(type('obj', (object,), target_data))
 
     # Get services for each target
     target_services = {}
-    for target in targets:
-        services = db_manager.get_services_for_target(target.ip)
-        target_services[target.name] = services
+    for i, target in enumerate(raw_targets):
+        target_id = target.get('identifier', target.get('name', ''))
+        target_name = target.get('name', target_id)
+        raw_services = db.get_services(target=target_id)
+        # Transform services
+        services = []
+        for s in raw_services:
+            service_data = {
+                'target': s.get('target'),
+                'service': s.get('service'),
+                'port': s.get('port'),
+                'version': s.get('version')
+            }
+            services.append(type('obj', (object,), service_data))
+        target_services[target_name] = services
 
     return templates.TemplateResponse("targets.html", {
         "request": request,
@@ -91,7 +132,7 @@ async def targets_page(request: Request):
 @app.get("/credentials", response_class=HTMLResponse)
 async def credentials_page(request: Request):
     """Credentials management page"""
-    credentials = db_manager.get_all_credentials()
+    credentials = db.get_credentials()
 
     return templates.TemplateResponse("credentials.html", {
         "request": request,
@@ -102,23 +143,28 @@ async def credentials_page(request: Request):
 @app.get("/services", response_class=HTMLResponse)
 async def services_page(request: Request):
     """Services overview page"""
-    session = db_manager.get_services_session()
-    try:
-        all_services = session.query(db_manager.Service).all()
-    finally:
-        session.close()
+    raw_services = db.get_services()
 
-    # Group by target
+    # Transform services and group by target
     services_by_target = {}
-    for service in all_services:
-        if service.target not in services_by_target:
-            services_by_target[service.target] = []
-        services_by_target[service.target].append(service)
+    for s in raw_services:
+        target = s.get('target', 'unknown')
+        service_data = {
+            'target': s.get('target'),
+            'service': s.get('service'),
+            'port': s.get('port'),
+            'version': s.get('version')
+        }
+        service_obj = type('obj', (object,), service_data)
+
+        if target not in services_by_target:
+            services_by_target[target] = []
+        services_by_target[target].append(service_obj)
 
     return templates.TemplateResponse("services.html", {
         "request": request,
         "services_by_target": services_by_target,
-        "total_services": len(all_services),
+        "total_services": len(raw_services),
     })
 
 
