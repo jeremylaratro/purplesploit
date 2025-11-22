@@ -1306,16 +1306,22 @@ class CommandHandler:
                 def run_server():
                     """Background server process"""
                     import sys
+                    import os
                     import uvicorn
 
-                    # Redirect stdout/stderr to avoid output pollution
-                    # but still allow uvicorn to log
+                    # Redirect stdout/stderr to suppress request logging
+                    # This prevents HTTP requests from cluttering the CLI
+                    sys.stdout = open(os.devnull, 'w')
+                    sys.stderr = open(os.devnull, 'w')
+
+                    # Run with error-only logging to suppress HTTP request logs
                     uvicorn.run(
                         "purplesploit.api.server:app",
                         host=host,
                         port=port,
                         reload=False,
-                        log_level="info"
+                        log_level="error",  # Only show errors, not every HTTP request
+                        access_log=False    # Disable access logging
                     )
 
                 # Create and start the process
