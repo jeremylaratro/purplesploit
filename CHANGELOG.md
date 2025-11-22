@@ -245,6 +245,34 @@ git checkout v5.2.0
 - Banner display issues in various modes
 - Command help formatting
 
+## [3.2.0] - 2025-11-07
+
+### Added
+- **Comprehensive Accessibility Features**: Enhanced accessibility across framework
+  - Detailed accessibility documentation
+  - Improved keyboard navigation patterns
+  - Better screen reader compatibility notes
+
+### Fixed
+- **Critical Bug Fixes**: Module metadata access and interactive selector
+  - Fixed ModuleMetadata access errors
+  - Resolved interactive selector issues
+  - Fixed show modules command functionality
+
+## [3.1.0] - 2025-11-07
+
+### Added
+- **Smart Search and Workflow**: Enhanced efficiency features
+  - Smart search capabilities across modules
+  - Workflow demo and examples for quick learning
+  - Interactive selection with power commands for 3-command workflow
+
+### Fixed
+- **Interactive Selector**: Terminal access improvements
+  - Fixed fzf stdin/input conflicts using /dev/tty
+  - Enabled fzf and numbered selection with prompt_toolkit
+  - Resolved interactive mode, ops search, and banner display issues
+
 ## [3.0.0] - 2025-11-08
 
 ### Added
@@ -270,6 +298,25 @@ git checkout v5.2.0
 - Migrated from bash scripts to pure Python
 - Improved module architecture for extensibility
 
+## [2.9.0] - 2025-11-07
+
+### Added
+- **Complete Module Port**: All 18 modules operational in Python
+  - Successfully ported all bash modules to Python framework
+  - Full NetExec integration across all modules
+  - Impacket tools integrated (secretsdump, GetUserSPNs, etc.)
+  - Web testing tools (Feroxbuster, SQLMap, WFuzz)
+  - All modules tested and operational
+
+## [2.5.0] - 2025-11-06
+
+### Added
+- **Module Expansion**: 9 additional modules (11 total operational)
+  - Expanded module library significantly
+  - Added network protocol modules (LDAP, WinRM, MSSQL, RDP)
+  - Added web application testing modules
+  - Improved module loading system
+
 ## [Earlier Versions]
 
 Previous versions focused on bash-based automation and initial framework development.
@@ -289,8 +336,12 @@ Previous versions focused on bash-based automation and initial framework develop
 - **v4.5.0** (2025-11-11): Module organization improvements, core documentation
 - **v3.8.0** (2025-11-08): Governance and licensing, documentation refactor
 - **v3.5.0** (2025-11-08): Wordlist manager, module creator, interactive select
-- **v3.3.0** (2025-11-08): Customized branding, accessibility improvements
+- **v3.3.0** (2025-11-08): Customized branding, module tree view
+- **v3.2.0** (2025-11-07): Accessibility improvements, critical bug fixes
+- **v3.1.0** (2025-11-07): Smart search and workflow, interactive selector fixes
 - **v3.0.0** (2025-11-08): Python framework implementation, 86 operations
+- **v2.9.0** (2025-11-07): Complete module port, 18 modules operational
+- **v2.5.0** (2025-11-06): Module expansion, 11 modules operational
 - **Earlier**: Bash-based automation and prototyping
 
 ---

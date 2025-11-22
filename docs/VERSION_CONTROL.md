@@ -49,6 +49,14 @@ Historical version information is tracked in:
 - **v4.6.0** (2025-11-09): Dynamic banner system, enhanced documentation
 - **v4.5.1** (2025-11-08): Ops command bug fixes
 - **v4.5.0** (2025-11-11): Module organization improvements
+- **v3.8.0** (2025-11-08): Governance and licensing, documentation refactor
+- **v3.5.0** (2025-11-08): Wordlist manager, module creator, interactive select
+- **v3.3.0** (2025-11-08): Customized branding, module tree view
+- **v3.2.0** (2025-11-07): Accessibility improvements, critical bug fixes
+- **v3.1.0** (2025-11-07): Smart search and workflow improvements
+- **v3.0.0** (2025-11-08): Python framework implementation, 86 operations
+- **v2.9.0** (2025-11-07): Complete module port, 18 modules operational
+- **v2.5.0** (2025-11-06): Module expansion, 11 modules operational
 
 ## Documentation Structure
 
