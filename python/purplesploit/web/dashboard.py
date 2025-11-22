@@ -35,10 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database with shared path
-# Use /tmp for cross-user compatibility, or respect PURPLESPLOIT_DB env var
+# Initialize database with shared PERSISTENT path
+# Use /var/lib/purplesploit for cross-user compatibility and persistence across reboots
+# Unlike /tmp, this location persists data permanently until manually cleared
 import os
-db_path = os.getenv('PURPLESPLOIT_DB', '/tmp/purplesploit/purplesploit.db')
+db_path = os.getenv('PURPLESPLOIT_DB', '/var/lib/purplesploit/purplesploit.db')
 db = Database(db_path=db_path)
 
 
