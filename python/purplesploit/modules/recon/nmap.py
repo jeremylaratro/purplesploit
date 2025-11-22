@@ -24,7 +24,7 @@ class NmapModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "Standard nmap scan: all ports, version/script detection (-p- -sCV)"
+        return "All ports + version/script detection (-p- -sCV)"
 
     @property
     def author(self) -> str:
@@ -122,6 +122,12 @@ class NmapModule(ExternalToolModule):
                 "required": False,
                 "description": "Give up on host after this long (e.g., 30m)",
                 "default": None
+            },
+            "BACKGROUND": {
+                "value": "false",
+                "required": False,
+                "description": "Run scan in background (true/false)",
+                "default": "false"
             }
         })
 
@@ -260,39 +266,58 @@ class NmapModule(ExternalToolModule):
         Returns:
             Execution results
         """
-        # Run the command
-        result = super().run()
+        # Check if background mode is enabled
+        background = self.get_option("BACKGROUND")
+        run_in_background = background and str(background).lower() == "true"
 
-        # If successful, parse and import services
-        if result.get("success") and "parsed" in result:
-            parsed = result["parsed"]
-            rhost = self.get_option("RHOST")
+        if run_in_background:
+            # Check tool is installed
+            if not self.check_tool_installed():
+                return {
+                    "success": False,
+                    "error": f"Tool not found: {self.tool_name}. Please install it first."
+                }
 
-            # Import detected services into framework
-            for port_str, service_info in parsed.get("services", {}).items():
-                # Extract port number
-                port = int(port_str.split("/")[0])
-                service_name = service_info.get("service", "unknown")
+            # Build command and execute in background
+            command = self.build_command()
+            result = self.execute_command(command, background=True)
 
-                # Map common services
-                if service_name in ["microsoft-ds", "netbios-ssn"]:
-                    self.framework.session.services.add_service(rhost, "smb", port)
-                elif service_name in ["ldap", "ldaps"]:
-                    self.framework.session.services.add_service(rhost, "ldap", port)
-                elif service_name in ["ms-wbt-server", "rdp"]:
-                    self.framework.session.services.add_service(rhost, "rdp", port)
-                elif service_name in ["winrm", "wsman"]:
-                    self.framework.session.services.add_service(rhost, "winrm", port)
-                elif service_name in ["ms-sql-s", "mssql"]:
-                    self.framework.session.services.add_service(rhost, "mssql", port)
-                elif service_name == "ssh":
-                    self.framework.session.services.add_service(rhost, "ssh", port)
-                elif service_name in ["http", "https", "http-proxy"]:
-                    self.framework.session.services.add_service(rhost, "http", port)
+            # Return background execution info
+            return result
+        else:
+            # Run the command normally (synchronous)
+            result = super().run()
 
-                # Also save to database
-                self.framework.database.add_service(rhost, service_name, port, service_info.get("version"))
+            # If successful, parse and import services
+            if result.get("success") and "parsed" in result:
+                parsed = result["parsed"]
+                rhost = self.get_option("RHOST")
 
-            self.log(f"Imported {len(parsed.get('services', {}))} services to context", "success")
+                # Import detected services into framework
+                for port_str, service_info in parsed.get("services", {}).items():
+                    # Extract port number
+                    port = int(port_str.split("/")[0])
+                    service_name = service_info.get("service", "unknown")
 
-        return result
+                    # Map common services
+                    if service_name in ["microsoft-ds", "netbios-ssn"]:
+                        self.framework.session.services.add_service(rhost, "smb", port)
+                    elif service_name in ["ldap", "ldaps"]:
+                        self.framework.session.services.add_service(rhost, "ldap", port)
+                    elif service_name in ["ms-wbt-server", "rdp"]:
+                        self.framework.session.services.add_service(rhost, "rdp", port)
+                    elif service_name in ["winrm", "wsman"]:
+                        self.framework.session.services.add_service(rhost, "winrm", port)
+                    elif service_name in ["ms-sql-s", "mssql"]:
+                        self.framework.session.services.add_service(rhost, "mssql", port)
+                    elif service_name == "ssh":
+                        self.framework.session.services.add_service(rhost, "ssh", port)
+                    elif service_name in ["http", "https", "http-proxy"]:
+                        self.framework.session.services.add_service(rhost, "http", port)
+
+                    # Also save to database
+                    self.framework.database.add_service(rhost, service_name, port, service_info.get("version"))
+
+                self.log(f"Imported {len(parsed.get('services', {}))} services to context", "success")
+
+            return result

@@ -121,6 +121,12 @@
         // Initialize dashboard on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadDashboard();
+
+            // Enable auto-refresh every 10 seconds
+            const autoRefresh = new AutoRefresh(10000); // 10 seconds
+            autoRefresh.onRefresh(loadDashboard);
+            autoRefresh.start();
+            console.log('🔄 Auto-refresh enabled (10 seconds)');
         });
 
         async function loadDashboard() {

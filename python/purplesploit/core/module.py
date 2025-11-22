@@ -497,13 +497,14 @@ class ExternalToolModule(BaseModule):
         """
         raise NotImplementedError("Subclass must implement build_command()")
 
-    def execute_command(self, command: str, timeout: Optional[int] = None) -> Dict[str, Any]:
+    def execute_command(self, command: str, timeout: Optional[int] = None, background: bool = False) -> Dict[str, Any]:
         """
         Execute an external command.
 
         Args:
             command: Command to execute
             timeout: Timeout in seconds
+            background: If True, run in background and return immediately
 
         Returns:
             Dictionary with execution results
@@ -513,21 +514,43 @@ class ExternalToolModule(BaseModule):
         try:
             self.log(f"Executing: {command}", "info")
 
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
+            if background:
+                # Run in background using nohup
+                bg_command = f"nohup {command} &"
+                process = subprocess.Popen(
+                    bg_command,
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
 
-            return {
-                "success": result.returncode == 0,
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "command": command
-            }
+                self.log(f"Started in background (PID: {process.pid})", "success")
+
+                return {
+                    "success": True,
+                    "background": True,
+                    "pid": process.pid,
+                    "message": f"Command running in background (PID: {process.pid})",
+                    "command": command
+                }
+            else:
+                # Run synchronously (original behavior)
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+
+                return {
+                    "success": result.returncode == 0,
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "command": command
+                }
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
