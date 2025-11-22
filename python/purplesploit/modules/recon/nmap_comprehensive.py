@@ -22,7 +22,7 @@ class NmapComprehensiveModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "Comprehensive all-port scan with max intensity (-p- -sCV --version-intensity 9)"
+        return "All ports + max version intensity (-p- -sCV --version-intensity 9)"
 
     def _init_options(self):
         """Initialize module-specific options with comprehensive scan defaults."""
