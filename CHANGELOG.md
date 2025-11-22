@@ -5,6 +5,53 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2025-11-21
+
+### Added
+- **Web Portal & API Server**: Comprehensive web interface for PurpleSploit
+  - Real-time target analysis and visualization dashboard
+  - Interactive API documentation at `/api/docs`
+  - RESTful API for all framework operations
+  - Web portal at `http://localhost:5000` with dark-themed UI
+- **Webserver Command**: Integrated web server management from CLI
+  - `webserver start` - Launch server in background process
+  - `webserver stop` - Gracefully stop running server
+  - `webserver status` - Check server status and PID
+  - Background execution allows continued CLI usage while server runs
+  - Custom port support with `--port` flag
+- **Real-time Database Synchronization**: Web portal and CLI share same database
+  - Targets, credentials, and services automatically sync
+  - Changes in CLI instantly visible in web portal
+  - Changes via API instantly visible in CLI
+- **Repository Reorganization**: Enhanced modularity and parameter system
+  - Improved module structure for better maintainability
+  - Enhanced parameter passing between components
+  - Better separation of concerns across modules
+
+### Fixed
+- **Multiprocessing Error**: Fixed RuntimeError when starting web server
+  - Disabled auto-reload by default to prevent multiprocessing issues
+  - Server now runs cleanly in background without spawn errors
+  - Proper process management with daemon threads
+
+### Changed
+- Web server now runs as background process (non-blocking)
+- Updated help documentation with webserver commands
+- Improved server startup feedback with status indicators
+
+## [6.0.1] - 2025-11-21
+
+### Fixed
+- **Database Corruption Auto-Recovery**: Automatic detection and recovery for corrupted databases
+  - Detects SQLite database corruption on startup
+  - Automatically backs up corrupted databases
+  - Creates fresh database files when corruption detected
+  - Prevents data loss with timestamped backups
+
+### Changed
+- Enhanced database initialization with corruption checking
+- Improved error messages for database issues
+
 ## [6.0.0] - 2025-11-19
 
 ### Added
@@ -88,23 +135,77 @@ git checkout v5.2.0
 - Centralized CHANGELOG.md for tracking all version changes
 - VERSION_CONTROL.md guide for documentation versioning
 
-## [4.5.0] - 2024
+## [4.6.0] - 2025-11-09
+
+### Added
+- **Dynamic Banner System**: Multiple ASCII art variants for visual appeal
+  - 8 total banner designs with randomized selection
+  - Sleek ASCII art branding in README
+  - Integrated into launch scripts for variety
+- **Enhanced Documentation**: Improved README with better descriptions
+  - Added "Why PurpleSploit?" section explaining framework benefits
+  - Revised tool descriptions for clarity
+  - Fixed formatting throughout documentation
+
+### Changed
+- Banner now randomizes on each launch for fresh look
+- Improved README formatting and content organization
+
+## [4.5.1] - 2025-11-08
+
+### Fixed
+- **Ops Command**: Fixed issues with operation search and execution
+  - Enable direct run by operation ID from search results
+  - Improved search result display and numbering
+  - Better error handling for operation selection
+
+## [4.5.0] - 2025-11-11
 
 ### Added
 - Major module organization improvements
 - Enhanced usability features
 - Improved search and selection capabilities
+- **Core Documentation**: Command reference guide and architecture overview
 
 ### Changed
 - Module structure improvements
 - Better module categorization
 
-## [3.5.0] - 2024
+## [3.8.0] - 2025-11-08
 
 ### Added
+- **Governance and Licensing**: Simplified launch with non-commercial license
+  - Switched to non-commercial license for clarity
+  - Removed governance overhead for streamlined development
+  - Added comprehensive public launch documentation
+
+### Changed
+- Updated version numbering to 3.8
+- Refactored documentation structure for better organization
+- Improved security hardening documentation
+
+## [3.5.0] - 2025-11-08
+
+### Added
+- **Wordlist Manager**: Comprehensive wordlist management system
+  - Category-based organization (web_dir, dns_vhost, username, password, etc.)
+  - Interactive wordlist selection with `wordlists select <category>`
+  - Add, remove, and set wordlists per category
+  - Auto-population of wordlist options in modules
+- **Module Creator**: Automated module generation tool
+  - Scaffolding for new modules with templates
+  - Streamlined module development workflow
+- **Interactive Select Feature**: Enhanced user interaction across all commands
+  - `targets select`, `creds select`, `services select`, `wordlists select`
+  - Fuzzy search integration with fzf
+  - Numbered selection for quick access
+  - Auto-set feature for automatic option population
+- **Enhanced Ops Search**: Operations searchable globally across modules
+  - Organized results by module category
+  - Direct execution from search results
+  - Multi-word query support
 - Dual interface support (Console Mode + TUI Mode)
 - Fuzzy search with `search` and `ops` commands
-- Interactive selection with `{}` syntax
 - Smart service detection
 - Workspace and job management
 
@@ -114,13 +215,107 @@ git checkout v5.2.0
 - 50+ operations across web, network, recon, and exploitation tools
 - Integration with NetExec, Impacket, SQLMap, Feroxbuster, and more
 
-## [3.0.0] - 2024
+### Changed
+- Version bumped from 3.3 to 3.5
+- Enhanced banner display system
+- Improved interactive mode and selection mechanisms
+
+### Fixed
+- Interactive mode stdin/input conflicts with fzf
+- Module metadata access issues
+- Banner display bugs
+
+## [3.3.0] - 2025-11-08
 
 ### Added
-- Initial Python framework implementation
-- Core module system
-- Database integration for targets and credentials
-- Basic command-line interface
+- **Customized Branding**: Enhanced visual identity
+  - Polished UI elements across interfaces
+  - Improved help screens and banners
+  - Organized dual-mode documentation (console/TUI)
+- **Module Select with Submenu Traversal**: Tree view navigation
+  - Hierarchical module browsing
+  - Submenu navigation for module categories
+  - Visual tree structure for better discoverability
+- **Accessibility Improvements**: Comprehensive accessibility features
+  - Better keyboard navigation
+  - Screen reader compatibility considerations
+  - Improved command documentation
+
+### Fixed
+- Banner display issues in various modes
+- Command help formatting
+
+## [3.2.0] - 2025-11-07
+
+### Added
+- **Comprehensive Accessibility Features**: Enhanced accessibility across framework
+  - Detailed accessibility documentation
+  - Improved keyboard navigation patterns
+  - Better screen reader compatibility notes
+
+### Fixed
+- **Critical Bug Fixes**: Module metadata access and interactive selector
+  - Fixed ModuleMetadata access errors
+  - Resolved interactive selector issues
+  - Fixed show modules command functionality
+
+## [3.1.0] - 2025-11-07
+
+### Added
+- **Smart Search and Workflow**: Enhanced efficiency features
+  - Smart search capabilities across modules
+  - Workflow demo and examples for quick learning
+  - Interactive selection with power commands for 3-command workflow
+
+### Fixed
+- **Interactive Selector**: Terminal access improvements
+  - Fixed fzf stdin/input conflicts using /dev/tty
+  - Enabled fzf and numbered selection with prompt_toolkit
+  - Resolved interactive mode, ops search, and banner display issues
+
+## [3.0.0] - 2025-11-08
+
+### Added
+- **Initial Python Framework Implementation**: Complete rewrite from bash
+  - Core module system with dynamic loading
+  - Database integration for targets and credentials (SQLite)
+  - Metasploit-style command-line interface with prompt_toolkit
+  - Session management and context persistence
+- **Interactive Mode**: Full interactive command interface
+  - Real-time command completion
+  - History support with search
+  - Context-aware prompting
+- **Granular Operations**: 86 total operations across modules
+  - All NetExec (NXC) modules with granular operation support
+  - SMB, LDAP, WinRM, MSSQL, RDP, SSH operations
+  - Web testing tools (Feroxbuster, SQLMap, WFuzz)
+- **Power Commands**: 3-command workflow capability
+  - Quick target/credential setup
+  - Rapid module loading and execution
+  - Streamlined penetration testing workflow
+
+### Changed
+- Migrated from bash scripts to pure Python
+- Improved module architecture for extensibility
+
+## [2.9.0] - 2025-11-07
+
+### Added
+- **Complete Module Port**: All 18 modules operational in Python
+  - Successfully ported all bash modules to Python framework
+  - Full NetExec integration across all modules
+  - Impacket tools integrated (secretsdump, GetUserSPNs, etc.)
+  - Web testing tools (Feroxbuster, SQLMap, WFuzz)
+  - All modules tested and operational
+
+## [2.5.0] - 2025-11-06
+
+### Added
+- **Module Expansion**: 9 additional modules (11 total operational)
+  - Expanded module library significantly
+  - Added network protocol modules (LDAP, WinRM, MSSQL, RDP)
+  - Added web application testing modules
+  - Improved module loading system
 
 ## [Earlier Versions]
 
@@ -130,13 +325,23 @@ Previous versions focused on bash-based automation and initial framework develop
 
 ## Version History Summary
 
-- **v6.0.0**: Pure Python edition, enhanced auto-completion, removed bash/TUI
-- **v5.2.0**: Shell command integration
-- **v5.1.0**: Ligolo-ng integration, console-only version
-- **v5.0.0**: Complete SMB restructure, documentation cleanup
-- **v4.5.0**: Module organization improvements
-- **v3.5.0**: Dual interface (Console + TUI), fuzzy search
-- **v3.0.0**: Python framework implementation
+- **v6.1.0** (2025-11-21): Web portal & API server, webserver command, background execution
+- **v6.0.1** (2025-11-21): Database corruption auto-recovery
+- **v6.0.0** (2025-11-19): Pure Python edition, enhanced auto-completion, removed bash/TUI
+- **v5.2.0** (2025-11-19): Shell command integration
+- **v5.1.0** (2025-11-19): Ligolo-ng integration, console-only version
+- **v5.0.0** (2025-11-17): Complete SMB restructure, documentation cleanup
+- **v4.6.0** (2025-11-09): Dynamic banner system, enhanced documentation
+- **v4.5.1** (2025-11-08): Ops command fixes
+- **v4.5.0** (2025-11-11): Module organization improvements, core documentation
+- **v3.8.0** (2025-11-08): Governance and licensing, documentation refactor
+- **v3.5.0** (2025-11-08): Wordlist manager, module creator, interactive select
+- **v3.3.0** (2025-11-08): Customized branding, module tree view
+- **v3.2.0** (2025-11-07): Accessibility improvements, critical bug fixes
+- **v3.1.0** (2025-11-07): Smart search and workflow, interactive selector fixes
+- **v3.0.0** (2025-11-08): Python framework implementation, 86 operations
+- **v2.9.0** (2025-11-07): Complete module port, 18 modules operational
+- **v2.5.0** (2025-11-06): Module expansion, 11 modules operational
 - **Earlier**: Bash-based automation and prototyping
 
 ---

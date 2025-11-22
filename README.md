@@ -1,4 +1,4 @@
-# PurpleSploit Framework v6.0.0
+# PurpleSploit Framework v6.1.0
 
 <div align="center">
 
@@ -146,7 +146,10 @@ purplesploit> search smb shares        # Fuzzy search
 purplesploit> run {}                   # Interactive select
 ```
 
-### Enhanced Features (v6.0.0)
+### Enhanced Features (v6.1.0)
+- **Web Portal & API Server**: Comprehensive web interface with real-time target visualization at `http://localhost:5000`
+- **Webserver Command**: Launch web portal in background with `webserver start` - continue using CLI while server runs
+- **Real-time Database Sync**: Changes in CLI instantly appear in web portal and vice versa
 - **Dropdown Auto-Completion**: Context-aware command suggestions with enhanced dropdown menu
 - **Pure Python**: Completely rewritten in Python for better performance and maintainability
 - **Dynamic Completions**: Auto-complete includes modules, targets, and common operations
