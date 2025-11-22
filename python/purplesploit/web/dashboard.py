@@ -42,7 +42,8 @@ if os.getenv('PURPLESPLOIT_DB'):
     db_path = os.getenv('PURPLESPLOIT_DB')
 else:
     # Default: project_root/.data/purplesploit.db
-    project_root = Path(__file__).parent.parent.parent
+    # Navigate from python/purplesploit/web/dashboard.py -> project root
+    project_root = Path(__file__).parent.parent.parent.parent
     data_dir = project_root / '.data'
     data_dir.mkdir(exist_ok=True)
     db_path = str(data_dir / 'purplesploit.db')
