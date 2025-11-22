@@ -32,6 +32,10 @@ class Database:
             ps_dir.mkdir(exist_ok=True)
             db_path = str(ps_dir / "purplesploit.db")
 
+        # Ensure parent directory exists for custom paths
+        db_path_obj = Path(db_path)
+        db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
         self.db_path = db_path
         self.conn = None
         self._connect()

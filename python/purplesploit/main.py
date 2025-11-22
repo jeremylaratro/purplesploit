@@ -52,9 +52,13 @@ For more information, visit: https://github.com/jeremylaratro/purplesploit
 
     try:
         # Initialize framework
+        # Use shared database path for cross-user compatibility
+        import os
+        db_path = args.db or os.getenv('PURPLESPLOIT_DB', '/tmp/purplesploit/purplesploit.db')
+
         framework = Framework(
             modules_path=args.modules,
-            db_path=args.db
+            db_path=db_path
         )
 
         # Discover modules
