@@ -207,8 +207,8 @@ class CommandHandler:
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
 [blue]defaults <cmd>[/blue]         Manage module default options
-[blue]deploy[/blue]                 Deploy payloads/pivots/scripts to targets
-[blue]deploy select[/blue]          Interactive deployment method selection
+[blue]deploy[/blue]                 Show deployment modules (ligolo, c2, script)
+[blue]deploy <type>[/blue]          Load deployment module (ligolo/c2/script)
 [blue]webserver start[/blue]        Start web portal in background
 [blue]webserver stop[/blue]         Stop web portal
 [blue]webserver status[/blue]       Check web portal status
@@ -1248,135 +1248,91 @@ class CommandHandler:
         Deploy payloads, pivots, and tools to target systems.
 
         Usage:
-            deploy                      # Load deploy module and show all operations
-            deploy select               # Interactive operation selection
-            deploy ligolo               # Show Ligolo pivot deployment operations
-            deploy beacon               # Show C2 beacon deployment operations
-            deploy script               # Show script deployment operations (WinPEAS, LinPEAS)
+            deploy                      # Show available deployment modules
+            deploy ligolo               # Load Ligolo pivot deployment module
+            deploy c2                   # Load C2 beacon deployment module
+            deploy script               # Load script deployment module
 
         Examples:
-            deploy                      # Show all deployment operations
-            deploy ligolo               # Filter to Ligolo operations only
-            deploy select               # Interactive selection of deployment method
+            deploy                      # Show all deployment modules
+            deploy ligolo               # Load deploy/ligolo module
+            deploy c2                   # Load deploy/c2 module
         """
-        # Load the deploy module if not already loaded
-        deploy_module_path = "post/deploy"
+        # Module path mapping
+        module_map = {
+            "ligolo": "deploy/ligolo",
+            "c2": "deploy/c2",
+            "beacon": "deploy/c2",  # Alias
+            "script": "deploy/script",
+            "scripts": "deploy/script"  # Alias
+        }
 
-        # Check if we need to switch to deploy module
-        current_module = self.framework.session.current_module
-        if not current_module or current_module.get_module_path() != deploy_module_path:
-            # Load the deploy module
-            if deploy_module_path not in self.framework.modules:
-                self.display.print_error(f"Deploy module not found at: {deploy_module_path}")
-                return True
-
-            module_instance = self.framework.use_module(deploy_module_path)
-            if not module_instance:
-                self.display.print_error("Failed to load deploy module")
-                return True
-        else:
-            module_instance = current_module
-
-        # Handle subcommands
+        # If no args, show available modules
         if not args:
-            # Show all operations grouped by subcategory
-            self._display_deploy_operations(module_instance)
+            self._display_deploy_modules()
             return True
 
         subcommand = args[0].lower()
 
-        if subcommand == "select":
-            # Interactive selection
-            operations = module_instance.get_operations()
-            if operations:
-                selected = self.interactive.select_operation(operations)
-                if selected:
-                    self.display.print_info(f"Selected: {selected['name']}")
-                    self.display.print_info("Set required options and run 'run' to execute")
-                    # Set the operation handler if needed
-                    if hasattr(module_instance, 'set_current_operation'):
-                        module_instance.set_current_operation(selected)
-                else:
-                    self.display.print_warning("No operation selected")
-            else:
-                self.display.print_warning("No operations available")
-            return True
+        # Check if it's a known module
+        if subcommand in module_map:
+            module_path = module_map[subcommand]
 
-        elif subcommand in ["ligolo", "beacon", "script", "c2"]:
-            # Filter operations by subcategory
-            subcategory_map = {
-                "ligolo": "ligolo",
-                "beacon": "c2_beacon",
-                "c2": "c2_beacon",
-                "script": "scripts"
-            }
+            # Check if module exists
+            if module_path not in self.framework.modules:
+                self.display.print_error(f"Deploy module not found: {module_path}")
+                self.display.print_info("Run 'deploy' to see available modules")
+                return True
 
-            filter_subcategory = subcategory_map.get(subcommand)
-            self._display_deploy_operations(module_instance, filter_subcategory)
-            return True
+            # Load the module
+            self.display.print_info(f"Loading {module_path}...")
+            return self.cmd_use([module_path])
 
         else:
-            self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: deploy [select|ligolo|beacon|script]")
+            self.display.print_error(f"Unknown deploy subcommand: {subcommand}")
+            self.display.print_info("Usage: deploy [ligolo|c2|script]")
             return True
 
-    def _display_deploy_operations(self, module_instance, filter_subcategory=None):
-        """Display deployment operations grouped by subcategory."""
-        operations = module_instance.get_operations()
-
-        if not operations:
-            self.display.print_warning("No operations available")
-            return
-
-        # Group by subcategory
-        from collections import defaultdict
-        grouped = defaultdict(list)
-
-        for op in operations:
-            subcategory = op.get('subcategory', 'other')
-
-            # Apply filter if specified
-            if filter_subcategory and subcategory != filter_subcategory:
-                continue
-
-            grouped[subcategory].append(op)
-
-        if not grouped:
-            self.display.print_warning(f"No operations found for filter: {filter_subcategory}")
-            return
-
-        # Display header
+    def _display_deploy_modules(self):
+        """Display available deployment modules."""
         self.display.console.print()
-        self.display.console.print("[bold cyan]═══ Deploy Module Operations ═══[/bold cyan]")
+        self.display.console.print("[bold cyan]═══ Deploy Modules ═══[/bold cyan]")
         self.display.console.print()
 
-        # Define subcategory display names
-        subcategory_names = {
-            "ligolo": "Ligolo Pivot Deployment",
-            "c2_beacon": "C2 Beacon Deployment",
-            "scripts": "Script Deployment (WinPEAS, LinPEAS, etc.)"
-        }
+        # Define modules
+        modules = [
+            {
+                "name": "deploy/ligolo",
+                "command": "deploy ligolo",
+                "description": "Deploy ligolo-ng agents for network pivoting",
+                "methods": "NXC, SSH, SMB, PSExec, WMIExec"
+            },
+            {
+                "name": "deploy/c2",
+                "command": "deploy c2",
+                "description": "Deploy C2 beacons and payloads to targets",
+                "methods": "NXC, SSH, SMB, PSExec, WMIExec, WinRM"
+            },
+            {
+                "name": "deploy/script",
+                "command": "deploy script",
+                "description": "Deploy enumeration scripts (WinPEAS, LinPEAS, custom)",
+                "methods": "NXC, SSH, SMB, PSExec"
+            }
+        ]
 
-        # Display each subcategory
-        for subcategory in sorted(grouped.keys()):
-            display_name = subcategory_names.get(subcategory, subcategory.replace('_', ' ').title())
-
-            self.display.console.print(f"[bold green]▸ {display_name}[/bold green]")
-            self.display.console.print()
-
-            for idx, op in enumerate(grouped[subcategory], 1):
-                op_name = op.get('name', 'Unknown')
-                op_desc = op.get('description', 'No description')
-
-                self.display.console.print(f"  [cyan]{idx}.[/cyan] {op_name}")
-                self.display.console.print(f"     [dim]{op_desc}[/dim]")
-
+        # Display each module
+        for idx, module in enumerate(modules, 1):
+            self.display.console.print(f"[bold green]{idx}. {module['name']}[/bold green]")
+            self.display.console.print(f"   [cyan]Command:[/cyan] {module['command']}")
+            self.display.console.print(f"   [dim]{module['description']}[/dim]")
+            self.display.console.print(f"   [yellow]Methods:[/yellow] {module['methods']}")
             self.display.console.print()
 
         # Display helpful tips
-        self.display.print_info("Tip: Use 'deploy select' for interactive selection")
-        self.display.print_info("     Use 'options' to view/set deployment options")
-        self.display.print_info("     Use 'run' to execute the selected operation")
+        self.display.print_info("Tip: Use 'deploy <type>' to load a deployment module")
+        self.display.print_info("     Then use 'options' to set targets and credentials")
+        self.display.print_info("     Use 'run' or 'operations' to see available operations")
 
     def cmd_webserver(self, args: List[str]) -> bool:
         """
