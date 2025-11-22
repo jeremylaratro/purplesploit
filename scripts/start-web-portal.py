@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # Add the python directory to the path so we can import purplesploit
-repo_root = Path(__file__).parent
+repo_root = Path(__file__).parent.parent  # Go up one level from scripts/
 python_dir = repo_root / "python"
 
 if python_dir.exists():
@@ -39,7 +39,7 @@ except ImportError as e:
     print()
     print("Make sure you're running this from the repository root:")
     print("  cd /path/to/purplesploit")
-    print("  python start-web-portal.py")
+    print("  python scripts/start-web-portal.py")
     sys.exit(1)
 except KeyboardInterrupt:
     print("\n\nShutting down server...")
