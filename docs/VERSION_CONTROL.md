@@ -4,9 +4,9 @@ This document describes the version control and documentation management system 
 
 ## Current Version
 
-**PurpleSploit v6.0.0**
+**PurpleSploit v6.1.0**
 
-The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "6.0.0"`.
+The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "6.1.0"`.
 
 ## Version Control Policy
 
@@ -27,6 +27,7 @@ Historical version information is tracked in:
    - High-level changes between versions
    - Feature additions, removals, and modifications
    - Breaking changes and migration notes
+   - Comprehensive version history with semantic versioning
 
 2. **Git History**
    - Detailed commit-by-commit changes
@@ -34,15 +35,28 @@ Historical version information is tracked in:
    - Use `git tag` for version tags
 
 3. **Git Tags**
-   - Major releases are tagged (e.g., `v6.0.0`, `v5.2.0`, `v5.0.0`)
+   - Major releases are tagged (e.g., `v6.1.0`, `v6.0.0`, `v5.2.0`)
    - Use `git checkout <tag>` to view code at specific versions
 
-## Recent Major Versions
+## Recent Versions
 
-- **v6.0.0** (2025-11-19): Pure Python edition, removed bash/TUI components, enhanced auto-completion
+- **v6.1.0** (2025-11-21): Web portal & API server, webserver command, real-time database sync
+- **v6.0.1** (2025-11-21): Database corruption auto-recovery
+- **v6.0.0** (2025-11-19): Pure Python edition, enhanced auto-completion, removed bash/TUI
 - **v5.2.0** (2025-11-19): Shell command integration
-- **v5.1.0** (2025-11-19): Ligolo-ng integration
+- **v5.1.0** (2025-11-19): Ligolo-ng integration, console-only version
 - **v5.0.0** (2025-11-17): Complete SMB module restructure, documentation cleanup
+- **v4.6.0** (2025-11-09): Dynamic banner system, enhanced documentation
+- **v4.5.1** (2025-11-08): Ops command bug fixes
+- **v4.5.0** (2025-11-11): Module organization improvements
+- **v3.8.0** (2025-11-08): Governance and licensing, documentation refactor
+- **v3.5.0** (2025-11-08): Wordlist manager, module creator, interactive select
+- **v3.3.0** (2025-11-08): Customized branding, module tree view
+- **v3.2.0** (2025-11-07): Accessibility improvements, critical bug fixes
+- **v3.1.0** (2025-11-07): Smart search and workflow improvements
+- **v3.0.0** (2025-11-08): Python framework implementation, 86 operations
+- **v2.9.0** (2025-11-07): Complete module port, 18 modules operational
+- **v2.5.0** (2025-11-06): Module expansion, 11 modules operational
 
 ## Documentation Structure
 
@@ -194,6 +208,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2025-11-19 (v6.0.0)
+**Last Updated**: 2025-11-21 (v6.1.0)
 
 For questions about documentation versioning, see the [Contributing Guide](CONTRIBUTING.md).
