@@ -35,7 +35,7 @@ This project is the result of multiple personal objectives that converged, havin
 3. involves architecting a modular, scalable tool or framework.
 The result is purplesploit, a tool based off the concept of metasploit but focused on efficiency and automation of pentesting workflows.     
 
-> **⚠️ LEGAL DISCLAIMER**: This tool is for **authorized security testing and educational purposes only**. Unauthorized access to computer systems is illegal. See [DISCLAIMER.md](DISCLAIMER.md) for full terms. Use responsibly and ethically.
+> **⚠️ LEGAL DISCLAIMER**: This tool is for **authorized security testing and educational purposes only**. Unauthorized access to computer systems is illegal. See [DISCLAIMER.md](docs/DISCLAIMER.md) for full terms. Use responsibly and ethically.
 
 #### Tools included
 
@@ -281,8 +281,9 @@ bash purplesploit-tui.sh
 
 - **[Quick Start Guide](QUICKSTART.md)** - Get started in 5 minutes
 - **[Console Guide](docs/console-mode/README.md)** - Complete CLI reference
+- **[Web Portal Guide](docs/WEB_PORTAL_GUIDE.md)** - Web interface documentation
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Add your own modules
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and internals
+- **[Overview](docs/OVERVIEW.md)** - Framework architecture and design
 - **[Full Documentation](docs/)** - Complete guides and API reference
 
 ---
