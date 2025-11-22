@@ -21,7 +21,7 @@ class NmapAggressiveModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "Aggressive scan with OS detection, scripts, traceroute (-sCV -O --traceroute)"
+        return "OS detection + scripts + traceroute (-sCV -O --traceroute)"
 
     def _init_options(self):
         """Initialize module-specific options with aggressive scan defaults."""
