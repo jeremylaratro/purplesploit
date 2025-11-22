@@ -52,9 +52,10 @@ For more information, visit: https://github.com/jeremylaratro/purplesploit
 
     try:
         # Initialize framework
-        # Use shared database path for cross-user compatibility
+        # Use shared PERSISTENT database path for cross-user compatibility
+        # /var/lib/purplesploit is persistent across reboots (unlike /tmp)
         import os
-        db_path = args.db or os.getenv('PURPLESPLOIT_DB', '/tmp/purplesploit/purplesploit.db')
+        db_path = args.db or os.getenv('PURPLESPLOIT_DB', '/var/lib/purplesploit/purplesploit.db')
 
         framework = Framework(
             modules_path=args.modules,
