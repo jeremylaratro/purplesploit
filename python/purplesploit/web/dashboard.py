@@ -35,8 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database
-db = Database()
+# Initialize database with shared path
+# Use /tmp for cross-user compatibility, or respect PURPLESPLOIT_DB env var
+import os
+db_path = os.getenv('PURPLESPLOIT_DB', '/tmp/purplesploit/purplesploit.db')
+db = Database(db_path=db_path)
 
 
 # ============================================================================
