@@ -117,11 +117,24 @@ class Framework:
         # Load services
         services = self.database.get_services()
         for service in services:
+            # Add to session
             self.session.services.add_service(
                 service['target'],
                 service['service'],
                 service['port']
             )
+
+            # Sync to models database (for webserver)
+            try:
+                db_manager.add_service(
+                    service['target'],
+                    service['service'],
+                    service['port'],
+                    service.get('version')
+                )
+            except Exception:
+                # Service already exists in models DB, skip
+                pass
 
     def discover_modules(self, base_path: str = None) -> int:
         """
