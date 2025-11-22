@@ -7,6 +7,7 @@ Quick reference for essential commands.
 | Command | Description |
 |---------|-------------|
 | `search <query>` | Find modules by name, description, or category |
+| `ops` | Show operations for current module (when in a module) |
 | `ops <query>` | Search operations across all modules globally |
 | `module select` | Browse all modules interactively with fzf |
 | `ops select` | Interactive selection from last ops search results |
@@ -77,6 +78,6 @@ Quick reference for essential commands.
 ## Key Concepts
 
 **search** = Find modules
-**ops** = Find operations (actions) across all modules
+**ops** = Context-aware: Show current module's operations (no args) or search globally (with args)
 **select** = Interactive fuzzy selection with fzf
 **Context** = Targets, creds, workspace persist across all modules

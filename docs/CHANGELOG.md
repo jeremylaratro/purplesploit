@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [6.3.0] - 2025-11-22
 
 ### Added
+- **Context-Aware `ops` Command**: Enhanced operations command for improved usability
+  - When in a module: `ops` (no args) displays operations for the current module
+  - When not in a module or with args: `ops <query>` performs global operations search
+  - Provides simpler workflow - just type `ops` to see available operations
+  - Maintains backward compatibility with existing global search functionality
 - **Deploy Command**: New unified deployment command for payloads, pivots, and enumeration scripts
   - `deploy` command to show available deployment modules
   - `deploy ligolo` to load Ligolo pivot deployment module
