@@ -35,11 +35,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database with shared PERSISTENT path
-# Use /var/lib/purplesploit for cross-user compatibility and persistence across reboots
-# Unlike /tmp, this location persists data permanently until manually cleared
+# Initialize database with project-local path
+# Keep everything self-contained within the purplesploit project directory
 import os
-db_path = os.getenv('PURPLESPLOIT_DB', '/var/lib/purplesploit/purplesploit.db')
+if os.getenv('PURPLESPLOIT_DB'):
+    db_path = os.getenv('PURPLESPLOIT_DB')
+else:
+    # Default: project_root/.data/purplesploit.db
+    # Navigate from python/purplesploit/web/dashboard.py -> project root
+    project_root = Path(__file__).parent.parent.parent.parent
+    data_dir = project_root / '.data'
+    data_dir.mkdir(exist_ok=True)
+    db_path = str(data_dir / 'purplesploit.db')
+
 db = Database(db_path=db_path)
 
 

@@ -111,9 +111,42 @@
         }
         .service-count { font-size: 2em; font-weight: bold; }
         .service-name { font-size: 0.9em; color: #ddd; margin-top: 5px; }
+        .auto-refresh {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            z-index: 1000;
+        }
+        .refresh-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4CAF50;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
     </style>
+    <script>
+        // Auto-refresh dashboard every 3 seconds
+        setTimeout(function() {
+            location.reload();
+        }, 3000);
+    </script>
 </head>
 <body>
+    <div class="auto-refresh">
+        <span class="refresh-indicator"></span>
+        Auto-refresh: 3s
+    </div>
     <div class="container">
         <header>
             <h1>🛡️ PurpleSploit Dashboard</h1>
