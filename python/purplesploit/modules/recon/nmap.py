@@ -5,6 +5,7 @@ Network scanning and service detection using Nmap.
 """
 
 from purplesploit.core.module import ExternalToolModule
+from purplesploit.models.database import db_manager
 
 
 class NmapModule(ExternalToolModule):
@@ -315,8 +316,14 @@ class NmapModule(ExternalToolModule):
                     elif service_name in ["http", "https", "http-proxy"]:
                         self.framework.session.services.add_service(rhost, "http", port)
 
-                    # Also save to database
+                    # Save to old database (backwards compatibility)
                     self.framework.database.add_service(rhost, service_name, port, service_info.get("version"))
+
+                    # Save to models database (for webserver)
+                    try:
+                        db_manager.add_service(rhost, service_name, port, service_info.get("version"))
+                    except Exception as e:
+                        self.log(f"Failed to save service to models database: {e}", "debug")
 
                 self.log(f"Imported {len(parsed.get('services', {}))} services to context", "success")
 
