@@ -5,6 +5,15 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.1] - 2025-11-22
+
+### Improved
+- **Enhanced `ops` Command**: Automatically displays module options when no operations exist
+  - For modules with operations: `ops` shows operations (e.g., nxc_smb)
+  - For modules without operations: `ops` shows options (e.g., nmap)
+  - Provides consistent, intuitive workflow across all module types
+  - Eliminates need to remember which modules use operations vs. options
+
 ## [6.3.0] - 2025-11-22
 
 ### Added
