@@ -5,6 +5,52 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2025-11-22
+
+### Added
+- **Persistent Module Defaults System**: Save and reuse custom module configurations
+  - Set default options per module that persist across sessions
+  - Override defaults when needed without losing saved configurations
+  - Improved workflow efficiency for repeated operations
+- **Persistent Ligolo Sessions**: Automated pivot deployment with session persistence
+  - Ligolo sessions automatically reconnect and persist across framework restarts
+  - Automated pivot deployment capabilities
+  - `-selfcert` flag enabled by default for easier setup
+- **Database Sync Utilities**: Enhanced synchronization between CLI and web portal
+  - New `get_all_services` method for comprehensive service querying
+  - Automatic service syncing to webserver database
+  - Sync existing database entries to webserver on startup
+- **Nmap Background Mode**: Run nmap scans in background without blocking CLI
+  - Continue using framework while scans execute
+  - Real-time scan progress tracking
+  - Enhanced nmap module descriptions for better discoverability
+
+### Changed
+- **Project Structure Cleanup**: Streamlined repository organization
+  - Removed all 21 .psm files from old TUI version
+  - Consolidated documentation into `docs/` directory
+  - Created `scripts/` directory for utility scripts (reset-databases.py, start-web-portal.py, sync_databases.py)
+  - Clean root directory with only essential files (README.md, QUICKSTART.md, LICENSE, purplesploit-python)
+  - Moved CHANGELOG.md, COMMANDS.md, DISCLAIMER.md, OVERVIEW.md, SYNC_DATABASES.md, WEB_PORTAL_GUIDE.md to docs/
+  - Updated all documentation links and script references to reflect new structure
+- **Chronological Versioning**: All PRs and commits now properly versioned chronologically
+- **Nmap Module Descriptions**: Updated to be more distinctive and clear
+
+### Fixed
+- **Webserver Request Logging**: Suppressed verbose logging in CLI for cleaner output
+- **Webserver Real-time Updates**: Fixed synchronization issues between CLI and web portal
+- **Dashboard Session Data**: Corrected database path to display proper session data from core database
+- **Database Location**: Changed from `/tmp` to persistent project directory location
+  - Ensures data survives system reboots
+  - Self-contained deployment with all data in project directory
+- **Database Path Consistency**: Unified database path between CLI and dashboard
+  - CLI and web portal now use same database location
+  - Real-time sync works reliably across both interfaces
+
+### Removed
+- Old TUI module files (.psm) - 20 module files and 1 template removed
+- Empty documentation directories (docs/examples/)
+
 ## [6.1.0] - 2025-11-21
 
 ### Added
@@ -325,6 +371,7 @@ Previous versions focused on bash-based automation and initial framework develop
 
 ## Version History Summary
 
+- **v6.2.0** (2025-11-22): Persistent module defaults, ligolo sessions, nmap background mode, project cleanup
 - **v6.1.0** (2025-11-21): Web portal & API server, webserver command, background execution
 - **v6.0.1** (2025-11-21): Database corruption auto-recovery
 - **v6.0.0** (2025-11-19): Pure Python edition, enhanced auto-completion, removed bash/TUI

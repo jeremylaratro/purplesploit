@@ -15,7 +15,7 @@ The PurpleSploit web portal provides a modern, visual interface for analyzing ta
 cd /path/to/purplesploit
 
 # Run the launcher script
-python start-web-portal.py
+python scripts/start-web-portal.py
 ```
 
 ### Method 2: Using Python Module
@@ -123,7 +123,7 @@ purplesploit(nmap_parser)> run
 ```bash
 # From repo root
 cd /path/to/purplesploit
-python start-web-portal.py
+python scripts/start-web-portal.py
 ```
 
 ### 3. View Results
@@ -173,7 +173,7 @@ If you see: `sqlite3.DatabaseError: file is not a database`
 **Quick Fix**: Run the database reset tool:
 ```bash
 cd /path/to/purplesploit
-python reset-databases.py
+python scripts/reset-databases.py
 ```
 
 This will:
@@ -199,7 +199,7 @@ If you see: `[WARNING] Web portal static files not found`
 **Solution**: Make sure you're running from the correct directory:
 ```bash
 cd /path/to/purplesploit
-python start-web-portal.py
+python scripts/start-web-portal.py
 ```
 
 The static files are located at: `python/purplesploit/web/static/`
