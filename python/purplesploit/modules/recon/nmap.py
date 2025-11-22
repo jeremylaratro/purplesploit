@@ -24,7 +24,7 @@ class NmapModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "Network scanning and service detection using Nmap"
+        return "Standard nmap scan: all ports, version/script detection (-p- -sCV)"
 
     @property
     def author(self) -> str:
