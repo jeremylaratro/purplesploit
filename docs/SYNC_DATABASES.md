@@ -9,7 +9,7 @@ If you have existing targets, credentials, or services that aren't showing up on
 Run the sync script:
 
 ```bash
-python3 sync_databases.py
+python3 scripts/sync_databases.py
 ```
 
 This will:
@@ -55,7 +55,7 @@ If data still doesn't show up after running the sync script:
 
 3. **Run the sync script with verbose output**
    ```bash
-   python3 sync_databases.py
+   python3 scripts/sync_databases.py
    ```
 
 4. **Check the webserver is running**

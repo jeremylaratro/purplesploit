@@ -15,7 +15,7 @@ from .core.framework import Framework
 from .core.module import BaseModule, ExternalToolModule
 from .core.session import Session
 
-__version__ = "6.1.0"
+__version__ = "6.2.0"
 __author__ = "PurpleSploit Team"
 
 __all__ = [

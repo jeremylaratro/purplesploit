@@ -1,6 +1,6 @@
 # PurpleSploit Documentation
 
-Complete documentation for PurpleSploit Framework v6.1.0.
+Complete documentation for PurpleSploit Framework v6.2.0.
 
 ## 📚 Quick Links
 
@@ -31,7 +31,7 @@ Complete documentation for PurpleSploit Framework v6.1.0.
 
 ## 📖 Version Information
 
-**Current Version**: 6.1.0
+**Current Version**: 6.2.0
 
 This documentation reflects the current version only. For historical versions:
 - See [CHANGELOG.md](CHANGELOG.md) for version history
