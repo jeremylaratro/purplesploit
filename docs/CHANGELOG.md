@@ -5,6 +5,24 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2025-11-22
+
+### Added
+- **Deploy Command**: New unified deployment command for payloads, pivots, and enumeration scripts
+  - `deploy` command with subcommands for different deployment types
+  - `deploy select` for interactive deployment method selection
+  - `deploy ligolo` to show Ligolo pivot deployment operations
+  - `deploy beacon` to show C2 beacon deployment operations
+  - `deploy script` to show script deployment operations (WinPEAS, LinPEAS)
+- **Deploy Module**: Comprehensive deployment module in `modules/post/deploy.py`
+  - **Ligolo Pivot Deployment**: 5 deployment methods (NXC, SSH, SMB, PSExec, WMIExec)
+  - **C2 Beacon Deployment**: 6 deployment methods (NXC, SSH, SMB, PSExec, WMIExec, WinRM)
+  - **Script Deployment**: 8 deployment operations for WinPEAS, LinPEAS, and custom scripts
+  - Support for multiple deployment methods based on system/OS/services
+  - Flexible deployment via NXC, SSH, SMB, PSExec, WMIExec for different scenarios
+  - Automatic file upload and execution capabilities
+  - Output capture and saving for enumeration scripts
+
 ## [6.2.0] - 2025-11-22
 
 ### Added
@@ -371,6 +389,7 @@ Previous versions focused on bash-based automation and initial framework develop
 
 ## Version History Summary
 
+- **v6.3.0** (2025-11-22): Deploy command and module for unified payload/pivot/script deployment
 - **v6.2.0** (2025-11-22): Persistent module defaults, ligolo sessions, nmap background mode, project cleanup
 - **v6.1.0** (2025-11-21): Web portal & API server, webserver command, background execution
 - **v6.0.1** (2025-11-21): Database corruption auto-recovery
