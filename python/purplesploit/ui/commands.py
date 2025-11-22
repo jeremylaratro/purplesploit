@@ -1134,7 +1134,11 @@ class CommandHandler:
             self.display.console.print()
 
             # Build command with args if provided
-            cmd_args = [ligolo_cmd] + args if args else [ligolo_cmd]
+            # Default to -selfcert if no args provided
+            if args:
+                cmd_args = [ligolo_cmd] + args
+            else:
+                cmd_args = [ligolo_cmd, "-selfcert"]
 
             # Launch ligolo-ng with full terminal control
             # Using os.system for proper terminal handling
