@@ -46,16 +46,16 @@ class NmapModule(ExternalToolModule):
                 "default": None
             },
             "PORTS": {
-                "value": None,
+                "value": "-",
                 "required": False,
-                "description": "Port specification (e.g., 1-1000, 80,443)",
-                "default": None
+                "description": "Port specification (e.g., 1-1000, 80,443, - for all ports)",
+                "default": "-"
             },
             "SCAN_TYPE": {
-                "value": "sV",
+                "value": "sCV",
                 "required": False,
-                "description": "Scan type (sS, sT, sU, sV, sC, etc.)",
-                "default": "sV"
+                "description": "Scan type (sS, sT, sU, sV, sC, sCV, etc.)",
+                "default": "sCV"
             },
             "TOP_PORTS": {
                 "value": None,
@@ -70,15 +70,15 @@ class NmapModule(ExternalToolModule):
                 "default": None
             },
             "OUTPUT_FORMAT": {
-                "value": "normal",
+                "value": "all",
                 "required": False,
-                "description": "Output format (normal, xml, grepable)",
-                "default": "normal"
+                "description": "Output format (normal, xml, grepable, all)",
+                "default": "all"
             },
             "OUTPUT_FILE": {
                 "value": None,
                 "required": False,
-                "description": "Output file path",
+                "description": "Output file path (without extension for -oA)",
                 "default": None
             },
             "TIMING": {
@@ -100,16 +100,16 @@ class NmapModule(ExternalToolModule):
                 "default": None
             },
             "MIN_RATE": {
-                "value": None,
+                "value": "3900",
                 "required": False,
                 "description": "Minimum packets per second",
-                "default": None
+                "default": "3900"
             },
             "MAX_RTT_TIMEOUT": {
-                "value": None,
+                "value": "4.5",
                 "required": False,
-                "description": "Maximum round-trip time timeout (e.g., 100ms)",
-                "default": None
+                "description": "Maximum round-trip time timeout (e.g., 100ms, 4.5)",
+                "default": "4.5"
             },
             "MAX_RETRIES": {
                 "value": None,
@@ -190,11 +190,19 @@ class NmapModule(ExternalToolModule):
             cmd += f" --script={script}"
 
         # Output
+        # If no output file specified but format is set, use target name
+        if not output_file and output_format and output_format != "normal":
+            # Use target as filename (sanitize it)
+            target_name = rhost.replace("/", "_").replace(":", "_")
+            output_file = f"nmap_{target_name}"
+
         if output_file:
             if output_format == "xml":
                 cmd += f" -oX {output_file}"
             elif output_format == "grepable":
                 cmd += f" -oG {output_file}"
+            elif output_format == "all":
+                cmd += f" -oA {output_file}"
             else:
                 cmd += f" -oN {output_file}"
 
