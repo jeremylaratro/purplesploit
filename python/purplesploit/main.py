@@ -52,10 +52,19 @@ For more information, visit: https://github.com/jeremylaratro/purplesploit
 
     try:
         # Initialize framework
-        # Use shared PERSISTENT database path for cross-user compatibility
-        # /var/lib/purplesploit is persistent across reboots (unlike /tmp)
+        # Use project-local database path to keep everything self-contained
+        # Database stored in purplesploit project root directory
         import os
-        db_path = args.db or os.getenv('PURPLESPLOIT_DB', '/var/lib/purplesploit/purplesploit.db')
+        if args.db:
+            db_path = args.db
+        elif os.getenv('PURPLESPLOIT_DB'):
+            db_path = os.getenv('PURPLESPLOIT_DB')
+        else:
+            # Default: project_root/.data/purplesploit.db
+            project_root = Path(__file__).parent.parent.parent
+            data_dir = project_root / '.data'
+            data_dir.mkdir(exist_ok=True)
+            db_path = str(data_dir / 'purplesploit.db')
 
         framework = Framework(
             modules_path=args.modules,
