@@ -21,7 +21,7 @@ class NmapUdpModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "UDP port scan of top 100 common UDP services (-sU --top-ports 100)"
+        return "UDP top 100 ports (-sU --top-ports 100)"
 
     def _init_options(self):
         """Initialize module-specific options with UDP scan defaults."""

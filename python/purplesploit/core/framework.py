@@ -15,6 +15,7 @@ from datetime import datetime
 from .module import BaseModule, ModuleMetadata
 from .session import Session
 from .database import Database
+from purplesploit.models.database import db_manager, TargetCreate, CredentialCreate
 
 
 class Framework:
@@ -355,6 +356,10 @@ class Framework:
         Returns:
             True if added successfully
         """
+        # Generate a name if not provided
+        if not name:
+            name = identifier
+
         target_dict = {'type': target_type, 'name': name}
         if target_type == 'web':
             target_dict['url'] = identifier
@@ -365,8 +370,22 @@ class Framework:
         if not self.session.targets.add(target_dict):
             return False
 
-        # Add to database
-        return self.database.add_target(target_type, identifier, name)
+        # Add to old database (backwards compatibility)
+        self.database.add_target(target_type, identifier, name)
+
+        # Add to new models database (for webserver)
+        try:
+            target_create = TargetCreate(
+                name=name,
+                ip=identifier,
+                description=f"Added via CLI - {target_type}"
+            )
+            db_manager.add_target(target_create)
+        except Exception as e:
+            # If target already exists, that's fine
+            self.log(f"Target already exists in models database: {e}", "debug")
+
+        return True
 
     def add_credential(self, username: str, password: str = None,
                       domain: str = None, hash_value: str = None,
@@ -384,6 +403,10 @@ class Framework:
         Returns:
             True if added successfully
         """
+        # Generate a name if not provided
+        if not name:
+            name = f"{domain}/{username}" if domain else username
+
         cred_dict = {
             'username': username,
             'password': password,
@@ -396,7 +419,7 @@ class Framework:
         if not self.session.credentials.add(cred_dict):
             return False
 
-        # Add to database
+        # Add to old database (backwards compatibility)
         self.database.add_credential(
             username=username,
             password=password,
@@ -404,6 +427,21 @@ class Framework:
             hash_value=hash_value,
             name=name
         )
+
+        # Add to new models database (for webserver)
+        try:
+            cred_create = CredentialCreate(
+                name=name,
+                username=username,
+                password=password,
+                domain=domain,
+                hash=hash_value
+            )
+            db_manager.add_credential(cred_create)
+        except Exception as e:
+            # If credential already exists, that's fine
+            self.log(f"Credential already exists in models database: {e}", "debug")
+
         return True
 
     def get_stats(self) -> Dict:
