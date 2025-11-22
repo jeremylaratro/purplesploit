@@ -22,7 +22,7 @@ class NmapNoPingModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "Network scanning with host discovery disabled (-Pn)"
+        return "Scan without host discovery, treats all hosts as online (-Pn -p- -sCV)"
 
     def _init_options(self):
         """Initialize module-specific options with no-ping defaults."""

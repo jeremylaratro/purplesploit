@@ -21,7 +21,7 @@ class NmapStealthModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "Stealthy SYN scanning (requires root)"
+        return "Stealth SYN scan with slow timing, requires root (-sS -T2 -p-)"
 
     def _init_options(self):
         """Initialize module-specific options with stealth scan defaults."""
