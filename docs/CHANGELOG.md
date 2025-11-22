@@ -5,6 +5,21 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.2] - 2025-11-22
+
+### Added
+- **Nmap Module Operations**: Added granular scan type operations to nmap module
+  - **Default Scan**: All ports + version/script detection (-p- -sCV)
+  - **Fast Scan**: Top 100 ports only + quick version (--top-ports 100 -sV -T4)
+  - **Comprehensive Scan**: All ports + max version intensity (-p- -sCV --version-intensity 9)
+  - **Aggressive Scan**: OS detection + scripts + traceroute (-sCV -O --traceroute)
+  - **Stealth Scan**: Stealth SYN + slow timing (requires root: -sS -T2 -p-)
+  - **UDP Scan**: UDP top 100 ports (-sU --top-ports 100)
+  - **No Ping Scan**: No ping/discovery + all ports (-Pn -p- -sCV)
+  - Typing `ops` in nmap module now shows different scan types as operations
+  - Operations grouped by subcategory: standard, advanced, specialized
+  - Users can now easily select scan type with `run <number>` instead of configuring options
+
 ## [6.3.1] - 2025-11-22
 
 ### Improved
