@@ -21,7 +21,7 @@ class NmapFastModule(NmapModule):
 
     @property
     def description(self) -> str:
-        return "Quick network scanning of the most common ports"
+        return "Fast scan of top 100 ports with quick version detection (--top-ports 100 -sV)"
 
     def _init_options(self):
         """Initialize module-specific options with fast scan defaults."""
