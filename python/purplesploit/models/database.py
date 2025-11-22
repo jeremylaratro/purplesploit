@@ -337,6 +337,14 @@ class DatabaseManager:
         finally:
             session.close()
 
+    def get_all_services(self) -> List[Service]:
+        """Get all services"""
+        session = self.get_services_session()
+        try:
+            return session.query(Service).all()
+        finally:
+            session.close()
+
     def get_services_for_target(self, target: str) -> List[Service]:
         """Get all services for a target"""
         session = self.get_services_session()
