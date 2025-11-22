@@ -1102,17 +1102,38 @@ class CommandHandler:
 
     def cmd_ligolo(self, args: List[str]) -> bool:
         """
-        Launch ligolo-ng interface.
+        Launch or attach to ligolo-ng interface.
 
         Usage:
-            ligolo                    # Launch ligolo-ng proxy interface
+            ligolo                    # Launch or attach to ligolo-ng session
+            ligolo kill               # Kill existing ligolo-ng session
             ligolo --help             # Show ligolo-ng help
 
-        Press CTRL+D to return to PurpleSploit.
+        Press CTRL+B then D to detach from session.
         """
         import subprocess
         import os
         import shutil
+
+        # Special commands
+        if args and args[0] == "kill":
+            # Kill existing ligolo session
+            result = subprocess.run(
+                ["tmux", "kill-session", "-t", "ligolo"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                self.display.print_success("Killed ligolo-ng session")
+            else:
+                self.display.print_warning("No ligolo-ng session to kill")
+            return True
+
+        # Check if tmux is installed
+        if not shutil.which("tmux"):
+            self.display.print_error("tmux not found in PATH")
+            self.display.print_info("Install tmux: apt install tmux / brew install tmux")
+            return True
 
         # Check if ligolo-ng is installed
         ligolo_cmd = None
@@ -1129,27 +1150,45 @@ class CommandHandler:
             return True
 
         try:
-            self.display.print_info("Launching ligolo-ng...")
-            self.display.print_info("Press CTRL+D (EOF) to return to PurpleSploit")
-            self.display.console.print()
+            # Check if ligolo tmux session already exists
+            check_session = subprocess.run(
+                ["tmux", "has-session", "-t", "ligolo"],
+                capture_output=True,
+                text=True
+            )
 
-            # Build command with args if provided
-            cmd_args = [ligolo_cmd] + args if args else [ligolo_cmd]
+            if check_session.returncode == 0:
+                # Session exists, attach to it
+                self.display.print_info("Attaching to existing ligolo-ng session...")
+                self.display.print_info("Press CTRL+B then D to detach (keeps session running)")
+                self.display.console.print()
+                os.system("tmux attach-session -t ligolo")
+            else:
+                # Create new session
+                self.display.print_info("Creating new ligolo-ng session...")
+                self.display.print_info("Press CTRL+B then D to detach (keeps session running)")
+                self.display.console.print()
 
-            # Launch ligolo-ng with full terminal control
-            # Using os.system for proper terminal handling
-            cmd_str = " ".join(cmd_args)
-            os.system(cmd_str)
+                # Build command with args if provided
+                # Default to -selfcert if no args provided
+                if args:
+                    cmd_args = [ligolo_cmd] + args
+                else:
+                    cmd_args = [ligolo_cmd, "-selfcert"]
 
-            # User returned (via CTRL+D or exit)
+                # Create tmux session and run ligolo
+                cmd_str = " ".join(cmd_args)
+                os.system(f"tmux new-session -s ligolo '{cmd_str}'")
+
+            # User returned (via detach or exit)
             self.display.console.print()
             self.display.print_success("Returned to PurpleSploit")
 
         except KeyboardInterrupt:
             self.display.console.print()
-            self.display.print_info("ligolo-ng interrupted, returning to PurpleSploit")
+            self.display.print_info("Returned to PurpleSploit")
         except Exception as e:
-            self.display.print_error(f"Error launching ligolo-ng: {e}")
+            self.display.print_error(f"Error with ligolo-ng: {e}")
             import traceback
             traceback.print_exc()
 
