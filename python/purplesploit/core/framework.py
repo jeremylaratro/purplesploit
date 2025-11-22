@@ -53,7 +53,7 @@ class Framework:
         self.log_messages = []
 
     def _load_persisted_data(self):
-        """Load targets and credentials from database into session."""
+        """Load targets and credentials from database into session and sync to models DB."""
         # Load targets
         db_targets = self.database.get_targets()
         for target in db_targets:
@@ -66,7 +66,23 @@ class Framework:
             else:
                 target_dict['ip'] = target['identifier']
 
+            # Add to session
             self.session.targets.add(target_dict)
+
+            # Sync to models database (for webserver)
+            if target['type'] == 'network':
+                try:
+                    identifier = target['identifier']
+                    name = target.get('name') or identifier
+                    target_create = TargetCreate(
+                        name=name,
+                        ip=identifier,
+                        description=f"Loaded from legacy database - {target['type']}"
+                    )
+                    db_manager.add_target(target_create)
+                except Exception:
+                    # Target already exists in models DB, skip
+                    pass
 
         # Load credentials
         db_creds = self.database.get_credentials()
@@ -79,7 +95,24 @@ class Framework:
                 'hash_type': cred['hash_type'],
                 'name': cred['name']
             }
+
+            # Add to session
             self.session.credentials.add(cred_dict)
+
+            # Sync to models database (for webserver)
+            try:
+                name = cred.get('name') or cred['username']
+                cred_create = CredentialCreate(
+                    name=name,
+                    username=cred['username'],
+                    password=cred.get('password'),
+                    domain=cred.get('domain'),
+                    hash=cred.get('hash')
+                )
+                db_manager.add_credential(cred_create)
+            except Exception:
+                # Credential already exists in models DB, skip
+                pass
 
         # Load services
         services = self.database.get_services()
