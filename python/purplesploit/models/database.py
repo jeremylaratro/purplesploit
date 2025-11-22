@@ -369,6 +369,39 @@ class DatabaseManager:
         finally:
             session.close()
 
+    def add_service(self, target: str, service: str, port: int, version: str = None) -> Service:
+        """Add a service"""
+        session = self.get_services_session()
+        try:
+            # Check if service already exists
+            existing = session.query(Service).filter(
+                Service.target == target,
+                Service.service == service,
+                Service.port == port
+            ).first()
+
+            if existing:
+                # Update version if provided
+                if version:
+                    existing.version = version
+                    session.commit()
+                    session.refresh(existing)
+                return existing
+
+            # Create new service
+            db_service = Service(
+                target=target,
+                service=service,
+                port=port,
+                version=version
+            )
+            session.add(db_service)
+            session.commit()
+            session.refresh(db_service)
+            return db_service
+        finally:
+            session.close()
+
     def add_exploit(self, target: str, service: str, port: int, version: str,
                     exploit_title: str, exploit_path: str = None,
                     edb_id: str = None, platform: str = None,
