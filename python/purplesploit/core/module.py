@@ -49,6 +49,7 @@ class BaseModule(ABC):
         self._profile_registry = get_profile_registry()
         self._init_options()
         self._init_parameters()
+        self._load_defaults_from_db()
 
     @property
     @abstractmethod
@@ -189,6 +190,39 @@ class BaseModule(ABC):
         # Convert parameters to legacy options format for backward compatibility
         for name, param in self.parameters.items():
             self.options[name] = param.to_dict()
+
+    def _load_defaults_from_db(self):
+        """
+        Load default option values from the database.
+
+        This method loads user-configured defaults from the database and applies
+        them to options that haven't been explicitly set. This allows users to
+        customize default values for module options persistently.
+        """
+        if not hasattr(self.framework, 'database'):
+            return
+
+        # Get module identifier (use category/name as module_name)
+        module_identifier = self.category
+        if hasattr(self, '__class__'):
+            module_identifier = self.__class__.__name__.replace('Module', '').lower()
+
+        # Load all defaults for this module
+        defaults = self.framework.database.get_module_defaults(module_identifier)
+
+        # Apply defaults to options that haven't been set
+        for option_name, default_value in defaults.items():
+            if option_name in self.options:
+                # Only apply if the current value is None or matches the hardcoded default
+                current_value = self.options[option_name].get("value")
+                if current_value is None:
+                    self.options[option_name]["value"] = default_value
+                    self.options[option_name]["default"] = default_value
+
+                    # Also update parameter if using new system
+                    if option_name in self.parameters:
+                        self.parameters[option_name].value = default_value
+                        self.parameters[option_name].default = default_value
 
     def set_option(self, key: str, value: Any) -> bool:
         """

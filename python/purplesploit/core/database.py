@@ -140,6 +140,19 @@ class Database:
             )
         """)
 
+        # Module default settings
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS module_defaults (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                module_name TEXT NOT NULL,
+                option_name TEXT NOT NULL,
+                option_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(module_name, option_name)
+            )
+        """)
+
         self.conn.commit()
 
     def close(self):
@@ -506,3 +519,104 @@ class Database:
 
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
+
+    # Module Defaults Methods
+    def set_module_default(self, module_name: str, option_name: str, option_value: str) -> bool:
+        """
+        Set a default value for a module option.
+
+        Args:
+            module_name: Name of the module (e.g., 'nmap')
+            option_name: Name of the option (e.g., 'SCAN_TYPE')
+            option_value: Default value to set
+
+        Returns:
+            True if set successfully
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO module_defaults (module_name, option_name, option_value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(module_name, option_name)
+                DO UPDATE SET option_value = ?, updated_at = CURRENT_TIMESTAMP
+            """, (module_name, option_name, option_value, option_value))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error setting module default: {e}")
+            return False
+
+    def get_module_default(self, module_name: str, option_name: str) -> Optional[str]:
+        """
+        Get a default value for a module option.
+
+        Args:
+            module_name: Name of the module
+            option_name: Name of the option
+
+        Returns:
+            Default value if found, None otherwise
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT option_value FROM module_defaults
+            WHERE module_name = ? AND option_name = ?
+        """, (module_name, option_name))
+
+        row = cursor.fetchone()
+        return row['option_value'] if row else None
+
+    def get_module_defaults(self, module_name: str) -> Dict[str, str]:
+        """
+        Get all default values for a module.
+
+        Args:
+            module_name: Name of the module
+
+        Returns:
+            Dictionary of option_name -> option_value
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT option_name, option_value FROM module_defaults
+            WHERE module_name = ?
+        """, (module_name,))
+
+        return {row['option_name']: row['option_value'] for row in cursor.fetchall()}
+
+    def delete_module_default(self, module_name: str, option_name: str) -> bool:
+        """
+        Delete a default value for a module option.
+
+        Args:
+            module_name: Name of the module
+            option_name: Name of the option
+
+        Returns:
+            True if deleted
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM module_defaults
+            WHERE module_name = ? AND option_name = ?
+        """, (module_name, option_name))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def delete_all_module_defaults(self, module_name: str) -> bool:
+        """
+        Delete all default values for a module.
+
+        Args:
+            module_name: Name of the module
+
+        Returns:
+            True if any were deleted
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM module_defaults WHERE module_name = ?
+        """, (module_name,))
+        self.conn.commit()
+        return cursor.rowcount > 0

@@ -102,6 +102,7 @@ class CommandHandler:
             "ligolo": self.cmd_ligolo,            # Launch ligolo-ng
             "shell": self.cmd_shell,              # Drop to localhost shell
             "webserver": self.cmd_webserver,      # Start/stop web server
+            "defaults": self.cmd_defaults,        # Manage module default options
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -204,6 +205,7 @@ class CommandHandler:
         utility_help = """[blue]clear[/blue]                  Clear the screen
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
+[blue]defaults <cmd>[/blue]         Manage module default options
 [blue]webserver start[/blue]        Start web portal in background
 [blue]webserver stop[/blue]         Stop web portal
 [blue]webserver status[/blue]       Check web portal status
@@ -1534,6 +1536,129 @@ class CommandHandler:
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
             self.display.print_info("Usage: hosts [export|append|sudo] [file]")
+
+        return True
+
+    def cmd_defaults(self, args: List[str]) -> bool:
+        """Manage module default option values."""
+        from rich.table import Table
+
+        if not args:
+            self.display.print_error("Usage: defaults <command> [args]")
+            self.display.print_info("Commands:")
+            self.display.print_info("  defaults show <module>           - Show default values for a module")
+            self.display.print_info("  defaults set <module> <opt> <val> - Set a default value")
+            self.display.print_info("  defaults delete <module> <opt>   - Delete a default value")
+            self.display.print_info("  defaults reset <module>          - Reset all defaults for a module")
+            self.display.print_info("")
+            self.display.print_info("Examples:")
+            self.display.print_info("  defaults show nmap")
+            self.display.print_info("  defaults set nmap PORTS -")
+            self.display.print_info("  defaults set nmap MIN_RATE 3900")
+            self.display.print_info("  defaults delete nmap PORTS")
+            self.display.print_info("  defaults reset nmap")
+            return True
+
+        subcommand = args[0].lower()
+
+        # Show defaults for a module
+        if subcommand == "show":
+            if len(args) < 2:
+                self.display.print_error("Usage: defaults show <module>")
+                self.display.print_info("Example: defaults show nmap")
+                return True
+
+            module_name = args[1].lower()
+            defaults = self.framework.database.get_module_defaults(module_name)
+
+            if not defaults:
+                self.display.print_warning(f"No custom defaults found for module '{module_name}'")
+                self.display.print_info("Defaults are set using: defaults set <module> <option> <value>")
+                return True
+
+            # Display defaults in a table
+            table = Table(title=f"Default Values for '{module_name}'")
+            table.add_column("Option", style="cyan")
+            table.add_column("Default Value", style="green")
+
+            for option, value in sorted(defaults.items()):
+                table.add_row(option, str(value))
+
+            self.display.console.print(table)
+            self.display.print_info(f"Total: {len(defaults)} custom defaults")
+
+        # Set a default value
+        elif subcommand == "set":
+            if len(args) < 4:
+                self.display.print_error("Usage: defaults set <module> <option> <value>")
+                self.display.print_info("Example: defaults set nmap PORTS -")
+                return True
+
+            module_name = args[1].lower()
+            option_name = args[2].upper()
+            option_value = " ".join(args[3:])  # Allow values with spaces
+
+            success = self.framework.database.set_module_default(
+                module_name, option_name, option_value
+            )
+
+            if success:
+                self.display.print_success(
+                    f"Set default for {module_name}.{option_name} = {option_value}"
+                )
+                self.display.print_info("This default will be applied when the module is loaded")
+            else:
+                self.display.print_error("Failed to set default value")
+
+        # Delete a default value
+        elif subcommand == "delete":
+            if len(args) < 3:
+                self.display.print_error("Usage: defaults delete <module> <option>")
+                self.display.print_info("Example: defaults delete nmap PORTS")
+                return True
+
+            module_name = args[1].lower()
+            option_name = args[2].upper()
+
+            success = self.framework.database.delete_module_default(module_name, option_name)
+
+            if success:
+                self.display.print_success(
+                    f"Deleted default for {module_name}.{option_name}"
+                )
+            else:
+                self.display.print_warning(
+                    f"No default found for {module_name}.{option_name}"
+                )
+
+        # Reset all defaults for a module
+        elif subcommand == "reset":
+            if len(args) < 2:
+                self.display.print_error("Usage: defaults reset <module>")
+                self.display.print_info("Example: defaults reset nmap")
+                return True
+
+            module_name = args[1].lower()
+
+            # Confirm reset
+            self.display.print_warning(
+                f"This will delete all custom defaults for '{module_name}'"
+            )
+            confirm = input("Continue? [y/N]: ")
+
+            if confirm.lower() == 'y':
+                success = self.framework.database.delete_all_module_defaults(module_name)
+
+                if success:
+                    self.display.print_success(f"Reset all defaults for '{module_name}'")
+                else:
+                    self.display.print_warning(f"No defaults found for '{module_name}'")
+            else:
+                self.display.print_info("Operation cancelled")
+
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Use: defaults <show|set|delete|reset>")
 
         return True
 
