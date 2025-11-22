@@ -1263,7 +1263,7 @@ class CommandHandler:
         deploy_module_path = "post/deploy"
 
         # Check if we need to switch to deploy module
-        current_module = self.framework.current_module
+        current_module = self.framework.session.current_module
         if not current_module or current_module.get_module_path() != deploy_module_path:
             # Load the deploy module
             if deploy_module_path not in self.framework.modules:
