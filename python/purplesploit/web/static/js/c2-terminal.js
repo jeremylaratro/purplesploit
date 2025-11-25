@@ -568,14 +568,33 @@ async function addTarget(event) {
     const ip = document.getElementById('target-ip').value.trim();
     const name = document.getElementById('target-name').value.trim() || ip;
 
-    // Execute via terminal
-    executeCommand(`target ${ip}`);
+    try {
+        // Execute via HTTP API to ensure we can wait for completion
+        const response = await fetch(`${API_BASE}/api/c2/command`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                command: `target ${ip}`,
+                session_id: sessionId
+            })
+        });
 
-    // Clear form
-    document.getElementById('add-target-form').reset();
+        const data = await response.json();
 
-    // Reload list
-    setTimeout(() => loadTargetsList(), 500);
+        if (data.success) {
+            appendOutput('System', data.output, 'success');
+
+            // Clear form
+            document.getElementById('add-target-form').reset();
+
+            // Reload list after successful addition
+            await loadTargetsList();
+        } else {
+            appendOutput('Error', data.error || 'Failed to add target', 'error');
+        }
+    } catch (error) {
+        appendOutput('Error', `Failed to add target: ${error.message}`, 'error');
+    }
 }
 
 async function useTarget(ip) {
@@ -758,7 +777,10 @@ function closeConfigModal() {
 async function runConfiguredModule(event) {
     event.preventDefault();
 
-    if (!currentModuleInfo) return;
+    if (!currentModuleInfo) {
+        appendOutput('Error', 'No module loaded', 'error');
+        return;
+    }
 
     // Gather form values
     const formData = new FormData(event.target);
@@ -768,6 +790,17 @@ async function runConfiguredModule(event) {
         if (value.trim()) {
             options[key] = value.trim();
         }
+    }
+
+    // Validate required options
+    const requiredOptions = Object.keys(currentModuleInfo.options).filter(
+        key => currentModuleInfo.options[key].required
+    );
+
+    const missingOptions = requiredOptions.filter(opt => !options[opt]);
+    if (missingOptions.length > 0) {
+        appendOutput('Error', `Missing required options: ${missingOptions.join(', ')}`, 'error');
+        return;
     }
 
     closeConfigModal();
@@ -797,14 +830,21 @@ async function runConfiguredModule(event) {
             })
         });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
         const result = await response.json();
 
         if (result.success) {
-            appendOutput('', result.output);
+            appendOutput('Module Output', result.output, 'success');
+            updateContext();  // Refresh context display
         } else {
             appendOutput('Error', result.error || 'Module execution failed', 'error');
         }
     } catch (error) {
+        console.error('Module execution error:', error);
         appendOutput('Error', `Failed to execute module: ${error.message}`, 'error');
     }
 }
