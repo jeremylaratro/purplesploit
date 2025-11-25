@@ -161,8 +161,9 @@ Type 'help' for available commands.
                     <h3>Add New Target</h3>
                     <form id="add-target-form" onsubmit="addTarget(event)" class="manager-form">
                         <div class="form-group">
-                            <label for="target-ip">IP Address / Hostname:</label>
-                            <input type="text" id="target-ip" placeholder="10.10.10.100 or example.com" required />
+                            <label for="target-ip">IP Address / Hostname / Subnet:</label>
+                            <input type="text" id="target-ip" placeholder="10.10.10.100 or 10.10.10.0/24" required />
+                            <small style="color: var(--text-muted); font-size: 11px;">Supports CIDR notation (e.g., 10.10.10.0/24 for subnets)</small>
                         </div>
                         <div class="form-group">
                             <label for="target-name">Name (optional):</label>

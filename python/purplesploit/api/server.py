@@ -6,6 +6,7 @@ FastAPI server providing HTTP API for PurpleSploit
 import subprocess
 import asyncio
 import json
+import ipaddress
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
@@ -88,6 +89,42 @@ print(f"[INFO] Discovered {module_count} modules")
 
 # Session storage for command history
 sessions: Dict[str, Dict] = {}
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def expand_cidr(target: str) -> List[str]:
+    """
+    Expand CIDR notation into individual IP addresses.
+
+    Args:
+        target: IP address or CIDR notation (e.g., "10.10.10.0/24")
+
+    Returns:
+        List of IP addresses as strings
+    """
+    try:
+        # Try to parse as CIDR network
+        network = ipaddress.ip_network(target, strict=False)
+
+        # For large networks, limit the expansion
+        if network.num_addresses > 256:
+            # For /16 and larger, return the network notation itself
+            # Modules should handle this appropriately
+            return [str(network)]
+
+        # For smaller networks, expand to individual IPs
+        return [str(ip) for ip in network.hosts()]
+    except ValueError:
+        # Not CIDR notation, treat as single IP/hostname
+        return [target]
+
+
+def is_cidr_notation(target: str) -> bool:
+    """Check if target is in CIDR notation."""
+    return '/' in target
 
 
 
@@ -698,7 +735,7 @@ async def execute_framework_command(command: str, session_id: str) -> str:
   run                  - Execute current module
   back                 - Unload current module
   targets              - List targets
-  target <ip>          - Set target
+  target <ip|subnet>   - Set target (supports CIDR notation)
   creds                - List credentials
   cred <user:pass>     - Add credential
   stats                - Show statistics
@@ -706,10 +743,13 @@ async def execute_framework_command(command: str, session_id: str) -> str:
   clear                - Clear screen
 
 Examples:
-  search smb           - Find SMB-related modules
-  use smb/authentication - Load SMB auth module
-  set RHOST 10.10.10.100 - Set target option
-  run                  - Execute the module
+  search smb                 - Find SMB-related modules
+  use smb/authentication     - Load SMB auth module
+  target 10.10.10.100        - Set single target
+  target 10.10.10.0/24       - Add entire subnet (/24 expands to 254 IPs)
+  target 192.168.0.0/16      - Add large subnet (kept as range)
+  set RHOST 10.10.10.100     - Set target option
+  run                        - Execute the module
 """
 
     elif cmd == "search":
@@ -848,9 +888,28 @@ Examples:
             return "No target set"
 
         # Add/set target (non-blocking)
-        target_ip = args[0]
-        await loop.run_in_executor(None, framework.add_target, "network", target_ip, target_ip)
-        return f"Target set: {target_ip}"
+        target_input = args[0]
+
+        # Check if it's CIDR notation
+        if is_cidr_notation(target_input):
+            # Expand CIDR to individual IPs
+            ips = expand_cidr(target_input)
+
+            if len(ips) == 1 and '/' in ips[0]:
+                # Large subnet - add as-is
+                await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+                return f"Target subnet added: {target_input}\n(Large subnet - will be expanded during module execution)"
+            else:
+                # Expand and add individual IPs
+                count = 0
+                for ip in ips:
+                    await loop.run_in_executor(None, framework.add_target, "network", str(ip), str(ip))
+                    count += 1
+                return f"Added {count} targets from subnet {target_input}\nUse 'targets' to view all targets."
+        else:
+            # Single IP/hostname
+            await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            return f"Target set: {target_input}"
 
     elif cmd == "targets":
         targets = framework.session.targets.list()
