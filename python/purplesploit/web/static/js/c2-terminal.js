@@ -517,3 +517,294 @@ document.getElementById('refresh-modules')?.addEventListener('click', () => {
     appendOutput('System', 'Refreshing modules...', 'info');
     loadModules();
 });
+
+/* ============================================================================
+   Target Management
+   ============================================================================ */
+
+async function showTargetManager() {
+    const modal = document.getElementById('target-modal');
+    modal.classList.remove('hidden');
+    await loadTargetsList();
+}
+
+function closeTargetManager() {
+    document.getElementById('target-modal').classList.add('hidden');
+}
+
+async function loadTargetsList() {
+    const listContainer = document.getElementById('target-list');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/targets`);
+        const targets = await response.json();
+
+        if (targets.length === 0) {
+            listContainer.innerHTML = '<div class="empty">No targets configured</div>';
+            return;
+        }
+
+        listContainer.innerHTML = targets.map(target => `
+            <div class="entity-item">
+                <div class="entity-info">
+                    <div class="entity-name">${escapeHtml(target.name)}</div>
+                    <div class="entity-details">${escapeHtml(target.ip)}</div>
+                </div>
+                <div class="entity-actions">
+                    <button onclick="useTarget('${escapeHtml(target.ip)}')">Use</button>
+                    <button class="delete" onclick="deleteTarget('${escapeHtml(target.name)}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        listContainer.innerHTML = '<div class="empty">Failed to load targets</div>';
+        console.error('Failed to load targets:', error);
+    }
+}
+
+async function addTarget(event) {
+    event.preventDefault();
+
+    const ip = document.getElementById('target-ip').value.trim();
+    const name = document.getElementById('target-name').value.trim() || ip;
+
+    // Execute via terminal
+    executeCommand(`target ${ip}`);
+
+    // Clear form
+    document.getElementById('add-target-form').reset();
+
+    // Reload list
+    setTimeout(() => loadTargetsList(), 500);
+}
+
+async function useTarget(ip) {
+    executeCommand(`target ${ip}`);
+    closeTargetManager();
+}
+
+async function deleteTarget(name) {
+    if (!confirm(`Delete target ${name}?`)) return;
+
+    try {
+        await fetch(`${API_BASE}/api/targets/${name}`, { method: 'DELETE' });
+        await loadTargetsList();
+        appendOutput('System', `Target ${name} deleted`, 'success');
+    } catch (error) {
+        appendOutput('Error', `Failed to delete target: ${error.message}`, 'error');
+    }
+}
+
+/* ============================================================================
+   Credential Management
+   ============================================================================ */
+
+async function showCredentialManager() {
+    const modal = document.getElementById('credential-modal');
+    modal.classList.remove('hidden');
+    await loadCredentialsList();
+}
+
+function closeCredentialManager() {
+    document.getElementById('credential-modal').classList.add('hidden');
+}
+
+async function loadCredentialsList() {
+    const listContainer = document.getElementById('credential-list');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/credentials`);
+        const credentials = await response.json();
+
+        if (credentials.length === 0) {
+            listContainer.innerHTML = '<div class="empty">No credentials configured</div>';
+            return;
+        }
+
+        listContainer.innerHTML = credentials.map(cred => `
+            <div class="entity-item">
+                <div class="entity-info">
+                    <div class="entity-name">${escapeHtml(cred.name)}</div>
+                    <div class="entity-details">${escapeHtml(cred.username)}:${cred.password ? '***' : '[hash]'}</div>
+                </div>
+                <div class="entity-actions">
+                    <button class="delete" onclick="deleteCredential('${escapeHtml(cred.name)}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        listContainer.innerHTML = '<div class="empty">Failed to load credentials</div>';
+        console.error('Failed to load credentials:', error);
+    }
+}
+
+async function addCredential(event) {
+    event.preventDefault();
+
+    const username = document.getElementById('cred-username').value.trim();
+    const password = document.getElementById('cred-password').value;
+    const domain = document.getElementById('cred-domain').value.trim();
+    const hash = document.getElementById('cred-hash').value.trim();
+
+    // Build command
+    if (password) {
+        executeCommand(`cred ${username}:${password}`);
+    } else {
+        // Use API for complex credentials
+        try {
+            await fetch(`${API_BASE}/api/credentials`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: username,
+                    username: username,
+                    domain: domain || null,
+                    hash: hash || null
+                })
+            });
+            appendOutput('System', `Credential ${username} added`, 'success');
+        } catch (error) {
+            appendOutput('Error', `Failed to add credential: ${error.message}`, 'error');
+        }
+    }
+
+    // Clear form
+    document.getElementById('add-credential-form').reset();
+
+    // Reload list
+    setTimeout(() => loadCredentialsList(), 500);
+}
+
+async function deleteCredential(name) {
+    if (!confirm(`Delete credential ${name}?`)) return;
+
+    try {
+        await fetch(`${API_BASE}/api/credentials/${name}`, { method: 'DELETE' });
+        await loadCredentialsList();
+        appendOutput('System', `Credential ${name} deleted`, 'success');
+    } catch (error) {
+        appendOutput('Error', `Failed to delete credential: ${error.message}`, 'error');
+    }
+}
+
+/* ============================================================================
+   Module Configuration
+   ============================================================================ */
+
+let currentModuleInfo = null;
+
+async function configureModuleFromModal() {
+    // Get module info from modal
+    const modal = document.getElementById('module-modal');
+    const modulePath = modal.dataset.modulePath;
+
+    if (!modulePath) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/c2/module/${modulePath}`);
+        currentModuleInfo = await response.json();
+
+        showConfigModal(currentModuleInfo);
+        closeModuleModal();
+    } catch (error) {
+        appendOutput('Error', `Failed to load module config: ${error.message}`, 'error');
+    }
+}
+
+function showConfigModal(moduleInfo) {
+    const modal = document.getElementById('config-modal');
+    const modalTitle = document.getElementById('config-module-name');
+    const optionsContainer = document.getElementById('config-options');
+
+    modalTitle.textContent = `Configure: ${moduleInfo.name}`;
+
+    // Build options form
+    let html = '';
+    Object.keys(moduleInfo.options).forEach(key => {
+        const opt = moduleInfo.options[key];
+        const required = opt.required ? 'required' : '';
+        const requiredClass = opt.required ? 'required' : '';
+        const requiredIndicator = opt.required ? '<span class="required-indicator">*</span>' : '';
+
+        html += `
+            <div class="config-option ${requiredClass}">
+                <div class="option-label">
+                    ${escapeHtml(key)}${requiredIndicator}
+                </div>
+                <div class="option-input">
+                    <input
+                        type="text"
+                        name="${escapeHtml(key)}"
+                        value="${escapeHtml(opt.value || '')}"
+                        placeholder="${escapeHtml(opt.description || '')}"
+                        ${required}
+                        class="form-group input"
+                    />
+                </div>
+                <div class="option-description">${escapeHtml(opt.description || '')}</div>
+            </div>
+        `;
+    });
+
+    optionsContainer.innerHTML = html;
+    modal.classList.remove('hidden');
+}
+
+function closeConfigModal() {
+    document.getElementById('config-modal').classList.add('hidden');
+    currentModuleInfo = null;
+}
+
+async function runConfiguredModule(event) {
+    event.preventDefault();
+
+    if (!currentModuleInfo) return;
+
+    // Gather form values
+    const formData = new FormData(event.target);
+    const options = {};
+
+    for (let [key, value] of formData.entries()) {
+        if (value.trim()) {
+            options[key] = value.trim();
+        }
+    }
+
+    closeConfigModal();
+
+    // Show in terminal
+    appendCommand(`use ${currentModuleInfo.path}`);
+    appendOutput('', `Loaded module: ${currentModuleInfo.name}`);
+
+    // Set options
+    for (let [key, value] of Object.entries(options)) {
+        appendCommand(`set ${key} ${value}`);
+        appendOutput('', `Set ${key} => ${value}`);
+    }
+
+    // Execute module
+    appendCommand('run');
+    appendOutput('System', 'Executing module...', 'info');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/c2/module/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                module_path: currentModuleInfo.path,
+                options: options,
+                session_id: sessionId
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            appendOutput('', result.output);
+        } else {
+            appendOutput('Error', result.error || 'Module execution failed', 'error');
+        }
+    } catch (error) {
+        appendOutput('Error', `Failed to execute module: ${error.message}`, 'error');
+    }
+}

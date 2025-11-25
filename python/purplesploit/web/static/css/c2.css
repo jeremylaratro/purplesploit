@@ -511,6 +511,10 @@ body {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+.modal-content.modal-large {
+    max-width: 900px;
+}
+
 .modal-header {
     padding: 20px 25px;
     border-bottom: 1px solid var(--border-color);
@@ -643,6 +647,183 @@ body {
 
 .terminal-line {
     animation: fadeIn 0.2s ease-out;
+}
+
+/* ============================================================================
+   Form Styles
+   ============================================================================ */
+
+.manager-section {
+    margin-bottom: 30px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.manager-section:last-child {
+    border-bottom: none;
+}
+
+.manager-section h3 {
+    font-size: 16px;
+    color: var(--accent-cyan);
+    margin-bottom: 20px;
+}
+
+.manager-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font-mono);
+    transition: all 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 0 3px rgba(157, 78, 221, 0.1);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.entity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.entity-item {
+    padding: 15px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.entity-item:hover {
+    background: var(--bg-highlight);
+    border-color: var(--accent-purple);
+}
+
+.entity-info {
+    flex: 1;
+}
+
+.entity-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.entity-details {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.entity-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.entity-actions button {
+    padding: 6px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.entity-actions button:hover {
+    background: var(--accent-purple);
+    border-color: var(--accent-purple);
+}
+
+.entity-actions button.delete {
+    color: var(--error);
+}
+
+.entity-actions button.delete:hover {
+    background: var(--error);
+    color: white;
+}
+
+.config-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.config-option {
+    display: grid;
+    grid-template-columns: 150px 1fr 100px;
+    gap: 15px;
+    align-items: center;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+}
+
+.config-option.required {
+    border-left: 3px solid var(--accent-purple);
+}
+
+.option-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.option-label .required-indicator {
+    color: var(--error);
+    margin-left: 4px;
+}
+
+.option-input {
+    flex: 1;
+}
+
+.option-description {
+    font-size: 11px;
+    color: var(--text-muted);
+    grid-column: 2 / 3;
 }
 
 /* ============================================================================

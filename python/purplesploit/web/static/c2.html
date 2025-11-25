@@ -71,11 +71,11 @@
                     <h3>⚡ QUICK ACTIONS</h3>
                 </div>
                 <div class="quick-actions">
-                    <button class="action-btn" onclick="executeQuickCommand('show modules')">List Modules</button>
-                    <button class="action-btn" onclick="executeQuickCommand('targets')">Show Targets</button>
-                    <button class="action-btn" onclick="executeQuickCommand('creds')">Show Creds</button>
-                    <button class="action-btn" onclick="executeQuickCommand('stats')">Statistics</button>
-                    <button class="action-btn" onclick="clearTerminal()">Clear Terminal</button>
+                    <button class="action-btn" onclick="showTargetManager()">📍 Manage Targets</button>
+                    <button class="action-btn" onclick="showCredentialManager()">🔑 Manage Credentials</button>
+                    <button class="action-btn" onclick="executeQuickCommand('show modules')">📁 List Modules</button>
+                    <button class="action-btn" onclick="executeQuickCommand('stats')">📊 Statistics</button>
+                    <button class="action-btn" onclick="clearTerminal()">🗑️ Clear Terminal</button>
                 </div>
             </div>
         </aside>
@@ -144,6 +144,100 @@ Type 'help' for available commands.
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModuleModal()">Close</button>
                 <button class="btn btn-primary" onclick="useModuleFromModal()">Use Module</button>
+                <button class="btn btn-primary" onclick="configureModuleFromModal()" style="margin-left: 8px;">Configure & Run</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target Manager Modal -->
+    <div id="target-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🎯 Target Management</h2>
+                <button class="modal-close" onclick="closeTargetManager()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manager-section">
+                    <h3>Add New Target</h3>
+                    <form id="add-target-form" onsubmit="addTarget(event)" class="manager-form">
+                        <div class="form-group">
+                            <label for="target-ip">IP Address / Hostname:</label>
+                            <input type="text" id="target-ip" placeholder="10.10.10.100 or example.com" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="target-name">Name (optional):</label>
+                            <input type="text" id="target-name" placeholder="Web Server" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Target</button>
+                    </form>
+                </div>
+                <div class="manager-section">
+                    <h3>Current Targets</h3>
+                    <div id="target-list" class="entity-list">
+                        <div class="loading">Loading targets...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credential Manager Modal -->
+    <div id="credential-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔑 Credential Management</h2>
+                <button class="modal-close" onclick="closeCredentialManager()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manager-section">
+                    <h3>Add New Credential</h3>
+                    <form id="add-credential-form" onsubmit="addCredential(event)" class="manager-form">
+                        <div class="form-group">
+                            <label for="cred-username">Username:</label>
+                            <input type="text" id="cred-username" placeholder="administrator" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-password">Password:</label>
+                            <input type="password" id="cred-password" placeholder="Password123!" />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-domain">Domain (optional):</label>
+                            <input type="text" id="cred-domain" placeholder="CORP" />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-hash">Hash (optional):</label>
+                            <input type="text" id="cred-hash" placeholder="NTLM hash" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Credential</button>
+                    </form>
+                </div>
+                <div class="manager-section">
+                    <h3>Current Credentials</h3>
+                    <div id="credential-list" class="entity-list">
+                        <div class="loading">Loading credentials...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Configuration Modal -->
+    <div id="config-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="config-module-name">Configure Module</h2>
+                <button class="modal-close" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="module-config-form" onsubmit="runConfiguredModule(event)">
+                    <div id="config-options" class="config-options">
+                        <!-- Options will be inserted here -->
+                    </div>
+                    <div class="modal-footer" style="border-top: none; padding-top: 0;">
+                        <button type="button" class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Run Module</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
