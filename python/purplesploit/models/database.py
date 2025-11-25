@@ -227,13 +227,15 @@ class DatabaseManager:
         self._check_and_fix_databases()
 
         # Create engines for each database
+        # Use check_same_thread=False to allow async operations across threads
+        sqlite_args = {"check_same_thread": False}
         self.engines = {
-            "credentials": create_engine(f"sqlite:///{CREDENTIALS_DB}"),
-            "targets": create_engine(f"sqlite:///{TARGETS_DB}"),
-            "web_targets": create_engine(f"sqlite:///{WEB_TARGETS_DB}"),
-            "ad_targets": create_engine(f"sqlite:///{AD_TARGETS_DB}"),
-            "services": create_engine(f"sqlite:///{SERVICES_DB}"),
-            "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}"),
+            "credentials": create_engine(f"sqlite:///{CREDENTIALS_DB}", connect_args=sqlite_args),
+            "targets": create_engine(f"sqlite:///{TARGETS_DB}", connect_args=sqlite_args),
+            "web_targets": create_engine(f"sqlite:///{WEB_TARGETS_DB}", connect_args=sqlite_args),
+            "ad_targets": create_engine(f"sqlite:///{AD_TARGETS_DB}", connect_args=sqlite_args),
+            "services": create_engine(f"sqlite:///{SERVICES_DB}", connect_args=sqlite_args),
+            "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}", connect_args=sqlite_args),
         }
 
         # Create session makers
