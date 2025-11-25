@@ -264,7 +264,7 @@ class DatabaseManager:
             if db_path.exists():
                 try:
                     # Try to open the database
-                    conn = sqlite3.connect(str(db_path))
+                    conn = sqlite3.connect(str(db_path), check_same_thread=False)
                     cursor = conn.cursor()
                     # Try a simple query to verify it's a valid database
                     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
