@@ -83,7 +83,8 @@ else:
     db_path = str(data_dir / 'purplesploit.db')
 
 framework = Framework(db_path=db_path)
-framework.discover_modules()
+module_count = framework.discover_modules()
+print(f"[INFO] Discovered {module_count} modules")
 
 # Session storage for command history
 sessions: Dict[str, Dict] = {}
@@ -701,7 +702,14 @@ async def execute_framework_command(command: str, session_id: str) -> str:
   creds                - List credentials
   cred <user:pass>     - Add credential
   stats                - Show statistics
+  info                 - Show framework information
   clear                - Clear screen
+
+Examples:
+  search smb           - Find SMB-related modules
+  use smb/authentication - Load SMB auth module
+  set RHOST 10.10.10.100 - Set target option
+  run                  - Execute the module
 """
 
     elif cmd == "search":
@@ -728,7 +736,23 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         if module:
             sessions[session_id]["current_module"] = module_path
             return f"Loaded module: {module.name}\nUse 'show options' to see available options."
-        return f"Module not found: {module_path}"
+
+        # Module not found - provide helpful suggestions
+        output = f"Module not found: {module_path}\n\n"
+
+        # Try to find similar modules
+        search_results = await loop.run_in_executor(None, framework.search_modules, module_path.split('/')[-1])
+        if search_results:
+            output += "Did you mean one of these?\n\n"
+            for i, m in enumerate(search_results[:5], 1):
+                output += f"  {i}. {m.path}\n"
+                output += f"     {m.name} - {m.description}\n\n"
+            output += f"Use 'search {module_path}' to find more modules."
+        else:
+            output += "Use 'show modules' to see all available modules.\n"
+            output += f"Or use 'search <keyword>' to find specific modules."
+
+        return output
 
     elif cmd == "show":
         if not args:
@@ -871,6 +895,17 @@ async def execute_framework_command(command: str, session_id: str) -> str:
 
     elif cmd == "clear":
         return "\x1b[2J\x1b[H"  # ANSI clear screen
+
+    elif cmd == "info":
+        # Show framework info
+        output = "Framework Information:\n\n"
+        output += f"  Version:     2.0.0\n"
+        output += f"  Modules:     {len(framework.modules)}\n"
+        output += f"  Categories:  {len(framework.get_categories())}\n"
+        output += f"  Database:    {framework.database.db_path}\n"
+        if sessions[session_id].get("current_module"):
+            output += f"\n  Current Module: {sessions[session_id]['current_module']}\n"
+        return output
 
     else:
         return f"Unknown command: {cmd}\nType 'help' for available commands."
