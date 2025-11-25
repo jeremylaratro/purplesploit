@@ -4,10 +4,13 @@ FastAPI server providing HTTP API for PurpleSploit
 """
 
 import subprocess
-from typing import List, Optional
+import asyncio
+import json
+from typing import List, Optional, Dict, Any
 from pathlib import Path
+from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +23,7 @@ from purplesploit.models.database import (
     TargetCreate, TargetResponse,
     ServiceResponse
 )
+from purplesploit.core.framework import Framework
 
 # Create FastAPI app
 app = FastAPI(
@@ -66,6 +70,23 @@ if STATIC_DIR:
     print(f"[INFO] Serving web portal from: {STATIC_DIR}")
 else:
     print("[WARNING] Web portal static files not found. API-only mode enabled.")
+
+# Initialize Framework for C2 operations
+# Use project-local database path
+import os
+if os.getenv('PURPLESPLOIT_DB'):
+    db_path = os.getenv('PURPLESPLOIT_DB')
+else:
+    project_root = Path(__file__).parent.parent.parent.parent
+    data_dir = project_root / '.data'
+    data_dir.mkdir(exist_ok=True)
+    db_path = str(data_dir / 'purplesploit.db')
+
+framework = Framework(db_path=db_path)
+framework.discover_modules()
+
+# Session storage for command history
+sessions: Dict[str, Dict] = {}
 
 
 
@@ -407,16 +428,15 @@ class ExploitResponse(BaseModel):
     target: str
     service: str
     port: int
-    version: Optional[str]
+    version: Optional[str] = None
     exploit_title: str
-    exploit_path: Optional[str]
-    edb_id: Optional[str]
-    platform: Optional[str]
-    exploit_type: Optional[str]
-    created_at: Optional[str]
+    exploit_path: Optional[str] = None
+    edb_id: Optional[str] = None
+    platform: Optional[str] = None
+    exploit_type: Optional[str] = None
+    created_at: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TargetAnalysisResponse(BaseModel):
@@ -479,6 +499,463 @@ async def get_exploits_for_target(target: str):
     """Get all exploits for a specific target"""
     exploits = db_manager.get_exploits_for_target(target)
     return [ExploitResponse.from_orm(e) for e in exploits]
+
+
+# ============================================================================
+# C2 Command & Control API
+# ============================================================================
+
+class C2CommandRequest(BaseModel):
+    """Request model for C2 command execution"""
+    command: str
+    session_id: Optional[str] = "default"
+
+class C2CommandResponse(BaseModel):
+    """Response model for C2 command execution"""
+    success: bool
+    output: str
+    error: Optional[str] = None
+    timestamp: str
+    session_id: str
+
+class ModuleListResponse(BaseModel):
+    """Response model for module list"""
+    path: str
+    name: str
+    category: str
+    description: str
+    author: str
+
+class ModuleExecuteRequest(BaseModel):
+    """Request model for module execution"""
+    module_path: str
+    options: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = "default"
+
+
+@app.get("/api/c2/modules")
+async def list_modules():
+    """List all available modules"""
+    modules = framework.list_modules()
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in modules]
+
+
+@app.get("/api/c2/modules/search")
+async def search_modules(query: str):
+    """Search modules by name, description, or category"""
+    results = framework.search_modules(query)
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in results]
+
+
+@app.get("/api/c2/modules/{category}")
+async def get_modules_by_category(category: str):
+    """Get modules by category"""
+    modules = framework.list_modules(category=category)
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in modules]
+
+
+@app.get("/api/c2/module/{module_path:path}")
+async def get_module_info(module_path: str):
+    """Get detailed module information"""
+    metadata = framework.get_module(module_path)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    # Instantiate to get options
+    module_instance = metadata.instance(framework)
+
+    return {
+        "path": metadata.path,
+        "name": metadata.name,
+        "category": metadata.category,
+        "description": metadata.description,
+        "author": metadata.author,
+        "options": module_instance.show_options()
+    }
+
+
+@app.post("/api/c2/module/execute")
+async def execute_module(request: ModuleExecuteRequest):
+    """Execute a module with provided options"""
+    try:
+        # Load module
+        module = framework.use_module(request.module_path)
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
+
+        # Set options if provided
+        if request.options:
+            for key, value in request.options.items():
+                module.set_option(key, value)
+
+        # Run module
+        results = framework.run_module(module)
+
+        # Store in session history
+        session_id = request.session_id
+        if session_id not in sessions:
+            sessions[session_id] = {"history": [], "created_at": datetime.now().isoformat()}
+
+        sessions[session_id]["history"].append({
+            "type": "module_execution",
+            "module": request.module_path,
+            "timestamp": datetime.now().isoformat(),
+            "results": results
+        })
+
+        return {
+            "success": results.get("success", False),
+            "output": json.dumps(results, indent=2),
+            "error": results.get("error"),
+            "timestamp": datetime.now().isoformat(),
+            "session_id": session_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/c2/command")
+async def execute_c2_command(request: C2CommandRequest):
+    """Execute a framework command"""
+    try:
+        command = request.command.strip()
+        session_id = request.session_id
+
+        # Initialize session if needed
+        if session_id not in sessions:
+            sessions[session_id] = {
+                "history": [],
+                "created_at": datetime.now().isoformat(),
+                "current_module": None
+            }
+
+        # Parse and execute command
+        output = await execute_framework_command(command, session_id)
+
+        # Store in history
+        sessions[session_id]["history"].append({
+            "type": "command",
+            "command": command,
+            "output": output,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        return C2CommandResponse(
+            success=True,
+            output=output,
+            timestamp=datetime.now().isoformat(),
+            session_id=session_id
+        )
+    except Exception as e:
+        return C2CommandResponse(
+            success=False,
+            output="",
+            error=str(e),
+            timestamp=datetime.now().isoformat(),
+            session_id=request.session_id
+        )
+
+
+async def execute_framework_command(command: str, session_id: str) -> str:
+    """Execute a framework command and return output"""
+    parts = command.split()
+    if not parts:
+        return ""
+
+    cmd = parts[0].lower()
+    args = parts[1:] if len(parts) > 1 else []
+
+    # Handle different commands
+    if cmd == "help":
+        return """Available Commands:
+  search <query>       - Search for modules
+  use <module>         - Load a module
+  show modules         - List all modules
+  show options         - Show module options
+  set <opt> <val>      - Set module option
+  run                  - Execute current module
+  back                 - Unload current module
+  targets              - List targets
+  target <ip>          - Set target
+  creds                - List credentials
+  cred <user:pass>     - Add credential
+  stats                - Show statistics
+  clear                - Clear screen
+"""
+
+    elif cmd == "search":
+        if not args:
+            return "Usage: search <query>"
+        query = " ".join(args)
+        results = framework.search_modules(query)
+        if not results:
+            return f"No modules found matching '{query}'"
+        output = f"Found {len(results)} module(s):\n\n"
+        for i, m in enumerate(results, 1):
+            output += f"  {i}. [{m.category}] {m.name}\n"
+            output += f"     {m.path}\n"
+            output += f"     {m.description}\n\n"
+        return output
+
+    elif cmd == "use":
+        if not args:
+            return "Usage: use <module_path>"
+        module_path = " ".join(args)
+        module = framework.use_module(module_path)
+        if module:
+            sessions[session_id]["current_module"] = module_path
+            return f"Loaded module: {module.name}\nUse 'show options' to see available options."
+        return f"Module not found: {module_path}"
+
+    elif cmd == "show":
+        if not args:
+            return "Usage: show [modules|options|targets|creds]"
+
+        subcmd = args[0].lower()
+
+        if subcmd == "modules":
+            modules = framework.list_modules()
+            output = f"Available Modules ({len(modules)}):\n\n"
+            current_category = None
+            for m in modules:
+                if m.category != current_category:
+                    output += f"\n[{m.category.upper()}]\n"
+                    current_category = m.category
+                output += f"  {m.path}\n"
+            return output
+
+        elif subcmd == "options":
+            if not sessions[session_id].get("current_module"):
+                return "No module loaded. Use 'use <module>' first."
+            module = framework.use_module(sessions[session_id]["current_module"])
+            if not module:
+                return "Error loading current module"
+            options = module.show_options()
+            output = "Module Options:\n\n"
+            for key, opt in options.items():
+                required = "[*]" if opt.get('required') else "   "
+                value = opt.get('value', '')
+                desc = opt.get('description', '')
+                output += f"  {required} {key:15} {str(value):20} {desc}\n"
+            return output
+
+        elif subcmd == "targets":
+            targets = framework.session.targets.list()
+            if not targets:
+                return "No targets configured"
+            output = "Targets:\n"
+            for t in targets:
+                output += f"  • {t.get('name', 'N/A')} - {t.get('ip', t.get('url', 'N/A'))}\n"
+            return output
+
+        elif subcmd == "creds":
+            creds = framework.session.credentials.list()
+            if not creds:
+                return "No credentials configured"
+            output = "Credentials:\n"
+            for c in creds:
+                domain = f"{c.get('domain')}/" if c.get('domain') else ""
+                output += f"  • {domain}{c.get('username')}:{c.get('password', '[hash]')}\n"
+            return output
+
+        return f"Unknown show command: {subcmd}"
+
+    elif cmd == "set":
+        if len(args) < 2:
+            return "Usage: set <option> <value>"
+        if not sessions[session_id].get("current_module"):
+            return "No module loaded. Use 'use <module>' first."
+
+        module = framework.use_module(sessions[session_id]["current_module"])
+        if not module:
+            return "Error loading current module"
+
+        option = args[0]
+        value = " ".join(args[1:])
+        module.set_option(option, value)
+        return f"Set {option} => {value}"
+
+    elif cmd == "run" or cmd == "exploit":
+        if not sessions[session_id].get("current_module"):
+            return "No module loaded. Use 'use <module>' first."
+
+        module = framework.use_module(sessions[session_id]["current_module"])
+        if not module:
+            return "Error loading current module"
+
+        results = framework.run_module(module)
+        output = "Module Execution Results:\n\n"
+        output += json.dumps(results, indent=2)
+        return output
+
+    elif cmd == "back":
+        sessions[session_id]["current_module"] = None
+        return "Unloaded current module"
+
+    elif cmd == "target":
+        if not args:
+            # Show current target
+            current = framework.session.targets.get_active()
+            if current:
+                return f"Current target: {current.get('name')} - {current.get('ip', current.get('url'))}"
+            return "No target set"
+
+        # Add/set target
+        target_ip = args[0]
+        framework.add_target("network", target_ip, target_ip)
+        return f"Target set: {target_ip}"
+
+    elif cmd == "targets":
+        targets = framework.session.targets.list()
+        if not targets:
+            return "No targets configured"
+        output = "Targets:\n"
+        for t in targets:
+            output += f"  • {t.get('name', 'N/A')} - {t.get('ip', t.get('url', 'N/A'))}\n"
+        return output
+
+    elif cmd == "cred":
+        if not args:
+            return "Usage: cred <username:password>"
+
+        cred_str = args[0]
+        if ":" in cred_str:
+            username, password = cred_str.split(":", 1)
+            framework.add_credential(username, password)
+            return f"Added credential: {username}:{password}"
+        return "Invalid format. Use: username:password"
+
+    elif cmd == "creds":
+        creds = framework.session.credentials.list()
+        if not creds:
+            return "No credentials configured"
+        output = "Credentials:\n"
+        for c in creds:
+            domain = f"{c.get('domain')}/" if c.get('domain') else ""
+            output += f"  • {domain}{c.get('username')}:{c.get('password', '[hash]')}\n"
+        return output
+
+    elif cmd == "stats":
+        stats = framework.get_stats()
+        output = "Framework Statistics:\n\n"
+        output += f"  Modules:     {stats['modules']}\n"
+        output += f"  Categories:  {stats['categories']}\n"
+        output += f"  Targets:     {stats['targets']}\n"
+        output += f"  Credentials: {stats['credentials']}\n"
+        if stats['current_module']:
+            output += f"  Current:     {stats['current_module']}\n"
+        return output
+
+    elif cmd == "clear":
+        return "\x1b[2J\x1b[H"  # ANSI clear screen
+
+    else:
+        return f"Unknown command: {cmd}\nType 'help' for available commands."
+
+
+@app.get("/api/c2/session/{session_id}")
+async def get_session(session_id: str):
+    """Get session information and history"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return sessions[session_id]
+
+
+@app.get("/api/c2/sessions")
+async def list_sessions():
+    """List all active sessions"""
+    return {
+        "sessions": list(sessions.keys()),
+        "count": len(sessions)
+    }
+
+
+@app.delete("/api/c2/session/{session_id}")
+async def clear_session(session_id: str):
+    """Clear session history"""
+    if session_id in sessions:
+        sessions[session_id]["history"] = []
+        return {"message": f"Session {session_id} cleared"}
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@app.websocket("/ws/c2/{session_id}")
+async def websocket_c2(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for real-time C2 communication"""
+    await websocket.accept()
+
+    # Initialize session
+    if session_id not in sessions:
+        sessions[session_id] = {
+            "history": [],
+            "created_at": datetime.now().isoformat(),
+            "current_module": None
+        }
+
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Connected to PurpleSploit C2",
+            "session_id": session_id
+        })
+
+        while True:
+            # Receive command from client
+            data = await websocket.receive_json()
+            command = data.get("command", "").strip()
+
+            if not command:
+                continue
+
+            # Execute command
+            try:
+                output = await execute_framework_command(command, session_id)
+
+                # Store in history
+                sessions[session_id]["history"].append({
+                    "type": "command",
+                    "command": command,
+                    "output": output,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+                # Send response
+                await websocket.send_json({
+                    "type": "output",
+                    "command": command,
+                    "output": output,
+                    "success": True,
+                    "timestamp": datetime.now().isoformat()
+                })
+            except Exception as e:
+                await websocket.send_json({
+                    "type": "error",
+                    "command": command,
+                    "error": str(e),
+                    "success": False,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+    except WebSocketDisconnect:
+        print(f"Client disconnected from session {session_id}")
 
 
 # ============================================================================
