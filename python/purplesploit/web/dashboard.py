@@ -108,8 +108,9 @@ async def targets_page(request: Request):
 
     # Transform targets to match template expectations
     targets = []
-    for t in raw_targets:
+    for i, t in enumerate(raw_targets):
         target_data = {
+            'index': i,
             'name': t.get('name') or t.get('identifier'),
             'ip': t.get('identifier'),
             'description': t.get('metadata', {}).get('description', '') if isinstance(t.get('metadata'), dict) else ''
@@ -141,15 +142,36 @@ async def targets_page(request: Request):
     })
 
 
+@app.post("/targets/delete/{identifier}")
+async def delete_target_web(identifier: str):
+    """Delete a target via web interface"""
+    db.remove_target(identifier)
+    return RedirectResponse(url="/targets", status_code=303)
+
+
 @app.get("/credentials", response_class=HTMLResponse)
 async def credentials_page(request: Request):
     """Credentials management page"""
-    credentials = db.get_credentials()
+    raw_credentials = db.get_credentials()
+
+    # Add index to credentials
+    credentials = []
+    for i, c in enumerate(raw_credentials):
+        cred_data = dict(c)
+        cred_data['index'] = i
+        credentials.append(cred_data)
 
     return templates.TemplateResponse("credentials.html", {
         "request": request,
         "credentials": credentials,
     })
+
+
+@app.post("/credentials/delete/{cred_id}")
+async def delete_credential_web(cred_id: int):
+    """Delete a credential via web interface"""
+    db.remove_credential(cred_id)
+    return RedirectResponse(url="/credentials", status_code=303)
 
 
 @app.get("/services", response_class=HTMLResponse)

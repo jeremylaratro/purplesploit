@@ -213,6 +213,76 @@ class TargetManager:
                 return True
         return False
 
+    def remove_by_index(self, index: int) -> bool:
+        """
+        Remove a target by index.
+
+        Args:
+            index: Index of target to remove (0-based)
+
+        Returns:
+            True if removed
+        """
+        if 0 <= index < len(self.targets):
+            self.targets.pop(index)
+            if self.current_index >= len(self.targets):
+                self.current_index = max(0, len(self.targets) - 1)
+            return True
+        return False
+
+    def remove_range(self, start_index: int, end_index: int) -> int:
+        """
+        Remove targets by index range.
+
+        Args:
+            start_index: Start index (0-based, inclusive)
+            end_index: End index (0-based, inclusive)
+
+        Returns:
+            Number of targets removed
+        """
+        # Validate range
+        if start_index < 0 or end_index >= len(self.targets) or start_index > end_index:
+            return 0
+
+        # Remove in reverse order to maintain indices
+        count = 0
+        for i in range(end_index, start_index - 1, -1):
+            if self.remove_by_index(i):
+                count += 1
+
+        return count
+
+    def clear(self) -> int:
+        """
+        Remove all targets.
+
+        Returns:
+            Number of targets removed
+        """
+        count = len(self.targets)
+        self.targets = []
+        self.current_index = 0
+        return count
+
+    def modify(self, index: int, **kwargs) -> bool:
+        """
+        Modify a target's attributes.
+
+        Args:
+            index: Index of target to modify (0-based)
+            **kwargs: Attributes to update (e.g., name="NewName", ip="10.0.0.1")
+
+        Returns:
+            True if modified successfully
+        """
+        if 0 <= index < len(self.targets):
+            for key, value in kwargs.items():
+                if key in ['ip', 'url', 'name', 'type', 'metadata']:
+                    self.targets[index][key] = value
+            return True
+        return False
+
     def list(self) -> List[Dict]:
         """Get all targets."""
         return self.targets
@@ -309,6 +379,76 @@ class CredentialManager:
                 if self.current_index >= len(self.credentials):
                     self.current_index = max(0, len(self.credentials) - 1)
                 return True
+        return False
+
+    def remove_by_index(self, index: int) -> bool:
+        """
+        Remove a credential by index.
+
+        Args:
+            index: Index of credential to remove (0-based)
+
+        Returns:
+            True if removed
+        """
+        if 0 <= index < len(self.credentials):
+            self.credentials.pop(index)
+            if self.current_index >= len(self.credentials):
+                self.current_index = max(0, len(self.credentials) - 1)
+            return True
+        return False
+
+    def remove_range(self, start_index: int, end_index: int) -> int:
+        """
+        Remove credentials by index range.
+
+        Args:
+            start_index: Start index (0-based, inclusive)
+            end_index: End index (0-based, inclusive)
+
+        Returns:
+            Number of credentials removed
+        """
+        # Validate range
+        if start_index < 0 or end_index >= len(self.credentials) or start_index > end_index:
+            return 0
+
+        # Remove in reverse order to maintain indices
+        count = 0
+        for i in range(end_index, start_index - 1, -1):
+            if self.remove_by_index(i):
+                count += 1
+
+        return count
+
+    def clear(self) -> int:
+        """
+        Remove all credentials.
+
+        Returns:
+            Number of credentials removed
+        """
+        count = len(self.credentials)
+        self.credentials = []
+        self.current_index = 0
+        return count
+
+    def modify(self, index: int, **kwargs) -> bool:
+        """
+        Modify a credential's attributes.
+
+        Args:
+            index: Index of credential to modify (0-based)
+            **kwargs: Attributes to update (e.g., username="admin", password="newpass")
+
+        Returns:
+            True if modified successfully
+        """
+        if 0 <= index < len(self.credentials):
+            for key, value in kwargs.items():
+                if key in ['username', 'password', 'domain', 'hash', 'hash_type', 'name']:
+                    self.credentials[index][key] = value
+            return True
         return False
 
     def list(self) -> List[Dict]:

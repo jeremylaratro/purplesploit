@@ -73,6 +73,7 @@ class Database:
                 identifier TEXT NOT NULL,  -- IP or URL
                 name TEXT,
                 metadata TEXT,  -- JSON
+                status TEXT DEFAULT 'unverified',  -- 'unverified', 'verified', 'subnet'
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(type, identifier)
             )
@@ -236,7 +237,7 @@ class Database:
 
         Args:
             target_type: 'web' or 'network'
-            identifier: IP or URL
+            identifier: IP or URL (can be CIDR notation like 192.168.1.0/24)
             name: Optional name
             metadata: Additional metadata
 
@@ -245,29 +246,39 @@ class Database:
         """
         cursor = self.conn.cursor()
         try:
+            # Determine status: subnet, unverified, or verified
+            status = 'unverified'
+            if '/' in identifier and target_type == 'network':
+                status = 'subnet'
+
             cursor.execute("""
-                INSERT INTO targets (type, identifier, name, metadata)
-                VALUES (?, ?, ?, ?)
-            """, (target_type, identifier, name, json.dumps(metadata or {})))
+                INSERT INTO targets (type, identifier, name, metadata, status)
+                VALUES (?, ?, ?, ?, ?)
+            """, (target_type, identifier, name, json.dumps(metadata or {}), status))
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
 
-    def get_targets(self, target_type: str = None) -> List[Dict]:
+    def get_targets(self, target_type: str = None, exclude_subnets: bool = False) -> List[Dict]:
         """
         Get all targets.
 
         Args:
             target_type: Filter by type ('web' or 'network')
+            exclude_subnets: If True, exclude targets with status='subnet'
 
         Returns:
             List of target dictionaries
         """
         cursor = self.conn.cursor()
 
-        if target_type:
+        if target_type and exclude_subnets:
+            cursor.execute("SELECT * FROM targets WHERE type = ? AND status != 'subnet'", (target_type,))
+        elif target_type:
             cursor.execute("SELECT * FROM targets WHERE type = ?", (target_type,))
+        elif exclude_subnets:
+            cursor.execute("SELECT * FROM targets WHERE status != 'subnet'")
         else:
             cursor.execute("SELECT * FROM targets")
 
@@ -291,6 +302,21 @@ class Database:
         """
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM targets WHERE identifier = ?", (identifier,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def mark_target_verified(self, identifier: str) -> bool:
+        """
+        Mark a target as verified (responsive to scans).
+
+        Args:
+            identifier: IP or URL
+
+        Returns:
+            True if updated
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE targets SET status = 'verified' WHERE identifier = ?", (identifier,))
         self.conn.commit()
         return cursor.rowcount > 0
 
