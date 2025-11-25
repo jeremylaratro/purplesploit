@@ -675,13 +675,16 @@ async def execute_c2_command(request: C2CommandRequest):
 
 
 async def execute_framework_command(command: str, session_id: str) -> str:
-    """Execute a framework command and return output"""
+    """Execute a framework command and return output (non-blocking)"""
     parts = command.split()
     if not parts:
         return ""
 
     cmd = parts[0].lower()
     args = parts[1:] if len(parts) > 1 else []
+
+    # Run blocking operations in executor to prevent WebSocket blocking
+    loop = asyncio.get_event_loop()
 
     # Handle different commands
     if cmd == "help":
@@ -705,7 +708,8 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         if not args:
             return "Usage: search <query>"
         query = " ".join(args)
-        results = framework.search_modules(query)
+        # Run in executor to avoid blocking
+        results = await loop.run_in_executor(None, framework.search_modules, query)
         if not results:
             return f"No modules found matching '{query}'"
         output = f"Found {len(results)} module(s):\n\n"
@@ -719,7 +723,8 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         if not args:
             return "Usage: use <module_path>"
         module_path = " ".join(args)
-        module = framework.use_module(module_path)
+        # Run in executor to avoid blocking
+        module = await loop.run_in_executor(None, framework.use_module, module_path)
         if module:
             sessions[session_id]["current_module"] = module_path
             return f"Loaded module: {module.name}\nUse 'show options' to see available options."
@@ -732,7 +737,7 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         subcmd = args[0].lower()
 
         if subcmd == "modules":
-            modules = framework.list_modules()
+            modules = await loop.run_in_executor(None, framework.list_modules)
             output = f"Available Modules ({len(modules)}):\n\n"
             current_category = None
             for m in modules:
@@ -745,10 +750,10 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         elif subcmd == "options":
             if not sessions[session_id].get("current_module"):
                 return "No module loaded. Use 'use <module>' first."
-            module = framework.use_module(sessions[session_id]["current_module"])
+            module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
             if not module:
                 return "Error loading current module"
-            options = module.show_options()
+            options = await loop.run_in_executor(None, module.show_options)
             output = "Module Options:\n\n"
             for key, opt in options.items():
                 required = "[*]" if opt.get('required') else "   "
@@ -784,24 +789,24 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         if not sessions[session_id].get("current_module"):
             return "No module loaded. Use 'use <module>' first."
 
-        module = framework.use_module(sessions[session_id]["current_module"])
+        module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
         if not module:
             return "Error loading current module"
 
         option = args[0]
         value = " ".join(args[1:])
-        module.set_option(option, value)
+        await loop.run_in_executor(None, module.set_option, option, value)
         return f"Set {option} => {value}"
 
     elif cmd == "run" or cmd == "exploit":
         if not sessions[session_id].get("current_module"):
             return "No module loaded. Use 'use <module>' first."
 
-        module = framework.use_module(sessions[session_id]["current_module"])
+        module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
         if not module:
             return "Error loading current module"
 
-        results = framework.run_module(module)
+        results = await loop.run_in_executor(None, framework.run_module, module)
         output = "Module Execution Results:\n\n"
         output += json.dumps(results, indent=2)
         return output
@@ -813,14 +818,14 @@ async def execute_framework_command(command: str, session_id: str) -> str:
     elif cmd == "target":
         if not args:
             # Show current target
-            current = framework.session.targets.get_active()
+            current = await loop.run_in_executor(None, framework.session.targets.get_active)
             if current:
                 return f"Current target: {current.get('name')} - {current.get('ip', current.get('url'))}"
             return "No target set"
 
-        # Add/set target
+        # Add/set target (non-blocking)
         target_ip = args[0]
-        framework.add_target("network", target_ip, target_ip)
+        await loop.run_in_executor(None, framework.add_target, "network", target_ip, target_ip)
         return f"Target set: {target_ip}"
 
     elif cmd == "targets":
@@ -839,7 +844,7 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         cred_str = args[0]
         if ":" in cred_str:
             username, password = cred_str.split(":", 1)
-            framework.add_credential(username, password)
+            await loop.run_in_executor(None, framework.add_credential, username, password)
             return f"Added credential: {username}:{password}"
         return "Invalid format. Use: username:password"
 
@@ -854,7 +859,7 @@ async def execute_framework_command(command: str, session_id: str) -> str:
         return output
 
     elif cmd == "stats":
-        stats = framework.get_stats()
+        stats = await loop.run_in_executor(None, framework.get_stats)
         output = "Framework Statistics:\n\n"
         output += f"  Modules:     {stats['modules']}\n"
         output += f"  Categories:  {stats['categories']}\n"
