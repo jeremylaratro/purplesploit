@@ -764,6 +764,72 @@ class CommandHandler:
 
         subcommand = args[0].lower()
 
+        # Handle "targets clear" - clear all
+        if subcommand == "clear":
+            count = self.framework.session.targets.clear()
+            self.display.print_success(f"Cleared {count} target(s)")
+            return True
+
+        # Handle "targets 1-5 clear" or "targets 1 clear" - range/index clear
+        if subcommand.isdigit() or '-' in subcommand:
+            if len(args) < 2:
+                self.display.print_error("Usage: targets <index|range> <clear|modify> [options]")
+                return True
+
+            action = args[1].lower()
+
+            if action == "clear":
+                # Parse index or range
+                if '-' in subcommand:
+                    try:
+                        start, end = subcommand.split('-')
+                        start_idx = int(start)
+                        end_idx = int(end)
+                        count = self.framework.session.targets.remove_range(start_idx, end_idx)
+                        self.display.print_success(f"Cleared {count} target(s)")
+                    except ValueError:
+                        self.display.print_error("Invalid range format. Use: targets 1-5 clear")
+                else:
+                    try:
+                        index = int(subcommand)
+                        if self.framework.session.targets.remove_by_index(index):
+                            self.display.print_success(f"Cleared target at index {index}")
+                        else:
+                            self.display.print_error(f"No target at index {index}")
+                    except ValueError:
+                        self.display.print_error("Invalid index format")
+
+            elif action == "modify":
+                # Parse modify arguments: targets 1 modify name=NewName ip=10.0.0.1
+                if len(args) < 3:
+                    self.display.print_error("Usage: targets <index> modify <key=value> [key=value...]")
+                    return True
+
+                try:
+                    index = int(subcommand)
+                    modifications = {}
+                    for arg in args[2:]:
+                        if '=' in arg:
+                            key, value = arg.split('=', 1)
+                            modifications[key] = value
+
+                    if modifications:
+                        if self.framework.session.targets.modify(index, **modifications):
+                            self.display.print_success(f"Modified target at index {index}")
+                        else:
+                            self.display.print_error(f"No target at index {index}")
+                    else:
+                        self.display.print_error("No modifications specified")
+                except ValueError:
+                    self.display.print_error("Invalid index format")
+
+            else:
+                self.display.print_error(f"Unknown action: {action}")
+                self.display.print_info("Available actions: clear, modify")
+
+            return True
+
+        # Original subcommands
         if subcommand == "add":
             if len(args) < 2:
                 self.display.print_error("Usage: targets add <ip|url> [name]")
@@ -833,7 +899,7 @@ class CommandHandler:
 
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: targets [list|add|set|select|remove]")
+            self.display.print_info("Usage: targets [list|add|set|select|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
@@ -846,6 +912,72 @@ class CommandHandler:
 
         subcommand = args[0].lower()
 
+        # Handle "creds clear" - clear all
+        if subcommand == "clear":
+            count = self.framework.session.credentials.clear()
+            self.display.print_success(f"Cleared {count} credential(s)")
+            return True
+
+        # Handle "creds 1-5 clear" or "creds 1 clear" - range/index clear
+        if subcommand.isdigit() or '-' in subcommand:
+            if len(args) < 2:
+                self.display.print_error("Usage: creds <index|range> <clear|modify> [options]")
+                return True
+
+            action = args[1].lower()
+
+            if action == "clear":
+                # Parse index or range
+                if '-' in subcommand:
+                    try:
+                        start, end = subcommand.split('-')
+                        start_idx = int(start)
+                        end_idx = int(end)
+                        count = self.framework.session.credentials.remove_range(start_idx, end_idx)
+                        self.display.print_success(f"Cleared {count} credential(s)")
+                    except ValueError:
+                        self.display.print_error("Invalid range format. Use: creds 1-5 clear")
+                else:
+                    try:
+                        index = int(subcommand)
+                        if self.framework.session.credentials.remove_by_index(index):
+                            self.display.print_success(f"Cleared credential at index {index}")
+                        else:
+                            self.display.print_error(f"No credential at index {index}")
+                    except ValueError:
+                        self.display.print_error("Invalid index format")
+
+            elif action == "modify":
+                # Parse modify arguments: creds 1 modify username=admin password=newpass
+                if len(args) < 3:
+                    self.display.print_error("Usage: creds <index> modify <key=value> [key=value...]")
+                    return True
+
+                try:
+                    index = int(subcommand)
+                    modifications = {}
+                    for arg in args[2:]:
+                        if '=' in arg:
+                            key, value = arg.split('=', 1)
+                            modifications[key] = value
+
+                    if modifications:
+                        if self.framework.session.credentials.modify(index, **modifications):
+                            self.display.print_success(f"Modified credential at index {index}")
+                        else:
+                            self.display.print_error(f"No credential at index {index}")
+                    else:
+                        self.display.print_error("No modifications specified")
+                except ValueError:
+                    self.display.print_error("Invalid index format")
+
+            else:
+                self.display.print_error(f"Unknown action: {action}")
+                self.display.print_info("Available actions: clear, modify")
+
+            return True
+
+        # Original subcommands
         if subcommand == "add":
             if len(args) < 2:
                 self.display.print_error("Usage: creds add <username>:<password> [domain]")
@@ -922,7 +1054,7 @@ class CommandHandler:
 
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: creds [list|add|set|select|remove]")
+            self.display.print_info("Usage: creds [list|add|set|select|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
