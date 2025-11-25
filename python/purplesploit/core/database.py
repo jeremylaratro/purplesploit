@@ -43,7 +43,8 @@ class Database:
 
     def _connect(self):
         """Establish database connection."""
-        self.conn = sqlite3.connect(self.db_path)
+        # Use check_same_thread=False to allow async operations across threads
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row  # Enable dict-like access
 
     def _create_tables(self):
