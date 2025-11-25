@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurpleSploit C2 Terminal</title>
+    <link rel="stylesheet" href="/static/css/c2.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="c2-navbar">
+        <div class="nav-brand">
+            <span class="brand-icon">⚡</span>
+            <span class="brand-name">PURPLESPLOIT C2</span>
+            <span class="version">v6.2.0</span>
+        </div>
+        <div class="nav-status">
+            <span id="connection-status" class="status-indicator">
+                <span class="status-dot status-connecting"></span>
+                <span class="status-text">Connecting...</span>
+            </span>
+            <span class="session-info">Session: <span id="session-id">default</span></span>
+        </div>
+        <div class="nav-menu">
+            <a href="/" class="nav-link">📊 Dashboard</a>
+            <a href="/static/targets.html" class="nav-link">🎯 Targets</a>
+            <a href="/static/c2.html" class="nav-link active">💻 Terminal</a>
+            <a href="/api/docs" target="_blank" class="nav-link">📚 API</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="c2-container">
+        <!-- Sidebar -->
+        <aside class="c2-sidebar">
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>📁 MODULES</h3>
+                    <button id="refresh-modules" class="icon-btn" title="Refresh modules">↻</button>
+                </div>
+                <div class="module-search">
+                    <input type="text" id="module-search" placeholder="🔍 Search modules..." />
+                </div>
+                <div id="module-list" class="module-list">
+                    <div class="loading">Loading modules...</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>🎯 CONTEXT</h3>
+                </div>
+                <div class="context-info">
+                    <div class="context-item">
+                        <span class="context-label">Target:</span>
+                        <span id="current-target" class="context-value">None</span>
+                    </div>
+                    <div class="context-item">
+                        <span class="context-label">Module:</span>
+                        <span id="current-module" class="context-value">None</span>
+                    </div>
+                    <div class="context-item">
+                        <span class="context-label">Stats:</span>
+                        <span id="stats-info" class="context-value">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>⚡ QUICK ACTIONS</h3>
+                </div>
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="executeQuickCommand('show modules')">List Modules</button>
+                    <button class="action-btn" onclick="executeQuickCommand('targets')">Show Targets</button>
+                    <button class="action-btn" onclick="executeQuickCommand('creds')">Show Creds</button>
+                    <button class="action-btn" onclick="executeQuickCommand('stats')">Statistics</button>
+                    <button class="action-btn" onclick="clearTerminal()">Clear Terminal</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Terminal Area -->
+        <main class="c2-terminal-area">
+            <div class="terminal-header">
+                <div class="terminal-tabs">
+                    <div class="terminal-tab active">
+                        <span class="tab-icon">●</span>
+                        <span class="tab-name">Terminal 1</span>
+                    </div>
+                </div>
+                <div class="terminal-controls">
+                    <button class="icon-btn" onclick="clearTerminal()" title="Clear">🗑️</button>
+                    <button class="icon-btn" onclick="exportSession()" title="Export">💾</button>
+                </div>
+            </div>
+
+            <div id="terminal-output" class="terminal-output">
+                <!-- Banner -->
+                <pre class="terminal-banner">
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  ██████╗ ██╗   ██╗██████╗ ██████╗ ██╗     ███████╗███████╗██████╗║
+║  ██╔══██╗██║   ██║██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗
+║  ██████╔╝██║   ██║██████╔╝██████╔╝██║     █████╗  ███████╗██████╔╝
+║  ██╔═══╝ ██║   ██║██╔══██╗██╔═══╝ ██║     ██╔══╝  ╚════██║██╔═══╝║
+║  ██║     ╚██████╔╝██║  ██║██║     ███████╗███████╗███████║██║    ║
+║  ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝╚══════╝╚══════╝╚═╝    ║
+║                                                                   ║
+║              Command & Control Terminal v6.2.0                   ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Type 'help' for available commands.
+</pre>
+            </div>
+
+            <div class="terminal-input-area">
+                <div class="terminal-prompt">
+                    <span id="prompt-text" class="prompt-text">purplesploit &gt;</span>
+                    <input
+                        type="text"
+                        id="terminal-input"
+                        class="terminal-input"
+                        autocomplete="off"
+                        spellcheck="false"
+                        autofocus
+                    />
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Module Info Modal -->
+    <div id="module-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-module-name">Module Info</h2>
+                <button class="modal-close" onclick="closeModuleModal()">&times;</button>
+            </div>
+            <div id="modal-module-body" class="modal-body">
+                <!-- Module details will be inserted here -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModuleModal()">Close</button>
+                <button class="btn btn-primary" onclick="useModuleFromModal()">Use Module</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/c2-terminal.js"></script>
+    <script>
+        // Initialize terminal on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initTerminal();
+        });
+    </script>
+</body>
+</html>
