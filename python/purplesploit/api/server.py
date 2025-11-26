@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -377,6 +377,68 @@ async def get_target_services(target: str):
     """Get services for a specific target"""
     services = db_manager.get_services_for_target(target)
     return [ServiceResponse.from_orm(s) for s in services]
+
+
+# ============================================================================
+# Nmap Import/Upload API
+# ============================================================================
+
+@app.post("/api/nmap/upload")
+async def upload_nmap_results(file: UploadFile = File(...)):
+    """
+    Upload and parse nmap XML scan results.
+
+    Automatically imports discovered hosts with open ports to targets and services tables.
+    """
+    if not file.filename.endswith('.xml'):
+        raise HTTPException(status_code=400, detail="Only XML files are supported")
+
+    try:
+        # Save uploaded file temporarily
+        import tempfile
+        import xml.etree.ElementTree as ET
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xml') as tmp_file:
+            content = await file.read()
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+
+        # Parse XML using nmap module
+        from purplesploit.modules.recon.nmap import NmapModule
+
+        # Create framework instance
+        framework = get_framework()
+        nmap_module = NmapModule(framework)
+
+        # Parse XML
+        parsed_xml = nmap_module.parse_xml_output(tmp_path)
+
+        if not parsed_xml.get("hosts"):
+            # Clean up temp file
+            Path(tmp_path).unlink()
+            return {
+                "success": True,
+                "message": "No hosts with open ports found in scan results",
+                "hosts_discovered": 0,
+                "total_scanned": parsed_xml.get("total_hosts", 0)
+            }
+
+        # Process discovered hosts
+        nmap_module.process_discovered_hosts(parsed_xml)
+
+        # Clean up temp file
+        Path(tmp_path).unlink()
+
+        return {
+            "success": True,
+            "message": f"Successfully imported {len(parsed_xml.get('hosts', []))} hosts",
+            "hosts_discovered": len(parsed_xml.get("hosts", [])),
+            "total_scanned": parsed_xml.get("total_hosts", 0),
+            "filename": file.filename
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing nmap results: {str(e)}")
 
 
 # ============================================================================
