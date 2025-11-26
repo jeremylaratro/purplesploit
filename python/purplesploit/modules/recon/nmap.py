@@ -4,6 +4,9 @@ Nmap Scan Module
 Network scanning and service detection using Nmap.
 """
 
+import xml.etree.ElementTree as ET
+import os
+from pathlib import Path
 from purplesploit.core.module import ExternalToolModule
 from purplesploit.models.database import db_manager
 
@@ -125,10 +128,10 @@ class NmapModule(ExternalToolModule):
                 "default": None
             },
             "BACKGROUND": {
-                "value": "false",
+                "value": "true",
                 "required": False,
                 "description": "Run scan in background (true/false)",
-                "default": "false"
+                "default": "true"
             }
         })
 
@@ -218,6 +221,97 @@ class NmapModule(ExternalToolModule):
 
         return cmd
 
+    def parse_xml_output(self, xml_path: str) -> dict:
+        """
+        Parse nmap XML output file.
+
+        Args:
+            xml_path: Path to nmap XML output file
+
+        Returns:
+            Dictionary with hosts and their services
+        """
+        results = {
+            "hosts": [],
+            "total_hosts": 0,
+            "hosts_with_ports": 0
+        }
+
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+
+            for host in root.findall('host'):
+                # Get host status
+                status = host.find('status')
+                if status is None or status.get('state') != 'up':
+                    continue
+
+                # Get IP address
+                address = host.find('address[@addrtype="ipv4"]')
+                if address is None:
+                    address = host.find('address[@addrtype="ipv6"]')
+                if address is None:
+                    continue
+
+                ip = address.get('addr')
+                results["total_hosts"] += 1
+
+                # Get hostname if available
+                hostname = None
+                hostnames = host.find('hostnames')
+                if hostnames is not None:
+                    hostname_elem = hostnames.find('hostname')
+                    if hostname_elem is not None:
+                        hostname = hostname_elem.get('name')
+
+                # Get ports
+                ports_elem = host.find('ports')
+                if ports_elem is None:
+                    continue
+
+                open_ports = []
+                services = {}
+
+                for port in ports_elem.findall('port'):
+                    state = port.find('state')
+                    if state is None or state.get('state') != 'open':
+                        continue
+
+                    protocol = port.get('protocol', 'tcp')
+                    portid = port.get('portid')
+                    port_key = f"{portid}/{protocol}"
+
+                    service = port.find('service')
+                    service_name = service.get('name', 'unknown') if service is not None else 'unknown'
+                    service_product = service.get('product', '') if service is not None else ''
+                    service_version = service.get('version', '') if service is not None else ''
+
+                    version_str = f"{service_product} {service_version}".strip()
+
+                    open_ports.append(port_key)
+                    services[port_key] = {
+                        "service": service_name,
+                        "version": version_str,
+                        "port": int(portid),
+                        "protocol": protocol
+                    }
+
+                # Only add hosts with open ports
+                if open_ports:
+                    results["hosts_with_ports"] += 1
+                    results["hosts"].append({
+                        "ip": ip,
+                        "hostname": hostname,
+                        "open_ports": open_ports,
+                        "services": services
+                    })
+
+        except Exception as e:
+            self.log(f"Error parsing XML: {e}", "error")
+
+        return results
+
     def parse_output(self, output: str) -> dict:
         """
         Parse nmap output.
@@ -260,6 +354,62 @@ class NmapModule(ExternalToolModule):
 
         return results
 
+    def process_discovered_hosts(self, parsed_xml: dict):
+        """
+        Process discovered hosts and add them to targets and services.
+
+        Args:
+            parsed_xml: Parsed XML results from parse_xml_output()
+        """
+        for host_info in parsed_xml.get("hosts", []):
+            ip = host_info["ip"]
+            hostname = host_info.get("hostname")
+
+            # Add host to targets table with verified status
+            try:
+                self.framework.database.add_target(
+                    target_type="network",
+                    identifier=ip,
+                    name=hostname or ip,
+                    metadata={"hostname": hostname} if hostname else {}
+                )
+                # Mark as verified
+                self.framework.database.mark_target_verified(ip)
+                self.log(f"Added target: {ip}", "success")
+            except Exception as e:
+                self.log(f"Target {ip} may already exist: {e}", "debug")
+
+            # Add services
+            for port_str, service_info in host_info["services"].items():
+                port = service_info["port"]
+                service_name = service_info["service"]
+                version = service_info["version"]
+
+                # Map common services to framework context
+                if service_name in ["microsoft-ds", "netbios-ssn"]:
+                    self.framework.session.services.add_service(ip, "smb", port)
+                elif service_name in ["ldap", "ldaps"]:
+                    self.framework.session.services.add_service(ip, "ldap", port)
+                elif service_name in ["ms-wbt-server", "rdp"]:
+                    self.framework.session.services.add_service(ip, "rdp", port)
+                elif service_name in ["winrm", "wsman"]:
+                    self.framework.session.services.add_service(ip, "winrm", port)
+                elif service_name in ["ms-sql-s", "mssql"]:
+                    self.framework.session.services.add_service(ip, "mssql", port)
+                elif service_name == "ssh":
+                    self.framework.session.services.add_service(ip, "ssh", port)
+                elif service_name in ["http", "https", "http-proxy"]:
+                    self.framework.session.services.add_service(ip, "http", port)
+
+                # Save to database
+                try:
+                    self.framework.database.add_service(ip, service_name, port, version)
+                    db_manager.add_service(ip, service_name, port, version)
+                except Exception as e:
+                    self.log(f"Service may already exist: {e}", "debug")
+
+        self.log(f"Processed {len(parsed_xml.get('hosts', []))} hosts with open ports", "success")
+
     def run(self) -> dict:
         """
         Execute nmap scan and auto-import services to context.
@@ -270,6 +420,16 @@ class NmapModule(ExternalToolModule):
         # Check if background mode is enabled
         background = self.get_option("BACKGROUND")
         run_in_background = background and str(background).lower() == "true"
+
+        rhost = self.get_option("RHOST")
+        output_file = self.get_option("OUTPUT_FILE")
+
+        # Determine XML output path
+        if not output_file:
+            target_name = rhost.replace("/", "_").replace(":", "_")
+            output_file = f"nmap_{target_name}"
+
+        xml_path = f"{output_file}.xml"
 
         if run_in_background:
             # Check tool is installed
@@ -283,18 +443,41 @@ class NmapModule(ExternalToolModule):
             command = self.build_command()
             result = self.execute_command(command, background=True)
 
+            # Add note about XML parsing
+            if result.get("success"):
+                result["note"] = f"Scan running in background. Run 'parse {xml_path}' to import results when complete."
+
             # Return background execution info
             return result
         else:
             # Run the command normally (synchronous)
             result = super().run()
 
-            # If successful, parse and import services
+            # Try to parse XML output if it exists
+            if result.get("success") and os.path.exists(xml_path):
+                try:
+                    parsed_xml = self.parse_xml_output(xml_path)
+
+                    # Process discovered hosts (add to targets and services)
+                    if parsed_xml.get("hosts"):
+                        self.process_discovered_hosts(parsed_xml)
+
+                        result["xml_parsed"] = True
+                        result["hosts_discovered"] = len(parsed_xml.get("hosts", []))
+                        result["total_scanned"] = parsed_xml.get("total_hosts", 0)
+
+                        self.log(f"Discovered {result['hosts_discovered']} hosts with open ports out of {result['total_scanned']} total hosts", "success")
+                    else:
+                        self.log("No hosts with open ports discovered", "info")
+
+                except Exception as e:
+                    self.log(f"Error parsing XML output: {e}", "error")
+
+            # Also parse stdout for backward compatibility
             if result.get("success") and "parsed" in result:
                 parsed = result["parsed"]
-                rhost = self.get_option("RHOST")
 
-                # Import detected services into framework
+                # Import detected services into framework (for single host scans without XML)
                 for port_str, service_info in parsed.get("services", {}).items():
                     # Extract port number
                     port = int(port_str.split("/")[0])
@@ -315,16 +498,5 @@ class NmapModule(ExternalToolModule):
                         self.framework.session.services.add_service(rhost, "ssh", port)
                     elif service_name in ["http", "https", "http-proxy"]:
                         self.framework.session.services.add_service(rhost, "http", port)
-
-                    # Save to old database (backwards compatibility)
-                    self.framework.database.add_service(rhost, service_name, port, service_info.get("version"))
-
-                    # Save to models database (for webserver)
-                    try:
-                        db_manager.add_service(rhost, service_name, port, service_info.get("version"))
-                    except Exception as e:
-                        self.log(f"Failed to save service to models database: {e}", "debug")
-
-                self.log(f"Imported {len(parsed.get('services', {}))} services to context", "success")
 
             return result

@@ -104,6 +104,7 @@ class CommandHandler:
             "webserver": self.cmd_webserver,      # Start/stop web server
             "deploy": self.cmd_deploy,            # Deploy payloads/tools to targets
             "defaults": self.cmd_defaults,        # Manage module default options
+            "parse": self.cmd_parse,              # Parse nmap XML results
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -1930,6 +1931,52 @@ class CommandHandler:
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
             self.display.print_info("Use: defaults <show|set|delete|reset>")
+
+        return True
+
+    def cmd_parse(self, args: List[str]) -> bool:
+        """Parse nmap XML results and import to targets/services."""
+        if not args:
+            self.display.print_error("Usage: parse <nmap_xml_file>")
+            self.display.print_info("Example: parse nmap_192.168.1.0_24.xml")
+            return True
+
+        xml_file = args[0]
+
+        if not Path(xml_file).exists():
+            self.display.print_error(f"File not found: {xml_file}")
+            return True
+
+        try:
+            # Import the nmap module to use its parsing functionality
+            from purplesploit.modules.recon.nmap import NmapModule
+
+            # Create temporary nmap module instance
+            nmap_module = NmapModule(self.framework)
+
+            # Parse XML
+            self.display.print_info(f"Parsing {xml_file}...")
+            parsed_xml = nmap_module.parse_xml_output(xml_file)
+
+            if not parsed_xml.get("hosts"):
+                self.display.print_warning("No hosts with open ports found in scan results")
+                return True
+
+            # Process discovered hosts
+            nmap_module.process_discovered_hosts(parsed_xml)
+
+            # Display summary
+            hosts_discovered = len(parsed_xml.get("hosts", []))
+            total_scanned = parsed_xml.get("total_hosts", 0)
+
+            self.display.print_success(f"Successfully imported {hosts_discovered} hosts with open ports (out of {total_scanned} total)")
+            self.display.print_info("Run 'targets' to see all discovered targets")
+            self.display.print_info("Run 'services' to see all discovered services")
+
+        except Exception as e:
+            self.display.print_error(f"Error parsing XML file: {e}")
+            import traceback
+            traceback.print_exc()
 
         return True
 
