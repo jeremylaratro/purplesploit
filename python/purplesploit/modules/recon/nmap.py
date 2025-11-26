@@ -477,26 +477,33 @@ class NmapModule(ExternalToolModule):
             if result.get("success") and "parsed" in result and not result.get("xml_parsed"):
                 parsed = result["parsed"]
 
-                # Import detected services into framework (for single host scans without XML)
-                for port_str, service_info in parsed.get("services", {}).items():
-                    # Extract port number
-                    port = int(port_str.split("/")[0])
-                    service_name = service_info.get("service", "unknown")
+                # Only import services from stdout if scanning a single host (not a network range)
+                # For network ranges, we need XML output to distinguish individual IPs
+                is_network_range = "/" in rhost or "-" in rhost.split(".")[-1] if "." in rhost else False
 
-                    # Map common services
-                    if service_name in ["microsoft-ds", "netbios-ssn"]:
-                        self.framework.session.services.add_service(rhost, "smb", port)
-                    elif service_name in ["ldap", "ldaps"]:
-                        self.framework.session.services.add_service(rhost, "ldap", port)
-                    elif service_name in ["ms-wbt-server", "rdp"]:
-                        self.framework.session.services.add_service(rhost, "rdp", port)
-                    elif service_name in ["winrm", "wsman"]:
-                        self.framework.session.services.add_service(rhost, "winrm", port)
-                    elif service_name in ["ms-sql-s", "mssql"]:
-                        self.framework.session.services.add_service(rhost, "mssql", port)
-                    elif service_name == "ssh":
-                        self.framework.session.services.add_service(rhost, "ssh", port)
-                    elif service_name in ["http", "https", "http-proxy"]:
-                        self.framework.session.services.add_service(rhost, "http", port)
+                if not is_network_range:
+                    # Import detected services into framework (for single host scans without XML)
+                    for port_str, service_info in parsed.get("services", {}).items():
+                        # Extract port number
+                        port = int(port_str.split("/")[0])
+                        service_name = service_info.get("service", "unknown")
+
+                        # Map common services
+                        if service_name in ["microsoft-ds", "netbios-ssn"]:
+                            self.framework.session.services.add_service(rhost, "smb", port)
+                        elif service_name in ["ldap", "ldaps"]:
+                            self.framework.session.services.add_service(rhost, "ldap", port)
+                        elif service_name in ["ms-wbt-server", "rdp"]:
+                            self.framework.session.services.add_service(rhost, "rdp", port)
+                        elif service_name in ["winrm", "wsman"]:
+                            self.framework.session.services.add_service(rhost, "winrm", port)
+                        elif service_name in ["ms-sql-s", "mssql"]:
+                            self.framework.session.services.add_service(rhost, "mssql", port)
+                        elif service_name == "ssh":
+                            self.framework.session.services.add_service(rhost, "ssh", port)
+                        elif service_name in ["http", "https", "http-proxy"]:
+                            self.framework.session.services.add_service(rhost, "http", port)
+                else:
+                    self.log("Network range detected - services require XML parsing. Use 'parse <xml_file>' to import.", "warning")
 
             return result
