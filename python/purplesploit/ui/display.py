@@ -271,21 +271,34 @@ class Display:
         Args:
             results: Results dictionary
         """
-        # Print status message
+        # Show the command that was executed
+        if 'command' in results:
+            self.console.print(f"\n[dim]Command: {results['command']}[/dim]")
+
+        # Print status message with return code if available
         if results.get('success', False):
-            self.print_success("Module executed successfully")
+            if 'returncode' in results:
+                self.print_success(f"Module executed successfully (exit code: {results['returncode']})")
+            else:
+                self.print_success("Module executed successfully")
         elif 'error' in results:
             self.print_error(f"Module failed: {results.get('error', 'Unknown error')}")
+        elif 'returncode' in results and results['returncode'] != 0:
+            self.print_warning(f"Module completed with exit code: {results['returncode']}")
 
         # ALWAYS display stdout if present (even on failure - it contains useful info)
         if 'stdout' in results and results['stdout']:
             self.console.print("\n[bold]Output:[/bold]")
             self.console.print(Panel(results['stdout'], border_style="green"))
+        elif 'stdout' in results:
+            self.console.print("\n[dim]No stdout output captured[/dim]")
 
         # ALWAYS display stderr if present (even on failure - it contains useful info)
         if 'stderr' in results and results['stderr']:
             self.console.print("\n[bold yellow]Errors/Warnings:[/bold yellow]")
             self.console.print(Panel(results['stderr'], border_style="yellow"))
+        elif 'stderr' in results:
+            self.console.print("\n[dim]No stderr output captured[/dim]")
 
         # Display parsed results if present
         if 'parsed' in results:
