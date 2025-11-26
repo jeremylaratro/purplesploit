@@ -39,6 +39,7 @@ class NXCMSSQLModule(ExternalToolModule):
             "PASSWORD": {"value": None, "required": False, "description": "SQL password", "default": None},
             "DOMAIN": {"value": None, "required": False, "description": "Domain", "default": None},
             "HASH": {"value": None, "required": False, "description": "NTLM hash", "default": None},
+            "AUTH_TYPE": {"value": "domain", "required": False, "description": "Authentication type: domain, local, kerberos, windows", "default": "domain"},
         })
 
     def get_operations(self) -> List[Dict[str, Any]]:
@@ -69,8 +70,19 @@ class NXCMSSQLModule(ExternalToolModule):
 
     def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
         rhost = self.get_option("RHOST")
+        auth_type = self.get_option("AUTH_TYPE") or "domain"
         auth = self._build_auth()
+
         cmd = f"nxc mssql {rhost} {auth}"
+
+        # Add authentication type flags
+        if auth_type == "local":
+            cmd += " --local-auth"
+        elif auth_type == "kerberos":
+            cmd += " --kerberos"
+        elif auth_type == "windows":
+            cmd += " --windows-auth"
+
         if extra_args:
             cmd += f" {extra_args}"
         return self.execute_command(cmd, timeout=180)

@@ -446,7 +446,7 @@ class CredentialManager:
         """
         if 0 <= index < len(self.credentials):
             for key, value in kwargs.items():
-                if key in ['username', 'password', 'domain', 'hash', 'hash_type', 'name']:
+                if key in ['username', 'password', 'domain', 'dcip', 'dns', 'hash', 'hash_type', 'name']:
                     self.credentials[index][key] = value
             return True
         return False
