@@ -910,9 +910,61 @@ class CommandHandler:
             else:
                 self.display.print_error("Target not found")
 
+        elif subcommand == "modify":
+            # Interactive target modification
+            targets = self.framework.session.targets.list()
+            if not targets:
+                self.display.print_warning("No targets available. Add targets first with 'targets add' or 'target'")
+                return True
+
+            # Select target to modify
+            self.display.print_info("Select target to modify:")
+            selected = self.interactive.select_target(targets)
+            if not selected:
+                self.display.print_warning("No target selected")
+                return True
+
+            # Find the index
+            index = None
+            for i, target in enumerate(targets):
+                if target == selected:
+                    index = i
+                    break
+
+            if index is None:
+                self.display.print_error("Could not find target index")
+                return True
+
+            # Show current values
+            identifier = selected.get('ip') or selected.get('url') or 'Unknown'
+            self.display.print_info(f"\nModifying target: {identifier}")
+            self.display.print_info("Current values:")
+            for key in ['ip', 'url', 'name', 'type']:
+                val = selected.get(key)
+                self.display.print_info(f"  {key}: {val or 'Not set'}")
+
+            # Prompt for modifications
+            self.display.print_info("\nEnter new values (press Enter to skip):")
+            modifications = {}
+
+            for field in ['ip', 'url', 'name', 'type']:
+                new_val = input(f"{field.capitalize()}: ").strip()
+                if new_val:
+                    modifications[field] = new_val
+
+            if modifications:
+                if self.framework.session.targets.modify(index, **modifications):
+                    self.display.print_success(f"Modified target")
+                    for key, val in modifications.items():
+                        self.display.print_info(f"  → Set {key} = {val}")
+                else:
+                    self.display.print_error("Failed to modify target")
+            else:
+                self.display.print_info("No modifications made")
+
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: targets [list|add|set|select|remove|clear|<index> clear|<range> clear|<index> modify]")
+            self.display.print_info("Usage: targets [list|add|set|select|modify|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
@@ -1013,12 +1065,37 @@ class CommandHandler:
         elif subcommand == "select":
             # Interactive selection
             creds = self.framework.session.credentials.list()
-            if not creds:
-                self.display.print_warning("No credentials available. Add credentials first with 'creds add'")
-                return True
 
             selected = self.interactive.select_credential(creds)
-            if selected:
+
+            # Handle "Add New Credential" option
+            if selected == "ADD_NEW":
+                self.display.print_info("\n[Add New Credential]")
+                username = input("Username: ").strip()
+                if not username:
+                    self.display.print_warning("Username required")
+                    return True
+
+                password = input("Password: ").strip()
+                domain = input("Domain (optional): ").strip() or None
+                dcip = input("Domain Controller IP (optional): ").strip() or None
+                dns = input("DNS Server (optional): ").strip() or None
+
+                if self.framework.add_credential(username, password, domain, dcip, dns):
+                    self.display.print_success(f"Added credential: {username}")
+
+                    # Refresh creds list and auto-select the new credential
+                    creds = self.framework.session.credentials.list()
+                    if creds:
+                        self.framework.session.credentials.current_index = len(creds) - 1
+                        selected = creds[-1]
+                    else:
+                        return True
+                else:
+                    self.display.print_warning("Failed to add credential")
+                    return True
+
+            if selected and selected != "ADD_NEW":
                 # Find index and set as current
                 for i, cred in enumerate(creds):
                     if cred == selected:
@@ -1047,7 +1124,7 @@ class CommandHandler:
                                 module.set_option("HASH", selected['hash'])
                                 self.display.print_info(f"  → Set HASH = ****")
                         break
-            else:
+            elif not selected:
                 self.display.print_warning("No credential selected")
 
         elif subcommand == "set":
@@ -1071,9 +1148,66 @@ class CommandHandler:
             else:
                 self.display.print_error("Credential not found")
 
+        elif subcommand == "modify":
+            # Interactive credential modification
+            creds = self.framework.session.credentials.list()
+            if not creds:
+                self.display.print_warning("No credentials available. Add credentials first with 'creds add'")
+                return True
+
+            # Select credential to modify
+            self.display.print_info("Select credential to modify:")
+            selected = self.interactive.select_credential(creds)
+            if not selected:
+                self.display.print_warning("No credential selected")
+                return True
+
+            # Find the index
+            index = None
+            for i, cred in enumerate(creds):
+                if cred == selected:
+                    index = i
+                    break
+
+            if index is None:
+                self.display.print_error("Could not find credential index")
+                return True
+
+            # Show current values
+            self.display.print_info(f"\nModifying credential: {selected.get('username', 'N/A')}")
+            self.display.print_info("Current values:")
+            for key in ['username', 'password', 'domain', 'dcip', 'dns', 'hash']:
+                val = selected.get(key)
+                if key in ['password', 'hash'] and val:
+                    self.display.print_info(f"  {key}: ****")
+                else:
+                    self.display.print_info(f"  {key}: {val or 'Not set'}")
+
+            # Prompt for modifications
+            self.display.print_info("\nEnter new values (press Enter to skip):")
+            modifications = {}
+
+            for field in ['username', 'password', 'domain', 'dcip', 'dns', 'hash']:
+                new_val = input(f"{field.capitalize()}: ").strip()
+                if new_val:
+                    modifications[field] = new_val
+
+            if modifications:
+                if self.framework.session.credentials.modify(index, **modifications):
+                    self.display.print_success(f"Modified credential")
+                    for key, val in modifications.items():
+                        if key in ['password', 'hash']:
+                            self.display.print_info(f"  → Set {key} = ****")
+                        else:
+                            self.display.print_info(f"  → Set {key} = {val}")
+                else:
+                    self.display.print_error("Failed to modify credential")
+            else:
+                self.display.print_info("No modifications made")
+
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: creds [list|add|set|select|remove|clear|<index> clear|<range> clear|<index> modify]")
+            self.display.print_info("Usage: creds [list|add|set|select|modify|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
@@ -1274,14 +1408,21 @@ class CommandHandler:
 
     def cmd_ligolo(self, args: List[str]) -> bool:
         """
-        Launch or attach to ligolo-ng interface.
+        Launch or attach to ligolo-ng proxy interface (shell command passthrough).
 
         Usage:
-            ligolo                    # Launch or attach to ligolo-ng session
-            ligolo kill               # Kill existing ligolo-ng session
+            ligolo                    # Launch ligolo-ng with default settings (-selfcert)
             ligolo --help             # Show ligolo-ng help
+            ligolo -selfcert -laddr 0.0.0.0:11601  # Custom proxy settings
+            ligolo kill               # Kill existing ligolo-ng session
 
-        Press CTRL+B then D to detach from session.
+        The ligolo command runs ligolo-ng directly in a tmux session.
+        All arguments are passed through to the ligolo-ng binary.
+
+        Note: This is different from the 'c2/ligolo_pivot' module which is for
+              automated agent deployment. Use this command for interactive proxy control.
+
+        Press CTRL+B then D to detach from session (keeps it running).
         """
         import subprocess
         import os
