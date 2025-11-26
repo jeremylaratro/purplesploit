@@ -551,6 +551,17 @@ class ServiceManager:
         """
         return service in self.services.get(target, {})
 
+    def clear(self) -> int:
+        """
+        Remove all services.
+
+        Returns:
+            Number of service entries removed
+        """
+        count = len(self.services)
+        self.services = {}
+        return count
+
     def export(self) -> Dict:
         """Export service data."""
         return {"services": self.services}

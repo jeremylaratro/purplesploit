@@ -473,8 +473,8 @@ class NmapModule(ExternalToolModule):
                 except Exception as e:
                     self.log(f"Error parsing XML output: {e}", "error")
 
-            # Also parse stdout for backward compatibility
-            if result.get("success") and "parsed" in result:
+            # Also parse stdout for backward compatibility (only if XML parsing failed or didn't happen)
+            if result.get("success") and "parsed" in result and not result.get("xml_parsed"):
                 parsed = result["parsed"]
 
                 # Import detected services into framework (for single host scans without XML)
