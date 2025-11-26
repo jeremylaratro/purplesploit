@@ -924,10 +924,12 @@ class CommandHandler:
                 self.display.print_warning("No target selected")
                 return True
 
-            # Find the index
+            # Find the index by comparing identifier (more reliable than full dict comparison)
             index = None
+            selected_id = selected.get('ip') or selected.get('url')
             for i, target in enumerate(targets):
-                if target == selected:
+                target_id = target.get('ip') or target.get('url')
+                if target_id == selected_id:
                     index = i
                     break
 
@@ -1157,15 +1159,16 @@ class CommandHandler:
 
             # Select credential to modify
             self.display.print_info("Select credential to modify:")
-            selected = self.interactive.select_credential(creds)
-            if not selected:
+            selected = self.interactive.select_credential(creds, allow_add_new=False)
+            if not selected or selected == "ADD_NEW":
                 self.display.print_warning("No credential selected")
                 return True
 
-            # Find the index
+            # Find the index by comparing username (more reliable than full dict comparison)
             index = None
             for i, cred in enumerate(creds):
-                if cred == selected:
+                if (cred.get('username') == selected.get('username') and
+                    cred.get('domain') == selected.get('domain')):
                     index = i
                     break
 
