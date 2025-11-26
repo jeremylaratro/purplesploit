@@ -453,6 +453,38 @@ class DatabaseManager:
         finally:
             session.close()
 
+    def clear_all_targets(self) -> int:
+        """
+        Remove all targets from the database.
+
+        Returns:
+            Number of targets removed
+        """
+        session = self.get_targets_session()
+        try:
+            count = session.query(Target).count()
+            session.query(Target).delete()
+            session.commit()
+            return count
+        finally:
+            session.close()
+
+    def clear_all_services(self) -> int:
+        """
+        Remove all services from the database.
+
+        Returns:
+            Number of services removed
+        """
+        session = self.get_services_session()
+        try:
+            count = session.query(Service).count()
+            session.query(Service).delete()
+            session.commit()
+            return count
+        finally:
+            session.close()
+
 
 # Global database manager instance
 db_manager = DatabaseManager()
