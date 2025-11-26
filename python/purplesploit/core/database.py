@@ -40,6 +40,7 @@ class Database:
         self.conn = None
         self._connect()
         self._create_tables()
+        self._migrate_database()
 
     def _connect(self):
         """Establish database connection."""
@@ -160,6 +161,37 @@ class Database:
         """)
 
         self.conn.commit()
+
+    def _migrate_database(self):
+        """Apply database migrations for schema changes."""
+        cursor = self.conn.cursor()
+
+        # Migration: Add 'status' column to targets table if it doesn't exist
+        try:
+            cursor.execute("SELECT status FROM targets LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("""
+                ALTER TABLE targets ADD COLUMN status TEXT DEFAULT 'unverified'
+            """)
+            self.conn.commit()
+
+        # Migration: Add 'dcip' and 'dns' columns to credentials table if they don't exist
+        try:
+            cursor.execute("SELECT dcip FROM credentials LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("""
+                ALTER TABLE credentials ADD COLUMN dcip TEXT
+            """)
+            self.conn.commit()
+
+        try:
+            cursor.execute("SELECT dns FROM credentials LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("""
+                ALTER TABLE credentials ADD COLUMN dns TEXT
+            """)
+            self.conn.commit()
 
     def close(self):
         """Close database connection."""
