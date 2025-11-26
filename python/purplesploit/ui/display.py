@@ -245,23 +245,50 @@ class Display:
             self.print_warning("No services detected")
             return
 
+        # Filter out network ranges (CIDR notation) and only show individual IPs
+        filtered_services = {}
+        for target, target_services in services.items():
+            # Skip if target contains CIDR notation (/)
+            if "/" not in target:
+                filtered_services[target] = target_services
+
+        if not filtered_services:
+            self.print_warning("No services for individual hosts (only network ranges found)")
+            self.print_info("Tip: Network ranges indicate incomplete scans. Use 'parse <xml_file>' to import host-specific data.")
+            return
+
         table = Table(
-            title="Detected Services",
+            title="Detected Services by Host",
             box=box.ROUNDED,
             header_style="bold cyan",
-            border_style="bright_black"
+            border_style="bright_black",
+            show_lines=True
         )
 
-        table.add_column("Target", style="cyan", width=30)
-        table.add_column("Service", style="green", width=15)
+        table.add_column("Host", style="cyan bold", width=25)
+        table.add_column("Service", style="green", width=20)
         table.add_column("Ports", style="yellow", width=40)
 
-        for target, target_services in services.items():
-            for service, ports in target_services.items():
-                ports_str = ", ".join(map(str, ports))
-                table.add_row(target, service, ports_str)
+        # Sort targets by IP address
+        sorted_targets = sorted(filtered_services.keys(), key=lambda x: tuple(int(p) if p.isdigit() else p for p in x.replace(":", ".").split(".")))
+
+        for target in sorted_targets:
+            target_services = filtered_services[target]
+            service_items = list(target_services.items())
+
+            # First row for this host (with hostname in Target column)
+            if service_items:
+                first_service, first_ports = service_items[0]
+                ports_str = ", ".join(map(str, sorted(first_ports)))
+                table.add_row(f"[cyan bold]{target}[/cyan bold]", first_service, ports_str)
+
+                # Subsequent rows for remaining services (empty Target column)
+                for service, ports in service_items[1:]:
+                    ports_str = ", ".join(map(str, sorted(ports)))
+                    table.add_row("", service, ports_str)
 
         self.console.print(table)
+        self.console.print(f"\n[dim]Total hosts: {len(sorted_targets)}[/dim]")
         self.console.print()
 
     def print_results(self, results: Dict[str, Any]):
