@@ -271,18 +271,18 @@ class Display:
         Args:
             results: Results dictionary
         """
-        if not results.get('success', False):
+        # Print status message
+        if results.get('success', False):
+            self.print_success("Module executed successfully")
+        elif 'error' in results:
             self.print_error(f"Module failed: {results.get('error', 'Unknown error')}")
-            return
 
-        self.print_success("Module executed successfully")
-
-        # Display stdout if present
+        # ALWAYS display stdout if present (even on failure - it contains useful info)
         if 'stdout' in results and results['stdout']:
             self.console.print("\n[bold]Output:[/bold]")
             self.console.print(Panel(results['stdout'], border_style="green"))
 
-        # Display stderr if present
+        # ALWAYS display stderr if present (even on failure - it contains useful info)
         if 'stderr' in results and results['stderr']:
             self.console.print("\n[bold yellow]Errors/Warnings:[/bold yellow]")
             self.console.print(Panel(results['stderr'], border_style="yellow"))
