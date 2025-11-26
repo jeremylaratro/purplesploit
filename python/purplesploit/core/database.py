@@ -320,6 +320,20 @@ class Database:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    def clear_all_targets(self) -> int:
+        """
+        Remove all targets from the database.
+
+        Returns:
+            Number of targets removed
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM targets")
+        count = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM targets")
+        self.conn.commit()
+        return count
+
     # Credential Methods
     def add_credential(self, username: str, password: str = None,
                       domain: str = None, hash_value: str = None,
@@ -435,6 +449,20 @@ class Database:
             cursor.execute("SELECT * FROM services")
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def clear_all_services(self) -> int:
+        """
+        Remove all services from the database.
+
+        Returns:
+            Number of services removed
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM services")
+        count = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM services")
+        self.conn.commit()
+        return count
 
     # Scan Results Methods
     def save_scan_results(self, scan_name: str, target: str, scan_type: str,

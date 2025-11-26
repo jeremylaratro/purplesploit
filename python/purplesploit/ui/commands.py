@@ -767,8 +767,20 @@ class CommandHandler:
 
         # Handle "targets clear" - clear all
         if subcommand == "clear":
+            # Clear from session
             count = self.framework.session.targets.clear()
-            self.display.print_success(f"Cleared {count} target(s)")
+
+            # Clear from legacy database
+            self.framework.database.clear_all_targets()
+
+            # Clear from models database (for dashboard sync)
+            try:
+                from purplesploit.models.database import db_manager
+                db_manager.clear_all_targets()
+            except Exception as e:
+                self.display.print_warning(f"Could not clear dashboard targets: {e}")
+
+            self.display.print_success(f"Cleared {count} target(s) from session and databases")
             return True
 
         # Handle "targets 1-5 clear" or "targets 1 clear" - range/index clear
@@ -1061,6 +1073,24 @@ class CommandHandler:
 
     def cmd_services(self, args: List[str]) -> bool:
         """View detected services."""
+        # Check for 'clear' subcommand
+        if args and args[0].lower() == "clear":
+            # Clear from session
+            count = self.framework.session.services.clear()
+
+            # Clear from legacy database
+            self.framework.database.clear_all_services()
+
+            # Clear from models database (for dashboard sync)
+            try:
+                from purplesploit.models.database import db_manager
+                db_manager.clear_all_services()
+            except Exception as e:
+                self.display.print_warning(f"Could not clear dashboard services: {e}")
+
+            self.display.print_success(f"Cleared {count} service target(s) from session and databases")
+            return True
+
         # Check for 'select' subcommand
         if args and args[0].lower() == "select":
             services = self.framework.session.services.services
@@ -1081,7 +1111,7 @@ class CommandHandler:
         else:
             services = self.framework.session.services.services
             self.display.print_services_table(services)
-            self.display.print_info("\nTip: Use 'services select' for interactive selection")
+            self.display.print_info("\nTip: Use 'services select' for interactive selection or 'services clear' to remove all")
 
         return True
 
