@@ -6,6 +6,7 @@ Supports multiple deployment methods: SMB, PSExec, WMIExec, SSH.
 """
 
 from purplesploit.core.module import BaseModule
+from typing import Dict, Any, List
 import subprocess
 import os
 import time
@@ -22,43 +23,6 @@ class LigoloPivotModule(BaseModule):
 
     def __init__(self, framework):
         super().__init__(framework)
-        self.operations = {
-            "deploy_smb": {
-                "name": "Deploy via SMB",
-                "description": "Upload agent via SMB and execute with PsExec",
-                "handler": self.deploy_via_smb
-            },
-            "deploy_psexec": {
-                "name": "Deploy via PsExec",
-                "description": "Deploy agent using Impacket psexec",
-                "handler": self.deploy_via_psexec
-            },
-            "deploy_wmiexec": {
-                "name": "Deploy via WMIExec",
-                "description": "Deploy agent using Impacket wmiexec",
-                "handler": self.deploy_via_wmiexec
-            },
-            "deploy_ssh": {
-                "name": "Deploy via SSH",
-                "description": "Deploy agent via SSH (Linux/Unix targets)",
-                "handler": self.deploy_via_ssh
-            },
-            "deploy_nxc": {
-                "name": "Deploy via NetExec",
-                "description": "Deploy agent using NetExec (nxc)",
-                "handler": self.deploy_via_nxc
-            },
-            "list_agents": {
-                "name": "List Connected Agents",
-                "description": "Show all connected ligolo agents",
-                "handler": self.list_agents
-            },
-            "create_pivot": {
-                "name": "Create Pivot Route",
-                "description": "Create routing for pivot network",
-                "handler": self.create_pivot_route
-            }
-        }
 
     @property
     def name(self) -> str:
@@ -148,6 +112,46 @@ class LigoloPivotModule(BaseModule):
                 "default": "windows"
             }
         })
+
+    def get_operations(self) -> List[Dict[str, Any]]:
+        """Return list of ligolo deployment operations."""
+        return [
+            {
+                "name": "Deploy via SMB",
+                "description": "Upload agent via SMB and execute with PsExec",
+                "handler": self.deploy_via_smb
+            },
+            {
+                "name": "Deploy via PsExec",
+                "description": "Deploy agent using Impacket psexec",
+                "handler": self.deploy_via_psexec
+            },
+            {
+                "name": "Deploy via WMIExec",
+                "description": "Deploy agent using Impacket wmiexec",
+                "handler": self.deploy_via_wmiexec
+            },
+            {
+                "name": "Deploy via SSH",
+                "description": "Deploy agent via SSH (Linux/Unix targets)",
+                "handler": self.deploy_via_ssh
+            },
+            {
+                "name": "Deploy via NetExec",
+                "description": "Deploy agent using NetExec (nxc)",
+                "handler": self.deploy_via_nxc
+            },
+            {
+                "name": "List Connected Agents",
+                "description": "Show all connected ligolo agents",
+                "handler": self.list_agents
+            },
+            {
+                "name": "Create Pivot Route",
+                "description": "Create routing for pivot network",
+                "handler": self.create_pivot_route
+            }
+        ]
 
     def deploy_via_smb(self) -> dict:
         """Deploy agent via SMB share upload."""

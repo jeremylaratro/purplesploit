@@ -434,8 +434,8 @@ class Framework:
         return True
 
     def add_credential(self, username: str, password: str = None,
-                      domain: str = None, hash_value: str = None,
-                      name: str = None) -> bool:
+                      domain: str = None, dcip: str = None, dns: str = None,
+                      hash_value: str = None, name: str = None) -> bool:
         """
         Add a credential to both session and database.
 
@@ -443,6 +443,8 @@ class Framework:
             username: Username
             password: Password
             domain: Domain
+            dcip: Domain Controller IP
+            dns: DNS server
             hash_value: Password hash
             name: Optional name
 
@@ -457,6 +459,8 @@ class Framework:
             'username': username,
             'password': password,
             'domain': domain,
+            'dcip': dcip,
+            'dns': dns,
             'hash': hash_value,
             'name': name
         }
@@ -481,6 +485,8 @@ class Framework:
                 username=username,
                 password=password,
                 domain=domain,
+                dcip=dcip,
+                dns=dns,
                 hash=hash_value
             )
             db_manager.add_credential(cred_create)

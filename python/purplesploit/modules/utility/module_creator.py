@@ -405,18 +405,19 @@ class {class_name}(ExternalToolModule):
                 f'            {{"name": "{op["name"]}", "description": "{op["description"]}", "handler": "{handler_name}"}}'
             )
 
+            # Use regular string (not f-string) to avoid interpolation issues
             ops_methods.append(f'''
     def {handler_name}(self) -> Dict[str, Any]:
         """Execute {op['name']}."""
         command = "{op['command']}"
 
         # Replace placeholders with option values
-        for key, option in self.options.items():
-            value = option.get("value")
+        for opt_key, opt_val in self.options.items():
+            value = opt_val.get("value")
             if value:
-                command = command.replace(f"{{{{{key}}}}}", str(value))
+                command = command.replace(f"{{{{opt_key}}}}", str(value))
 
-        self.log(f"Executing: {{command}}", "info")
+        self.log(f"Executing: {{{{command}}}}", "info")
         return self.execute_command(command)
 ''')
 
