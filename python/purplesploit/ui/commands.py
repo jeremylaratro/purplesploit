@@ -1274,14 +1274,21 @@ class CommandHandler:
 
     def cmd_ligolo(self, args: List[str]) -> bool:
         """
-        Launch or attach to ligolo-ng interface.
+        Launch or attach to ligolo-ng proxy interface (shell command passthrough).
 
         Usage:
-            ligolo                    # Launch or attach to ligolo-ng session
-            ligolo kill               # Kill existing ligolo-ng session
+            ligolo                    # Launch ligolo-ng with default settings (-selfcert)
             ligolo --help             # Show ligolo-ng help
+            ligolo -selfcert -laddr 0.0.0.0:11601  # Custom proxy settings
+            ligolo kill               # Kill existing ligolo-ng session
 
-        Press CTRL+B then D to detach from session.
+        The ligolo command runs ligolo-ng directly in a tmux session.
+        All arguments are passed through to the ligolo-ng binary.
+
+        Note: This is different from the 'c2/ligolo_pivot' module which is for
+              automated agent deployment. Use this command for interactive proxy control.
+
+        Press CTRL+B then D to detach from session (keeps it running).
         """
         import subprocess
         import os
