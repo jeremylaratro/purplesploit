@@ -350,7 +350,7 @@ class CommandHandler:
             self.display.print_error("Usage: use <module_path | number> [operation_filter | subcategory]")
             self.display.print_info("Examples:")
             self.display.print_info("  use network/nxc_smb")
-            self.display.print_info("  use 1                  # Select from search results")
+            self.display.print_info("  use 1                  # Select from search or ops results")
             self.display.print_info("  use smb auth           # Load SMB module, show auth subcategory")
             self.display.print_info("  use smb shares         # Load SMB module, show shares subcategory")
             return True
@@ -419,20 +419,30 @@ class CommandHandler:
         # Check if it's a service shortcut
         if module_identifier.lower() in self.service_shortcuts:
             module_path = self.service_shortcuts[module_identifier.lower()]
-        # Check if it's a number (selecting from search results)
+        # Check if it's a number (selecting from search results or ops results)
         elif module_identifier.isdigit():
             index = int(module_identifier) - 1  # Convert to 0-based index
 
-            if not self.last_search_results:
-                self.display.print_error("No search results available. Run 'search' first")
-                return True
+            # Check for module search results first
+            if self.last_search_results:
+                if index < 0 or index >= len(self.last_search_results):
+                    self.display.print_error(f"Invalid number. Must be 1-{len(self.last_search_results)}")
+                    return True
+                # Get module path from search results
+                module_path = self.last_search_results[index].path
 
-            if index < 0 or index >= len(self.last_search_results):
-                self.display.print_error(f"Invalid number. Must be 1-{len(self.last_search_results)}")
-                return True
+            # Fall back to ops search results if available
+            elif hasattr(self, 'last_ops_results') and self.last_ops_results:
+                if index < 0 or index >= len(self.last_ops_results):
+                    self.display.print_error(f"Invalid number. Must be 1-{len(self.last_ops_results)}")
+                    return True
+                # Get module path from ops results
+                module_path = self.last_ops_results[index]['module_path']
+                self.display.print_info(f"Loading module from operation result: {self.last_ops_results[index]['module']}")
 
-            # Get module path from search results
-            module_path = self.last_search_results[index].path
+            else:
+                self.display.print_error("No search or ops results available. Run 'search' or 'ops' first")
+                return True
         else:
             module_path = module_identifier
 
@@ -2262,7 +2272,7 @@ class CommandHandler:
 
                 self.display.console.print()  # Blank line between modules
 
-            self.display.print_info("Tip: Use 'run <number>' to execute directly, 'use <module_path>' to load the module, or 'ops select' for interactive selection")
+            self.display.print_info("Tip: Use 'run <number>' to execute directly, 'use <number>' to load the parent module, or 'ops select' for interactive selection")
         else:
             self.display.print_warning(f"No operations found matching: {query}")
 
