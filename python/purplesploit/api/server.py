@@ -241,6 +241,34 @@ async def get_credential(name: str):
         session.close()
 
 
+@app.put("/api/credentials/{name}")
+async def update_credential(name: str, cred: CredentialCreate):
+    """Update a credential"""
+    session = db_manager.get_credentials_session()
+    try:
+        db_cred = session.query(Credential).filter(Credential.name == name).first()
+        if not db_cred:
+            raise HTTPException(status_code=404, detail="Credential not found")
+
+        # Update fields
+        if hasattr(cred, 'name') and cred.name:
+            db_cred.name = cred.name
+        if hasattr(cred, 'username') and cred.username:
+            db_cred.username = cred.username
+        if hasattr(cred, 'password') and cred.password:
+            db_cred.password = cred.password
+        if hasattr(cred, 'domain') and cred.domain:
+            db_cred.domain = cred.domain
+        if hasattr(cred, 'hash') and cred.hash:
+            db_cred.hash = cred.hash
+
+        session.commit()
+        session.refresh(db_cred)
+        return CredentialResponse.from_orm(db_cred)
+    finally:
+        session.close()
+
+
 @app.delete("/api/credentials/{name}")
 async def delete_credential(name: str):
     """Delete a credential"""
@@ -286,6 +314,30 @@ async def get_target(name: str):
         if not target:
             raise HTTPException(status_code=404, detail="Target not found")
         return TargetResponse.from_orm(target)
+    finally:
+        session.close()
+
+
+@app.put("/api/targets/{name}")
+async def update_target(name: str, target: TargetCreate):
+    """Update a target"""
+    session = db_manager.get_targets_session()
+    try:
+        db_target = session.query(Target).filter(Target.name == name).first()
+        if not db_target:
+            raise HTTPException(status_code=404, detail="Target not found")
+
+        # Update fields
+        if hasattr(target, 'name') and target.name:
+            db_target.name = target.name
+        if hasattr(target, 'ip') and target.ip:
+            db_target.ip = target.ip
+        if hasattr(target, 'description') and target.description:
+            db_target.description = target.description
+
+        session.commit()
+        session.refresh(db_target)
+        return TargetResponse.from_orm(db_target)
     finally:
         session.close()
 
@@ -882,7 +934,7 @@ Examples:
     elif cmd == "target":
         if not args:
             # Show current target
-            current = await loop.run_in_executor(None, framework.session.targets.get_active)
+            current = await loop.run_in_executor(None, framework.session.targets.get_current)
             if current:
                 return f"Current target: {current.get('name')} - {current.get('ip', current.get('url'))}"
             return "No target set"
@@ -892,20 +944,9 @@ Examples:
 
         # Check if it's CIDR notation
         if is_cidr_notation(target_input):
-            # Expand CIDR to individual IPs
-            ips = expand_cidr(target_input)
-
-            if len(ips) == 1 and '/' in ips[0]:
-                # Large subnet - add as-is
-                await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
-                return f"Target subnet added: {target_input}\n(Large subnet - will be expanded during module execution)"
-            else:
-                # Expand and add individual IPs
-                count = 0
-                for ip in ips:
-                    await loop.run_in_executor(None, framework.add_target, "network", str(ip), str(ip))
-                    count += 1
-                return f"Added {count} targets from subnet {target_input}\nUse 'targets' to view all targets."
+            # Add subnet as-is, don't expand
+            await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            return f"Target subnet added: {target_input}\n(Subnet will be expanded when hosts are verified via scanning)"
         else:
             # Single IP/hostname
             await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
