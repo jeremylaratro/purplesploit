@@ -225,18 +225,20 @@ class InteractiveSelector:
 
     def select_credential(
         self,
-        credentials: List[Dict[str, Any]]
+        credentials: List[Dict[str, Any]],
+        allow_add_new: bool = True
     ) -> Optional[Dict[str, Any]]:
         """
         Interactive credential selection.
 
         Args:
             credentials: List of credential dictionaries
+            allow_add_new: Whether to show "Add New Credential" option
 
         Returns:
-            Selected credential dict or None
+            Selected credential dict, "ADD_NEW" string, or None
         """
-        if not credentials:
+        if not credentials and not allow_add_new:
             return None
 
         # Format credentials for display
@@ -260,6 +262,11 @@ class InteractiveSelector:
                 line = f"{i:2d}. {user_str:30s} [Pass:{has_password} Hash:{has_hash}]"
             lines.append(line)
 
+        # Add "Add New Credential" option
+        if allow_add_new:
+            lines.append(f"\n{'─' * 60}")
+            lines.append(f"➕  Add New Credential")
+
         if not self.has_fzf:
             return self._simple_select_credential(credentials)
 
@@ -272,6 +279,10 @@ class InteractiveSelector:
         )
 
         if selected_line:
+            # Check if "Add New Credential" was selected
+            if "Add New Credential" in selected_line:
+                return "ADD_NEW"
+
             # Extract index from selected line
             try:
                 index = int(selected_line.split('.')[0].strip()) - 1
