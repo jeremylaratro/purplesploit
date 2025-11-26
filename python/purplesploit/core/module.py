@@ -474,6 +474,15 @@ class ExternalToolModule(BaseModule):
         self.tool_name = None  # Set in subclass
         self.tool_path = None  # Auto-detected or set in subclass
 
+        # Add SWITCHES option for custom CLI switches
+        if "SWITCHES" not in self.options:
+            self.options["SWITCHES"] = {
+                "value": "",
+                "required": False,
+                "description": "Custom command-line switches to append to command",
+                "default": ""
+            }
+
     def check_tool_installed(self) -> bool:
         """
         Check if the external tool is installed.
@@ -510,6 +519,11 @@ class ExternalToolModule(BaseModule):
             Dictionary with execution results
         """
         import subprocess
+
+        # Append custom switches if provided
+        switches = self.get_option("SWITCHES")
+        if switches:
+            command = f"{command} {switches}"
 
         try:
             self.log(f"Executing: {command}", "info")

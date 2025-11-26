@@ -5,6 +5,35 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0] - 2025-11-26
+
+### Added
+- **DOMAIN/DCIP/DNS Credential Fields**: Added domain controller IP (dcip) and DNS server (dns) fields to credential manager
+  - Updated CredentialManager to support dcip and dns fields
+  - Updated database models (Credential, CredentialCreate, CredentialResponse) with new fields
+  - Auto-set dcip and dns values when selecting credentials in modules
+- **AUTH_TYPE Option for SMB/MSSQL**: Added authentication type selection for SMB and MSSQL modules
+  - Supports: domain (default), local, kerberos, and windows authentication
+  - Available as AUTH_TYPE option in nxc_smb and nxc_mssql modules
+  - Automatically appends appropriate flags (--local-auth, --kerberos, --windows-auth)
+- **SWITCHES Option**: Added global SWITCHES option to all ExternalToolModule instances
+  - Allows custom command-line switches to be appended to any module command
+  - Available in OPTIONS menu for all modules using ExternalToolModule base class
+
+### Fixed
+- **Module Creator Bug**: Fixed "name 'key' is not defined" error in multi-operation module generation
+  - Updated template generation to use proper variable names (opt_key, opt_val)
+  - Corrected f-string escaping in generated operation methods
+- **Ligolo Pivot Module**: Fixed missing operations implementation
+  - Converted from old-style self.operations dict to get_operations() method
+  - Module now properly displays 7 deployment operations in operation selector
+  - Added missing List and Dict type imports
+
+### Enhanced
+- Credential manager modify() method now supports dcip and dns field modifications
+- Credential selection auto-populates DCIP and DNS in modules that support them
+- Improved modularity of authentication handling across network modules
+
 ## [6.5.0] - 2025-11-26
 
 ### Added

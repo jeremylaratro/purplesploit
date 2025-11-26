@@ -38,6 +38,8 @@ class Credential(Base):
     username = Column(String)
     password = Column(String)
     domain = Column(String)
+    dcip = Column(String)
+    dns = Column(String)
     hash = Column(String)
 
     def to_dict(self):
@@ -46,6 +48,8 @@ class Credential(Base):
             "username": self.username,
             "password": self.password,
             "domain": self.domain,
+            "dcip": self.dcip,
+            "dns": self.dns,
             "hash": self.hash,
         }
 
@@ -167,6 +171,8 @@ class CredentialCreate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     domain: Optional[str] = None
+    dcip: Optional[str] = None
+    dns: Optional[str] = None
     hash: Optional[str] = None
 
 
@@ -176,6 +182,8 @@ class CredentialResponse(BaseModel):
     username: Optional[str]
     password: Optional[str]
     domain: Optional[str]
+    dcip: Optional[str]
+    dns: Optional[str]
     hash: Optional[str]
 
     class Config:

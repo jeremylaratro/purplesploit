@@ -1037,6 +1037,12 @@ class CommandHandler:
                             if selected.get('domain') and "DOMAIN" in module.options:
                                 module.set_option("DOMAIN", selected['domain'])
                                 self.display.print_info(f"  → Set DOMAIN = {selected['domain']}")
+                            if selected.get('dcip') and "DCIP" in module.options:
+                                module.set_option("DCIP", selected['dcip'])
+                                self.display.print_info(f"  → Set DCIP = {selected['dcip']}")
+                            if selected.get('dns') and "DNS" in module.options:
+                                module.set_option("DNS", selected['dns'])
+                                self.display.print_info(f"  → Set DNS = {selected['dns']}")
                             if selected.get('hash') and "HASH" in module.options:
                                 module.set_option("HASH", selected['hash'])
                                 self.display.print_info(f"  → Set HASH = ****")
