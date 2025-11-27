@@ -5,6 +5,21 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.1] - 2025-11-27
+
+### Fixed
+- **Password Display**: Removed password censoring in credentials list - passwords and hashes now display uncensored
+  - Updated `print_credentials_table()` in display.py to show plaintext passwords
+  - Removed asterisk masking logic for sensitive data
+- **Services Display**: Fixed nmap services table to show one service/port per row
+  - Changed services table to display individual service/port combinations on separate rows
+  - Host column now shows blank cells for additional rows from same host
+  - Column header changed from "Ports" to "Port" for clarity
+- **Target Auto-Import**: Fixed nmap discovered IPs not being added to targets list
+  - Updated `process_discovered_hosts()` in nmap.py to use `framework.add_target()`
+  - Discovered IPs now correctly appear in both session and database targets
+  - Fixed issue where IPs were only saved to database but not to active session
+
 ## [6.6.0] - 2025-11-26
 
 ### Added
