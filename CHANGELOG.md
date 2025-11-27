@@ -5,6 +5,20 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.7.0] - 2025-11-27
+
+### Added
+- **Mobile-Friendly Web Dashboard**: Enhanced web dashboard with comprehensive responsive design
+  - Added mobile breakpoints for tablets (768px) and phones (480px)
+  - Navigation bar now wraps properly on smaller screens with adjusted spacing
+  - Responsive grid layouts for stats cards with optimized min-widths
+  - Table horizontal scrolling with touch support for better mobile browsing
+  - Optimized font sizes, padding, and spacing for mobile devices
+  - Service grid adapts from 150px to 90px minimum width on mobile
+  - Auto-refresh indicator repositioned and resized for mobile screens
+  - Container padding reduced on mobile for better space utilization
+  - Improved readability with scaled-down typography on small screens
+
 ## [6.6.2] - 2025-11-27
 
 ### Fixed
