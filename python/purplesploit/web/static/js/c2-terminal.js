@@ -40,6 +40,9 @@ function initTerminal() {
     sessionId = getSessionId();
     document.getElementById('session-id').textContent = sessionId;
 
+    // Load dynamic banner
+    loadBanner();
+
     // Setup event listeners
     terminalInput.addEventListener('keydown', handleKeyDown);
     moduleSearch.addEventListener('input', handleModuleSearch);
@@ -52,6 +55,29 @@ function initTerminal() {
 
     // Update context periodically
     setInterval(updateContext, 5000);
+}
+
+/**
+ * Load a random banner from the API
+ */
+async function loadBanner() {
+    try {
+        const response = await fetch(`${API_BASE}/api/banner`);
+        const data = await response.json();
+
+        // Display banner with welcome message
+        const bannerElement = document.getElementById('terminal-banner');
+        if (bannerElement) {
+            bannerElement.textContent = data.banner + '\n\n              Command & Control Terminal v6.6.2\n\nType \'help\' for available commands.\n';
+        }
+    } catch (error) {
+        console.error('Failed to load banner:', error);
+        // Fallback to simple text banner
+        const bannerElement = document.getElementById('terminal-banner');
+        if (bannerElement) {
+            bannerElement.textContent = '\n═══════════════════════════════════════════════\n        PURPLESPLOIT C2 TERMINAL\n        Command & Control Terminal v6.6.2\n═══════════════════════════════════════════════\n\nType \'help\' for available commands.\n';
+        }
+    }
 }
 
 /**
