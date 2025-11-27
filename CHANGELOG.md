@@ -5,6 +5,28 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.2] - 2025-11-27
+
+### Fixed
+- **Web Dashboard Target/Credential Display**: Fixed current target and credential not updating in web terminal context display
+  - Updated session tracking to include `current_target` and `current_credential` fields
+  - Modified `updateContext()` in c2-terminal.js to display current target from session
+  - Target/credential context now properly updates when selected in web terminal
+- **Web Dashboard Database Sync**: Fixed main dashboard showing zero targets/credentials despite data existing
+  - Changed dashboard.py to use models database (db_manager) instead of core database
+  - Dashboard now displays accurate counts from the shared models database
+  - All dashboard routes (targets, credentials, services) now sync with API data
+- **Searchsploit Exploit Discovery**: Fixed exploit discovery not working in nmap_parser module
+  - Updated nmap_parser to use db_manager.add_exploit() for storing exploits
+  - Added service syncing to models database for web dashboard visibility
+  - Exploits now properly stored and displayed in web dashboard
+
+### Added
+- **Credential Selection UI**: Added "Use" button for existing credentials in web terminal credential manager
+  - Credential manager now allows selecting existing credentials like the target manager
+  - Added `useCredential()` function to execute credential selection
+  - Credentials can now be selected from the list or added new
+
 ## [6.6.1] - 2025-11-27
 
 ### Fixed

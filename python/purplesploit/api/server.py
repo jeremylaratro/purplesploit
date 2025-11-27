@@ -764,7 +764,13 @@ async def execute_module(request: ModuleExecuteRequest):
         # Store in session history
         session_id = request.session_id
         if session_id not in sessions:
-            sessions[session_id] = {"history": [], "created_at": datetime.now().isoformat()}
+            sessions[session_id] = {
+                "history": [],
+                "created_at": datetime.now().isoformat(),
+                "current_module": None,
+                "current_target": None,
+                "current_credential": None
+            }
 
         sessions[session_id]["history"].append({
             "type": "module_execution",
@@ -796,7 +802,9 @@ async def execute_c2_command(request: C2CommandRequest):
             sessions[session_id] = {
                 "history": [],
                 "created_at": datetime.now().isoformat(),
-                "current_module": None
+                "current_module": None,
+                "current_target": None,
+                "current_credential": None
             }
 
         # Parse and execute command
@@ -1008,10 +1016,14 @@ Examples:
         if is_cidr_notation(target_input):
             # Add subnet as-is, don't expand
             await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            # Update session
+            sessions[session_id]["current_target"] = target_input
             return f"Target subnet added: {target_input}\n(Subnet will be expanded when hosts are verified via scanning)"
         else:
             # Single IP/hostname
             await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            # Update session
+            sessions[session_id]["current_target"] = target_input
             return f"Target set: {target_input}"
 
     elif cmd == "targets":
@@ -1031,6 +1043,8 @@ Examples:
         if ":" in cred_str:
             username, password = cred_str.split(":", 1)
             await loop.run_in_executor(None, framework.add_credential, username, password)
+            # Update session
+            sessions[session_id]["current_credential"] = f"{username}:{password}"
             return f"Added credential: {username}:{password}"
         return "Invalid format. Use: username:password"
 
@@ -1109,7 +1123,9 @@ async def websocket_c2(websocket: WebSocket, session_id: str):
         sessions[session_id] = {
             "history": [],
             "created_at": datetime.now().isoformat(),
-            "current_module": None
+            "current_module": None,
+            "current_target": None,
+            "current_credential": None
         }
 
     try:

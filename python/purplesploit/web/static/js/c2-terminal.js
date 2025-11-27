@@ -438,17 +438,27 @@ async function updateContext() {
         document.getElementById('stats-info').textContent =
             `${stats.total_targets}T ${stats.total_services}S`;
 
-        // Update current module/target from session
+        // Update current module/target/credential from session
         const sessionResponse = await fetch(`${API_BASE}/api/c2/session/${sessionId}`);
         if (sessionResponse.ok) {
             const session = await sessionResponse.json();
 
+            // Update current module
             if (session.current_module) {
                 currentModuleDisplay.textContent = session.current_module;
                 currentModuleDisplay.style.color = 'var(--success)';
             } else {
                 currentModuleDisplay.textContent = 'None';
                 currentModuleDisplay.style.color = 'var(--text-secondary)';
+            }
+
+            // Update current target
+            if (session.current_target) {
+                currentTargetDisplay.textContent = session.current_target;
+                currentTargetDisplay.style.color = 'var(--success)';
+            } else {
+                currentTargetDisplay.textContent = 'None';
+                currentTargetDisplay.style.color = 'var(--text-secondary)';
             }
         }
     } catch (error) {
@@ -647,6 +657,7 @@ async function loadCredentialsList() {
                     <div class="entity-details">${escapeHtml(cred.username)}:${cred.password ? '***' : '[hash]'}</div>
                 </div>
                 <div class="entity-actions">
+                    <button onclick="useCredential('${escapeHtml(cred.username)}', '${escapeHtml(cred.password || '')}', '${escapeHtml(cred.hash || '')}')">Use</button>
                     <button class="delete" onclick="deleteCredential('${escapeHtml(cred.name)}')">Delete</button>
                 </div>
             </div>
@@ -692,6 +703,32 @@ async function addCredential(event) {
 
     // Reload list
     setTimeout(() => loadCredentialsList(), 500);
+}
+
+async function useCredential(username, password, hash) {
+    // Build credential command based on what's available
+    if (password) {
+        executeCommand(`cred ${username}:${password}`);
+    } else if (hash) {
+        // For hash-based credentials, we just acknowledge selection
+        // The credential is already in the database
+        appendOutput('System', `Selected credential: ${username} [hash]`, 'success');
+        // Update session manually via API
+        try {
+            const response = await fetch(`${API_BASE}/api/c2/command`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    command: `cred ${username}:${hash}`,
+                    session_id: sessionId
+                })
+            });
+        } catch (error) {
+            console.error('Failed to set credential:', error);
+        }
+    }
+    closeCredentialManager();
+    updateContext();
 }
 
 async function deleteCredential(name) {
