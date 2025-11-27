@@ -365,15 +365,15 @@ class NmapModule(ExternalToolModule):
             ip = host_info["ip"]
             hostname = host_info.get("hostname")
 
-            # Add host to targets table with verified status
+            # Add host to targets (both session and database)
             try:
-                self.framework.database.add_target(
+                # Use framework.add_target to add to session, database, and models
+                self.framework.add_target(
                     target_type="network",
                     identifier=ip,
-                    name=hostname or ip,
-                    metadata={"hostname": hostname} if hostname else {}
+                    name=hostname or ip
                 )
-                # Mark as verified
+                # Mark as verified in database
                 self.framework.database.mark_target_verified(ip)
                 self.log(f"Added target: {ip}", "success")
             except Exception as e:
