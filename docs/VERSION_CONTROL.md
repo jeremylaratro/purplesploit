@@ -4,9 +4,9 @@ This document describes the version control and documentation management system 
 
 ## Current Version
 
-**PurpleSploit v6.6.0**
+**PurpleSploit v6.6.2**
 
-The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "6.6.0"`.
+The current version is defined in `python/purplesploit/__init__.py` as `__version__ = "6.6.2"`.
 
 ## Version Control Policy
 
@@ -40,6 +40,8 @@ Historical version information is tracked in:
 
 ## Recent Versions
 
+- **v6.6.2** (2025-11-27): Web dashboard fixes - target/credential display, database sync, credential selection UI, searchsploit exploit discovery
+- **v6.6.1** (2025-11-27): Password display, services display, target auto-import fixes
 - **v6.6.0** (2025-11-26): Auth type selection (SMB/MSSQL), DOMAIN/DCIP/DNS credential fields, SWITCHES option, Module Creator bugfix, Ligolo operations fix
 - **v6.5.0** (2025-11-26): Intelligent subnet scanning, auto-discovery of hosts/services, nmap XML import, background scanning default
 - **v6.4.0** (2025-11-25): Enhanced target/credential management, range-based deletion, web dashboard CRUD, improved subnet handling
@@ -213,6 +215,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2025-11-26 (v6.6.0)
+**Last Updated**: 2025-11-27 (v6.6.2)
 
 For questions about documentation versioning, see the [Contributing Guide](CONTRIBUTING.md).
