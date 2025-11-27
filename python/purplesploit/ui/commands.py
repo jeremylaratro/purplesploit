@@ -81,6 +81,8 @@ class CommandHandler:
             "creds": self.cmd_creds,
             "services": self.cmd_services,
             "wordlists": self.cmd_wordlists,
+            "analysis": self.cmd_analysis,     # View analysis results (web scans, etc.)
+            "webresults": self.cmd_analysis,   # Alias for analysis
 
             # Enhanced search commands
             "ops": self.cmd_ops,  # Search operations globally
@@ -189,7 +191,8 @@ class CommandHandler:
 [green]wordlists add <cat> <path>[/green]  Add wordlist by category
 [green]wordlists select <cat>[/green]      Select wordlist for category
 [green]services[/green]             View detected services
-[green]services select[/green]      Interactive service picker"""
+[green]services select[/green]      Interactive service picker
+[green]analysis[/green]             View web scan results dashboard"""
 
         # Quick Shortcuts Panel
         shortcuts_help = """[yellow]target <ip>[/yellow]          Quick add and set target
@@ -1381,6 +1384,89 @@ class CommandHandler:
 
             self.display.console.print(f"\n[bold cyan]{category.upper()}[/bold cyan]")
             self.display.console.print(table)
+
+    def cmd_analysis(self, args: List[str]) -> bool:
+        """View analysis results (web scans, etc.) organized by target."""
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich import box
+
+        # Get all scan results
+        web_results = self.framework.database.get_scan_results(scan_type="web")
+
+        if not web_results:
+            self.display.print_warning("No web scan results available")
+            self.display.print_info("Run web scans using modules like feroxbuster, wfuzz, or httpx first")
+            return True
+
+        # Group results by target
+        results_by_target = {}
+        for result in web_results:
+            target = result['target']
+            if target not in results_by_target:
+                results_by_target[target] = []
+            results_by_target[target].append(result)
+
+        # Display results organized by target
+        self.display.console.print("\n[bold cyan]═══ Web Scan Analysis Results ═══[/bold cyan]\n")
+
+        for target, scans in results_by_target.items():
+            # Create panel for each target
+            target_info = f"[bold yellow]Target:[/bold yellow] {target}\n"
+            target_info += f"[bold yellow]Total Scans:[/bold yellow] {len(scans)}\n\n"
+
+            # Create table for this target's scans
+            table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+            table.add_column("Scan Type", style="green", width=15)
+            table.add_column("Timestamp", style="dim", width=20)
+            table.add_column("Status", style="yellow", width=12)
+            table.add_column("Findings", style="white")
+            table.add_column("Log File", style="blue")
+
+            for scan in scans:
+                scan_name = scan['scan_name']
+                timestamp = scan['created_at']
+                results_data = scan['results']
+                log_file = scan.get('file_path', 'N/A')
+
+                # Determine status and findings
+                if results_data.get('status') == 'running':
+                    status = "[yellow]Running[/yellow]"
+                    findings = f"PID: {results_data.get('pid', 'N/A')}"
+                else:
+                    status = "[green]Complete[/green]"
+                    found_paths = results_data.get('found_paths', [])
+                    interesting = results_data.get('interesting_finds', [])
+                    findings = f"{len(found_paths)} paths ({len(interesting)} interesting)"
+
+                # Truncate log file path for display
+                if log_file != 'N/A':
+                    import os
+                    log_file = os.path.basename(log_file)
+
+                table.add_row(
+                    scan_name,
+                    timestamp.split('.')[0] if '.' in timestamp else timestamp,
+                    status,
+                    findings,
+                    log_file
+                )
+
+            # Show target panel
+            panel = Panel(
+                target_info + str(table),
+                title=f"[bold white]{target}[/bold white]",
+                border_style="cyan"
+            )
+            self.display.console.print(panel)
+            self.display.console.print()
+
+        # Show summary
+        self.display.console.print(f"\n[bold green]Total Targets with Results:[/bold green] {len(results_by_target)}")
+        self.display.console.print(f"[bold green]Total Scans:[/bold green] {len(web_results)}")
+        self.display.print_info("\nTip: Check log files in ~/.purplesploit/logs/web/ for detailed results")
+
+        return True
 
     def cmd_clear(self, args: List[str]) -> bool:
         """Clear the screen."""
