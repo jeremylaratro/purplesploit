@@ -132,23 +132,39 @@
 
         async function loadDashboard() {
             try {
+                console.log('Loading dashboard...');
+
                 // Load overview stats
+                console.log('Fetching stats...');
                 const stats = await API.getStats();
+                console.log('Stats loaded:', stats);
                 updateStats(stats);
 
                 // Load targets
+                console.log('Fetching targets...');
                 const targets = await API.getTargets();
+                console.log('Targets loaded:', targets.length, 'targets');
                 displayTargetsTable(targets.slice(0, 10)); // Show first 10
 
                 // Load recent exploits
+                console.log('Fetching exploits...');
                 const exploits = await API.getExploits();
+                console.log('Exploits loaded:', exploits.length, 'exploits');
                 displayRecentExploits(exploits.slice(0, 5)); // Show first 5
 
                 // Display services chart
                 displayServicesChart(stats.services_by_type);
+
+                console.log('Dashboard loaded successfully');
             } catch (error) {
                 console.error('Error loading dashboard:', error);
-                showError('Failed to load dashboard data');
+                showError('Failed to load dashboard data: ' + error.message);
+
+                // Show error in UI
+                document.getElementById('total-targets').textContent = 'Error';
+                document.getElementById('total-services').textContent = 'Error';
+                document.getElementById('total-exploits').textContent = 'Error';
+                document.getElementById('total-credentials').textContent = 'Error';
             }
         }
 

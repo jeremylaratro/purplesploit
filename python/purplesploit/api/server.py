@@ -25,6 +25,7 @@ from purplesploit.models.database import (
     ServiceResponse
 )
 from purplesploit.core.framework import Framework
+from purplesploit.ui.banner import show_banner
 
 # Create FastAPI app
 app = FastAPI(
@@ -204,6 +205,19 @@ async def status():
             "ad_targets": str(db_manager.AD_TARGETS_DB),
             "services": str(db_manager.SERVICES_DB),
         }
+    }
+
+
+@app.get("/api/banner")
+async def get_banner(variant: Optional[int] = None):
+    """Get a random or specific ASCII banner"""
+    import random
+    if variant is None:
+        variant = random.randint(0, 7)
+    banner_text = show_banner(variant)
+    return {
+        "banner": banner_text,
+        "variant": variant
     }
 
 
