@@ -10,6 +10,7 @@ import subprocess
 import re
 from typing import Dict, Any, List, Tuple
 from ..core.module import BaseModule
+from purplesploit.models.database import db_manager
 
 
 class NmapParser(BaseModule):
@@ -212,20 +213,31 @@ class NmapParser(BaseModule):
 
                             mapped_service = service_mapping.get(service_name, service_name)
 
-                            # Add to service database
+                            # Add to service database (session - in-memory)
                             self.framework.session.services.add_service(
                                 target=ip_addr,
                                 service=mapped_service,
                                 port=port_id
                             )
 
-                            # Also add to persistent database
+                            # Add to persistent core database
                             self.framework.database.add_service(
                                 target=ip_addr,
                                 service=mapped_service,
                                 port=port_id,
                                 version=version_str
                             )
+
+                            # Also sync to models database for web dashboard
+                            try:
+                                db_manager.add_service(
+                                    target=ip_addr,
+                                    service=mapped_service,
+                                    port=port_id,
+                                    version=version_str
+                                )
+                            except Exception as e:
+                                self.log(f"Warning: Failed to sync service to models DB: {str(e)}", "warning")
 
                             services_found += 1
 
@@ -237,7 +249,8 @@ class NmapParser(BaseModule):
                                 # Store exploit results
                                 for exploit_title, exploit_path, edb_id in exploits:
                                     try:
-                                        self.framework.database.add_exploit(
+                                        # Use db_manager to store exploits in the models database
+                                        db_manager.add_exploit(
                                             target=ip_addr,
                                             service=mapped_service,
                                             port=port_id,
