@@ -482,6 +482,59 @@ class Database:
 
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_web_services(self) -> List[Dict]:
+        """
+        Get all detected web services (http/https).
+
+        Returns:
+            List of web service dictionaries with target:port URLs
+        """
+        cursor = self.conn.cursor()
+
+        # Web services and common web ports
+        web_services = ('http', 'https', 'http-proxy', 'http-alt', 'ssl/http', 'ssl/https')
+        web_ports = (80, 443, 8080, 8443, 8000, 8888, 9090, 3000, 5000, 9000, 8001, 8008, 4443, 8081, 8082, 9443)
+
+        # Get services that are either explicitly web services or on common web ports
+        cursor.execute("""
+            SELECT DISTINCT target, port, service
+            FROM services
+            WHERE service IN ({})
+            OR port IN ({})
+            ORDER BY target, port
+        """.format(
+            ','.join('?' * len(web_services)),
+            ','.join('?' * len(web_ports))
+        ), web_services + web_ports)
+
+        web_targets = []
+        for row in cursor.fetchall():
+            target = row[0]
+            port = row[1]
+            service = row[2]
+
+            # Determine protocol
+            if service in ('https', 'ssl/https') or port in (443, 8443, 4443, 9443):
+                protocol = 'https'
+            else:
+                protocol = 'http'
+
+            # Build URL
+            if (protocol == 'http' and port == 80) or (protocol == 'https' and port == 443):
+                url = f"{protocol}://{target}"
+            else:
+                url = f"{protocol}://{target}:{port}"
+
+            web_targets.append({
+                'target': target,
+                'port': port,
+                'service': service,
+                'protocol': protocol,
+                'url': url
+            })
+
+        return web_targets
+
     def clear_all_services(self) -> int:
         """
         Remove all services from the database.
