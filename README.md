@@ -24,7 +24,7 @@
 
 **Pure Python pentesting framework for tool/workflow efficiency, with an emphasis on usability**
 
-[Quick Start](#-quick-start) • [Key Features](#-key-features) • [Installation](#-installation) • [Docs](docs/)
+[Quick Start](#-quick-start) • [Key Features](#-key-features) • [Installation](#-installation) • [Wiki](wiki/)
 
 </div>
 > What it does TL;DR
@@ -291,12 +291,17 @@ httpx
 ---
 
 ## 📚 Documentation
-- **[Quick Start Guide](QUICKSTART.md)** - Get started in 5 minutes
-- **[Console Guide](docs/console-mode/README.md)** - Complete CLI reference
-- **[Web Portal Guide](docs/WEB_PORTAL_GUIDE.md)** - Web interface documentation
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - Add your own modules
-- **[Overview](docs/OVERVIEW.md)** - Framework architecture and design
-- **[Full Documentation](docs/)** - Complete guides and API reference
+
+### **[📖 Wiki](wiki/)** - Complete Documentation
+- **[Commands Reference](wiki/Commands-Reference.md)** - All commands with tables
+- **[Framework Guide](wiki/Framework-Guide.md)** - Architecture and concepts
+- **[Web Portal Guide](wiki/Web-Portal.md)** - Web interface and API
+
+### Additional Guides
+- **[Quick Start](QUICKSTART.md)** - Get started in 5 minutes
+- **[Contributing](docs/CONTRIBUTING.md)** - Add your own modules
+- **[Changelog](docs/CHANGELOG.md)** - Version history
+- **[Disclaimer](docs/DISCLAIMER.md)** - Legal and authorized use
 
 ---
 
