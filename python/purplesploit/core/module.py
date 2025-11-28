@@ -392,22 +392,31 @@ class BaseModule(ABC):
         context = self.get_context()
 
         # Auto-set target if available
-        if context.get('current_target') and not self.get_option('RHOST'):
+        if context.get('current_target'):
             target = context['current_target']
             if isinstance(target, dict):
-                if 'ip' in target:
+                # Only set if not already set by user
+                if 'ip' in target and target['ip'] and not self.get_option('RHOST'):
                     self.set_option('RHOST', target['ip'])
-                if 'url' in target:
+                if 'url' in target and target['url'] and not self.get_option('URL'):
                     self.set_option('URL', target['url'])
 
         # Auto-set credentials if available
         if context.get('current_cred'):
             cred = context['current_cred']
             if isinstance(cred, dict):
-                if 'username' in cred and 'USERNAME' in self.options:
-                    self.set_option('USERNAME', cred['username'])
-                if 'password' in cred and 'PASSWORD' in self.options:
-                    self.set_option('PASSWORD', cred['password'])
+                # Auto-populate all credential fields (only if not already set)
+                cred_mappings = {
+                    'username': 'USERNAME',
+                    'password': 'PASSWORD',
+                    'domain': 'DOMAIN',
+                    'dcip': 'DCIP',
+                    'dns': 'DNS',
+                    'hash': 'HASH'
+                }
+                for cred_key, option_key in cred_mappings.items():
+                    if cred_key in cred and cred[cred_key] and option_key in self.options and not self.get_option(option_key):
+                        self.set_option(option_key, cred[cred_key])
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
@@ -474,6 +483,15 @@ class ExternalToolModule(BaseModule):
         self.tool_name = None  # Set in subclass
         self.tool_path = None  # Auto-detected or set in subclass
 
+        # Add SWITCHES option for custom CLI switches
+        if "SWITCHES" not in self.options:
+            self.options["SWITCHES"] = {
+                "value": "",
+                "required": False,
+                "description": "Custom command-line switches to append to command",
+                "default": ""
+            }
+
     def check_tool_installed(self) -> bool:
         """
         Check if the external tool is installed.
@@ -510,6 +528,11 @@ class ExternalToolModule(BaseModule):
             Dictionary with execution results
         """
         import subprocess
+
+        # Append custom switches if provided
+        switches = self.get_option("SWITCHES")
+        if switches:
+            command = f"{command} {switches}"
 
         try:
             self.log(f"Executing: {command}", "info")

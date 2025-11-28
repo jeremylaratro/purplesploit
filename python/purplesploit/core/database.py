@@ -40,10 +40,12 @@ class Database:
         self.conn = None
         self._connect()
         self._create_tables()
+        self._migrate_database()
 
     def _connect(self):
         """Establish database connection."""
-        self.conn = sqlite3.connect(self.db_path)
+        # Use check_same_thread=False to allow async operations across threads
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row  # Enable dict-like access
 
     def _create_tables(self):
@@ -72,6 +74,7 @@ class Database:
                 identifier TEXT NOT NULL,  -- IP or URL
                 name TEXT,
                 metadata TEXT,  -- JSON
+                status TEXT DEFAULT 'unverified',  -- 'unverified', 'verified', 'subnet'
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(type, identifier)
             )
@@ -159,6 +162,37 @@ class Database:
 
         self.conn.commit()
 
+    def _migrate_database(self):
+        """Apply database migrations for schema changes."""
+        cursor = self.conn.cursor()
+
+        # Migration: Add 'status' column to targets table if it doesn't exist
+        try:
+            cursor.execute("SELECT status FROM targets LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("""
+                ALTER TABLE targets ADD COLUMN status TEXT DEFAULT 'unverified'
+            """)
+            self.conn.commit()
+
+        # Migration: Add 'dcip' and 'dns' columns to credentials table if they don't exist
+        try:
+            cursor.execute("SELECT dcip FROM credentials LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("""
+                ALTER TABLE credentials ADD COLUMN dcip TEXT
+            """)
+            self.conn.commit()
+
+        try:
+            cursor.execute("SELECT dns FROM credentials LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("""
+                ALTER TABLE credentials ADD COLUMN dns TEXT
+            """)
+            self.conn.commit()
+
     def close(self):
         """Close database connection."""
         if self.conn:
@@ -235,7 +269,7 @@ class Database:
 
         Args:
             target_type: 'web' or 'network'
-            identifier: IP or URL
+            identifier: IP or URL (can be CIDR notation like 192.168.1.0/24)
             name: Optional name
             metadata: Additional metadata
 
@@ -244,29 +278,39 @@ class Database:
         """
         cursor = self.conn.cursor()
         try:
+            # Determine status: subnet, unverified, or verified
+            status = 'unverified'
+            if '/' in identifier and target_type == 'network':
+                status = 'subnet'
+
             cursor.execute("""
-                INSERT INTO targets (type, identifier, name, metadata)
-                VALUES (?, ?, ?, ?)
-            """, (target_type, identifier, name, json.dumps(metadata or {})))
+                INSERT INTO targets (type, identifier, name, metadata, status)
+                VALUES (?, ?, ?, ?, ?)
+            """, (target_type, identifier, name, json.dumps(metadata or {}), status))
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
 
-    def get_targets(self, target_type: str = None) -> List[Dict]:
+    def get_targets(self, target_type: str = None, exclude_subnets: bool = False) -> List[Dict]:
         """
         Get all targets.
 
         Args:
             target_type: Filter by type ('web' or 'network')
+            exclude_subnets: If True, exclude targets with status='subnet'
 
         Returns:
             List of target dictionaries
         """
         cursor = self.conn.cursor()
 
-        if target_type:
+        if target_type and exclude_subnets:
+            cursor.execute("SELECT * FROM targets WHERE type = ? AND status != 'subnet'", (target_type,))
+        elif target_type:
             cursor.execute("SELECT * FROM targets WHERE type = ?", (target_type,))
+        elif exclude_subnets:
+            cursor.execute("SELECT * FROM targets WHERE status != 'subnet'")
         else:
             cursor.execute("SELECT * FROM targets")
 
@@ -292,6 +336,35 @@ class Database:
         cursor.execute("DELETE FROM targets WHERE identifier = ?", (identifier,))
         self.conn.commit()
         return cursor.rowcount > 0
+
+    def mark_target_verified(self, identifier: str) -> bool:
+        """
+        Mark a target as verified (responsive to scans).
+
+        Args:
+            identifier: IP or URL
+
+        Returns:
+            True if updated
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE targets SET status = 'verified' WHERE identifier = ?", (identifier,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def clear_all_targets(self) -> int:
+        """
+        Remove all targets from the database.
+
+        Returns:
+            Number of targets removed
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM targets")
+        count = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM targets")
+        self.conn.commit()
+        return count
 
     # Credential Methods
     def add_credential(self, username: str, password: str = None,
@@ -408,6 +481,73 @@ class Database:
             cursor.execute("SELECT * FROM services")
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def get_web_services(self) -> List[Dict]:
+        """
+        Get all detected web services (http/https).
+
+        Returns:
+            List of web service dictionaries with target:port URLs
+        """
+        cursor = self.conn.cursor()
+
+        # Web services and common web ports
+        web_services = ('http', 'https', 'http-proxy', 'http-alt', 'ssl/http', 'ssl/https')
+        web_ports = (80, 443, 8080, 8443, 8000, 8888, 9090, 3000, 5000, 9000, 8001, 8008, 4443, 8081, 8082, 9443)
+
+        # Get services that are either explicitly web services or on common web ports
+        cursor.execute("""
+            SELECT DISTINCT target, port, service
+            FROM services
+            WHERE service IN ({})
+            OR port IN ({})
+            ORDER BY target, port
+        """.format(
+            ','.join('?' * len(web_services)),
+            ','.join('?' * len(web_ports))
+        ), web_services + web_ports)
+
+        web_targets = []
+        for row in cursor.fetchall():
+            target = row[0]
+            port = row[1]
+            service = row[2]
+
+            # Determine protocol
+            if service in ('https', 'ssl/https') or port in (443, 8443, 4443, 9443):
+                protocol = 'https'
+            else:
+                protocol = 'http'
+
+            # Build URL
+            if (protocol == 'http' and port == 80) or (protocol == 'https' and port == 443):
+                url = f"{protocol}://{target}"
+            else:
+                url = f"{protocol}://{target}:{port}"
+
+            web_targets.append({
+                'target': target,
+                'port': port,
+                'service': service,
+                'protocol': protocol,
+                'url': url
+            })
+
+        return web_targets
+
+    def clear_all_services(self) -> int:
+        """
+        Remove all services from the database.
+
+        Returns:
+            Number of services removed
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM services")
+        count = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM services")
+        self.conn.commit()
+        return count
 
     # Scan Results Methods
     def save_scan_results(self, scan_name: str, target: str, scan_type: str,

@@ -38,6 +38,8 @@ class Credential(Base):
     username = Column(String)
     password = Column(String)
     domain = Column(String)
+    dcip = Column(String)
+    dns = Column(String)
     hash = Column(String)
 
     def to_dict(self):
@@ -46,6 +48,8 @@ class Credential(Base):
             "username": self.username,
             "password": self.password,
             "domain": self.domain,
+            "dcip": self.dcip,
+            "dns": self.dns,
             "hash": self.hash,
         }
 
@@ -167,6 +171,8 @@ class CredentialCreate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     domain: Optional[str] = None
+    dcip: Optional[str] = None
+    dns: Optional[str] = None
     hash: Optional[str] = None
 
 
@@ -176,6 +182,8 @@ class CredentialResponse(BaseModel):
     username: Optional[str]
     password: Optional[str]
     domain: Optional[str]
+    dcip: Optional[str]
+    dns: Optional[str]
     hash: Optional[str]
 
     class Config:
@@ -227,13 +235,15 @@ class DatabaseManager:
         self._check_and_fix_databases()
 
         # Create engines for each database
+        # Use check_same_thread=False to allow async operations across threads
+        sqlite_args = {"check_same_thread": False}
         self.engines = {
-            "credentials": create_engine(f"sqlite:///{CREDENTIALS_DB}"),
-            "targets": create_engine(f"sqlite:///{TARGETS_DB}"),
-            "web_targets": create_engine(f"sqlite:///{WEB_TARGETS_DB}"),
-            "ad_targets": create_engine(f"sqlite:///{AD_TARGETS_DB}"),
-            "services": create_engine(f"sqlite:///{SERVICES_DB}"),
-            "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}"),
+            "credentials": create_engine(f"sqlite:///{CREDENTIALS_DB}", connect_args=sqlite_args),
+            "targets": create_engine(f"sqlite:///{TARGETS_DB}", connect_args=sqlite_args),
+            "web_targets": create_engine(f"sqlite:///{WEB_TARGETS_DB}", connect_args=sqlite_args),
+            "ad_targets": create_engine(f"sqlite:///{AD_TARGETS_DB}", connect_args=sqlite_args),
+            "services": create_engine(f"sqlite:///{SERVICES_DB}", connect_args=sqlite_args),
+            "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}", connect_args=sqlite_args),
         }
 
         # Create session makers
@@ -262,7 +272,7 @@ class DatabaseManager:
             if db_path.exists():
                 try:
                     # Try to open the database
-                    conn = sqlite3.connect(str(db_path))
+                    conn = sqlite3.connect(str(db_path), check_same_thread=False)
                     cursor = conn.cursor()
                     # Try a simple query to verify it's a valid database
                     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
@@ -448,6 +458,38 @@ class DatabaseManager:
         session = self.get_exploits_session()
         try:
             return session.query(Exploit).all()
+        finally:
+            session.close()
+
+    def clear_all_targets(self) -> int:
+        """
+        Remove all targets from the database.
+
+        Returns:
+            Number of targets removed
+        """
+        session = self.get_targets_session()
+        try:
+            count = session.query(Target).count()
+            session.query(Target).delete()
+            session.commit()
+            return count
+        finally:
+            session.close()
+
+    def clear_all_services(self) -> int:
+        """
+        Remove all services from the database.
+
+        Returns:
+            Number of services removed
+        """
+        session = self.get_services_session()
+        try:
+            count = session.query(Service).count()
+            session.query(Service).delete()
+            session.commit()
+            return count
         finally:
             session.close()
 

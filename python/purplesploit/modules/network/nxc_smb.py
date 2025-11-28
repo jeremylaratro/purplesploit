@@ -53,12 +53,20 @@ class NXCSMBModule(ExternalToolModule):
         return ["smb_auth", "smb_shares", "smb_execution"]
 
     def _init_parameters(self):
-        """Set RHOST as required parameter."""
+        """Set RHOST as required parameter and add AUTH_TYPE option."""
         super()._init_parameters()
         # Make RHOST required for SMB operations
         if "RHOST" in self.parameters:
             self.parameters["RHOST"].required = True
             self.options["RHOST"]["required"] = True
+
+        # Add AUTH_TYPE option for authentication method selection
+        self.options["AUTH_TYPE"] = {
+            "value": "domain",
+            "required": False,
+            "description": "Authentication type: domain, local, kerberos",
+            "default": "domain"
+        }
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
@@ -155,12 +163,19 @@ class NXCSMBModule(ExternalToolModule):
         """Execute nxc smb command with extra arguments."""
         rhost = self.get_option("RHOST")
         domain = self.get_option("DOMAIN")
+        auth_type = self.get_option("AUTH_TYPE") or "domain"
         auth = self._build_auth()
 
         cmd = f"nxc smb {rhost} {auth}"
 
         if domain and domain != "WORKGROUP":
             cmd += f" -d {domain}"
+
+        # Add authentication type flags
+        if auth_type == "local":
+            cmd += " --local-auth"
+        elif auth_type == "kerberos":
+            cmd += " --kerberos"
 
         if extra_args:
             cmd += f" {extra_args}"

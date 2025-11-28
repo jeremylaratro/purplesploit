@@ -81,6 +81,8 @@ class CommandHandler:
             "creds": self.cmd_creds,
             "services": self.cmd_services,
             "wordlists": self.cmd_wordlists,
+            "analysis": self.cmd_analysis,     # View analysis results (web scans, etc.)
+            "webresults": self.cmd_analysis,   # Alias for analysis
 
             # Enhanced search commands
             "ops": self.cmd_ops,  # Search operations globally
@@ -104,6 +106,7 @@ class CommandHandler:
             "webserver": self.cmd_webserver,      # Start/stop web server
             "deploy": self.cmd_deploy,            # Deploy payloads/tools to targets
             "defaults": self.cmd_defaults,        # Manage module default options
+            "parse": self.cmd_parse,              # Parse nmap XML results
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -188,7 +191,8 @@ class CommandHandler:
 [green]wordlists add <cat> <path>[/green]  Add wordlist by category
 [green]wordlists select <cat>[/green]      Select wordlist for category
 [green]services[/green]             View detected services
-[green]services select[/green]      Interactive service picker"""
+[green]services select[/green]      Interactive service picker
+[green]analysis[/green]             View web scan results dashboard"""
 
         # Quick Shortcuts Panel
         shortcuts_help = """[yellow]target <ip>[/yellow]          Quick add and set target
@@ -207,8 +211,8 @@ class CommandHandler:
 [blue]history[/blue]                Show command history
 [blue]stats[/blue]                  Show statistics
 [blue]defaults <cmd>[/blue]         Manage module default options
-[blue]deploy[/blue]                 Deploy payloads/pivots/scripts to targets
-[blue]deploy select[/blue]          Interactive deployment method selection
+[blue]deploy[/blue]                 Show deployment modules (ligolo, c2, script)
+[blue]deploy <type>[/blue]          Load deployment module (ligolo/c2/script)
 [blue]webserver start[/blue]        Start web portal in background
 [blue]webserver stop[/blue]         Stop web portal
 [blue]webserver status[/blue]       Check web portal status
@@ -349,7 +353,7 @@ class CommandHandler:
             self.display.print_error("Usage: use <module_path | number> [operation_filter | subcategory]")
             self.display.print_info("Examples:")
             self.display.print_info("  use network/nxc_smb")
-            self.display.print_info("  use 1                  # Select from search results")
+            self.display.print_info("  use 1                  # Select from search or ops results")
             self.display.print_info("  use smb auth           # Load SMB module, show auth subcategory")
             self.display.print_info("  use smb shares         # Load SMB module, show shares subcategory")
             return True
@@ -418,20 +422,30 @@ class CommandHandler:
         # Check if it's a service shortcut
         if module_identifier.lower() in self.service_shortcuts:
             module_path = self.service_shortcuts[module_identifier.lower()]
-        # Check if it's a number (selecting from search results)
+        # Check if it's a number (selecting from search results or ops results)
         elif module_identifier.isdigit():
             index = int(module_identifier) - 1  # Convert to 0-based index
 
-            if not self.last_search_results:
-                self.display.print_error("No search results available. Run 'search' first")
-                return True
+            # Check for module search results first
+            if self.last_search_results:
+                if index < 0 or index >= len(self.last_search_results):
+                    self.display.print_error(f"Invalid number. Must be 1-{len(self.last_search_results)}")
+                    return True
+                # Get module path from search results
+                module_path = self.last_search_results[index].path
 
-            if index < 0 or index >= len(self.last_search_results):
-                self.display.print_error(f"Invalid number. Must be 1-{len(self.last_search_results)}")
-                return True
+            # Fall back to ops search results if available
+            elif hasattr(self, 'last_ops_results') and self.last_ops_results:
+                if index < 0 or index >= len(self.last_ops_results):
+                    self.display.print_error(f"Invalid number. Must be 1-{len(self.last_ops_results)}")
+                    return True
+                # Get module path from ops results
+                module_path = self.last_ops_results[index]['module_path']
+                self.display.print_info(f"Loading module from operation result: {self.last_ops_results[index]['module']}")
 
-            # Get module path from search results
-            module_path = self.last_search_results[index].path
+            else:
+                self.display.print_error("No search or ops results available. Run 'search' or 'ops' first")
+                return True
         else:
             module_path = module_identifier
 
@@ -764,6 +778,84 @@ class CommandHandler:
 
         subcommand = args[0].lower()
 
+        # Handle "targets clear" - clear all
+        if subcommand == "clear":
+            # Clear from session
+            count = self.framework.session.targets.clear()
+
+            # Clear from legacy database
+            self.framework.database.clear_all_targets()
+
+            # Clear from models database (for dashboard sync)
+            try:
+                from purplesploit.models.database import db_manager
+                db_manager.clear_all_targets()
+            except Exception as e:
+                self.display.print_warning(f"Could not clear dashboard targets: {e}")
+
+            self.display.print_success(f"Cleared {count} target(s) from session and databases")
+            return True
+
+        # Handle "targets 1-5 clear" or "targets 1 clear" - range/index clear
+        if subcommand.isdigit() or '-' in subcommand:
+            if len(args) < 2:
+                self.display.print_error("Usage: targets <index|range> <clear|modify> [options]")
+                return True
+
+            action = args[1].lower()
+
+            if action == "clear":
+                # Parse index or range
+                if '-' in subcommand:
+                    try:
+                        start, end = subcommand.split('-')
+                        start_idx = int(start)
+                        end_idx = int(end)
+                        count = self.framework.session.targets.remove_range(start_idx, end_idx)
+                        self.display.print_success(f"Cleared {count} target(s)")
+                    except ValueError:
+                        self.display.print_error("Invalid range format. Use: targets 1-5 clear")
+                else:
+                    try:
+                        index = int(subcommand)
+                        if self.framework.session.targets.remove_by_index(index):
+                            self.display.print_success(f"Cleared target at index {index}")
+                        else:
+                            self.display.print_error(f"No target at index {index}")
+                    except ValueError:
+                        self.display.print_error("Invalid index format")
+
+            elif action == "modify":
+                # Parse modify arguments: targets 1 modify name=NewName ip=10.0.0.1
+                if len(args) < 3:
+                    self.display.print_error("Usage: targets <index> modify <key=value> [key=value...]")
+                    return True
+
+                try:
+                    index = int(subcommand)
+                    modifications = {}
+                    for arg in args[2:]:
+                        if '=' in arg:
+                            key, value = arg.split('=', 1)
+                            modifications[key] = value
+
+                    if modifications:
+                        if self.framework.session.targets.modify(index, **modifications):
+                            self.display.print_success(f"Modified target at index {index}")
+                        else:
+                            self.display.print_error(f"No target at index {index}")
+                    else:
+                        self.display.print_error("No modifications specified")
+                except ValueError:
+                    self.display.print_error("Invalid index format")
+
+            else:
+                self.display.print_error(f"Unknown action: {action}")
+                self.display.print_info("Available actions: clear, modify")
+
+            return True
+
+        # Original subcommands
         if subcommand == "add":
             if len(args) < 2:
                 self.display.print_error("Usage: targets add <ip|url> [name]")
@@ -831,9 +923,63 @@ class CommandHandler:
             else:
                 self.display.print_error("Target not found")
 
+        elif subcommand == "modify":
+            # Interactive target modification
+            targets = self.framework.session.targets.list()
+            if not targets:
+                self.display.print_warning("No targets available. Add targets first with 'targets add' or 'target'")
+                return True
+
+            # Select target to modify
+            self.display.print_info("Select target to modify:")
+            selected = self.interactive.select_target(targets)
+            if not selected:
+                self.display.print_warning("No target selected")
+                return True
+
+            # Find the index by comparing identifier (more reliable than full dict comparison)
+            index = None
+            selected_id = selected.get('ip') or selected.get('url')
+            for i, target in enumerate(targets):
+                target_id = target.get('ip') or target.get('url')
+                if target_id == selected_id:
+                    index = i
+                    break
+
+            if index is None:
+                self.display.print_error("Could not find target index")
+                return True
+
+            # Show current values
+            identifier = selected.get('ip') or selected.get('url') or 'Unknown'
+            self.display.print_info(f"\nModifying target: {identifier}")
+            self.display.print_info("Current values:")
+            for key in ['ip', 'url', 'name', 'type']:
+                val = selected.get(key)
+                self.display.print_info(f"  {key}: {val or 'Not set'}")
+
+            # Prompt for modifications
+            self.display.print_info("\nEnter new values (press Enter to skip):")
+            modifications = {}
+
+            for field in ['ip', 'url', 'name', 'type']:
+                new_val = input(f"{field.capitalize()}: ").strip()
+                if new_val:
+                    modifications[field] = new_val
+
+            if modifications:
+                if self.framework.session.targets.modify(index, **modifications):
+                    self.display.print_success(f"Modified target")
+                    for key, val in modifications.items():
+                        self.display.print_info(f"  → Set {key} = {val}")
+                else:
+                    self.display.print_error("Failed to modify target")
+            else:
+                self.display.print_info("No modifications made")
+
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: targets [list|add|set|select|remove]")
+            self.display.print_info("Usage: targets [list|add|set|select|modify|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
@@ -846,6 +992,72 @@ class CommandHandler:
 
         subcommand = args[0].lower()
 
+        # Handle "creds clear" - clear all
+        if subcommand == "clear":
+            count = self.framework.session.credentials.clear()
+            self.display.print_success(f"Cleared {count} credential(s)")
+            return True
+
+        # Handle "creds 1-5 clear" or "creds 1 clear" - range/index clear
+        if subcommand.isdigit() or '-' in subcommand:
+            if len(args) < 2:
+                self.display.print_error("Usage: creds <index|range> <clear|modify> [options]")
+                return True
+
+            action = args[1].lower()
+
+            if action == "clear":
+                # Parse index or range
+                if '-' in subcommand:
+                    try:
+                        start, end = subcommand.split('-')
+                        start_idx = int(start)
+                        end_idx = int(end)
+                        count = self.framework.session.credentials.remove_range(start_idx, end_idx)
+                        self.display.print_success(f"Cleared {count} credential(s)")
+                    except ValueError:
+                        self.display.print_error("Invalid range format. Use: creds 1-5 clear")
+                else:
+                    try:
+                        index = int(subcommand)
+                        if self.framework.session.credentials.remove_by_index(index):
+                            self.display.print_success(f"Cleared credential at index {index}")
+                        else:
+                            self.display.print_error(f"No credential at index {index}")
+                    except ValueError:
+                        self.display.print_error("Invalid index format")
+
+            elif action == "modify":
+                # Parse modify arguments: creds 1 modify username=admin password=newpass
+                if len(args) < 3:
+                    self.display.print_error("Usage: creds <index> modify <key=value> [key=value...]")
+                    return True
+
+                try:
+                    index = int(subcommand)
+                    modifications = {}
+                    for arg in args[2:]:
+                        if '=' in arg:
+                            key, value = arg.split('=', 1)
+                            modifications[key] = value
+
+                    if modifications:
+                        if self.framework.session.credentials.modify(index, **modifications):
+                            self.display.print_success(f"Modified credential at index {index}")
+                        else:
+                            self.display.print_error(f"No credential at index {index}")
+                    else:
+                        self.display.print_error("No modifications specified")
+                except ValueError:
+                    self.display.print_error("Invalid index format")
+
+            else:
+                self.display.print_error(f"Unknown action: {action}")
+                self.display.print_info("Available actions: clear, modify")
+
+            return True
+
+        # Original subcommands
         if subcommand == "add":
             if len(args) < 2:
                 self.display.print_error("Usage: creds add <username>:<password> [domain]")
@@ -868,12 +1080,37 @@ class CommandHandler:
         elif subcommand == "select":
             # Interactive selection
             creds = self.framework.session.credentials.list()
-            if not creds:
-                self.display.print_warning("No credentials available. Add credentials first with 'creds add'")
-                return True
 
             selected = self.interactive.select_credential(creds)
-            if selected:
+
+            # Handle "Add New Credential" option
+            if selected == "ADD_NEW":
+                self.display.print_info("\n[Add New Credential]")
+                username = input("Username: ").strip()
+                if not username:
+                    self.display.print_warning("Username required")
+                    return True
+
+                password = input("Password: ").strip()
+                domain = input("Domain (optional): ").strip() or None
+                dcip = input("Domain Controller IP (optional): ").strip() or None
+                dns = input("DNS Server (optional): ").strip() or None
+
+                if self.framework.add_credential(username, password, domain, dcip, dns):
+                    self.display.print_success(f"Added credential: {username}")
+
+                    # Refresh creds list and auto-select the new credential
+                    creds = self.framework.session.credentials.list()
+                    if creds:
+                        self.framework.session.credentials.current_index = len(creds) - 1
+                        selected = creds[-1]
+                    else:
+                        return True
+                else:
+                    self.display.print_warning("Failed to add credential")
+                    return True
+
+            if selected and selected != "ADD_NEW":
                 # Find index and set as current
                 for i, cred in enumerate(creds):
                     if cred == selected:
@@ -892,11 +1129,17 @@ class CommandHandler:
                             if selected.get('domain') and "DOMAIN" in module.options:
                                 module.set_option("DOMAIN", selected['domain'])
                                 self.display.print_info(f"  → Set DOMAIN = {selected['domain']}")
+                            if selected.get('dcip') and "DCIP" in module.options:
+                                module.set_option("DCIP", selected['dcip'])
+                                self.display.print_info(f"  → Set DCIP = {selected['dcip']}")
+                            if selected.get('dns') and "DNS" in module.options:
+                                module.set_option("DNS", selected['dns'])
+                                self.display.print_info(f"  → Set DNS = {selected['dns']}")
                             if selected.get('hash') and "HASH" in module.options:
                                 module.set_option("HASH", selected['hash'])
                                 self.display.print_info(f"  → Set HASH = ****")
                         break
-            else:
+            elif not selected:
                 self.display.print_warning("No credential selected")
 
         elif subcommand == "set":
@@ -920,14 +1163,90 @@ class CommandHandler:
             else:
                 self.display.print_error("Credential not found")
 
+        elif subcommand == "modify":
+            # Interactive credential modification
+            creds = self.framework.session.credentials.list()
+            if not creds:
+                self.display.print_warning("No credentials available. Add credentials first with 'creds add'")
+                return True
+
+            # Select credential to modify
+            self.display.print_info("Select credential to modify:")
+            selected = self.interactive.select_credential(creds, allow_add_new=False)
+            if not selected or selected == "ADD_NEW":
+                self.display.print_warning("No credential selected")
+                return True
+
+            # Find the index by comparing username (more reliable than full dict comparison)
+            index = None
+            for i, cred in enumerate(creds):
+                if (cred.get('username') == selected.get('username') and
+                    cred.get('domain') == selected.get('domain')):
+                    index = i
+                    break
+
+            if index is None:
+                self.display.print_error("Could not find credential index")
+                return True
+
+            # Show current values
+            self.display.print_info(f"\nModifying credential: {selected.get('username', 'N/A')}")
+            self.display.print_info("Current values:")
+            for key in ['username', 'password', 'domain', 'dcip', 'dns', 'hash']:
+                val = selected.get(key)
+                if key in ['password', 'hash'] and val:
+                    self.display.print_info(f"  {key}: ****")
+                else:
+                    self.display.print_info(f"  {key}: {val or 'Not set'}")
+
+            # Prompt for modifications
+            self.display.print_info("\nEnter new values (press Enter to skip):")
+            modifications = {}
+
+            for field in ['username', 'password', 'domain', 'dcip', 'dns', 'hash']:
+                new_val = input(f"{field.capitalize()}: ").strip()
+                if new_val:
+                    modifications[field] = new_val
+
+            if modifications:
+                if self.framework.session.credentials.modify(index, **modifications):
+                    self.display.print_success(f"Modified credential")
+                    for key, val in modifications.items():
+                        if key in ['password', 'hash']:
+                            self.display.print_info(f"  → Set {key} = ****")
+                        else:
+                            self.display.print_info(f"  → Set {key} = {val}")
+                else:
+                    self.display.print_error("Failed to modify credential")
+            else:
+                self.display.print_info("No modifications made")
+
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: creds [list|add|set|select|remove]")
+            self.display.print_info("Usage: creds [list|add|set|select|modify|remove|clear|<index> clear|<range> clear|<index> modify]")
 
         return True
 
     def cmd_services(self, args: List[str]) -> bool:
         """View detected services."""
+        # Check for 'clear' subcommand
+        if args and args[0].lower() == "clear":
+            # Clear from session
+            count = self.framework.session.services.clear()
+
+            # Clear from legacy database
+            self.framework.database.clear_all_services()
+
+            # Clear from models database (for dashboard sync)
+            try:
+                from purplesploit.models.database import db_manager
+                db_manager.clear_all_services()
+            except Exception as e:
+                self.display.print_warning(f"Could not clear dashboard services: {e}")
+
+            self.display.print_success(f"Cleared {count} service target(s) from session and databases")
+            return True
+
         # Check for 'select' subcommand
         if args and args[0].lower() == "select":
             services = self.framework.session.services.services
@@ -948,7 +1267,7 @@ class CommandHandler:
         else:
             services = self.framework.session.services.services
             self.display.print_services_table(services)
-            self.display.print_info("\nTip: Use 'services select' for interactive selection")
+            self.display.print_info("\nTip: Use 'services select' for interactive selection or 'services clear' to remove all")
 
         return True
 
@@ -1066,6 +1385,89 @@ class CommandHandler:
             self.display.console.print(f"\n[bold cyan]{category.upper()}[/bold cyan]")
             self.display.console.print(table)
 
+    def cmd_analysis(self, args: List[str]) -> bool:
+        """View analysis results (web scans, etc.) organized by target."""
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich import box
+
+        # Get all scan results
+        web_results = self.framework.database.get_scan_results(scan_type="web")
+
+        if not web_results:
+            self.display.print_warning("No web scan results available")
+            self.display.print_info("Run web scans using modules like feroxbuster, wfuzz, or httpx first")
+            return True
+
+        # Group results by target
+        results_by_target = {}
+        for result in web_results:
+            target = result['target']
+            if target not in results_by_target:
+                results_by_target[target] = []
+            results_by_target[target].append(result)
+
+        # Display results organized by target
+        self.display.console.print("\n[bold cyan]═══ Web Scan Analysis Results ═══[/bold cyan]\n")
+
+        for target, scans in results_by_target.items():
+            # Create panel for each target
+            target_info = f"[bold yellow]Target:[/bold yellow] {target}\n"
+            target_info += f"[bold yellow]Total Scans:[/bold yellow] {len(scans)}\n\n"
+
+            # Create table for this target's scans
+            table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+            table.add_column("Scan Type", style="green", width=15)
+            table.add_column("Timestamp", style="dim", width=20)
+            table.add_column("Status", style="yellow", width=12)
+            table.add_column("Findings", style="white")
+            table.add_column("Log File", style="blue")
+
+            for scan in scans:
+                scan_name = scan['scan_name']
+                timestamp = scan['created_at']
+                results_data = scan['results']
+                log_file = scan.get('file_path', 'N/A')
+
+                # Determine status and findings
+                if results_data.get('status') == 'running':
+                    status = "[yellow]Running[/yellow]"
+                    findings = f"PID: {results_data.get('pid', 'N/A')}"
+                else:
+                    status = "[green]Complete[/green]"
+                    found_paths = results_data.get('found_paths', [])
+                    interesting = results_data.get('interesting_finds', [])
+                    findings = f"{len(found_paths)} paths ({len(interesting)} interesting)"
+
+                # Truncate log file path for display
+                if log_file != 'N/A':
+                    import os
+                    log_file = os.path.basename(log_file)
+
+                table.add_row(
+                    scan_name,
+                    timestamp.split('.')[0] if '.' in timestamp else timestamp,
+                    status,
+                    findings,
+                    log_file
+                )
+
+            # Show target panel
+            panel = Panel(
+                target_info + str(table),
+                title=f"[bold white]{target}[/bold white]",
+                border_style="cyan"
+            )
+            self.display.console.print(panel)
+            self.display.console.print()
+
+        # Show summary
+        self.display.console.print(f"\n[bold green]Total Targets with Results:[/bold green] {len(results_by_target)}")
+        self.display.console.print(f"[bold green]Total Scans:[/bold green] {len(web_results)}")
+        self.display.print_info("\nTip: Check log files in ~/.purplesploit/logs/web/ for detailed results")
+
+        return True
+
     def cmd_clear(self, args: List[str]) -> bool:
         """Clear the screen."""
         self.display.clear()
@@ -1105,14 +1507,21 @@ class CommandHandler:
 
     def cmd_ligolo(self, args: List[str]) -> bool:
         """
-        Launch or attach to ligolo-ng interface.
+        Launch or attach to ligolo-ng proxy interface (shell command passthrough).
 
         Usage:
-            ligolo                    # Launch or attach to ligolo-ng session
-            ligolo kill               # Kill existing ligolo-ng session
+            ligolo                    # Launch ligolo-ng with default settings (-selfcert)
             ligolo --help             # Show ligolo-ng help
+            ligolo -selfcert -laddr 0.0.0.0:11601  # Custom proxy settings
+            ligolo kill               # Kill existing ligolo-ng session
 
-        Press CTRL+B then D to detach from session.
+        The ligolo command runs ligolo-ng directly in a tmux session.
+        All arguments are passed through to the ligolo-ng binary.
+
+        Note: This is different from the 'c2/ligolo_pivot' module which is for
+              automated agent deployment. Use this command for interactive proxy control.
+
+        Press CTRL+B then D to detach from session (keeps it running).
         """
         import subprocess
         import os
@@ -1248,135 +1657,91 @@ class CommandHandler:
         Deploy payloads, pivots, and tools to target systems.
 
         Usage:
-            deploy                      # Load deploy module and show all operations
-            deploy select               # Interactive operation selection
-            deploy ligolo               # Show Ligolo pivot deployment operations
-            deploy beacon               # Show C2 beacon deployment operations
-            deploy script               # Show script deployment operations (WinPEAS, LinPEAS)
+            deploy                      # Show available deployment modules
+            deploy ligolo               # Load Ligolo pivot deployment module
+            deploy c2                   # Load C2 beacon deployment module
+            deploy script               # Load script deployment module
 
         Examples:
-            deploy                      # Show all deployment operations
-            deploy ligolo               # Filter to Ligolo operations only
-            deploy select               # Interactive selection of deployment method
+            deploy                      # Show all deployment modules
+            deploy ligolo               # Load deploy/ligolo module
+            deploy c2                   # Load deploy/c2 module
         """
-        # Load the deploy module if not already loaded
-        deploy_module_path = "post/deploy"
+        # Module path mapping
+        module_map = {
+            "ligolo": "deploy/ligolo",
+            "c2": "deploy/c2",
+            "beacon": "deploy/c2",  # Alias
+            "script": "deploy/script",
+            "scripts": "deploy/script"  # Alias
+        }
 
-        # Check if we need to switch to deploy module
-        current_module = self.framework.session.current_module
-        if not current_module or current_module.get_module_path() != deploy_module_path:
-            # Load the deploy module
-            if deploy_module_path not in self.framework.modules:
-                self.display.print_error(f"Deploy module not found at: {deploy_module_path}")
-                return True
-
-            module_instance = self.framework.use_module(deploy_module_path)
-            if not module_instance:
-                self.display.print_error("Failed to load deploy module")
-                return True
-        else:
-            module_instance = current_module
-
-        # Handle subcommands
+        # If no args, show available modules
         if not args:
-            # Show all operations grouped by subcategory
-            self._display_deploy_operations(module_instance)
+            self._display_deploy_modules()
             return True
 
         subcommand = args[0].lower()
 
-        if subcommand == "select":
-            # Interactive selection
-            operations = module_instance.get_operations()
-            if operations:
-                selected = self.interactive.select_operation(operations)
-                if selected:
-                    self.display.print_info(f"Selected: {selected['name']}")
-                    self.display.print_info("Set required options and run 'run' to execute")
-                    # Set the operation handler if needed
-                    if hasattr(module_instance, 'set_current_operation'):
-                        module_instance.set_current_operation(selected)
-                else:
-                    self.display.print_warning("No operation selected")
-            else:
-                self.display.print_warning("No operations available")
-            return True
+        # Check if it's a known module
+        if subcommand in module_map:
+            module_path = module_map[subcommand]
 
-        elif subcommand in ["ligolo", "beacon", "script", "c2"]:
-            # Filter operations by subcategory
-            subcategory_map = {
-                "ligolo": "ligolo",
-                "beacon": "c2_beacon",
-                "c2": "c2_beacon",
-                "script": "scripts"
-            }
+            # Check if module exists
+            if module_path not in self.framework.modules:
+                self.display.print_error(f"Deploy module not found: {module_path}")
+                self.display.print_info("Run 'deploy' to see available modules")
+                return True
 
-            filter_subcategory = subcategory_map.get(subcommand)
-            self._display_deploy_operations(module_instance, filter_subcategory)
-            return True
+            # Load the module
+            self.display.print_info(f"Loading {module_path}...")
+            return self.cmd_use([module_path])
 
         else:
-            self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: deploy [select|ligolo|beacon|script]")
+            self.display.print_error(f"Unknown deploy subcommand: {subcommand}")
+            self.display.print_info("Usage: deploy [ligolo|c2|script]")
             return True
 
-    def _display_deploy_operations(self, module_instance, filter_subcategory=None):
-        """Display deployment operations grouped by subcategory."""
-        operations = module_instance.get_operations()
-
-        if not operations:
-            self.display.print_warning("No operations available")
-            return
-
-        # Group by subcategory
-        from collections import defaultdict
-        grouped = defaultdict(list)
-
-        for op in operations:
-            subcategory = op.get('subcategory', 'other')
-
-            # Apply filter if specified
-            if filter_subcategory and subcategory != filter_subcategory:
-                continue
-
-            grouped[subcategory].append(op)
-
-        if not grouped:
-            self.display.print_warning(f"No operations found for filter: {filter_subcategory}")
-            return
-
-        # Display header
+    def _display_deploy_modules(self):
+        """Display available deployment modules."""
         self.display.console.print()
-        self.display.console.print("[bold cyan]═══ Deploy Module Operations ═══[/bold cyan]")
+        self.display.console.print("[bold cyan]═══ Deploy Modules ═══[/bold cyan]")
         self.display.console.print()
 
-        # Define subcategory display names
-        subcategory_names = {
-            "ligolo": "Ligolo Pivot Deployment",
-            "c2_beacon": "C2 Beacon Deployment",
-            "scripts": "Script Deployment (WinPEAS, LinPEAS, etc.)"
-        }
+        # Define modules
+        modules = [
+            {
+                "name": "deploy/ligolo",
+                "command": "deploy ligolo",
+                "description": "Deploy ligolo-ng agents for network pivoting",
+                "methods": "NXC, SSH, SMB, PSExec, WMIExec"
+            },
+            {
+                "name": "deploy/c2",
+                "command": "deploy c2",
+                "description": "Deploy C2 beacons and payloads to targets",
+                "methods": "NXC, SSH, SMB, PSExec, WMIExec, WinRM"
+            },
+            {
+                "name": "deploy/script",
+                "command": "deploy script",
+                "description": "Deploy enumeration scripts (WinPEAS, LinPEAS, custom)",
+                "methods": "NXC, SSH, SMB, PSExec"
+            }
+        ]
 
-        # Display each subcategory
-        for subcategory in sorted(grouped.keys()):
-            display_name = subcategory_names.get(subcategory, subcategory.replace('_', ' ').title())
-
-            self.display.console.print(f"[bold green]▸ {display_name}[/bold green]")
-            self.display.console.print()
-
-            for idx, op in enumerate(grouped[subcategory], 1):
-                op_name = op.get('name', 'Unknown')
-                op_desc = op.get('description', 'No description')
-
-                self.display.console.print(f"  [cyan]{idx}.[/cyan] {op_name}")
-                self.display.console.print(f"     [dim]{op_desc}[/dim]")
-
+        # Display each module
+        for idx, module in enumerate(modules, 1):
+            self.display.console.print(f"[bold green]{idx}. {module['name']}[/bold green]")
+            self.display.console.print(f"   [cyan]Command:[/cyan] {module['command']}")
+            self.display.console.print(f"   [dim]{module['description']}[/dim]")
+            self.display.console.print(f"   [yellow]Methods:[/yellow] {module['methods']}")
             self.display.console.print()
 
         # Display helpful tips
-        self.display.print_info("Tip: Use 'deploy select' for interactive selection")
-        self.display.print_info("     Use 'options' to view/set deployment options")
-        self.display.print_info("     Use 'run' to execute the selected operation")
+        self.display.print_info("Tip: Use 'deploy <type>' to load a deployment module")
+        self.display.print_info("     Then use 'options' to set targets and credentials")
+        self.display.print_info("     Use 'run' or 'operations' to see available operations")
 
     def cmd_webserver(self, args: List[str]) -> bool:
         """
@@ -1845,6 +2210,52 @@ class CommandHandler:
 
         return True
 
+    def cmd_parse(self, args: List[str]) -> bool:
+        """Parse nmap XML results and import to targets/services."""
+        if not args:
+            self.display.print_error("Usage: parse <nmap_xml_file>")
+            self.display.print_info("Example: parse nmap_192.168.1.0_24.xml")
+            return True
+
+        xml_file = args[0]
+
+        if not Path(xml_file).exists():
+            self.display.print_error(f"File not found: {xml_file}")
+            return True
+
+        try:
+            # Import the nmap module to use its parsing functionality
+            from purplesploit.modules.recon.nmap import NmapModule
+
+            # Create temporary nmap module instance
+            nmap_module = NmapModule(self.framework)
+
+            # Parse XML
+            self.display.print_info(f"Parsing {xml_file}...")
+            parsed_xml = nmap_module.parse_xml_output(xml_file)
+
+            if not parsed_xml.get("hosts"):
+                self.display.print_warning("No hosts with open ports found in scan results")
+                return True
+
+            # Process discovered hosts
+            nmap_module.process_discovered_hosts(parsed_xml)
+
+            # Display summary
+            hosts_discovered = len(parsed_xml.get("hosts", []))
+            total_scanned = parsed_xml.get("total_hosts", 0)
+
+            self.display.print_success(f"Successfully imported {hosts_discovered} hosts with open ports (out of {total_scanned} total)")
+            self.display.print_info("Run 'targets' to see all discovered targets")
+            self.display.print_info("Run 'services' to see all discovered services")
+
+        except Exception as e:
+            self.display.print_error(f"Error parsing XML file: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
     def cmd_exit(self, args: List[str]) -> bool:
         """Exit the framework."""
         self.display.print_info("Exiting PurpleSploit...")
@@ -1953,7 +2364,7 @@ class CommandHandler:
 
                 self.display.console.print()  # Blank line between modules
 
-            self.display.print_info("Tip: Use 'run <number>' to execute directly, 'use <module_path>' to load the module, or 'ops select' for interactive selection")
+            self.display.print_info("Tip: Use 'run <number>' to execute directly, 'use <number>' to load the parent module, or 'ops select' for interactive selection")
         else:
             self.display.print_warning(f"No operations found matching: {query}")
 

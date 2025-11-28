@@ -15,6 +15,7 @@
         <ul class="nav-menu">
             <li><a href="/" class="active">Dashboard</a></li>
             <li><a href="/static/targets.html">Targets</a></li>
+            <li><a href="/static/c2.html">C2 Terminal</a></li>
             <li><a href="/static/exploits.html">Exploits</a></li>
             <li><a href="/api/docs" target="_blank">API Docs</a></li>
         </ul>
@@ -131,23 +132,41 @@
 
         async function loadDashboard() {
             try {
-                // Load overview stats
-                const stats = await API.getStats();
-                updateStats(stats);
-
-                // Load targets
+                // Load all data directly from API endpoints (same as targets page)
                 const targets = await API.getTargets();
-                displayTargetsTable(targets.slice(0, 10)); // Show first 10
-
-                // Load recent exploits
+                const credentials = await API.getCredentials();
+                const services = await API.getServices();
                 const exploits = await API.getExploits();
-                displayRecentExploits(exploits.slice(0, 5)); // Show first 5
 
-                // Display services chart
-                displayServicesChart(stats.services_by_type);
+                // Calculate services by type
+                const servicesByType = {};
+                services.forEach(service => {
+                    const type = service.service || 'unknown';
+                    servicesByType[type] = (servicesByType[type] || 0) + 1;
+                });
+
+                // Update stats display
+                updateStats({
+                    total_targets: targets.length,
+                    total_credentials: credentials.length,
+                    total_services: services.length,
+                    total_exploits: exploits.length,
+                    services_by_type: servicesByType
+                });
+
+                // Display targets table and exploits
+                displayTargetsTable(targets.slice(0, 10));
+                displayRecentExploits(exploits.slice(0, 5));
+                displayServicesChart(servicesByType);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
-                showError('Failed to load dashboard data');
+                showError('Failed to load dashboard data: ' + error.message);
+
+                // Show error in UI
+                document.getElementById('total-targets').textContent = 'Error';
+                document.getElementById('total-services').textContent = 'Error';
+                document.getElementById('total-exploits').textContent = 'Error';
+                document.getElementById('total-credentials').textContent = 'Error';
             }
         }
 

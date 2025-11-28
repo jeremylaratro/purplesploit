@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurpleSploit C2 Terminal</title>
+    <link rel="stylesheet" href="/static/css/c2.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="c2-navbar">
+        <div class="nav-brand">
+            <span class="brand-icon">⚡</span>
+            <span class="brand-name">PURPLESPLOIT C2</span>
+            <span class="version">v6.2.0</span>
+        </div>
+        <div class="nav-status">
+            <span id="connection-status" class="status-indicator">
+                <span class="status-dot status-connecting"></span>
+                <span class="status-text">Connecting...</span>
+            </span>
+            <span class="session-info">Session: <span id="session-id">default</span></span>
+        </div>
+        <div class="nav-menu">
+            <a href="/" class="nav-link">📊 Dashboard</a>
+            <a href="/static/targets.html" class="nav-link">🎯 Targets</a>
+            <a href="/static/c2.html" class="nav-link active">💻 Terminal</a>
+            <a href="/api/docs" target="_blank" class="nav-link">📚 API</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="c2-container">
+        <!-- Sidebar -->
+        <aside class="c2-sidebar">
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>📁 MODULES</h3>
+                    <button id="refresh-modules" class="icon-btn" title="Refresh modules">↻</button>
+                </div>
+                <div class="module-search">
+                    <input type="text" id="module-search" placeholder="🔍 Search modules..." />
+                </div>
+                <div id="module-list" class="module-list">
+                    <div class="loading">Loading modules...</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>🎯 CONTEXT</h3>
+                </div>
+                <div class="context-info">
+                    <div class="context-item">
+                        <span class="context-label">Target:</span>
+                        <span id="current-target" class="context-value">None</span>
+                    </div>
+                    <div class="context-item">
+                        <span class="context-label">Module:</span>
+                        <span id="current-module" class="context-value">None</span>
+                    </div>
+                    <div class="context-item">
+                        <span class="context-label">Stats:</span>
+                        <span id="stats-info" class="context-value">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <h3>⚡ QUICK ACTIONS</h3>
+                </div>
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="showTargetManager()">📍 Manage Targets</button>
+                    <button class="action-btn" onclick="showCredentialManager()">🔑 Manage Credentials</button>
+                    <button class="action-btn" onclick="executeQuickCommand('show modules')">📁 List Modules</button>
+                    <button class="action-btn" onclick="executeQuickCommand('stats')">📊 Statistics</button>
+                    <button class="action-btn" onclick="clearTerminal()">🗑️ Clear Terminal</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Terminal Area -->
+        <main class="c2-terminal-area">
+            <div class="terminal-header">
+                <div class="terminal-tabs">
+                    <div class="terminal-tab active">
+                        <span class="tab-icon">●</span>
+                        <span class="tab-name">Terminal 1</span>
+                    </div>
+                </div>
+                <div class="terminal-controls">
+                    <button class="icon-btn" onclick="clearTerminal()" title="Clear">🗑️</button>
+                    <button class="icon-btn" onclick="exportSession()" title="Export">💾</button>
+                </div>
+            </div>
+
+            <div id="terminal-output" class="terminal-output">
+                <!-- Banner - Will be loaded dynamically -->
+                <pre id="terminal-banner" class="terminal-banner">Loading banner...</pre>
+            </div>
+
+            <div class="terminal-input-area">
+                <div class="terminal-prompt">
+                    <span id="prompt-text" class="prompt-text">purplesploit &gt;</span>
+                    <input
+                        type="text"
+                        id="terminal-input"
+                        class="terminal-input"
+                        autocomplete="off"
+                        spellcheck="false"
+                        autofocus
+                    />
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Module Info Modal -->
+    <div id="module-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-module-name">Module Info</h2>
+                <button class="modal-close" onclick="closeModuleModal()">&times;</button>
+            </div>
+            <div id="modal-module-body" class="modal-body">
+                <!-- Module details will be inserted here -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModuleModal()">Close</button>
+                <button class="btn btn-primary" onclick="useModuleFromModal()">Use Module</button>
+                <button class="btn btn-primary" onclick="configureModuleFromModal()" style="margin-left: 8px;">Configure & Run</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target Manager Modal -->
+    <div id="target-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🎯 Target Management</h2>
+                <button class="modal-close" onclick="closeTargetManager()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manager-section">
+                    <h3>Add New Target</h3>
+                    <form id="add-target-form" onsubmit="addTarget(event)" class="manager-form">
+                        <div class="form-group">
+                            <label for="target-ip">IP Address / Hostname / Subnet:</label>
+                            <input type="text" id="target-ip" placeholder="10.10.10.100 or 10.10.10.0/24" required />
+                            <small style="color: var(--text-muted); font-size: 11px;">Supports CIDR notation (e.g., 10.10.10.0/24 for subnets)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="target-name">Name (optional):</label>
+                            <input type="text" id="target-name" placeholder="Web Server" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Target</button>
+                    </form>
+                </div>
+                <div class="manager-section">
+                    <h3>Current Targets</h3>
+                    <div id="target-list" class="entity-list">
+                        <div class="loading">Loading targets...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credential Manager Modal -->
+    <div id="credential-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔑 Credential Management</h2>
+                <button class="modal-close" onclick="closeCredentialManager()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manager-section">
+                    <h3>Add New Credential</h3>
+                    <form id="add-credential-form" onsubmit="addCredential(event)" class="manager-form">
+                        <div class="form-group">
+                            <label for="cred-username">Username:</label>
+                            <input type="text" id="cred-username" placeholder="administrator" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-password">Password:</label>
+                            <input type="password" id="cred-password" placeholder="Password123!" />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-domain">Domain (optional):</label>
+                            <input type="text" id="cred-domain" placeholder="CORP" />
+                        </div>
+                        <div class="form-group">
+                            <label for="cred-hash">Hash (optional):</label>
+                            <input type="text" id="cred-hash" placeholder="NTLM hash" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Credential</button>
+                    </form>
+                </div>
+                <div class="manager-section">
+                    <h3>Current Credentials</h3>
+                    <div id="credential-list" class="entity-list">
+                        <div class="loading">Loading credentials...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Configuration Modal -->
+    <div id="config-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="config-module-name">Configure Module</h2>
+                <button class="modal-close" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="module-config-form" onsubmit="runConfiguredModule(event)">
+                    <div id="config-options" class="config-options">
+                        <!-- Options will be inserted here -->
+                    </div>
+                    <div class="modal-footer" style="border-top: none; padding-top: 0;">
+                        <button type="button" class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Run Module</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/c2-terminal.js"></script>
+    <script>
+        // Initialize terminal on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initTerminal();
+        });
+    </script>
+</body>
+</html>

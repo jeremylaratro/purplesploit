@@ -43,7 +43,7 @@ class Display:
         banner = f"""[bold magenta]{banner_text}[/bold magenta]
 
 [cyan]              Offensive Security Framework | Search. Select. Exploit.[/cyan]
-[dim]                                Version 6.3.2 - Python Edition[/dim]
+[dim]                                Version 6.7.0 - Python Edition[/dim]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)
@@ -216,12 +216,6 @@ class Display:
             hash_val = cred.get('hash', '')
             name = cred.get('name', '')
 
-            # Mask sensitive data
-            if password:
-                password = "*" * min(len(password), 10)
-            if hash_val:
-                hash_val = hash_val[:12] + "..." if len(hash_val) > 12 else hash_val
-
             table.add_row(
                 str(idx),
                 name,
@@ -245,23 +239,56 @@ class Display:
             self.print_warning("No services detected")
             return
 
+        # Filter out network ranges (CIDR notation) and only show individual IPs
+        filtered_services = {}
+        for target, target_services in services.items():
+            # Skip if target contains CIDR notation (/)
+            if "/" not in target:
+                filtered_services[target] = target_services
+
+        if not filtered_services:
+            self.print_warning("No services for individual hosts (only network ranges found)")
+            self.print_info("Tip: Network ranges indicate incomplete scans. Use 'parse <xml_file>' to import host-specific data.")
+            return
+
         table = Table(
-            title="Detected Services",
+            title="Detected Services by Host",
             box=box.ROUNDED,
             header_style="bold cyan",
-            border_style="bright_black"
+            border_style="bright_black",
+            show_lines=True
         )
 
-        table.add_column("Target", style="cyan", width=30)
-        table.add_column("Service", style="green", width=15)
-        table.add_column("Ports", style="yellow", width=40)
+        table.add_column("Host", style="cyan bold", width=25)
+        table.add_column("Service", style="green", width=20)
+        table.add_column("Port", style="yellow", width=40)
 
-        for target, target_services in services.items():
+        # Sort targets by IP address
+        sorted_targets = sorted(filtered_services.keys(), key=lambda x: tuple(int(p) if p.isdigit() else p for p in x.replace(":", ".").split(".")))
+
+        for target in sorted_targets:
+            target_services = filtered_services[target]
+
+            # Create a list of (service, port) tuples for this host
+            service_port_pairs = []
             for service, ports in target_services.items():
-                ports_str = ", ".join(map(str, ports))
-                table.add_row(target, service, ports_str)
+                for port in sorted(ports):
+                    service_port_pairs.append((service, port))
+
+            # Sort by service name, then by port
+            service_port_pairs.sort(key=lambda x: (x[0], x[1]))
+
+            # First row for this host (with hostname in Host column)
+            if service_port_pairs:
+                first_service, first_port = service_port_pairs[0]
+                table.add_row(f"[cyan bold]{target}[/cyan bold]", first_service, str(first_port))
+
+                # Subsequent rows for remaining service/port pairs (empty Host column)
+                for service, port in service_port_pairs[1:]:
+                    table.add_row("", service, str(port))
 
         self.console.print(table)
+        self.console.print(f"\n[dim]Total hosts: {len(sorted_targets)}[/dim]")
         self.console.print()
 
     def print_results(self, results: Dict[str, Any]):
@@ -271,21 +298,34 @@ class Display:
         Args:
             results: Results dictionary
         """
-        if not results.get('success', False):
+        # Show the command that was executed
+        if 'command' in results:
+            self.console.print(f"\n[dim]Command: {results['command']}[/dim]")
+
+        # Print status message with return code if available
+        if results.get('success', False):
+            if 'returncode' in results:
+                self.print_success(f"Module executed successfully (exit code: {results['returncode']})")
+            else:
+                self.print_success("Module executed successfully")
+        elif 'error' in results:
             self.print_error(f"Module failed: {results.get('error', 'Unknown error')}")
-            return
+        elif 'returncode' in results and results['returncode'] != 0:
+            self.print_warning(f"Module completed with exit code: {results['returncode']}")
 
-        self.print_success("Module executed successfully")
-
-        # Display stdout if present
+        # ALWAYS display stdout if present (even on failure - it contains useful info)
         if 'stdout' in results and results['stdout']:
             self.console.print("\n[bold]Output:[/bold]")
             self.console.print(Panel(results['stdout'], border_style="green"))
+        elif 'stdout' in results:
+            self.console.print("\n[dim]No stdout output captured[/dim]")
 
-        # Display stderr if present
+        # ALWAYS display stderr if present (even on failure - it contains useful info)
         if 'stderr' in results and results['stderr']:
             self.console.print("\n[bold yellow]Errors/Warnings:[/bold yellow]")
             self.console.print(Panel(results['stderr'], border_style="yellow"))
+        elif 'stderr' in results:
+            self.console.print("\n[dim]No stderr output captured[/dim]")
 
         # Display parsed results if present
         if 'parsed' in results:
