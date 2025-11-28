@@ -25,14 +25,61 @@ Quick reference for essential commands.
 
 ## Context Management
 
+### Targets
+
 | Command | Description |
 |---------|-------------|
 | `target <ip>` | Quick add and set target |
+| `targets add <ip\|url> [name]` | Add target to database |
+| `targets list` | List all targets (default) |
+| `targets select` | Pick target interactively (fzf) |
+| `targets set <index\|identifier>` | Set current target |
+| `targets remove <identifier>` | Remove target by identifier |
+| `targets modify` | Modify target interactively |
+| `targets <idx> modify <k=v>...` | Modify target by index (e.g., `targets 1 modify name=Server ip=10.0.0.1`) |
+| `targets clear` | Clear all targets |
+| `targets <idx\|range> clear` | Clear by index or range (e.g., `targets 1-5 clear` or `targets 3 clear`) |
+
+### Credentials
+
+| Command | Description |
+|---------|-------------|
 | `cred <user:pass>` | Quick add and set credential |
-| `targets add <ip> [name]` | Add target to database |
-| `targets select` | Pick target interactively |
 | `creds add <user:pass> [domain]` | Add credential to database |
-| `creds select` | Pick credential interactively |
+| `creds list` | List all credentials (default) |
+| `creds select` | Pick credential interactively (fzf) |
+| `creds set <index\|username>` | Set current credential |
+| `creds remove <identifier>` | Remove credential |
+| `creds modify` | Modify credential interactively |
+| `creds <idx> modify <k=v>...` | Modify credential by index (e.g., `creds 1 modify password=newpass`) |
+| `creds clear` | Clear all credentials |
+| `creds <idx\|range> clear` | Clear by index or range (e.g., `creds 1-3 clear`) |
+
+### Wordlists
+
+| Command | Description |
+|---------|-------------|
+| `wordlists list` | List all wordlists by category (default) |
+| `wordlists add <cat> <path> [name]` | Add wordlist by category |
+| `wordlists select <category>` | Pick wordlist for category interactively |
+| `wordlists set <cat> <path\|name\|idx>` | Set current wordlist for category |
+| `wordlists remove <cat> <identifier>` | Remove wordlist from category |
+
+**Categories**: web_dir, dns_vhost, username, password, subdomain, parameter, api, general
+
+### Services
+
+| Command | Description |
+|---------|-------------|
+| `services` | View detected services from scans |
+| `services select` | Pick from detected services interactively |
+| `services clear` | Clear all detected services |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
+| `analysis` | View web scan results dashboard |
 | `workspace <name>` | Switch to or create workspace |
 
 ## Execution

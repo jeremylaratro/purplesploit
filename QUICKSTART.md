@@ -1,4 +1,4 @@
-# PurpleSploit v6.0.0 Quick Start Guide
+# PurpleSploit v6.7.0 Quick Start Guide
 
 Get started with PurpleSploit in 5 minutes! Pure Python edition with enhanced auto-completion.
 
@@ -34,7 +34,8 @@ python3 -m purplesploit.main
 ./purplesploit-python
 ```
 
-### New in v6.0.0
+### Recent Updates
+- **Mobile-Friendly Web Dashboard** (v6.7.0): Responsive design for tablets and phones
 - **Enhanced Auto-Completion**: Context-aware dropdown menu with suggestions
 - **Pure Python**: All bash/TUI components removed for better performance
 - **Dynamic Suggestions**: Includes modules, targets, operations, and common commands
@@ -173,7 +174,7 @@ purplesploit> shell
 ## 💡 Pro Tips
 
 ### Power User Features
-1. **Interactive Selection**: Use `{}` for menus: `target {}`, `cred {}`, `run {}`
+1. **Interactive Selection**: Use `select` for interactive menus: `targets select`, `creds select`, `module select`
 2. **Tab Completion**: Works for module paths, commands, and operations
 3. **Recent Modules**: `recent` shows recently used modules
 4. **Workspaces**: `workspace <name>` organizes engagement data
@@ -204,8 +205,8 @@ PurpleSploit uses **fzf** for lightning-fast fuzzy search:
 purplesploit> search <query>     # Fuzzy find modules
 purplesploit> ops <query>        # Search operations
 purplesploit> module select      # Interactive browser
-purplesploit> target {}          # Pick from targets
-purplesploit> cred {}            # Pick from creds
+purplesploit> targets select     # Pick from targets
+purplesploit> creds select       # Pick from creds
 ```
 
 **Type to filter** - Matches anywhere in text
@@ -259,6 +260,6 @@ Ensure you're running as root/sudo for network scans
 
 *Pure Python. Enhanced Auto-Completion. Built for Speed.*
 
-**Version 6.0.0 - Python Edition**
+**Version 6.7.0 - Python Edition**
 
 </div>

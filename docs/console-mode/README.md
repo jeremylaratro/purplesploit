@@ -13,7 +13,7 @@
 ░░        ░░░ ░ ░   ░░   ░ ░░         ░ ░      ░   ░  ░  ░  ░░         ░ ░   ░ ░ ░ ▒   ▒ ░  ░
             ░        ░                  ░  ░   ░  ░      ░               ░  ░    ░ ░   ░
 
-                    Metasploit-Style Console Mode | Version 3.8
+                    Metasploit-Style Console Mode | Version 6.7.0
 ```
 
 **Metasploit-inspired command-line interface for offensive security operations**
@@ -301,34 +301,23 @@ purplesploit> ops select
 
 ---
 
-## 🤝 Comparison: Console vs TUI Mode
-
-| Feature | Console Mode | TUI Mode |
-|---------|--------------|----------|
-| Interface | Command-line (like Metasploit) | Full-screen menu |
-| Best For | Scripting, automation, power users | Visual navigation, exploration |
-| Selection | fzf fuzzy search | Arrow key navigation |
-| Speed | ⚡ Lightning fast | 🎯 Point and click |
-| Automation | ✅ Excellent | ❌ Manual only |
-| Learning Curve | Moderate (Metasploit-like) | Easy (visual) |
-
 ---
 
 ## 📝 Notes
 
-- Console mode is the primary interface for automation and scripting
-- All modules support both Console and TUI modes
-- Context (targets/creds) is shared between modes
-- Use `interactive` or `i` command to switch to TUI mode
+- Console mode is the primary interface for PurpleSploit
+- All modules work seamlessly in the console interface
+- Context (targets/creds) persists across sessions
+- Web Portal available for visual target management at `http://localhost:5000`
 
 ---
 
 ## 🔗 See Also
 
-- [TUI Mode Documentation](../tui-mode/README.md)
-- [Module Development](../ARCHITECTURE.md)
-- [Smart Features](../../SMART_FEATURES.md)
-- [Quick Start Guide](../../README.md)
+- [Web Portal Guide](../WEB_PORTAL_GUIDE.md)
+- [Module Development](../CONTRIBUTING.md)
+- [Framework Overview](../OVERVIEW.md)
+- [Quick Start Guide](../../QUICKSTART.md)
 
 ---
 
@@ -336,6 +325,6 @@ purplesploit> ops select
 
 **PurpleSploit Console Mode** - Command-line offensive security, simplified.
 
-*For menu-driven interface, see [TUI Mode](../tui-mode/README.md)*
+*For visual interface, see [Web Portal Guide](../WEB_PORTAL_GUIDE.md)*
 
 </div>

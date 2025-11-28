@@ -182,17 +182,25 @@ class CommandHandler:
 [cyan]recent[/cyan]                 Show recently used modules
 [cyan]recent select[/cyan]          Interactive recent selection"""
 
-        # Context Commands Panel
-        context_help = """[green]targets add <ip>[/green]      Add a target
-[green]targets select[/green]       Interactive target picker (fzf)
-[green]targets list[/green]         List all targets
-[green]creds add <u:p>[/green]      Add credentials
-[green]creds select[/green]         Interactive credential picker
-[green]wordlists add <cat> <path>[/green]  Add wordlist by category
-[green]wordlists select <cat>[/green]      Select wordlist for category
-[green]services[/green]             View detected services
-[green]services select[/green]      Interactive service picker
-[green]analysis[/green]             View web scan results dashboard"""
+        # Context Commands Panel - Basic
+        context_basic = """[green]targets add/list/select[/green]        Manage targets (add, view, pick)
+[green]targets set/remove/clear[/green]        Set current, remove, or clear all
+[green]targets modify[/green]                  Interactive modification
+[green]targets <idx> modify <k=v>[/green]      Modify by index (e.g., 1 modify ip=10.0.0.1)
+[green]targets <idx|range> clear[/green]       Clear by index/range (e.g., 1-5 clear)
+[green]creds add/list/select[/green]           Manage credentials (add, view, pick)
+[green]creds set/remove/clear[/green]          Set current, remove, or clear all
+[green]creds modify[/green]                    Interactive modification
+[green]creds <idx> modify <k=v>[/green]        Modify by index (e.g., 1 modify password=new)
+[green]creds <idx|range> clear[/green]         Clear by index/range"""
+
+        # Context Commands Panel - Resources
+        context_resources = """[green]wordlists add <cat> <path>[/green]     Add wordlist by category
+[green]wordlists list/select/set[/green]       View, pick, or set wordlist
+[green]wordlists remove <cat> <id>[/green]     Remove wordlist from category
+[green]services[/green]                        View detected services from scans
+[green]services select/clear[/green]           Pick service or clear all
+[green]analysis[/green]                        View web scan results dashboard"""
 
         # Quick Shortcuts Panel
         shortcuts_help = """[yellow]target <ip>[/yellow]          Quick add and set target
@@ -225,10 +233,15 @@ class CommandHandler:
                                          border_style="cyan", box=box.ROUNDED, padding=(1, 2)))
         self.display.console.print()
 
-        # Two column layout for search and context
-        col1 = Panel(search_help, title="[bold cyan]🔍 Smart Search[/bold cyan]",
-                    border_style="cyan", box=box.ROUNDED, padding=(1, 2))
-        col2 = Panel(context_help, title="[bold green]🎯 Context Management[/bold green]",
+        # Search panel (full width)
+        self.display.console.print(Panel(search_help, title="[bold cyan]🔍 Smart Search[/bold cyan]",
+                                         border_style="cyan", box=box.ROUNDED, padding=(1, 2)))
+        self.display.console.print()
+
+        # Two column layout for context management
+        col1 = Panel(context_basic, title="[bold green]🎯 Targets & Credentials[/bold green]",
+                    border_style="green", box=box.ROUNDED, padding=(1, 2))
+        col2 = Panel(context_resources, title="[bold green]📦 Resources & Services[/bold green]",
                     border_style="green", box=box.ROUNDED, padding=(1, 2))
         self.display.console.print(Columns([col1, col2], equal=True, expand=True))
         self.display.console.print()
