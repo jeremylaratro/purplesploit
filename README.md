@@ -105,27 +105,28 @@ purplesploit> ops secretsdump
 
 Type. Search. Execute. No menu diving.
 
-### 3. 🎯 `{} select` - Interactive Selection Everywhere
-**Every command** supports interactive selection with `{}`:
+### 3. 🎯 `select` - Interactive Selection Everywhere
+**Most commands** support interactive selection with `select`:
 
 ```bash
 # Browse all modules interactively
-purplesploit> module select {}
+purplesploit> module select
 
 # Pick from all targets
-purplesploit> target {}
+purplesploit> targets select
 
 # Choose credentials
-purplesploit> cred {}
+purplesploit> creds select
 
-# Select any operation
-purplesploit> run {}
+# Select operations from search results
+purplesploit> ops bloodhound
+purplesploit> ops select
 
-# Works with EVERYTHING
-purplesploit> workspace {}
+# Select from recent modules
+purplesploit> recent select
 ```
 
-**No typing, no memorizing** - just press `{}` and pick.
+**No typing, no memorizing** - just add `select` and pick from a menu.
 
 ---
 
@@ -146,13 +147,14 @@ purplesploit> search smb shares        # Fuzzy search
 purplesploit> run {}                   # Interactive select
 ```
 
-### Enhanced Features (v6.2.0)
-- **Web Portal & API Server**: Comprehensive web interface with real-time target visualization at `http://localhost:5000`
+### Key Features (v6.7.0)
+- **Mobile-Friendly Web Dashboard**: Responsive web interface optimized for tablets and phones at `http://localhost:5000`
+- **Enhanced Context Management**: Comprehensive target/credential management with modify, clear, and bulk operations
 - **Webserver Command**: Launch web portal in background with `webserver start` - continue using CLI while server runs
 - **Real-time Database Sync**: Changes in CLI instantly appear in web portal and vice versa
-- **Dropdown Auto-Completion**: Context-aware command suggestions with enhanced dropdown menu
+- **Smart Auto-Completion**: Context-aware command suggestions with enhanced dropdown menu
 - **Pure Python**: Completely rewritten in Python for better performance and maintainability
-- **Dynamic Completions**: Auto-complete includes modules, targets, and common operations
+- **Interactive Selection**: fzf-powered fuzzy search for all commands with `select` subcommands
 - **Ligolo Integration**: Seamless proxy tunneling with `ligolo` command
 - **Shell Access**: Quick localhost shell access with `shell` command
 
@@ -240,8 +242,8 @@ cd purplesploit
 # Console mode
 python3 -m purplesploit.main
 
-# OR TUI mode
-bash purplesploit-tui.sh
+# Start web portal in background
+purplesploit> webserver start
 ```
 
 ---
@@ -252,15 +254,15 @@ bash purplesploit-tui.sh
 |---------|--------------|---------|
 | `search <term>` | Fuzzy search modules/ops | `search kerberos` |
 | `ops <term>` | Search operations only | `ops dump` |
-| `module select {}` | Browse module tree | Interactive picker |
-| `target {}` | Select/add targets | Pick from list |
-| `cred {}` | Select credentials | Pick from database |
-| `run {}` | Execute with selection | Choose operation |
-| `workspace {}` | Switch workspace | Select workspace |
-| `jobs list` | List background jobs | Monitor scans |
+| `module select` | Browse module tree | Interactive picker |
+| `targets select` | Select/add targets | Pick from list |
+| `creds select` | Select credentials | Pick from database |
+| `run` | Execute with selection | Choose operation |
+| `workspace <name>` | Switch workspace | Select workspace |
+| `webserver start/stop` | Control web portal | Manage dashboard |
 | `help` | Full command list | All commands |
 
-**Pro tip**: Add `{}` to ANY command for interactive selection!
+**Pro tip**: Most commands support `select` for interactive fuzzy search!
 
 ---
 

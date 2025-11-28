@@ -1,6 +1,6 @@
 # PurpleSploit - Core Overview
 
-**Version 6.0.0 - Pure Python Pentesting Framework**
+**Version 6.7.0 - Pure Python Pentesting Framework**
 
 ## What is PurpleSploit?
 
@@ -617,4 +617,4 @@ PurpleSploit **wraps** external tools, it doesn't replace them:
 
 ---
 
-*Built for red teamers, by red teamers. Version 6.0.0 - Pure Python Edition.*
+*Built for red teamers, by red teamers. Version 6.7.0 - Pure Python Edition.*
