@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import subprocess
 import re
 from typing import Dict, Any, List, Tuple
-from ..core.module import BaseModule
+from purplesploit.core.module import BaseModule
 from purplesploit.models.database import db_manager
 
 

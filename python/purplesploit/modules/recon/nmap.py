@@ -7,6 +7,7 @@ Network scanning and service detection using Nmap.
 import xml.etree.ElementTree as ET
 import os
 from pathlib import Path
+from typing import List, Dict, Any
 from purplesploit.core.module import ExternalToolModule
 from purplesploit.models.database import db_manager
 
