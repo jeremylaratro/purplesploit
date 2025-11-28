@@ -8,12 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [6.8.1] - 2025-11-28
 
 ### Fixed
-- **Module Discovery**: Fixed critical bug where modules weren't being registered during startup
-  - Module discovery now properly filters out imported classes vs. classes defined in the module file
-  - Added `obj.__module__` check in `_register_module()` to ensure only locally-defined classes are registered
-  - Fixes issue where nmap variant modules (nmap_fast, nmap_aggressive, etc.) weren't showing up in search
-  - All 37 modules now properly discovered and available for use
-  - Resolves module registration conflicts when modules inherit from other modules (e.g., NmapFastModule inheriting from NmapModule)
+- **Module Discovery**: Fixed critical bugs preventing modules from being registered during startup
+  - **Framework Registration**: Module discovery now properly filters out imported classes vs. classes defined in the module file
+    - Added `obj.__module__` check in `_register_module()` to ensure only locally-defined classes are registered
+    - Resolves module registration conflicts when modules inherit from other modules
+  - **Nmap Module Imports**: Fixed missing typing imports causing all nmap modules to fail
+    - Added `from typing import List, Dict, Any` to nmap.py (line 10)
+    - All nmap variant modules (fast, aggressive, stealth, comprehensive, no_ping, udp) now load correctly
+  - **Nmap Parser Import**: Fixed incorrect relative import path
+    - Changed `from ..core.module import BaseModule` to `from purplesploit.core.module import BaseModule`
+    - nmap_parser module now loads without errors
+  - **Result**: All 37 modules (including 8 nmap modules) now properly discovered and available for use
 
 ## [6.7.0] - 2025-11-27
 
