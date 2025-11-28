@@ -238,9 +238,9 @@ Ensure you're running as root/sudo for network scans
 ## 📚 Next Steps
 
 - **[Full README](README.md)** - Complete feature list
-- **[Console Guide](docs/console-mode/README.md)** - Advanced commands
+- **[Commands Reference](wiki/Commands-Reference.md)** - All commands with tables
+- **[Framework Guide](wiki/Framework-Guide.md)** - Architecture and concepts
 - **[Contributing](docs/CONTRIBUTING.md)** - Add your own Python modules
-- **[Architecture](docs/ARCHITECTURE.md)** - Framework internals
 
 ---
 
