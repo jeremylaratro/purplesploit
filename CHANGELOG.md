@@ -5,6 +5,16 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.8.1] - 2025-11-28
+
+### Fixed
+- **Module Discovery**: Fixed critical bug where modules weren't being registered during startup
+  - Module discovery now properly filters out imported classes vs. classes defined in the module file
+  - Added `obj.__module__` check in `_register_module()` to ensure only locally-defined classes are registered
+  - Fixes issue where nmap variant modules (nmap_fast, nmap_aggressive, etc.) weren't showing up in search
+  - All 37 modules now properly discovered and available for use
+  - Resolves module registration conflicts when modules inherit from other modules (e.g., NmapFastModule inheriting from NmapModule)
+
 ## [6.7.0] - 2025-11-27
 
 ### Added
