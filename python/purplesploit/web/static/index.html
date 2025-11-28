@@ -132,32 +132,30 @@
 
         async function loadDashboard() {
             try {
-                // Load all data directly from API endpoints (same as targets page)
+                console.log('Loading dashboard...');
+
+                // Load overview stats
+                console.log('Fetching stats...');
+                const stats = await API.getStats();
+                console.log('Stats loaded:', stats);
+                updateStats(stats);
+
+                // Load targets
+                console.log('Fetching targets...');
                 const targets = await API.getTargets();
-                const credentials = await API.getCredentials();
-                const services = await API.getServices();
+                console.log('Targets loaded:', targets.length, 'targets');
+                displayTargetsTable(targets.slice(0, 10)); // Show first 10
+
+                // Load recent exploits
+                console.log('Fetching exploits...');
                 const exploits = await API.getExploits();
+                console.log('Exploits loaded:', exploits.length, 'exploits');
+                displayRecentExploits(exploits.slice(0, 5)); // Show first 5
 
-                // Calculate services by type
-                const servicesByType = {};
-                services.forEach(service => {
-                    const type = service.service || 'unknown';
-                    servicesByType[type] = (servicesByType[type] || 0) + 1;
-                });
+                // Display services chart
+                displayServicesChart(stats.services_by_type);
 
-                // Update stats display
-                updateStats({
-                    total_targets: targets.length,
-                    total_credentials: credentials.length,
-                    total_services: services.length,
-                    total_exploits: exploits.length,
-                    services_by_type: servicesByType
-                });
-
-                // Display targets table and exploits
-                displayTargetsTable(targets.slice(0, 10));
-                displayRecentExploits(exploits.slice(0, 5));
-                displayServicesChart(servicesByType);
+                console.log('Dashboard loaded successfully');
             } catch (error) {
                 console.error('Error loading dashboard:', error);
                 showError('Failed to load dashboard data: ' + error.message);
