@@ -56,8 +56,7 @@ Step A. Target Discovery: `module select` --> type `nmap` --> select scan & run
 # Menu Items
 ### Search and Select
 
-<img width="1015" height="349" alt="help_first" src="https://github.com/user-attachments/assets/fe01ec68-ce6a-48db-a888-f72b39af2d0e" />
-
+<img width="926" height="580" alt="module_search" src="https://github.com/user-attachments/assets/2a6e08db-6454-4d7e-9585-c6e8d17242e3" />
 
 **Key Commands**
 Like metasploit, but with fzf for interactive select menus. To search for and select modules, you can use the traditional msf method, or use the interactive menu by adding select at the end of the command:
@@ -66,7 +65,9 @@ Like metasploit, but with fzf for interactive select menus. To search for and se
 ## Context Management
 Add and manage targets, credentials, and wordlists. The context manager is made up of a series of sqlite databases that manages the context for the entire framework. No more "set RHOST" per modules. Select a target, select a credential, and **it will be applied to all modules automatically**. 
 
-<img width="514" height="364" alt="management" src="https://github.com/user-attachments/assets/d4e0b0ad-afa0-43bc-a52b-4d5656f6bf3f" />
+<img width="1020" height="334" alt="targets creds" src="https://github.com/user-attachments/assets/678b3766-c63f-42ff-b748-6dda23912519" />
+<img width="1001" height="245" alt="servicewordlist" src="https://github.com/user-attachments/assets/59e89fda-ea4e-4141-b9a8-b15832931124" />
+
 
 Context items can be added, modified, selected, and cleared. For example:
 
