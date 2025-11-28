@@ -27,7 +27,7 @@
 [Quick Start](#-quick-start) • [Key Features](#-key-features) • [Installation](#-installation) • [Docs](docs/)
 
 </div>
-#### What it does TL;DR
+> What it does TL;DR
 - makes workflow efficient - no typing commands, credential application across all tools, auto analysis of scans
 # PurpleSploit Walkthrough
 
@@ -38,18 +38,20 @@
 ## Example workflow
 
 Given targets and/or credentials:
+```
 Step A. Add targeting:
-1. `targets select` --> `creds select` 
-2. `targets add` --> `creds add` 
+	1. `targets select` --> `creds select` 
+	2. `targets add` --> `creds add` 
 Step B. Select a command to run:
-3. `module select` -> `run op#`
-4. `search {object}` --> `use {module}` --> `run op#`
-
+	3. `module select` -> `run op#`
+	4. `search {object}` --> `use {module}` --> `run op#`
+```
 From 0-point (no targets, no creds):
+```
 Step A. Target Discovery: `module select` --> type `nmap` --> select scan & run
 	Step B. Target Selection: `services` --> pick a target from scan results --> `targets select`
 		Step C. Target Enumeration: `module select` -> `run op#` OR `search {object}` --> `use {module}` --> `run op#`
-
+```
 ---
 # Menu Items
 ### Search and Select
