@@ -123,11 +123,12 @@ purplesploit > creds/targets list
 ---
 ## Interactive Selection
 Targets, credentials, and modules can be selected interactively with fzf. This feature includes type search, so you can either select by navigating with keyboard/mouse or by typing keywords:
-![[typingselect.png]]
 
-![[module_select.png]]
+<img width="527" height="314" alt="typingselect" src="https://github.com/user-attachments/assets/9ec797ce-3f23-4df2-a0c0-385bb93363e6" />
 
-![[creds_select.png]]
+<img width="1231" height="473" alt="module_select" src="https://github.com/user-attachments/assets/f03137ae-db86-4c35-84ff-5cee3372a110" />
+
+<img width="919" height="429" alt="creds_select" src="https://github.com/user-attachments/assets/2a868c08-6515-4257-a180-0d017b4d99c0" />
 
 <img width="638" height="244" alt="targetselect" src="https://github.com/user-attachments/assets/b9bc0ac0-c11a-4704-873f-3cdb508d13e5" />
 
