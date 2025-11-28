@@ -195,10 +195,12 @@ class Framework:
         spec.loader.exec_module(mod)
 
         # Find all BaseModule subclasses
+        expected_module_name = f"purplesploit.modules.{module_path.replace('/', '.')}"
         for name, obj in inspect.getmembers(mod, inspect.isclass):
             if (issubclass(obj, BaseModule) and
                 obj is not BaseModule and
-                not inspect.isabstract(obj)):
+                not inspect.isabstract(obj) and
+                obj.__module__ == expected_module_name):
 
                 # Create temporary instance to extract metadata
                 try:
