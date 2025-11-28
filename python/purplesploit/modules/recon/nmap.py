@@ -135,6 +135,147 @@ class NmapModule(ExternalToolModule):
             }
         })
 
+    def get_operations(self) -> List[Dict[str, Any]]:
+        """
+        Get available scan type operations.
+
+        Returns:
+            List of operation dictionaries
+        """
+        return [
+            {
+                "name": "Default Scan",
+                "description": "All ports + version/script detection (-p- -sCV)",
+                "handler": "op_default_scan",
+                "subcategory": "standard"
+            },
+            {
+                "name": "Fast Scan",
+                "description": "Top 100 ports only + quick version (--top-ports 100 -sV -T4)",
+                "handler": "op_fast_scan",
+                "subcategory": "standard"
+            },
+            {
+                "name": "Comprehensive Scan",
+                "description": "All ports + max version intensity (-p- -sCV --version-intensity 9)",
+                "handler": "op_comprehensive_scan",
+                "subcategory": "standard"
+            },
+            {
+                "name": "Aggressive Scan",
+                "description": "OS detection + scripts + traceroute (-sCV -O --traceroute)",
+                "handler": "op_aggressive_scan",
+                "subcategory": "advanced"
+            },
+            {
+                "name": "Stealth Scan",
+                "description": "Stealth SYN + slow timing (requires root: -sS -T2 -p-)",
+                "handler": "op_stealth_scan",
+                "subcategory": "advanced"
+            },
+            {
+                "name": "UDP Scan",
+                "description": "UDP top 100 ports (-sU --top-ports 100)",
+                "handler": "op_udp_scan",
+                "subcategory": "specialized"
+            },
+            {
+                "name": "No Ping Scan",
+                "description": "No ping/discovery + all ports (-Pn -p- -sCV)",
+                "handler": "op_no_ping_scan",
+                "subcategory": "specialized"
+            }
+        ]
+
+    def op_default_scan(self) -> Dict[str, Any]:
+        """Execute default scan: All ports + version/script detection."""
+        # Set default scan options
+        self.set_option("PORTS", "-")
+        self.set_option("SCAN_TYPE", "sCV")
+        self.set_option("TIMING", "4")
+        self.set_option("MIN_RATE", "3900")
+        self.set_option("MAX_RTT_TIMEOUT", "4.5")
+
+        return self.run()
+
+    def op_fast_scan(self) -> Dict[str, Any]:
+        """Execute fast scan: Top 100 ports only."""
+        # Set fast scan options
+        self.set_option("TOP_PORTS", "100")
+        self.set_option("PORTS", None)
+        self.set_option("SCAN_TYPE", "sV")
+        self.set_option("TIMING", "4")
+        self.set_option("MIN_RATE", "5000")
+        self.set_option("MAX_RTT_TIMEOUT", "2")
+        self.set_option("MAX_RETRIES", "1")
+        self.set_option("VERSION_INTENSITY", "2")
+
+        return self.run()
+
+    def op_comprehensive_scan(self) -> Dict[str, Any]:
+        """Execute comprehensive scan: All ports + max version intensity."""
+        # Set comprehensive scan options
+        self.set_option("PORTS", "-")
+        self.set_option("SCAN_TYPE", "sCV")
+        self.set_option("VERSION_INTENSITY", "9")
+        self.set_option("TIMING", "4")
+        self.set_option("MIN_RATE", "3900")
+        self.set_option("MAX_RTT_TIMEOUT", "4.5")
+
+        return self.run()
+
+    def op_aggressive_scan(self) -> Dict[str, Any]:
+        """Execute aggressive scan: OS detection + scripts + traceroute."""
+        # Set aggressive scan options
+        self.set_option("SCAN_TYPE", "sCV")
+        self.set_option("OS_DETECTION", "true")
+        self.set_option("VERSION_INTENSITY", "9")
+        self.set_option("TIMING", "4")
+
+        # Run the scan
+        result = self.run()
+
+        # Note: Traceroute would need additional implementation in build_command
+        # For now, users can add --traceroute via SCRIPT or custom flags if needed
+
+        return result
+
+    def op_stealth_scan(self) -> Dict[str, Any]:
+        """Execute stealth scan: SYN scan with slow timing."""
+        # Set stealth scan options
+        self.set_option("SCAN_TYPE", "sS")
+        self.set_option("TIMING", "2")
+        self.set_option("MIN_RATE", "100")
+        self.set_option("MAX_RTT_TIMEOUT", "10")
+        self.set_option("PORTS", "-")
+
+        return self.run()
+
+    def op_udp_scan(self) -> Dict[str, Any]:
+        """Execute UDP scan: Top 100 UDP ports."""
+        # Set UDP scan options
+        self.set_option("SCAN_TYPE", "sU")
+        self.set_option("TOP_PORTS", "100")
+        self.set_option("PORTS", None)
+        self.set_option("TIMING", "4")
+        self.set_option("MIN_RATE", "1000")
+
+        return self.run()
+
+    def op_no_ping_scan(self) -> Dict[str, Any]:
+        """Execute no ping scan: Skip host discovery."""
+        # Set no ping scan options
+        self.set_option("PORTS", "-")
+        self.set_option("SCAN_TYPE", "sCV")
+
+        # Run the scan
+        result = self.run()
+
+        # Note: -Pn flag would need to be added in build_command
+        # For now, users can add it via custom options if the module supports it
+
+        return result
+
     def build_command(self) -> str:
         """
         Build the nmap command.

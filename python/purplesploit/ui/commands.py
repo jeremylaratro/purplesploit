@@ -2290,14 +2290,20 @@ class CommandHandler:
     def cmd_ops(self, args: List[str]) -> bool:
         """
         Context-aware operations command.
-        - When in a module with no args: Show operations for current module
+        - When in a module with no args: Show operations (or options if no operations)
         - When given args: Search operations globally across all modules
         """
         if not args:
-            # If in a module, show operations for current module
+            # If in a module, show operations or options
             module = self.framework.session.current_module
             if module:
-                return self.cmd_show_ops([])
+                # Check if module has operations
+                if module.has_operations():
+                    return self.cmd_show_ops([])
+                else:
+                    # Module has no operations, show options instead
+                    self.display.print_info(f"\n{module.name} Options:")
+                    return self.cmd_options([])
             else:
                 self.display.print_error("Usage: ops <query>")
                 self.display.print_info("       ops select  # Interactive operation selection from last search")
