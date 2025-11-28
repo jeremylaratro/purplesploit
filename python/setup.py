@@ -11,7 +11,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="purplesploit",
-    version="6.3.2",
+    version="6.7.0",
     author="PurpleSploit Team",
     author_email="purplesploit@example.com",
     description="Hybrid pentesting framework - Python advanced features",

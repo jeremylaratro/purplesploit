@@ -4,10 +4,14 @@ FastAPI server providing HTTP API for PurpleSploit
 """
 
 import subprocess
-from typing import List, Optional
+import asyncio
+import json
+import ipaddress
+from typing import List, Optional, Dict, Any
 from pathlib import Path
+from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +24,8 @@ from purplesploit.models.database import (
     TargetCreate, TargetResponse,
     ServiceResponse
 )
+from purplesploit.core.framework import Framework
+from purplesploit.ui.banner import show_banner
 
 # Create FastAPI app
 app = FastAPI(
@@ -66,6 +72,60 @@ if STATIC_DIR:
     print(f"[INFO] Serving web portal from: {STATIC_DIR}")
 else:
     print("[WARNING] Web portal static files not found. API-only mode enabled.")
+
+# Initialize Framework for C2 operations
+# Use project-local database path
+import os
+if os.getenv('PURPLESPLOIT_DB'):
+    db_path = os.getenv('PURPLESPLOIT_DB')
+else:
+    project_root = Path(__file__).parent.parent.parent.parent
+    data_dir = project_root / '.data'
+    data_dir.mkdir(exist_ok=True)
+    db_path = str(data_dir / 'purplesploit.db')
+
+framework = Framework(db_path=db_path)
+module_count = framework.discover_modules()
+print(f"[INFO] Discovered {module_count} modules")
+
+# Session storage for command history
+sessions: Dict[str, Dict] = {}
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def expand_cidr(target: str) -> List[str]:
+    """
+    Expand CIDR notation into individual IP addresses.
+
+    Args:
+        target: IP address or CIDR notation (e.g., "10.10.10.0/24")
+
+    Returns:
+        List of IP addresses as strings
+    """
+    try:
+        # Try to parse as CIDR network
+        network = ipaddress.ip_network(target, strict=False)
+
+        # For large networks, limit the expansion
+        if network.num_addresses > 256:
+            # For /16 and larger, return the network notation itself
+            # Modules should handle this appropriately
+            return [str(network)]
+
+        # For smaller networks, expand to individual IPs
+        return [str(ip) for ip in network.hosts()]
+    except ValueError:
+        # Not CIDR notation, treat as single IP/hostname
+        return [target]
+
+
+def is_cidr_notation(target: str) -> bool:
+    """Check if target is in CIDR notation."""
+    return '/' in target
 
 
 
@@ -148,6 +208,19 @@ async def status():
     }
 
 
+@app.get("/api/banner")
+async def get_banner(variant: Optional[int] = None):
+    """Get a random or specific ASCII banner"""
+    import random
+    if variant is None:
+        variant = random.randint(0, 7)
+    banner_text = show_banner(variant)
+    return {
+        "banner": banner_text,
+        "variant": variant
+    }
+
+
 # ============================================================================
 # Credentials API
 # ============================================================================
@@ -178,6 +251,34 @@ async def get_credential(name: str):
         if not cred:
             raise HTTPException(status_code=404, detail="Credential not found")
         return CredentialResponse.from_orm(cred)
+    finally:
+        session.close()
+
+
+@app.put("/api/credentials/{name}")
+async def update_credential(name: str, cred: CredentialCreate):
+    """Update a credential"""
+    session = db_manager.get_credentials_session()
+    try:
+        db_cred = session.query(Credential).filter(Credential.name == name).first()
+        if not db_cred:
+            raise HTTPException(status_code=404, detail="Credential not found")
+
+        # Update fields
+        if hasattr(cred, 'name') and cred.name:
+            db_cred.name = cred.name
+        if hasattr(cred, 'username') and cred.username:
+            db_cred.username = cred.username
+        if hasattr(cred, 'password') and cred.password:
+            db_cred.password = cred.password
+        if hasattr(cred, 'domain') and cred.domain:
+            db_cred.domain = cred.domain
+        if hasattr(cred, 'hash') and cred.hash:
+            db_cred.hash = cred.hash
+
+        session.commit()
+        session.refresh(db_cred)
+        return CredentialResponse.from_orm(db_cred)
     finally:
         session.close()
 
@@ -231,6 +332,30 @@ async def get_target(name: str):
         session.close()
 
 
+@app.put("/api/targets/{name}")
+async def update_target(name: str, target: TargetCreate):
+    """Update a target"""
+    session = db_manager.get_targets_session()
+    try:
+        db_target = session.query(Target).filter(Target.name == name).first()
+        if not db_target:
+            raise HTTPException(status_code=404, detail="Target not found")
+
+        # Update fields
+        if hasattr(target, 'name') and target.name:
+            db_target.name = target.name
+        if hasattr(target, 'ip') and target.ip:
+            db_target.ip = target.ip
+        if hasattr(target, 'description') and target.description:
+            db_target.description = target.description
+
+        session.commit()
+        session.refresh(db_target)
+        return TargetResponse.from_orm(db_target)
+    finally:
+        session.close()
+
+
 @app.delete("/api/targets/{name}")
 async def delete_target(name: str):
     """Delete a target"""
@@ -266,6 +391,68 @@ async def get_target_services(target: str):
     """Get services for a specific target"""
     services = db_manager.get_services_for_target(target)
     return [ServiceResponse.from_orm(s) for s in services]
+
+
+# ============================================================================
+# Nmap Import/Upload API
+# ============================================================================
+
+@app.post("/api/nmap/upload")
+async def upload_nmap_results(file: UploadFile = File(...)):
+    """
+    Upload and parse nmap XML scan results.
+
+    Automatically imports discovered hosts with open ports to targets and services tables.
+    """
+    if not file.filename.endswith('.xml'):
+        raise HTTPException(status_code=400, detail="Only XML files are supported")
+
+    try:
+        # Save uploaded file temporarily
+        import tempfile
+        import xml.etree.ElementTree as ET
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xml') as tmp_file:
+            content = await file.read()
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+
+        # Parse XML using nmap module
+        from purplesploit.modules.recon.nmap import NmapModule
+
+        # Create framework instance
+        framework = get_framework()
+        nmap_module = NmapModule(framework)
+
+        # Parse XML
+        parsed_xml = nmap_module.parse_xml_output(tmp_path)
+
+        if not parsed_xml.get("hosts"):
+            # Clean up temp file
+            Path(tmp_path).unlink()
+            return {
+                "success": True,
+                "message": "No hosts with open ports found in scan results",
+                "hosts_discovered": 0,
+                "total_scanned": parsed_xml.get("total_hosts", 0)
+            }
+
+        # Process discovered hosts
+        nmap_module.process_discovered_hosts(parsed_xml)
+
+        # Clean up temp file
+        Path(tmp_path).unlink()
+
+        return {
+            "success": True,
+            "message": f"Successfully imported {len(parsed_xml.get('hosts', []))} hosts",
+            "hosts_discovered": len(parsed_xml.get("hosts", [])),
+            "total_scanned": parsed_xml.get("total_hosts", 0),
+            "filename": file.filename
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing nmap results: {str(e)}")
 
 
 # ============================================================================
@@ -407,16 +594,15 @@ class ExploitResponse(BaseModel):
     target: str
     service: str
     port: int
-    version: Optional[str]
+    version: Optional[str] = None
     exploit_title: str
-    exploit_path: Optional[str]
-    edb_id: Optional[str]
-    platform: Optional[str]
-    exploit_type: Optional[str]
-    created_at: Optional[str]
+    exploit_path: Optional[str] = None
+    edb_id: Optional[str] = None
+    platform: Optional[str] = None
+    exploit_type: Optional[str] = None
+    created_at: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TargetAnalysisResponse(BaseModel):
@@ -479,6 +665,529 @@ async def get_exploits_for_target(target: str):
     """Get all exploits for a specific target"""
     exploits = db_manager.get_exploits_for_target(target)
     return [ExploitResponse.from_orm(e) for e in exploits]
+
+
+# ============================================================================
+# C2 Command & Control API
+# ============================================================================
+
+class C2CommandRequest(BaseModel):
+    """Request model for C2 command execution"""
+    command: str
+    session_id: Optional[str] = "default"
+
+class C2CommandResponse(BaseModel):
+    """Response model for C2 command execution"""
+    success: bool
+    output: str
+    error: Optional[str] = None
+    timestamp: str
+    session_id: str
+
+class ModuleListResponse(BaseModel):
+    """Response model for module list"""
+    path: str
+    name: str
+    category: str
+    description: str
+    author: str
+
+class ModuleExecuteRequest(BaseModel):
+    """Request model for module execution"""
+    module_path: str
+    options: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = "default"
+
+
+@app.get("/api/c2/modules")
+async def list_modules():
+    """List all available modules"""
+    modules = framework.list_modules()
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in modules]
+
+
+@app.get("/api/c2/modules/search")
+async def search_modules(query: str):
+    """Search modules by name, description, or category"""
+    results = framework.search_modules(query)
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in results]
+
+
+@app.get("/api/c2/modules/{category}")
+async def get_modules_by_category(category: str):
+    """Get modules by category"""
+    modules = framework.list_modules(category=category)
+    return [{
+        "path": m.path,
+        "name": m.name,
+        "category": m.category,
+        "description": m.description,
+        "author": m.author
+    } for m in modules]
+
+
+@app.get("/api/c2/module/{module_path:path}")
+async def get_module_info(module_path: str):
+    """Get detailed module information"""
+    metadata = framework.get_module(module_path)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    # Instantiate to get options
+    module_instance = metadata.instance(framework)
+
+    return {
+        "path": metadata.path,
+        "name": metadata.name,
+        "category": metadata.category,
+        "description": metadata.description,
+        "author": metadata.author,
+        "options": module_instance.show_options()
+    }
+
+
+@app.post("/api/c2/module/execute")
+async def execute_module(request: ModuleExecuteRequest):
+    """Execute a module with provided options"""
+    try:
+        # Load module
+        module = framework.use_module(request.module_path)
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
+
+        # Set options if provided
+        if request.options:
+            for key, value in request.options.items():
+                module.set_option(key, value)
+
+        # Run module
+        results = framework.run_module(module)
+
+        # Store in session history
+        session_id = request.session_id
+        if session_id not in sessions:
+            sessions[session_id] = {
+                "history": [],
+                "created_at": datetime.now().isoformat(),
+                "current_module": None,
+                "current_target": None,
+                "current_credential": None
+            }
+
+        sessions[session_id]["history"].append({
+            "type": "module_execution",
+            "module": request.module_path,
+            "timestamp": datetime.now().isoformat(),
+            "results": results
+        })
+
+        return {
+            "success": results.get("success", False),
+            "output": json.dumps(results, indent=2),
+            "error": results.get("error"),
+            "timestamp": datetime.now().isoformat(),
+            "session_id": session_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/c2/command")
+async def execute_c2_command(request: C2CommandRequest):
+    """Execute a framework command"""
+    try:
+        command = request.command.strip()
+        session_id = request.session_id
+
+        # Initialize session if needed
+        if session_id not in sessions:
+            sessions[session_id] = {
+                "history": [],
+                "created_at": datetime.now().isoformat(),
+                "current_module": None,
+                "current_target": None,
+                "current_credential": None
+            }
+
+        # Parse and execute command
+        output = await execute_framework_command(command, session_id)
+
+        # Store in history
+        sessions[session_id]["history"].append({
+            "type": "command",
+            "command": command,
+            "output": output,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        return C2CommandResponse(
+            success=True,
+            output=output,
+            timestamp=datetime.now().isoformat(),
+            session_id=session_id
+        )
+    except Exception as e:
+        return C2CommandResponse(
+            success=False,
+            output="",
+            error=str(e),
+            timestamp=datetime.now().isoformat(),
+            session_id=request.session_id
+        )
+
+
+async def execute_framework_command(command: str, session_id: str) -> str:
+    """Execute a framework command and return output (non-blocking)"""
+    parts = command.split()
+    if not parts:
+        return ""
+
+    cmd = parts[0].lower()
+    args = parts[1:] if len(parts) > 1 else []
+
+    # Run blocking operations in executor to prevent WebSocket blocking
+    loop = asyncio.get_event_loop()
+
+    # Handle different commands
+    if cmd == "help":
+        return """Available Commands:
+  search <query>       - Search for modules
+  use <module>         - Load a module
+  show modules         - List all modules
+  show options         - Show module options
+  set <opt> <val>      - Set module option
+  run                  - Execute current module
+  back                 - Unload current module
+  targets              - List targets
+  target <ip|subnet>   - Set target (supports CIDR notation)
+  creds                - List credentials
+  cred <user:pass>     - Add credential
+  stats                - Show statistics
+  info                 - Show framework information
+  clear                - Clear screen
+
+Examples:
+  search smb                 - Find SMB-related modules
+  use smb/authentication     - Load SMB auth module
+  target 10.10.10.100        - Set single target
+  target 10.10.10.0/24       - Add entire subnet (/24 expands to 254 IPs)
+  target 192.168.0.0/16      - Add large subnet (kept as range)
+  set RHOST 10.10.10.100     - Set target option
+  run                        - Execute the module
+"""
+
+    elif cmd == "search":
+        if not args:
+            return "Usage: search <query>"
+        query = " ".join(args)
+        # Run in executor to avoid blocking
+        results = await loop.run_in_executor(None, framework.search_modules, query)
+        if not results:
+            return f"No modules found matching '{query}'"
+        output = f"Found {len(results)} module(s):\n\n"
+        for i, m in enumerate(results, 1):
+            output += f"  {i}. [{m.category}] {m.name}\n"
+            output += f"     {m.path}\n"
+            output += f"     {m.description}\n\n"
+        return output
+
+    elif cmd == "use":
+        if not args:
+            return "Usage: use <module_path>"
+        module_path = " ".join(args)
+        # Run in executor to avoid blocking
+        module = await loop.run_in_executor(None, framework.use_module, module_path)
+        if module:
+            sessions[session_id]["current_module"] = module_path
+            return f"Loaded module: {module.name}\nUse 'show options' to see available options."
+
+        # Module not found - provide helpful suggestions
+        output = f"Module not found: {module_path}\n\n"
+
+        # Try to find similar modules
+        search_results = await loop.run_in_executor(None, framework.search_modules, module_path.split('/')[-1])
+        if search_results:
+            output += "Did you mean one of these?\n\n"
+            for i, m in enumerate(search_results[:5], 1):
+                output += f"  {i}. {m.path}\n"
+                output += f"     {m.name} - {m.description}\n\n"
+            output += f"Use 'search {module_path}' to find more modules."
+        else:
+            output += "Use 'show modules' to see all available modules.\n"
+            output += f"Or use 'search <keyword>' to find specific modules."
+
+        return output
+
+    elif cmd == "show":
+        if not args:
+            return "Usage: show [modules|options|targets|creds]"
+
+        subcmd = args[0].lower()
+
+        if subcmd == "modules":
+            modules = await loop.run_in_executor(None, framework.list_modules)
+            output = f"Available Modules ({len(modules)}):\n\n"
+            current_category = None
+            for m in modules:
+                if m.category != current_category:
+                    output += f"\n[{m.category.upper()}]\n"
+                    current_category = m.category
+                output += f"  {m.path}\n"
+            return output
+
+        elif subcmd == "options":
+            if not sessions[session_id].get("current_module"):
+                return "No module loaded. Use 'use <module>' first."
+            module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
+            if not module:
+                return "Error loading current module"
+            options = await loop.run_in_executor(None, module.show_options)
+            output = "Module Options:\n\n"
+            for key, opt in options.items():
+                required = "[*]" if opt.get('required') else "   "
+                value = opt.get('value', '')
+                desc = opt.get('description', '')
+                output += f"  {required} {key:15} {str(value):20} {desc}\n"
+            return output
+
+        elif subcmd == "targets":
+            targets = framework.session.targets.list()
+            if not targets:
+                return "No targets configured"
+            output = "Targets:\n"
+            for t in targets:
+                output += f"  • {t.get('name', 'N/A')} - {t.get('ip', t.get('url', 'N/A'))}\n"
+            return output
+
+        elif subcmd == "creds":
+            creds = framework.session.credentials.list()
+            if not creds:
+                return "No credentials configured"
+            output = "Credentials:\n"
+            for c in creds:
+                domain = f"{c.get('domain')}/" if c.get('domain') else ""
+                output += f"  • {domain}{c.get('username')}:{c.get('password', '[hash]')}\n"
+            return output
+
+        return f"Unknown show command: {subcmd}"
+
+    elif cmd == "set":
+        if len(args) < 2:
+            return "Usage: set <option> <value>"
+        if not sessions[session_id].get("current_module"):
+            return "No module loaded. Use 'use <module>' first."
+
+        module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
+        if not module:
+            return "Error loading current module"
+
+        option = args[0]
+        value = " ".join(args[1:])
+        await loop.run_in_executor(None, module.set_option, option, value)
+        return f"Set {option} => {value}"
+
+    elif cmd == "run" or cmd == "exploit":
+        if not sessions[session_id].get("current_module"):
+            return "No module loaded. Use 'use <module>' first."
+
+        module = await loop.run_in_executor(None, framework.use_module, sessions[session_id]["current_module"])
+        if not module:
+            return "Error loading current module"
+
+        results = await loop.run_in_executor(None, framework.run_module, module)
+        output = "Module Execution Results:\n\n"
+        output += json.dumps(results, indent=2)
+        return output
+
+    elif cmd == "back":
+        sessions[session_id]["current_module"] = None
+        return "Unloaded current module"
+
+    elif cmd == "target":
+        if not args:
+            # Show current target
+            current = await loop.run_in_executor(None, framework.session.targets.get_current)
+            if current:
+                return f"Current target: {current.get('name')} - {current.get('ip', current.get('url'))}"
+            return "No target set"
+
+        # Add/set target (non-blocking)
+        target_input = args[0]
+
+        # Check if it's CIDR notation
+        if is_cidr_notation(target_input):
+            # Add subnet as-is, don't expand
+            await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            # Update session
+            sessions[session_id]["current_target"] = target_input
+            return f"Target subnet added: {target_input}\n(Subnet will be expanded when hosts are verified via scanning)"
+        else:
+            # Single IP/hostname
+            await loop.run_in_executor(None, framework.add_target, "network", target_input, target_input)
+            # Update session
+            sessions[session_id]["current_target"] = target_input
+            return f"Target set: {target_input}"
+
+    elif cmd == "targets":
+        targets = framework.session.targets.list()
+        if not targets:
+            return "No targets configured"
+        output = "Targets:\n"
+        for t in targets:
+            output += f"  • {t.get('name', 'N/A')} - {t.get('ip', t.get('url', 'N/A'))}\n"
+        return output
+
+    elif cmd == "cred":
+        if not args:
+            return "Usage: cred <username:password>"
+
+        cred_str = args[0]
+        if ":" in cred_str:
+            username, password = cred_str.split(":", 1)
+            await loop.run_in_executor(None, framework.add_credential, username, password)
+            # Update session
+            sessions[session_id]["current_credential"] = f"{username}:{password}"
+            return f"Added credential: {username}:{password}"
+        return "Invalid format. Use: username:password"
+
+    elif cmd == "creds":
+        creds = framework.session.credentials.list()
+        if not creds:
+            return "No credentials configured"
+        output = "Credentials:\n"
+        for c in creds:
+            domain = f"{c.get('domain')}/" if c.get('domain') else ""
+            output += f"  • {domain}{c.get('username')}:{c.get('password', '[hash]')}\n"
+        return output
+
+    elif cmd == "stats":
+        stats = await loop.run_in_executor(None, framework.get_stats)
+        output = "Framework Statistics:\n\n"
+        output += f"  Modules:     {stats['modules']}\n"
+        output += f"  Categories:  {stats['categories']}\n"
+        output += f"  Targets:     {stats['targets']}\n"
+        output += f"  Credentials: {stats['credentials']}\n"
+        if stats['current_module']:
+            output += f"  Current:     {stats['current_module']}\n"
+        return output
+
+    elif cmd == "clear":
+        return "\x1b[2J\x1b[H"  # ANSI clear screen
+
+    elif cmd == "info":
+        # Show framework info
+        output = "Framework Information:\n\n"
+        output += f"  Version:     2.0.0\n"
+        output += f"  Modules:     {len(framework.modules)}\n"
+        output += f"  Categories:  {len(framework.get_categories())}\n"
+        output += f"  Database:    {framework.database.db_path}\n"
+        if sessions[session_id].get("current_module"):
+            output += f"\n  Current Module: {sessions[session_id]['current_module']}\n"
+        return output
+
+    else:
+        return f"Unknown command: {cmd}\nType 'help' for available commands."
+
+
+@app.get("/api/c2/session/{session_id}")
+async def get_session(session_id: str):
+    """Get session information and history"""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return sessions[session_id]
+
+
+@app.get("/api/c2/sessions")
+async def list_sessions():
+    """List all active sessions"""
+    return {
+        "sessions": list(sessions.keys()),
+        "count": len(sessions)
+    }
+
+
+@app.delete("/api/c2/session/{session_id}")
+async def clear_session(session_id: str):
+    """Clear session history"""
+    if session_id in sessions:
+        sessions[session_id]["history"] = []
+        return {"message": f"Session {session_id} cleared"}
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@app.websocket("/ws/c2/{session_id}")
+async def websocket_c2(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for real-time C2 communication"""
+    await websocket.accept()
+
+    # Initialize session
+    if session_id not in sessions:
+        sessions[session_id] = {
+            "history": [],
+            "created_at": datetime.now().isoformat(),
+            "current_module": None,
+            "current_target": None,
+            "current_credential": None
+        }
+
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Connected to PurpleSploit C2",
+            "session_id": session_id
+        })
+
+        while True:
+            # Receive command from client
+            data = await websocket.receive_json()
+            command = data.get("command", "").strip()
+
+            if not command:
+                continue
+
+            # Execute command
+            try:
+                output = await execute_framework_command(command, session_id)
+
+                # Store in history
+                sessions[session_id]["history"].append({
+                    "type": "command",
+                    "command": command,
+                    "output": output,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+                # Send response
+                await websocket.send_json({
+                    "type": "output",
+                    "command": command,
+                    "output": output,
+                    "success": True,
+                    "timestamp": datetime.now().isoformat()
+                })
+            except Exception as e:
+                await websocket.send_json({
+                    "type": "error",
+                    "command": command,
+                    "error": str(e),
+                    "success": False,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+    except WebSocketDisconnect:
+        print(f"Client disconnected from session {session_id}")
 
 
 # ============================================================================

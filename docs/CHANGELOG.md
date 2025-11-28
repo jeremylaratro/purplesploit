@@ -38,19 +38,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provides simpler workflow - just type `ops` to see available operations
   - Maintains backward compatibility with existing global search functionality
 - **Deploy Command**: New unified deployment command for payloads, pivots, and enumeration scripts
-  - `deploy` command with subcommands for different deployment types
-  - `deploy select` for interactive deployment method selection
-  - `deploy ligolo` to show Ligolo pivot deployment operations
-  - `deploy beacon` to show C2 beacon deployment operations
-  - `deploy script` to show script deployment operations (WinPEAS, LinPEAS)
-- **Deploy Module**: Comprehensive deployment module in `modules/post/deploy.py`
-  - **Ligolo Pivot Deployment**: 5 deployment methods (NXC, SSH, SMB, PSExec, WMIExec)
-  - **C2 Beacon Deployment**: 6 deployment methods (NXC, SSH, SMB, PSExec, WMIExec, WinRM)
-  - **Script Deployment**: 8 deployment operations for WinPEAS, LinPEAS, and custom scripts
+  - `deploy` command to show available deployment modules
+  - `deploy ligolo` to load Ligolo pivot deployment module
+  - `deploy c2` to load C2 beacon deployment module
+  - `deploy script` to load script deployment module
+- **Deploy Modules**: Three focused deployment modules in `modules/deploy/`
+  - **deploy/ligolo** - Ligolo pivot agent deployment
+    - 5 deployment operations: NXC, SSH, SMB, PSExec, WMIExec
+    - Automatic agent upload and execution
+    - Support for Windows and Linux targets
+  - **deploy/c2** - C2 beacon/payload deployment
+    - 6 deployment operations: NXC, SSH, SMB, PSExec, WMIExec, WinRM
+    - Support for Sliver, Metasploit, Cobalt Strike, and generic beacons
+    - Flexible execution options and arguments
+  - **deploy/script** - Enumeration script deployment
+    - 8 deployment operations for WinPEAS, LinPEAS, and custom scripts
+    - Automatic output capture and saving
+    - Multiple deployment methods based on target OS and access
   - Support for multiple deployment methods based on system/OS/services
   - Flexible deployment via NXC, SSH, SMB, PSExec, WMIExec for different scenarios
   - Automatic file upload and execution capabilities
-  - Output capture and saving for enumeration scripts
+  - Modular architecture following PurpleSploit design patterns
 
 ## [6.2.0] - 2025-11-22
 
