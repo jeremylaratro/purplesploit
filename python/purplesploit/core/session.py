@@ -191,6 +191,11 @@ class TargetManager:
 
         target['added_at'] = datetime.now().isoformat()
         self.targets.append(target)
+
+        # Auto-select first target
+        if len(self.targets) == 1:
+            self.current_index = 0
+
         return True
 
     def remove(self, identifier: str) -> bool:

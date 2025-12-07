@@ -395,11 +395,22 @@ class BaseModule(ABC):
         if context.get('current_target'):
             target = context['current_target']
             if isinstance(target, dict):
-                # Only set if not already set by user
-                if 'ip' in target and target['ip'] and not self.get_option('RHOST'):
-                    self.set_option('RHOST', target['ip'])
-                if 'url' in target and target['url'] and not self.get_option('URL'):
-                    self.set_option('URL', target['url'])
+                # Determine the target value (IP or URL)
+                target_value = target.get('ip') or target.get('url')
+
+                if target_value:
+                    # Auto-set common target options (only if not already set by user)
+                    # RHOST - common for network modules
+                    if 'ip' in target and target['ip'] and 'RHOST' in self.options and not self.get_option('RHOST'):
+                        self.set_option('RHOST', target['ip'])
+
+                    # TARGET - used by some modules like auto_enum
+                    if 'TARGET' in self.options and not self.get_option('TARGET'):
+                        self.set_option('TARGET', target_value)
+
+                    # URL - used by web modules
+                    if 'url' in target and target['url'] and 'URL' in self.options and not self.get_option('URL'):
+                        self.set_option('URL', target['url'])
 
         # Auto-set credentials if available
         if context.get('current_cred'):
