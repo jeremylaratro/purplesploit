@@ -2403,6 +2403,8 @@ class CommandHandler:
         if results:
             # Store results for selection and run command
             self.last_ops_results = results
+            # Clear search results so 'use <number>' uses ops results
+            self.last_search_results = None
 
             # Group results by module for better organization
             from collections import defaultdict
