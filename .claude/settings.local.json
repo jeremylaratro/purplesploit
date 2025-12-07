@@ -6,7 +6,10 @@
       "Bash(chmod:*)",
       "Bash(python3:*)",
       "Bash(mkdir:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(wfuzz --help:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
