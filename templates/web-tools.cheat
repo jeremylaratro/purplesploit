@@ -1,0 +1,360 @@
+% web, enumeration, fuzzing
+
+; ============================================
+; FFUF - Fast Web Fuzzer
+; ============================================
+
+# FFUF - Directory fuzzing
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -c -t <threads>
+
+# FFUF - Directory fuzzing with extensions
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -e .php,.html,.txt,.bak -c -t <threads>
+
+# FFUF - Subdomain enumeration
+ffuf -u https://FUZZ.$DOMAIN -w <wordlist> -c -t <threads>
+
+# FFUF - Vhost enumeration
+ffuf -u $WEB_TARGET -H "Host: FUZZ.$DOMAIN" -w <wordlist> -c -t <threads>
+
+# FFUF - Parameter fuzzing (GET)
+ffuf -u $WEB_TARGET?FUZZ=test -w <wordlist> -c -t <threads>
+
+# FFUF - POST data fuzzing
+ffuf -u $WEB_TARGET -w <wordlist> -X POST -d "FUZZ=test" -H "Content-Type: application/x-www-form-urlencoded" -c -t <threads>
+
+# FFUF - Filter by status code
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -fc <status_codes> -c -t <threads>
+
+# FFUF - Filter by response size
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -fs <size> -c -t <threads>
+
+# FFUF - Match response size
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -ms <size> -c -t <threads>
+
+# FFUF - Recursion mode
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -recursion -recursion-depth <depth> -c -t <threads>
+
+# FFUF - With authentication (Basic Auth)
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -H "Authorization: Basic <base64_creds>" -c -t <threads>
+
+# FFUF - With cookies
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -b "PHPSESSID=<session_id>" -c -t <threads>
+
+# FFUF - Save output to file
+ffuf -u $WEB_TARGET/FUZZ -w <wordlist> -o <output_file> -of json -c -t <threads>
+
+$ wordlist: find /usr/share/wordlists /usr/share/seclists -type f -name "*.txt" 2>/dev/null | head -20
+$ threads: echo -e "40\n50\n100\n200"
+$ status_codes: echo -e "404\n403,404\n500,501,502,503"
+$ size: echo -e "0\n1234\n5678"
+$ depth: echo -e "1\n2\n3\n4"
+$ output_file: echo "ffuf_results.json"
+$ base64_creds: echo "dXNlcjpwYXNz"
+$ session_id: echo "example_session_id"
+
+; ============================================
+; GOBUSTER - Directory/DNS Enumeration
+; ============================================
+
+# Gobuster - Directory enumeration
+gobuster dir -u $WEB_TARGET -w <wordlist> -t <threads>
+
+# Gobuster - Directory with extensions
+gobuster dir -u $WEB_TARGET -w <wordlist> -x <extensions> -t <threads>
+
+# Gobuster - With status code filtering
+gobuster dir -u $WEB_TARGET -w <wordlist> -b <excluded_codes> -t <threads>
+
+# Gobuster - DNS subdomain enumeration
+gobuster dns -d $DOMAIN -w <wordlist> -t <threads>
+
+# Gobuster - Vhost enumeration
+gobuster vhost -u $WEB_TARGET -w <wordlist> -t <threads>
+
+# Gobuster - With authentication
+gobuster dir -u $WEB_TARGET -w <wordlist> -U <username> -P <password> -t <threads>
+
+# Gobuster - With cookies
+gobuster dir -u $WEB_TARGET -w <wordlist> -c "PHPSESSID=<session_id>" -t <threads>
+
+# Gobuster - Follow redirects
+gobuster dir -u $WEB_TARGET -w <wordlist> -r -t <threads>
+
+# Gobuster - Expanded mode (show full URLs)
+gobuster dir -u $WEB_TARGET -w <wordlist> -e -t <threads>
+
+# Gobuster - Save to file
+gobuster dir -u $WEB_TARGET -w <wordlist> -o <output_file> -t <threads>
+
+# Gobuster - With custom User-Agent
+gobuster dir -u $WEB_TARGET -w <wordlist> -a "<user_agent>" -t <threads>
+
+# Gobuster - S3 bucket enumeration
+gobuster s3 -w <wordlist> -t <threads>
+
+$ extensions: echo -e "php,html,txt\naspx,asp\njsp,do\nbak,old,zip"
+$ excluded_codes: echo -e "404\n403,404\n400,404,500"
+$ username: echo "admin"
+$ password: echo "password"
+$ user_agent: echo -e "Mozilla/5.0\nGooglebot/2.1"
+
+; ============================================
+; FEROXBUSTER - Fast Content Discovery
+; ============================================
+
+# Feroxbuster - Basic directory scan
+feroxbuster -u $WEB_TARGET -w <wordlist> -t <threads>
+
+# Feroxbuster - With extensions
+feroxbuster -u $WEB_TARGET -w <wordlist> -x <extensions> -t <threads>
+
+# Feroxbuster - Recursive scan
+feroxbuster -u $WEB_TARGET -w <wordlist> --depth <depth> -t <threads>
+
+# Feroxbuster - Extract links from pages
+feroxbuster -u $WEB_TARGET -w <wordlist> --extract-links -t <threads>
+
+# Feroxbuster - Filter by status code
+feroxbuster -u $WEB_TARGET -w <wordlist> -C <excluded_codes> -t <threads>
+
+# Feroxbuster - Filter by response size
+feroxbuster -u $WEB_TARGET -w <wordlist> -S <size> -t <threads>
+
+# Feroxbuster - With authentication
+feroxbuster -u $WEB_TARGET -w <wordlist> -H "Authorization: Bearer <token>" -t <threads>
+
+# Feroxbuster - With cookies
+feroxbuster -u $WEB_TARGET -w <wordlist> -H "Cookie: PHPSESSID=<session_id>" -t <threads>
+
+# Feroxbuster - Scan multiple targets
+feroxbuster --stdin -w <wordlist> -t <threads>
+
+# Feroxbuster - Force recursion on specific status codes
+feroxbuster -u $WEB_TARGET -w <wordlist> --force-recursion -t <threads>
+
+# Feroxbuster - Save output
+feroxbuster -u $WEB_TARGET -w <wordlist> -o <output_file> -t <threads>
+
+# Feroxbuster - Quiet mode with specific extensions
+feroxbuster -u $WEB_TARGET -w <wordlist> -x php,html,txt -q -t <threads>
+
+# Feroxbuster - Insecure SSL
+feroxbuster -u $WEB_TARGET -w <wordlist> -k -t <threads>
+
+# Feroxbuster - Collect words from target
+feroxbuster -u $WEB_TARGET -w <wordlist> --collect-words -t <threads>
+
+# Feroxbuster - Rate limiting
+feroxbuster -u $WEB_TARGET -w <wordlist> --rate-limit <requests_per_sec> -t <threads>
+
+$ token: echo "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+$ requests_per_sec: echo -e "10\n50\n100"
+
+; ============================================
+; WFUZZ - Web Application Fuzzer
+; ============================================
+
+# Wfuzz - Directory fuzzing
+wfuzz -c -z file,<wordlist> --hc <hide_code> $WEB_TARGET/FUZZ
+
+# Wfuzz - Parameter fuzzing (GET)
+wfuzz -c -z file,<wordlist> --hc <hide_code> $WEB_TARGET?param=FUZZ
+
+# Wfuzz - POST data fuzzing
+wfuzz -c -z file,<wordlist> --hc <hide_code> -d "username=FUZZ&password=test" $WEB_TARGET
+
+# Wfuzz - Subdomain enumeration
+wfuzz -c -z file,<wordlist> --hc <hide_code> -H "Host: FUZZ.$DOMAIN" $WEB_TARGET
+
+# Wfuzz - Multiple injection points
+wfuzz -c -z file,<wordlist> --hc <hide_code> $WEB_TARGET/FUZZ/FUZ2Z
+
+# Wfuzz - Header fuzzing
+wfuzz -c -z file,<wordlist> --hc <hide_code> -H "User-Agent: FUZZ" $WEB_TARGET
+
+# Wfuzz - Authentication fuzzing
+wfuzz -c -z file,<wordlist> --hc <hide_code> -d "username=admin&password=FUZZ" $WEB_TARGET/login
+
+# Wfuzz - Hide by character count
+wfuzz -c -z file,<wordlist> --hh <chars> $WEB_TARGET/FUZZ
+
+# Wfuzz - Hide by word count
+wfuzz -c -z file,<wordlist> --hw <words> $WEB_TARGET/FUZZ
+
+# Wfuzz - Show only specific status codes
+wfuzz -c -z file,<wordlist> --sc <show_code> $WEB_TARGET/FUZZ
+
+# Wfuzz - With cookies
+wfuzz -c -z file,<wordlist> --hc <hide_code> -b "PHPSESSID=<session_id>" $WEB_TARGET/FUZZ
+
+# Wfuzz - With proxy
+wfuzz -c -z file,<wordlist> --hc <hide_code> -p <proxy> $WEB_TARGET/FUZZ
+
+# Wfuzz - Recursive fuzzing
+wfuzz -c -z file,<wordlist> --hc <hide_code> -R <depth> $WEB_TARGET/FUZZ
+
+$ hide_code: echo -e "404\n403,404\n500"
+$ show_code: echo -e "200\n200,301,302\n200,403"
+$ chars: echo -e "0\n1234"
+$ words: echo -e "0\n10\n50"
+$ proxy: echo "127.0.0.1:8080"
+
+; ============================================
+; NIKTO - Web Server Scanner
+; ============================================
+
+# Nikto - Basic scan
+nikto -h $WEB_TARGET
+
+# Nikto - Scan specific port
+nikto -h $IP -p <port>
+
+# Nikto - SSL/TLS scan
+nikto -h $WEB_TARGET -ssl
+
+# Nikto - Scan with all plugins
+nikto -h $WEB_TARGET -Plugins "@@ALL"
+
+# Nikto - Tuning options (specific tests)
+nikto -h $WEB_TARGET -Tuning <tuning_option>
+
+# Nikto - Output to file
+nikto -h $WEB_TARGET -o <output_file> -Format <format>
+
+# Nikto - Scan with authentication
+nikto -h $WEB_TARGET -id <username>:<password>
+
+# Nikto - Scan through proxy
+nikto -h $WEB_TARGET -useproxy http://<proxy>
+
+# Nikto - Update database
+nikto -update
+
+$ port: echo -e "80\n443\n8080\n8443"
+$ tuning_option: echo -e "1\n2\n3\n4\n5\n6\n7\n8\n9\nx"
+$ format: echo -e "txt\nhtml\nxml\ncsv"
+
+; ============================================
+; WHATWEB - Web Technology Identifier
+; ============================================
+
+# WhatWeb - Basic scan
+whatweb $WEB_TARGET
+
+# WhatWeb - Verbose output
+whatweb -v $WEB_TARGET
+
+# WhatWeb - Aggressive mode
+whatweb -a <aggression> $WEB_TARGET
+
+# WhatWeb - Scan from URL list
+whatweb -i <url_list>
+
+# WhatWeb - Output to file
+whatweb $WEB_TARGET --log-json=<output_file>
+
+# WhatWeb - With authentication
+whatweb $WEB_TARGET --user <username>:<password>
+
+# WhatWeb - Custom User-Agent
+whatweb $WEB_TARGET -U "<user_agent>"
+
+$ aggression: echo -e "1\n2\n3\n4"
+$ url_list: echo "urls.txt"
+
+; ============================================
+; DIRB - Web Content Scanner
+; ============================================
+
+# DIRB - Basic directory scan
+dirb $WEB_TARGET <wordlist>
+
+# DIRB - Scan with extensions
+dirb $WEB_TARGET <wordlist> -X <extensions>
+
+# DIRB - Scan with authentication
+dirb $WEB_TARGET <wordlist> -u <username>:<password>
+
+# DIRB - Scan with cookies
+dirb $WEB_TARGET <wordlist> -c "PHPSESSID=<session_id>"
+
+# DIRB - Non-recursive scan
+dirb $WEB_TARGET <wordlist> -r
+
+# DIRB - Save output to file
+dirb $WEB_TARGET <wordlist> -o <output_file>
+
+# DIRB - Case insensitive
+dirb $WEB_TARGET <wordlist> -i
+
+# DIRB - Ignore specific status codes
+dirb $WEB_TARGET <wordlist> -N <excluded_codes>
+
+; ============================================
+; WPSCAN - WordPress Scanner
+; ============================================
+
+# WPScan - Basic scan
+wpscan --url $WEB_TARGET
+
+# WPScan - Enumerate users
+wpscan --url $WEB_TARGET --enumerate u
+
+# WPScan - Enumerate plugins
+wpscan --url $WEB_TARGET --enumerate p
+
+# WPScan - Enumerate themes
+wpscan --url $WEB_TARGET --enumerate t
+
+# WPScan - Enumerate all
+wpscan --url $WEB_TARGET --enumerate ap,at,cb,dbe
+
+# WPScan - Password attack
+wpscan --url $WEB_TARGET --passwords <wordlist> --usernames <username>
+
+# WPScan - With API token for vulnerability data
+wpscan --url $WEB_TARGET --api-token <api_token>
+
+# WPScan - Output to file
+wpscan --url $WEB_TARGET -o <output_file>
+
+# WPScan - Aggressive mode
+wpscan --url $WEB_TARGET --plugins-detection aggressive
+
+$ api_token: echo "YOUR_API_TOKEN"
+
+; ============================================
+; NUCLEI - Vulnerability Scanner
+; ============================================
+
+# Nuclei - Basic scan
+nuclei -u $WEB_TARGET
+
+# Nuclei - Scan with specific templates
+nuclei -u $WEB_TARGET -t <template_path>
+
+# Nuclei - Scan with severity filter
+nuclei -u $WEB_TARGET -severity <severity>
+
+# Nuclei - Scan from URL list
+nuclei -l <url_list>
+
+# Nuclei - Update templates
+nuclei -update-templates
+
+# Nuclei - Scan with tags
+nuclei -u $WEB_TARGET -tags <tags>
+
+# Nuclei - Output to file
+nuclei -u $WEB_TARGET -o <output_file>
+
+# Nuclei - JSON output
+nuclei -u $WEB_TARGET -json -o <output_file>
+
+# Nuclei - Rate limit
+nuclei -u $WEB_TARGET -rate-limit <rate>
+
+$ template_path: find ~/nuclei-templates -type f -name "*.yaml" 2>/dev/null | head -20
+$ severity: echo -e "critical\nhigh\nmedium\nlow\ninfo"
+$ tags: echo -e "cve\nxss\nsqli\nlfi\nrce"
+$ rate: echo -e "150\n100\n50"

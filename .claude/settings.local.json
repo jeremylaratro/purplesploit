@@ -4,7 +4,9 @@
       "Read(//home/kali/.local/**)",
       "Read(//home/kali/.nxc/modules/nxc_spider_plus/**)",
       "Bash(chmod:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

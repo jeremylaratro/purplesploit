@@ -1,0 +1,1 @@
+# Nmap 7.95 scan initiated Sat Dec  6 21:41:58 2025 as: /usr/lib/nmap/nmap --privileged -p- -sV -sC -T4 --min-rate 1000 -oN ./enum_output/sri_com_20251206_213824/network/nmap_full.txt -oX ./enum_output/sri_com_20251206_213824/network/nmap_full.xml sri.com

