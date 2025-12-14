@@ -98,12 +98,15 @@ class TestNmapCommandBuilding:
     def test_build_command_top_ports(self, nmap_module):
         """Test command with top ports."""
         nmap_module.set_option("RHOST", "192.168.1.100")
-        nmap_module.set_option("PORTS", None)
+        # Set PORTS to empty string to explicitly disable port specification
+        # (setting to None returns the default "-" from get_option)
+        nmap_module.set_option("PORTS", "")
         nmap_module.set_option("TOP_PORTS", "100")
 
         command = nmap_module.build_command()
 
         assert "--top-ports 100" in command
+        assert "-p " not in command
 
     def test_build_command_timing(self, nmap_module):
         """Test command with timing template."""

@@ -6,17 +6,26 @@ SQLite-based storage for:
 - Scan results and findings
 - Persistent workspaces
 - Credential and target storage
+
+Thread-safe implementation using connection pooling and locking.
 """
 
 import sqlite3
 import json
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 
 class Database:
-    """Database manager for PurpleSploit."""
+    """
+    Thread-safe database manager for PurpleSploit.
+
+    Uses a threading lock to ensure safe concurrent access to the SQLite database.
+    Each write operation acquires the lock to prevent race conditions.
+    """
 
     def __init__(self, db_path: str = None):
         """
@@ -38,6 +47,8 @@ class Database:
 
         self.db_path = db_path
         self.conn = None
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._local = threading.local()  # Thread-local storage for connections
         self._connect()
         self._create_tables()
         self._migrate_database()
@@ -45,8 +56,33 @@ class Database:
     def _connect(self):
         """Establish database connection."""
         # Use check_same_thread=False to allow async operations across threads
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        # Combined with our lock, this ensures thread-safe access
+        self.conn = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            timeout=30.0  # Wait up to 30 seconds for locks
+        )
         self.conn.row_factory = sqlite3.Row  # Enable dict-like access
+        # Enable WAL mode for better concurrent read performance
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+
+    @contextmanager
+    def _get_cursor(self):
+        """
+        Context manager for thread-safe cursor access.
+
+        Yields:
+            A cursor object with automatic commit/rollback on exit.
+        """
+        with self._lock:
+            cursor = self.conn.cursor()
+            try:
+                yield cursor
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def _create_tables(self):
         """Create database tables if they don't exist."""
@@ -216,21 +252,20 @@ class Database:
         Returns:
             ID of inserted record
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO module_history
-            (module_name, module_path, options, results, success, error_message)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            module_name,
-            module_path,
-            json.dumps(options),
-            json.dumps(results),
-            success,
-            error_message
-        ))
-        self.conn.commit()
-        return cursor.lastrowid
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO module_history
+                (module_name, module_path, options, results, success, error_message)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                module_name,
+                module_path,
+                json.dumps(options),
+                json.dumps(results),
+                success,
+                error_message
+            ))
+            return cursor.lastrowid
 
     def get_module_history(self, module_name: str = None, limit: int = 100) -> List[Dict]:
         """
@@ -243,23 +278,24 @@ class Database:
         Returns:
             List of execution records
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        if module_name:
-            cursor.execute("""
-                SELECT * FROM module_history
-                WHERE module_name = ?
-                ORDER BY executed_at DESC
-                LIMIT ?
-            """, (module_name, limit))
-        else:
-            cursor.execute("""
-                SELECT * FROM module_history
-                ORDER BY executed_at DESC
-                LIMIT ?
-            """, (limit,))
+            if module_name:
+                cursor.execute("""
+                    SELECT * FROM module_history
+                    WHERE module_name = ?
+                    ORDER BY executed_at DESC
+                    LIMIT ?
+                """, (module_name, limit))
+            else:
+                cursor.execute("""
+                    SELECT * FROM module_history
+                    ORDER BY executed_at DESC
+                    LIMIT ?
+                """, (limit,))
 
-        return [dict(row) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]
 
     # Target Methods
     def add_target(self, target_type: str, identifier: str,
@@ -276,18 +312,17 @@ class Database:
         Returns:
             True if added (False if duplicate)
         """
-        cursor = self.conn.cursor()
         try:
             # Determine status: subnet, unverified, or verified
             status = 'unverified'
             if '/' in identifier and target_type == 'network':
                 status = 'subnet'
 
-            cursor.execute("""
-                INSERT INTO targets (type, identifier, name, metadata, status)
-                VALUES (?, ?, ?, ?, ?)
-            """, (target_type, identifier, name, json.dumps(metadata or {}), status))
-            self.conn.commit()
+            with self._get_cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO targets (type, identifier, name, metadata, status)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (target_type, identifier, name, json.dumps(metadata or {}), status))
             return True
         except sqlite3.IntegrityError:
             return False
@@ -303,24 +338,25 @@ class Database:
         Returns:
             List of target dictionaries
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        if target_type and exclude_subnets:
-            cursor.execute("SELECT * FROM targets WHERE type = ? AND status != 'subnet'", (target_type,))
-        elif target_type:
-            cursor.execute("SELECT * FROM targets WHERE type = ?", (target_type,))
-        elif exclude_subnets:
-            cursor.execute("SELECT * FROM targets WHERE status != 'subnet'")
-        else:
-            cursor.execute("SELECT * FROM targets")
+            if target_type and exclude_subnets:
+                cursor.execute("SELECT * FROM targets WHERE type = ? AND status != 'subnet'", (target_type,))
+            elif target_type:
+                cursor.execute("SELECT * FROM targets WHERE type = ?", (target_type,))
+            elif exclude_subnets:
+                cursor.execute("SELECT * FROM targets WHERE status != 'subnet'")
+            else:
+                cursor.execute("SELECT * FROM targets")
 
-        targets = []
-        for row in cursor.fetchall():
-            target = dict(row)
-            target['metadata'] = json.loads(target['metadata'])
-            targets.append(target)
+            targets = []
+            for row in cursor.fetchall():
+                target = dict(row)
+                target['metadata'] = json.loads(target['metadata'])
+                targets.append(target)
 
-        return targets
+            return targets
 
     def remove_target(self, identifier: str) -> bool:
         """
@@ -332,10 +368,9 @@ class Database:
         Returns:
             True if removed
         """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM targets WHERE identifier = ?", (identifier,))
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with self._get_cursor() as cursor:
+            cursor.execute("DELETE FROM targets WHERE identifier = ?", (identifier,))
+            return cursor.rowcount > 0
 
     def mark_target_verified(self, identifier: str) -> bool:
         """
@@ -347,10 +382,9 @@ class Database:
         Returns:
             True if updated
         """
-        cursor = self.conn.cursor()
-        cursor.execute("UPDATE targets SET status = 'verified' WHERE identifier = ?", (identifier,))
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with self._get_cursor() as cursor:
+            cursor.execute("UPDATE targets SET status = 'verified' WHERE identifier = ?", (identifier,))
+            return cursor.rowcount > 0
 
     def clear_all_targets(self) -> int:
         """
@@ -359,12 +393,11 @@ class Database:
         Returns:
             Number of targets removed
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM targets")
-        count = cursor.fetchone()[0]
-        cursor.execute("DELETE FROM targets")
-        self.conn.commit()
-        return count
+        with self._get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM targets")
+            count = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM targets")
+            return count
 
     # Credential Methods
     def add_credential(self, username: str, password: str = None,
@@ -386,17 +419,16 @@ class Database:
         Returns:
             ID of inserted record
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO credentials
-            (username, password, domain, hash, hash_type, name, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            username, password, domain, hash_value, hash_type, name,
-            json.dumps(metadata or {})
-        ))
-        self.conn.commit()
-        return cursor.lastrowid
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO credentials
+                (username, password, domain, hash, hash_type, name, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                username, password, domain, hash_value, hash_type, name,
+                json.dumps(metadata or {})
+            ))
+            return cursor.lastrowid
 
     def get_credentials(self) -> List[Dict]:
         """
@@ -405,16 +437,17 @@ class Database:
         Returns:
             List of credential dictionaries
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM credentials")
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM credentials")
 
-        creds = []
-        for row in cursor.fetchall():
-            cred = dict(row)
-            cred['metadata'] = json.loads(cred['metadata'])
-            creds.append(cred)
+            creds = []
+            for row in cursor.fetchall():
+                cred = dict(row)
+                cred['metadata'] = json.loads(cred['metadata'])
+                creds.append(cred)
 
-        return creds
+            return creds
 
     def remove_credential(self, cred_id: int) -> bool:
         """
@@ -426,10 +459,9 @@ class Database:
         Returns:
             True if removed
         """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM credentials WHERE id = ?", (cred_id,))
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with self._get_cursor() as cursor:
+            cursor.execute("DELETE FROM credentials WHERE id = ?", (cred_id,))
+            return cursor.rowcount > 0
 
     # Service Methods
     def add_service(self, target: str, service: str, port: int,
@@ -446,21 +478,20 @@ class Database:
         Returns:
             True if added
         """
-        cursor = self.conn.cursor()
         try:
-            cursor.execute("""
-                INSERT INTO services (target, service, port, version)
-                VALUES (?, ?, ?, ?)
-            """, (target, service, port, version))
-            self.conn.commit()
+            with self._get_cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO services (target, service, port, version)
+                    VALUES (?, ?, ?, ?)
+                """, (target, service, port, version))
             return True
         except sqlite3.IntegrityError:
             # Update version if service already exists
-            cursor.execute("""
-                UPDATE services SET version = ?, detected_at = CURRENT_TIMESTAMP
-                WHERE target = ? AND service = ? AND port = ?
-            """, (version, target, service, port))
-            self.conn.commit()
+            with self._get_cursor() as cursor:
+                cursor.execute("""
+                    UPDATE services SET version = ?, detected_at = CURRENT_TIMESTAMP
+                    WHERE target = ? AND service = ? AND port = ?
+                """, (version, target, service, port))
             return True
 
     def get_services(self, target: str = None) -> List[Dict]:
@@ -473,14 +504,15 @@ class Database:
         Returns:
             List of service dictionaries
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        if target:
-            cursor.execute("SELECT * FROM services WHERE target = ?", (target,))
-        else:
-            cursor.execute("SELECT * FROM services")
+            if target:
+                cursor.execute("SELECT * FROM services WHERE target = ?", (target,))
+            else:
+                cursor.execute("SELECT * FROM services")
 
-        return [dict(row) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]
 
     def get_web_services(self) -> List[Dict]:
         """
@@ -489,51 +521,52 @@ class Database:
         Returns:
             List of web service dictionaries with target:port URLs
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        # Web services and common web ports
-        web_services = ('http', 'https', 'http-proxy', 'http-alt', 'ssl/http', 'ssl/https')
-        web_ports = (80, 443, 8080, 8443, 8000, 8888, 9090, 3000, 5000, 9000, 8001, 8008, 4443, 8081, 8082, 9443)
+            # Web services and common web ports
+            web_services = ('http', 'https', 'http-proxy', 'http-alt', 'ssl/http', 'ssl/https')
+            web_ports = (80, 443, 8080, 8443, 8000, 8888, 9090, 3000, 5000, 9000, 8001, 8008, 4443, 8081, 8082, 9443)
 
-        # Get services that are either explicitly web services or on common web ports
-        cursor.execute("""
-            SELECT DISTINCT target, port, service
-            FROM services
-            WHERE service IN ({})
-            OR port IN ({})
-            ORDER BY target, port
-        """.format(
-            ','.join('?' * len(web_services)),
-            ','.join('?' * len(web_ports))
-        ), web_services + web_ports)
+            # Get services that are either explicitly web services or on common web ports
+            cursor.execute("""
+                SELECT DISTINCT target, port, service
+                FROM services
+                WHERE service IN ({})
+                OR port IN ({})
+                ORDER BY target, port
+            """.format(
+                ','.join('?' * len(web_services)),
+                ','.join('?' * len(web_ports))
+            ), web_services + web_ports)
 
-        web_targets = []
-        for row in cursor.fetchall():
-            target = row[0]
-            port = row[1]
-            service = row[2]
+            web_targets = []
+            for row in cursor.fetchall():
+                target = row[0]
+                port = row[1]
+                service = row[2]
 
-            # Determine protocol
-            if service in ('https', 'ssl/https') or port in (443, 8443, 4443, 9443):
-                protocol = 'https'
-            else:
-                protocol = 'http'
+                # Determine protocol
+                if service in ('https', 'ssl/https') or port in (443, 8443, 4443, 9443):
+                    protocol = 'https'
+                else:
+                    protocol = 'http'
 
-            # Build URL
-            if (protocol == 'http' and port == 80) or (protocol == 'https' and port == 443):
-                url = f"{protocol}://{target}"
-            else:
-                url = f"{protocol}://{target}:{port}"
+                # Build URL
+                if (protocol == 'http' and port == 80) or (protocol == 'https' and port == 443):
+                    url = f"{protocol}://{target}"
+                else:
+                    url = f"{protocol}://{target}:{port}"
 
-            web_targets.append({
-                'target': target,
-                'port': port,
-                'service': service,
-                'protocol': protocol,
-                'url': url
-            })
+                web_targets.append({
+                    'target': target,
+                    'port': port,
+                    'service': service,
+                    'protocol': protocol,
+                    'url': url
+                })
 
-        return web_targets
+            return web_targets
 
     def clear_all_services(self) -> int:
         """
@@ -542,12 +575,11 @@ class Database:
         Returns:
             Number of services removed
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM services")
-        count = cursor.fetchone()[0]
-        cursor.execute("DELETE FROM services")
-        self.conn.commit()
-        return count
+        with self._get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM services")
+            count = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM services")
+            return count
 
     # Scan Results Methods
     def save_scan_results(self, scan_name: str, target: str, scan_type: str,
@@ -565,13 +597,12 @@ class Database:
         Returns:
             ID of inserted record
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO scan_results (scan_name, target, scan_type, results, file_path)
-            VALUES (?, ?, ?, ?, ?)
-        """, (scan_name, target, scan_type, json.dumps(results), file_path))
-        self.conn.commit()
-        return cursor.lastrowid
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO scan_results (scan_name, target, scan_type, results, file_path)
+                VALUES (?, ?, ?, ?, ?)
+            """, (scan_name, target, scan_type, json.dumps(results), file_path))
+            return cursor.lastrowid
 
     def get_scan_results(self, target: str = None, scan_type: str = None) -> List[Dict]:
         """
@@ -584,29 +615,30 @@ class Database:
         Returns:
             List of scan result dictionaries
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        query = "SELECT * FROM scan_results WHERE 1=1"
-        params = []
+            query = "SELECT * FROM scan_results WHERE 1=1"
+            params = []
 
-        if target:
-            query += " AND target = ?"
-            params.append(target)
-        if scan_type:
-            query += " AND scan_type = ?"
-            params.append(scan_type)
+            if target:
+                query += " AND target = ?"
+                params.append(target)
+            if scan_type:
+                query += " AND scan_type = ?"
+                params.append(scan_type)
 
-        query += " ORDER BY created_at DESC"
+            query += " ORDER BY created_at DESC"
 
-        cursor.execute(query, params)
+            cursor.execute(query, params)
 
-        results = []
-        for row in cursor.fetchall():
-            result = dict(row)
-            result['results'] = json.loads(result['results'])
-            results.append(result)
+            results = []
+            for row in cursor.fetchall():
+                result = dict(row)
+                result['results'] = json.loads(result['results'])
+                results.append(result)
 
-        return results
+            return results
 
     # Finding Methods
     def add_finding(self, target: str, title: str, severity: str,
@@ -627,14 +659,13 @@ class Database:
         Returns:
             ID of inserted record
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO findings
-            (target, title, severity, description, module_name, evidence, remediation)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (target, title, severity, description, module_name, evidence, remediation))
-        self.conn.commit()
-        return cursor.lastrowid
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO findings
+                (target, title, severity, description, module_name, evidence, remediation)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (target, title, severity, description, module_name, evidence, remediation))
+            return cursor.lastrowid
 
     def get_findings(self, target: str = None, severity: str = None) -> List[Dict]:
         """
@@ -647,22 +678,23 @@ class Database:
         Returns:
             List of finding dictionaries
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        query = "SELECT * FROM findings WHERE 1=1"
-        params = []
+            query = "SELECT * FROM findings WHERE 1=1"
+            params = []
 
-        if target:
-            query += " AND target = ?"
-            params.append(target)
-        if severity:
-            query += " AND severity = ?"
-            params.append(severity)
+            if target:
+                query += " AND target = ?"
+                params.append(target)
+            if severity:
+                query += " AND severity = ?"
+                params.append(severity)
 
-        query += " ORDER BY created_at DESC"
+            query += " ORDER BY created_at DESC"
 
-        cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
     # Module Defaults Methods
     def set_module_default(self, module_name: str, option_name: str, option_value: str) -> bool:
@@ -677,15 +709,14 @@ class Database:
         Returns:
             True if set successfully
         """
-        cursor = self.conn.cursor()
         try:
-            cursor.execute("""
-                INSERT INTO module_defaults (module_name, option_name, option_value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(module_name, option_name)
-                DO UPDATE SET option_value = ?, updated_at = CURRENT_TIMESTAMP
-            """, (module_name, option_name, option_value, option_value))
-            self.conn.commit()
+            with self._get_cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO module_defaults (module_name, option_name, option_value)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(module_name, option_name)
+                    DO UPDATE SET option_value = ?, updated_at = CURRENT_TIMESTAMP
+                """, (module_name, option_name, option_value, option_value))
             return True
         except Exception as e:
             print(f"Error setting module default: {e}")
@@ -702,14 +733,15 @@ class Database:
         Returns:
             Default value if found, None otherwise
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT option_value FROM module_defaults
-            WHERE module_name = ? AND option_name = ?
-        """, (module_name, option_name))
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT option_value FROM module_defaults
+                WHERE module_name = ? AND option_name = ?
+            """, (module_name, option_name))
 
-        row = cursor.fetchone()
-        return row['option_value'] if row else None
+            row = cursor.fetchone()
+            return row['option_value'] if row else None
 
     def get_module_defaults(self, module_name: str) -> Dict[str, str]:
         """
@@ -721,13 +753,14 @@ class Database:
         Returns:
             Dictionary of option_name -> option_value
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT option_name, option_value FROM module_defaults
-            WHERE module_name = ?
-        """, (module_name,))
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT option_name, option_value FROM module_defaults
+                WHERE module_name = ?
+            """, (module_name,))
 
-        return {row['option_name']: row['option_value'] for row in cursor.fetchall()}
+            return {row['option_name']: row['option_value'] for row in cursor.fetchall()}
 
     def delete_module_default(self, module_name: str, option_name: str) -> bool:
         """
@@ -740,13 +773,12 @@ class Database:
         Returns:
             True if deleted
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            DELETE FROM module_defaults
-            WHERE module_name = ? AND option_name = ?
-        """, (module_name, option_name))
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM module_defaults
+                WHERE module_name = ? AND option_name = ?
+            """, (module_name, option_name))
+            return cursor.rowcount > 0
 
     def delete_all_module_defaults(self, module_name: str) -> bool:
         """
@@ -758,9 +790,8 @@ class Database:
         Returns:
             True if any were deleted
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            DELETE FROM module_defaults WHERE module_name = ?
-        """, (module_name,))
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM module_defaults WHERE module_name = ?
+            """, (module_name,))
+            return cursor.rowcount > 0
