@@ -181,14 +181,16 @@ class TestBaseModuleContext:
         assert context["current_cred"] is not None
 
     def test_get_context_no_session(self, concrete_module_class, mock_framework_minimal):
-        """Test get_context returns empty dict without session."""
+        """Test get_context returns empty dict without session attribute."""
         module = concrete_module_class(mock_framework_minimal)
-        mock_framework_minimal.session = MagicMock(spec=[])  # No get_current methods
+        # Remove session attribute entirely to test the hasattr check
+        del mock_framework_minimal.session
 
         context = module.get_context()
 
-        # Should return empty or handle gracefully
+        # Should return empty dict when no session
         assert isinstance(context, dict)
+        assert context == {}
 
     def test_auto_set_from_context_target(self, test_module, mock_framework, sample_target):
         """Test auto-setting RHOST from context."""
@@ -440,15 +442,40 @@ class TestExternalToolModule:
             assert result["background"] is True
             assert result["pid"] == 12345
 
-    def test_run_checks_tool_installed(self, test_external_module):
+    def test_run_checks_tool_installed(self, mock_framework_minimal):
         """Test run() checks if tool is installed."""
-        test_external_module.tool_name = "nonexistent_tool_xyz"
-        test_external_module.tool_path = None
+        # Create an ExternalToolModule that uses the parent run() which checks tool install
+        class ToolCheckModule(ExternalToolModule):
+            def __init__(self, framework):
+                super().__init__(framework)
+                self.tool_name = "nonexistent_tool_xyz_12345"
+                self.tool_path = None
 
-        result = test_external_module.run()
+            @property
+            def name(self):
+                return "Tool Check Test"
+
+            @property
+            def description(self):
+                return "Test tool check"
+
+            @property
+            def author(self):
+                return "Test"
+
+            @property
+            def category(self):
+                return "test"
+
+            def build_command(self):
+                return "nonexistent_tool_xyz_12345 --test"
+            # Note: Intentionally NOT overriding run() so it uses parent's check
+
+        module = ToolCheckModule(mock_framework_minimal)
+        result = module.run()
 
         assert result["success"] is False
-        assert "not found" in result["error"]
+        assert "not found" in result["error"].lower()
 
 
 # =============================================================================
