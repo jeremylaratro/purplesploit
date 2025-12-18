@@ -122,6 +122,10 @@ class CommandHandler:
             "auto": self.cmd_auto,                # Smart auto-enumeration
             "autoenum": self.cmd_auto,            # Alias
 
+            # Advanced: Attack Graph Visualization
+            "graph": self.cmd_graph,              # Attack graph management
+            "attackgraph": self.cmd_graph,        # Alias
+
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -4269,4 +4273,384 @@ class CommandHandler:
             if 'http' in services_flat or 'https' in services_flat:
                 self.display.console.print("  • Web scanning: [cyan]use web/feroxbuster[/cyan]")
 
+        return True
+
+    # =========================================================================
+    # Attack Graph Visualization Commands
+    # =========================================================================
+
+    def cmd_graph(self, args: List[str]) -> bool:
+        """
+        Attack graph visualization management.
+
+        Usage:
+            graph                      - Show graph statistics
+            graph show                 - Display graph summary
+            graph add host <ip>        - Add a host node
+            graph add service <ip> <port> <name>  - Add a service
+            graph add cred <user> [pass] [domain] - Add credential
+            graph add vuln <service_id> <name> <severity>  - Add vulnerability
+            graph link <cred_id> <host_id>  - Link credential to host
+            graph compromised <node_id>     - Mark node as compromised
+            graph paths <from> <to>    - Find attack paths
+            graph lateral <host_id>    - Find lateral movement paths
+            graph export json [file]   - Export to JSON
+            graph export dot [file]    - Export to GraphViz DOT
+            graph export cytoscape     - Export to Cytoscape format
+            graph clear                - Clear the graph
+            graph import <file>        - Import from JSON
+
+        Examples:
+            graph add host 192.168.1.1
+            graph add service 192.168.1.1 445 smb
+            graph add cred administrator P@ssw0rd CORP
+            graph link cred:abc123 host:xyz789
+            graph paths host:start host:target
+            graph export json attack_graph.json
+        """
+        from purplesploit.core.attack_graph import (
+            AttackGraph, create_attack_graph, NodeType, NodeStatus, EdgeType
+        )
+
+        # Initialize graph if not exists
+        if not hasattr(self, '_attack_graph') or self._attack_graph is None:
+            self._attack_graph = create_attack_graph()
+
+        graph = self._attack_graph
+
+        if not args:
+            return self._graph_show_stats(graph)
+
+        subcommand = args[0].lower()
+
+        if subcommand == "show":
+            return self._graph_show(graph)
+        elif subcommand == "add":
+            return self._graph_add(graph, args[1:])
+        elif subcommand == "link":
+            return self._graph_link(graph, args[1:])
+        elif subcommand == "compromised":
+            return self._graph_compromised(graph, args[1:])
+        elif subcommand == "paths":
+            return self._graph_paths(graph, args[1:])
+        elif subcommand == "lateral":
+            return self._graph_lateral(graph, args[1:])
+        elif subcommand == "export":
+            return self._graph_export(graph, args[1:])
+        elif subcommand == "import":
+            return self._graph_import(graph, args[1:])
+        elif subcommand == "clear":
+            return self._graph_clear(graph)
+        else:
+            self.display.print_error(f"Unknown graph subcommand: {subcommand}")
+            self.display.print_info("Use 'graph' for usage info")
+
+        return True
+
+    def _graph_show_stats(self, graph) -> bool:
+        """Show graph statistics."""
+        from rich.panel import Panel
+        from rich.table import Table
+
+        stats = graph.get_statistics()
+
+        self.display.console.print()
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print("[bold white]                    ATTACK GRAPH STATUS                            [/bold white]")
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print()
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", style="cyan")
+
+        table.add_row("Total Nodes", str(stats["total_nodes"]))
+        table.add_row("Total Edges", str(stats["total_edges"]))
+        table.add_row("", "")
+        table.add_row("Hosts", str(stats["hosts"]))
+        table.add_row("Services", str(stats["services"]))
+        table.add_row("Credentials", str(stats["credentials"]))
+        table.add_row("Vulnerabilities", str(stats["vulnerabilities"]))
+        table.add_row("", "")
+        table.add_row("Compromised Hosts", f"[red]{stats['compromised_hosts']}[/red]")
+        table.add_row("Attack Paths", str(stats["attack_paths"]))
+
+        self.display.console.print(table)
+        self.display.console.print()
+
+        if stats["total_nodes"] == 0:
+            self.display.print_info("Graph is empty. Use 'graph add' to add nodes.")
+            self.display.print_info("Or run 'auto <target>' to auto-populate from scans.")
+
+        return True
+
+    def _graph_show(self, graph) -> bool:
+        """Show detailed graph view."""
+        from rich.tree import Tree
+        from purplesploit.core.attack_graph import NodeType, NodeStatus
+
+        if len(graph.nodes) == 0:
+            self.display.print_warning("Graph is empty")
+            return True
+
+        # Build tree by host
+        tree = Tree("[bold]Attack Graph[/bold]")
+
+        hosts = graph.get_nodes_by_type(NodeType.HOST)
+        for host in hosts:
+            status_icon = "🔴" if host.status == NodeStatus.COMPROMISED else "🟢"
+            host_branch = tree.add(f"{status_icon} [bold cyan]{host.label}[/bold cyan] ({host.id})")
+
+            # Add services under host
+            for edge in graph.get_edges_from(host.id):
+                if edge.edge_type.value == "has_service":
+                    service = graph.nodes.get(edge.target_id)
+                    if service:
+                        svc_branch = host_branch.add(f"[green]↳ {service.label}[/green]")
+
+                        # Add vulns under service
+                        for svc_edge in graph.get_edges_from(service.id):
+                            if svc_edge.edge_type.value == "has_vulnerability":
+                                vuln = graph.nodes.get(svc_edge.target_id)
+                                if vuln:
+                                    severity = vuln.properties.get("severity", "medium")
+                                    colors = {"critical": "red", "high": "red", "medium": "yellow", "low": "green"}
+                                    color = colors.get(severity.lower(), "white")
+                                    svc_branch.add(f"[{color}]⚠ {vuln.label}[/{color}]")
+
+            # Add credentials that authenticate to this host
+            for edge in graph.get_edges_to(host.id):
+                if edge.edge_type.value == "authenticates_to":
+                    cred = graph.nodes.get(edge.source_id)
+                    if cred:
+                        host_branch.add(f"[yellow]🔑 {cred.label}[/yellow]")
+
+        # Show orphan credentials
+        creds = graph.get_nodes_by_type(NodeType.CREDENTIAL)
+        orphan_creds = []
+        for cred in creds:
+            edges = graph.get_edges_from(cred.id)
+            if not edges:
+                orphan_creds.append(cred)
+
+        if orphan_creds:
+            cred_branch = tree.add("[yellow]Unlinked Credentials[/yellow]")
+            for cred in orphan_creds:
+                cred_branch.add(f"🔑 {cred.label}")
+
+        self.display.console.print(tree)
+        return True
+
+    def _graph_add(self, graph, args: List[str]) -> bool:
+        """Add node to graph."""
+        if not args:
+            self.display.print_error("Usage: graph add <host|service|cred|vuln> ...")
+            return True
+
+        node_type = args[0].lower()
+
+        if node_type == "host":
+            if len(args) < 2:
+                self.display.print_error("Usage: graph add host <ip> [hostname] [os]")
+                return True
+            ip = args[1]
+            hostname = args[2] if len(args) > 2 else None
+            os_type = args[3] if len(args) > 3 else None
+
+            node = graph.add_host(ip, hostname, os_type)
+            self.display.print_success(f"Added host: {node.label} ({node.id})")
+
+        elif node_type == "service":
+            if len(args) < 4:
+                self.display.print_error("Usage: graph add service <host_ip> <port> <name> [version]")
+                return True
+            host_ip = args[1]
+            port = int(args[2])
+            name = args[3]
+            version = args[4] if len(args) > 4 else None
+
+            node = graph.add_service(host_ip, port, name, version)
+            self.display.print_success(f"Added service: {node.label} ({node.id})")
+
+        elif node_type == "cred":
+            if len(args) < 2:
+                self.display.print_error("Usage: graph add cred <username> [password] [domain]")
+                return True
+            username = args[1]
+            password = args[2] if len(args) > 2 else None
+            domain = args[3] if len(args) > 3 else None
+
+            node = graph.add_credential(username, password, domain=domain)
+            self.display.print_success(f"Added credential: {node.label} ({node.id})")
+
+        elif node_type == "vuln":
+            if len(args) < 3:
+                self.display.print_error("Usage: graph add vuln <service_id> <name> [severity] [cve]")
+                return True
+            service_id = args[1]
+            name = args[2]
+            severity = args[3] if len(args) > 3 else "medium"
+            cve = args[4] if len(args) > 4 else None
+
+            node = graph.add_vulnerability(service_id, name, severity, cve)
+            self.display.print_success(f"Added vulnerability: {node.label} ({node.id})")
+
+        else:
+            self.display.print_error(f"Unknown node type: {node_type}")
+
+        return True
+
+    def _graph_link(self, graph, args: List[str]) -> bool:
+        """Link credential to host."""
+        if len(args) < 2:
+            self.display.print_error("Usage: graph link <cred_id> <host_id> [service]")
+            return True
+
+        cred_id = args[0]
+        host_id = args[1]
+        service = args[2] if len(args) > 2 else None
+
+        edge = graph.link_credential_to_host(cred_id, host_id, service)
+        if edge:
+            self.display.print_success(f"Linked {cred_id} → {host_id}")
+        else:
+            self.display.print_error("Failed to create link. Check node IDs exist.")
+
+        return True
+
+    def _graph_compromised(self, graph, args: List[str]) -> bool:
+        """Mark node as compromised."""
+        if not args:
+            self.display.print_error("Usage: graph compromised <node_id>")
+            return True
+
+        node_id = args[0]
+        if graph.mark_compromised(node_id):
+            self.display.print_success(f"Marked {node_id} as compromised")
+        else:
+            self.display.print_error(f"Node not found: {node_id}")
+
+        return True
+
+    def _graph_paths(self, graph, args: List[str]) -> bool:
+        """Find attack paths between nodes."""
+        if len(args) < 2:
+            self.display.print_error("Usage: graph paths <from_node_id> <to_node_id>")
+            return True
+
+        from_id = args[0]
+        to_id = args[1]
+
+        paths = graph.find_attack_paths(from_id, to_id)
+
+        if not paths:
+            self.display.print_warning(f"No paths found from {from_id} to {to_id}")
+            return True
+
+        self.display.console.print(f"\n[bold]Found {len(paths)} attack path(s):[/bold]\n")
+
+        for i, path in enumerate(paths[:5], 1):
+            self.display.console.print(f"[cyan]Path {i}[/cyan] (Risk Score: {path.risk_score:.1f})")
+
+            path_str = " → ".join([
+                graph.nodes[nid].label if nid in graph.nodes else nid
+                for nid in path.nodes
+            ])
+            self.display.console.print(f"  {path_str}")
+            self.display.console.print()
+
+        if len(paths) > 5:
+            self.display.console.print(f"  ... and {len(paths) - 5} more paths")
+
+        return True
+
+    def _graph_lateral(self, graph, args: List[str]) -> bool:
+        """Find lateral movement paths from a host."""
+        if not args:
+            self.display.print_error("Usage: graph lateral <host_id>")
+            return True
+
+        host_id = args[0]
+        paths = graph.find_lateral_paths(host_id)
+
+        if not paths:
+            self.display.print_warning(f"No lateral paths found from {host_id}")
+            return True
+
+        self.display.console.print(f"\n[bold]Found {len(paths)} lateral movement path(s):[/bold]\n")
+
+        for path in paths:
+            self.display.console.print(f"  [cyan]{path.description}[/cyan]")
+            path_str = " → ".join([
+                graph.nodes[nid].label if nid in graph.nodes else nid
+                for nid in path.nodes
+            ])
+            self.display.console.print(f"    {path_str}")
+
+        return True
+
+    def _graph_export(self, graph, args: List[str]) -> bool:
+        """Export graph to file."""
+        if not args:
+            self.display.print_error("Usage: graph export <json|dot|cytoscape> [filename]")
+            return True
+
+        format_type = args[0].lower()
+        filename = args[1] if len(args) > 1 else None
+
+        if format_type == "json":
+            output = graph.to_json(indent=2)
+            default_name = "attack_graph.json"
+        elif format_type == "dot":
+            output = graph.to_graphviz()
+            default_name = "attack_graph.dot"
+        elif format_type == "cytoscape":
+            import json
+            output = json.dumps(graph.to_cytoscape(), indent=2)
+            default_name = "attack_graph_cytoscape.json"
+        else:
+            self.display.print_error(f"Unknown format: {format_type}")
+            return True
+
+        if filename:
+            with open(filename, 'w') as f:
+                f.write(output)
+            self.display.print_success(f"Exported to {filename}")
+        else:
+            self.display.console.print(output)
+            self.display.print_info(f"Use 'graph export {format_type} <filename>' to save to file")
+
+        return True
+
+    def _graph_import(self, graph, args: List[str]) -> bool:
+        """Import graph from file."""
+        if not args:
+            self.display.print_error("Usage: graph import <filename>")
+            return True
+
+        filename = args[0]
+
+        try:
+            from purplesploit.core.attack_graph import AttackGraph
+
+            with open(filename, 'r') as f:
+                content = f.read()
+
+            self._attack_graph = AttackGraph.from_json(content)
+            stats = self._attack_graph.get_statistics()
+
+            self.display.print_success(f"Imported graph from {filename}")
+            self.display.print_info(f"  {stats['total_nodes']} nodes, {stats['total_edges']} edges")
+
+        except FileNotFoundError:
+            self.display.print_error(f"File not found: {filename}")
+        except Exception as e:
+            self.display.print_error(f"Import failed: {e}")
+
+        return True
+
+    def _graph_clear(self, graph) -> bool:
+        """Clear the attack graph."""
+        graph.clear()
+        self.display.print_success("Attack graph cleared")
         return True
