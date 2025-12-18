@@ -107,6 +107,21 @@ class CommandHandler:
             "deploy": self.cmd_deploy,            # Deploy payloads/tools to targets
             "defaults": self.cmd_defaults,        # Manage module default options
             "parse": self.cmd_parse,              # Parse nmap XML results
+
+            # Phase 2: Findings & Workflow commands
+            "findings": self.cmd_findings,        # Manage security findings
+            "finding": self.cmd_findings,         # Alias
+            "workflow": self.cmd_workflow,        # Workflow automation
+            "report": self.cmd_report,            # Generate reports
+
+            # Phase 3: Plugin marketplace
+            "plugin": self.cmd_plugin,            # Plugin management
+            "plugins": self.cmd_plugin,           # Alias
+
+            # Advanced: Smart Auto-Enumeration
+            "auto": self.cmd_auto,                # Smart auto-enumeration
+            "autoenum": self.cmd_auto,            # Alias
+
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -2931,5 +2946,1327 @@ class CommandHandler:
         elif module.has_operations():
             self.display.print_info("\nAvailable operations:")
             self._show_operations(module.get_operations())
+
+        return True
+
+    # =========================================================================
+    # Phase 2: Findings Management Commands
+    # =========================================================================
+
+    def cmd_findings(self, args: List[str]) -> bool:
+        """
+        Manage security findings.
+
+        Usage:
+            findings                    - List all findings
+            findings list               - List all findings
+            findings list --severity X  - Filter by severity
+            findings add <title>        - Add new finding (interactive)
+            findings show <id>          - Show finding details
+            findings update <id> <status> - Update finding status
+            findings evidence <id> <file> - Add evidence to finding
+            findings export <format> [path] - Export findings
+            findings stats              - Show findings statistics
+            findings clear              - Clear all findings
+        """
+        from purplesploit.core.findings import FindingsManager, FindingStatus, Severity
+
+        # Get or create findings manager
+        if not hasattr(self, '_findings_manager'):
+            self._findings_manager = FindingsManager(framework=self.framework)
+
+        if not args:
+            args = ["list"]
+
+        subcommand = args[0].lower()
+
+        if subcommand == "list":
+            return self._findings_list(args[1:])
+        elif subcommand == "add":
+            return self._findings_add(args[1:])
+        elif subcommand == "show":
+            return self._findings_show(args[1:])
+        elif subcommand == "update":
+            return self._findings_update(args[1:])
+        elif subcommand == "evidence":
+            return self._findings_evidence(args[1:])
+        elif subcommand == "export":
+            return self._findings_export(args[1:])
+        elif subcommand == "stats":
+            return self._findings_stats()
+        elif subcommand == "clear":
+            return self._findings_clear()
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Usage: findings [list|add|show|update|evidence|export|stats|clear]")
+            return True
+
+    def _findings_list(self, args: List[str]) -> bool:
+        """List findings with optional filters."""
+        from purplesploit.core.findings import FindingStatus, Severity
+        from rich.table import Table
+
+        findings = self._findings_manager.list_findings()
+
+        if not findings:
+            self.display.print_warning("No findings recorded yet")
+            self.display.print_info("Use 'findings add <title>' to create a finding")
+            return True
+
+        table = Table(title="Security Findings")
+        table.add_column("ID", style="cyan")
+        table.add_column("Title", style="white")
+        table.add_column("Severity", style="bold")
+        table.add_column("Target", style="green")
+        table.add_column("Status", style="yellow")
+        table.add_column("CVSS", style="magenta")
+
+        severity_colors = {
+            Severity.CRITICAL: "red",
+            Severity.HIGH: "red",
+            Severity.MEDIUM: "yellow",
+            Severity.LOW: "green",
+            Severity.INFO: "blue",
+        }
+
+        for finding in findings:
+            sev_color = severity_colors.get(finding.severity, "white")
+            cvss = f"{finding.cvss_score:.1f}" if finding.cvss_score else "-"
+
+            table.add_row(
+                finding.id,
+                finding.title[:40] + "..." if len(finding.title) > 40 else finding.title,
+                f"[{sev_color}]{finding.severity.value.upper()}[/{sev_color}]",
+                finding.target,
+                finding.status.value,
+                cvss,
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _findings_add(self, args: List[str]) -> bool:
+        """Add a new finding (interactive)."""
+        from purplesploit.core.findings import Severity
+
+        if not args:
+            self.display.print_error("Usage: findings add <title>")
+            return True
+
+        title = " ".join(args)
+
+        # Interactive prompts
+        self.display.print_info(f"Creating finding: {title}")
+
+        # Get severity
+        severity_options = ["critical", "high", "medium", "low", "info"]
+        self.display.console.print("\nSeverity levels: critical, high, medium, low, info")
+        try:
+            severity_input = input("Severity [medium]: ").strip().lower() or "medium"
+            if severity_input not in severity_options:
+                self.display.print_warning(f"Invalid severity, using 'medium'")
+                severity_input = "medium"
+        except (EOFError, KeyboardInterrupt):
+            self.display.print_warning("\nCancelled")
+            return True
+
+        # Get target
+        current_target = self.framework.session.targets.current
+        default_target = current_target.identifier if current_target else ""
+        try:
+            target = input(f"Target [{default_target}]: ").strip() or default_target
+        except (EOFError, KeyboardInterrupt):
+            self.display.print_warning("\nCancelled")
+            return True
+
+        # Get description
+        try:
+            description = input("Description: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            self.display.print_warning("\nCancelled")
+            return True
+
+        # Create finding
+        finding = self._findings_manager.create(
+            title=title,
+            severity=severity_input,
+            description=description,
+            target=target,
+        )
+
+        self.display.print_success(f"Created finding: {finding.id}")
+        return True
+
+    def _findings_show(self, args: List[str]) -> bool:
+        """Show finding details."""
+        if not args:
+            self.display.print_error("Usage: findings show <id>")
+            return True
+
+        finding_id = args[0]
+        finding = self._findings_manager.get(finding_id)
+
+        if not finding:
+            self.display.print_error(f"Finding not found: {finding_id}")
+            return True
+
+        self.display.console.print(f"\n[bold cyan]Finding: {finding.title}[/bold cyan]")
+        self.display.console.print(f"ID: {finding.id}")
+        self.display.console.print(f"Severity: {finding.severity.value.upper()}")
+        self.display.console.print(f"Status: {finding.status.value}")
+        self.display.console.print(f"Target: {finding.target}")
+
+        if finding.cvss_score:
+            self.display.console.print(f"CVSS: {finding.cvss_score}")
+        if finding.cvss_vector:
+            self.display.console.print(f"Vector: {finding.cvss_vector}")
+        if finding.cve_ids:
+            self.display.console.print(f"CVEs: {', '.join(finding.cve_ids)}")
+
+        self.display.console.print(f"\n[bold]Description:[/bold]\n{finding.description}")
+
+        if finding.impact:
+            self.display.console.print(f"\n[bold]Impact:[/bold]\n{finding.impact}")
+        if finding.remediation:
+            self.display.console.print(f"\n[bold]Remediation:[/bold]\n{finding.remediation}")
+
+        if finding.evidence:
+            self.display.console.print(f"\n[bold]Evidence ({len(finding.evidence)}):[/bold]")
+            for ev in finding.evidence:
+                self.display.console.print(f"  - {ev.title}: {ev.file_path or ev.content[:50]}")
+
+        if finding.notes:
+            self.display.console.print(f"\n[bold]Notes:[/bold]")
+            for note in finding.notes:
+                self.display.console.print(f"  {note}")
+
+        return True
+
+    def _findings_update(self, args: List[str]) -> bool:
+        """Update finding status."""
+        from purplesploit.core.findings import FindingStatus
+
+        if len(args) < 2:
+            self.display.print_error("Usage: findings update <id> <status>")
+            self.display.print_info("Statuses: draft, confirmed, reported, remediated, verified, false_positive, accepted_risk")
+            return True
+
+        finding_id = args[0]
+        new_status = args[1].lower()
+
+        try:
+            status = FindingStatus(new_status)
+        except ValueError:
+            self.display.print_error(f"Invalid status: {new_status}")
+            return True
+
+        success = self._findings_manager.transition_status(finding_id, status)
+        if success:
+            self.display.print_success(f"Updated finding {finding_id} to {new_status}")
+        else:
+            self.display.print_error(f"Failed to update finding {finding_id}")
+
+        return True
+
+    def _findings_evidence(self, args: List[str]) -> bool:
+        """Add evidence to a finding."""
+        if len(args) < 2:
+            self.display.print_error("Usage: findings evidence <id> <file_path>")
+            return True
+
+        finding_id = args[0]
+        file_path = " ".join(args[1:])
+
+        if not Path(file_path).exists():
+            self.display.print_error(f"File not found: {file_path}")
+            return True
+
+        evidence = self._findings_manager.add_evidence(
+            finding_id=finding_id,
+            title=Path(file_path).name,
+            file_path=file_path,
+            evidence_type="file",
+        )
+
+        if evidence:
+            self.display.print_success(f"Added evidence to finding {finding_id}")
+        else:
+            self.display.print_error(f"Failed to add evidence to {finding_id}")
+
+        return True
+
+    def _findings_export(self, args: List[str]) -> bool:
+        """Export findings."""
+        if not args:
+            self.display.print_error("Usage: findings export <format> [path]")
+            self.display.print_info("Formats: json")
+            return True
+
+        export_format = args[0].lower()
+        output_path = args[1] if len(args) > 1 else f"findings_{self.framework.session.workspace}.json"
+
+        if export_format == "json":
+            result = self._findings_manager.export_json(output_path)
+            self.display.print_success(f"Exported findings to: {result}")
+        else:
+            self.display.print_error(f"Unsupported export format: {export_format}")
+
+        return True
+
+    def _findings_stats(self) -> bool:
+        """Show findings statistics."""
+        stats = self._findings_manager.get_statistics()
+
+        self.display.console.print("\n[bold cyan]Findings Statistics[/bold cyan]")
+        self.display.console.print(f"Total: {stats['total']}")
+
+        self.display.console.print("\n[bold]By Severity:[/bold]")
+        for sev, count in stats['by_severity'].items():
+            if count > 0:
+                self.display.console.print(f"  {sev.upper()}: {count}")
+
+        self.display.console.print("\n[bold]By Status:[/bold]")
+        for status, count in stats['by_status'].items():
+            if count > 0:
+                self.display.console.print(f"  {status}: {count}")
+
+        self.display.console.print(f"\nWith Evidence: {stats['with_evidence']}")
+        self.display.console.print(f"With CVSS: {stats['with_cvss']}")
+
+        return True
+
+    def _findings_clear(self) -> bool:
+        """Clear all findings."""
+        try:
+            confirm = input("Clear all findings? [y/N]: ").strip().lower()
+            if confirm == 'y':
+                self._findings_manager.findings.clear()
+                self._findings_manager._save_findings()
+                self.display.print_success("Cleared all findings")
+            else:
+                self.display.print_info("Cancelled")
+        except (EOFError, KeyboardInterrupt):
+            self.display.print_info("\nCancelled")
+
+        return True
+
+    # =========================================================================
+    # Workflow Commands
+    # =========================================================================
+
+    def cmd_workflow(self, args: List[str]) -> bool:
+        """
+        Manage and run workflows.
+
+        Usage:
+            workflow                    - List workflows
+            workflow list               - List available workflows
+            workflow templates          - List workflow templates
+            workflow create <name>      - Create new workflow from template
+            workflow run <id> [target]  - Run a workflow
+            workflow status <id>        - Show workflow status
+            workflow pause <id>         - Pause a running workflow
+            workflow resume <id>        - Resume a paused workflow
+        """
+        from purplesploit.core.workflow import WorkflowEngine
+
+        # Get or create workflow engine
+        if not hasattr(self, '_workflow_engine'):
+            self._workflow_engine = WorkflowEngine(framework=self.framework)
+
+        if not args:
+            args = ["list"]
+
+        subcommand = args[0].lower()
+
+        if subcommand == "list":
+            return self._workflow_list()
+        elif subcommand == "templates":
+            return self._workflow_templates()
+        elif subcommand == "create":
+            return self._workflow_create(args[1:])
+        elif subcommand == "run":
+            return self._workflow_run(args[1:])
+        elif subcommand == "status":
+            return self._workflow_status(args[1:])
+        elif subcommand == "pause":
+            return self._workflow_pause(args[1:])
+        elif subcommand == "resume":
+            return self._workflow_resume(args[1:])
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Usage: workflow [list|templates|create|run|status|pause|resume]")
+            return True
+
+    def _workflow_list(self) -> bool:
+        """List existing workflows."""
+        from rich.table import Table
+
+        workflows = self._workflow_engine.list_workflows()
+
+        if not workflows:
+            self.display.print_warning("No workflows created yet")
+            self.display.print_info("Use 'workflow templates' to see available templates")
+            self.display.print_info("Use 'workflow create <name> --template <template>' to create")
+            return True
+
+        table = Table(title="Workflows")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name", style="white")
+        table.add_column("Status", style="yellow")
+        table.add_column("Steps", style="green")
+        table.add_column("Tags", style="dim")
+
+        for wf in workflows:
+            table.add_row(
+                wf.id,
+                wf.name,
+                wf.status.value,
+                str(len(wf.steps)),
+                ", ".join(wf.tags) if wf.tags else "-",
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _workflow_templates(self) -> bool:
+        """List workflow templates."""
+        from rich.table import Table
+
+        templates = self._workflow_engine.list_templates()
+
+        table = Table(title="Workflow Templates")
+        table.add_column("Template ID", style="cyan")
+        table.add_column("Name", style="white")
+        table.add_column("Description", style="dim")
+        table.add_column("Steps", style="green")
+        table.add_column("Tags", style="yellow")
+
+        for tmpl in templates:
+            table.add_row(
+                tmpl["id"],
+                tmpl["name"],
+                tmpl["description"][:50] + "..." if len(tmpl["description"]) > 50 else tmpl["description"],
+                str(tmpl["steps"]),
+                ", ".join(tmpl.get("tags", [])),
+            )
+
+        self.display.console.print(table)
+        self.display.print_info("\nCreate workflow: workflow create <name> --template <template_id>")
+        return True
+
+    def _workflow_create(self, args: List[str]) -> bool:
+        """Create a new workflow."""
+        if not args:
+            self.display.print_error("Usage: workflow create <name> [--template <template>]")
+            return True
+
+        name = args[0]
+        template = None
+
+        # Parse --template option
+        if "--template" in args:
+            idx = args.index("--template")
+            if idx + 1 < len(args):
+                template = args[idx + 1]
+
+        workflow = self._workflow_engine.create_workflow(
+            name=name,
+            from_template=template,
+        )
+
+        self.display.print_success(f"Created workflow: {workflow.id}")
+        self.display.console.print(f"Name: {workflow.name}")
+        self.display.console.print(f"Steps: {len(workflow.steps)}")
+
+        if workflow.steps:
+            self.display.console.print("\nWorkflow steps:")
+            for i, step in enumerate(workflow.steps, 1):
+                self.display.console.print(f"  {i}. {step.name} ({step.module})")
+
+        return True
+
+    def _workflow_run(self, args: List[str]) -> bool:
+        """Run a workflow."""
+        if not args:
+            self.display.print_error("Usage: workflow run <workflow_id> [--target <target>]")
+            return True
+
+        workflow_id = args[0]
+        variables = {}
+
+        # Parse --target option
+        if "--target" in args:
+            idx = args.index("--target")
+            if idx + 1 < len(args):
+                variables["target"] = args[idx + 1]
+
+        # Use current target if not specified
+        if "target" not in variables:
+            current = self.framework.session.targets.current
+            if current:
+                variables["target"] = current.identifier
+
+        if not variables.get("target"):
+            self.display.print_error("No target specified. Use --target or set a current target")
+            return True
+
+        self.display.print_info(f"Running workflow {workflow_id} against {variables['target']}...")
+
+        # Set up progress callbacks
+        def on_step_start(workflow, step):
+            self.display.print_info(f"  → Starting: {step.name}")
+
+        def on_step_complete(workflow, step, result):
+            if result.get("success"):
+                self.display.print_success(f"  ✓ {step.name}")
+            else:
+                self.display.print_error(f"  ✗ {step.name}: {result.get('error', 'Failed')}")
+
+        self._workflow_engine.on_step_start = on_step_start
+        self._workflow_engine.on_step_complete = on_step_complete
+
+        result = self._workflow_engine.run_workflow(workflow_id, variables)
+
+        if result.get("success"):
+            self.display.print_success(f"\nWorkflow completed!")
+            self.display.console.print(f"  Completed: {result['steps_completed']}")
+            self.display.console.print(f"  Failed: {result['steps_failed']}")
+            self.display.console.print(f"  Skipped: {result['steps_skipped']}")
+        else:
+            self.display.print_error(f"\nWorkflow failed: {result.get('error')}")
+
+        return True
+
+    def _workflow_status(self, args: List[str]) -> bool:
+        """Show workflow status."""
+        if not args:
+            self.display.print_error("Usage: workflow status <workflow_id>")
+            return True
+
+        workflow_id = args[0]
+        workflow = self._workflow_engine.get_workflow(workflow_id)
+
+        if not workflow:
+            self.display.print_error(f"Workflow not found: {workflow_id}")
+            return True
+
+        self.display.console.print(f"\n[bold cyan]Workflow: {workflow.name}[/bold cyan]")
+        self.display.console.print(f"ID: {workflow.id}")
+        self.display.console.print(f"Status: {workflow.status.value}")
+
+        if workflow.steps:
+            self.display.console.print("\n[bold]Steps:[/bold]")
+            for step in workflow.steps:
+                status_icon = {
+                    "pending": "○",
+                    "running": "◐",
+                    "success": "✓",
+                    "failed": "✗",
+                    "skipped": "−",
+                }.get(step.status.value, "?")
+                self.display.console.print(f"  {status_icon} {step.name} [{step.status.value}]")
+
+        return True
+
+    def _workflow_pause(self, args: List[str]) -> bool:
+        """Pause a workflow."""
+        if not args:
+            self.display.print_error("Usage: workflow pause <workflow_id>")
+            return True
+
+        success = self._workflow_engine.pause_workflow(args[0])
+        if success:
+            self.display.print_success(f"Paused workflow: {args[0]}")
+        else:
+            self.display.print_error(f"Failed to pause workflow: {args[0]}")
+
+        return True
+
+    def _workflow_resume(self, args: List[str]) -> bool:
+        """Resume a workflow."""
+        if not args:
+            self.display.print_error("Usage: workflow resume <workflow_id>")
+            return True
+
+        result = self._workflow_engine.resume_workflow(args[0])
+        if result.get("success"):
+            self.display.print_success(f"Resumed workflow: {args[0]}")
+        else:
+            self.display.print_error(f"Failed to resume: {result.get('error')}")
+
+        return True
+
+    # =========================================================================
+    # Report Generation Commands
+    # =========================================================================
+
+    def cmd_report(self, args: List[str]) -> bool:
+        """
+        Generate reports.
+
+        Usage:
+            report generate <format> [path]  - Generate report (pdf, html, xlsx, md, json)
+            report config                    - Show/edit report configuration
+            report preview                   - Preview findings summary
+        """
+        if not args:
+            self.display.print_error("Usage: report [generate|config|preview]")
+            return True
+
+        subcommand = args[0].lower()
+
+        if subcommand == "generate":
+            return self._report_generate(args[1:])
+        elif subcommand == "config":
+            return self._report_config(args[1:])
+        elif subcommand == "preview":
+            return self._report_preview()
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            return True
+
+    def _report_generate(self, args: List[str]) -> bool:
+        """Generate a report."""
+        from purplesploit.reporting import ReportGenerator
+
+        if not args:
+            self.display.print_error("Usage: report generate <format> [output_path]")
+            self.display.print_info("Formats: pdf, html, xlsx, markdown (md), json")
+            return True
+
+        format_type = args[0].lower()
+        output_path = args[1] if len(args) > 1 else None
+
+        # Get findings from findings manager
+        if not hasattr(self, '_findings_manager'):
+            from purplesploit.core.findings import FindingsManager
+            self._findings_manager = FindingsManager(framework=self.framework)
+
+        generator = ReportGenerator(framework=self.framework)
+
+        # Import findings
+        for finding in self._findings_manager.findings.values():
+            from purplesploit.reporting.models import Finding as ReportFinding, Severity
+            report_finding = ReportFinding(
+                id=finding.id,
+                title=finding.title,
+                severity=Severity(finding.severity.value),
+                description=finding.description,
+                target=finding.target,
+                cvss_score=finding.cvss_score,
+                cvss_vector=finding.cvss_vector,
+                cve_ids=finding.cve_ids,
+                cwe_ids=finding.cwe_ids,
+                impact=finding.impact,
+                remediation=finding.remediation,
+                port=finding.port,
+                service=finding.service,
+                module_name=finding.module_name,
+            )
+            generator.add_finding(report_finding)
+
+        try:
+            result = generator.generate(format_type, output_path)
+            self.display.print_success(f"Generated report: {result}")
+        except ImportError as e:
+            self.display.print_error(f"Missing dependency: {e}")
+            self.display.print_info("Install optional dependencies: pip install weasyprint openpyxl")
+        except Exception as e:
+            self.display.print_error(f"Failed to generate report: {e}")
+
+        return True
+
+    def _report_config(self, args: List[str]) -> bool:
+        """Show or edit report configuration."""
+        self.display.console.print("\n[bold]Report Configuration[/bold]")
+        self.display.console.print("(Interactive configuration not yet implemented)")
+        self.display.console.print("\nUse 'report generate <format>' to generate reports")
+        return True
+
+    def _report_preview(self) -> bool:
+        """Preview findings summary."""
+        if not hasattr(self, '_findings_manager'):
+            from purplesploit.core.findings import FindingsManager
+            self._findings_manager = FindingsManager(framework=self.framework)
+
+        stats = self._findings_manager.get_statistics()
+
+        self.display.console.print("\n[bold cyan]Report Preview[/bold cyan]")
+        self.display.console.print(f"\nTotal Findings: {stats['total']}")
+
+        if stats['total'] > 0:
+            self.display.console.print("\n[bold]Severity Breakdown:[/bold]")
+            for sev in ['critical', 'high', 'medium', 'low', 'info']:
+                count = stats['by_severity'].get(sev, 0)
+                if count > 0:
+                    self.display.console.print(f"  {sev.upper()}: {count}")
+
+            self.display.console.print("\n[bold]Targets Affected:[/bold]")
+            for target, count in stats['by_target'].items():
+                self.display.console.print(f"  {target}: {count} finding(s)")
+        else:
+            self.display.print_warning("No findings to report")
+            self.display.print_info("Use 'findings add <title>' to create findings")
+
+        return True
+
+    # =========================================================================
+    # Phase 3: Plugin Marketplace Commands
+    # =========================================================================
+
+    def cmd_plugin(self, args: List[str]) -> bool:
+        """
+        Manage plugins from the marketplace.
+
+        Usage:
+            plugin                      - Show installed plugins
+            plugin list                 - List installed plugins
+            plugin search <query>       - Search available plugins
+            plugin browse [category]    - Browse plugins by category
+            plugin install <name>       - Install a plugin
+            plugin update <name>        - Update a plugin
+            plugin uninstall <name>     - Uninstall a plugin
+            plugin enable <name>        - Enable a disabled plugin
+            plugin disable <name>       - Disable a plugin
+            plugin info <name>          - Show plugin details
+            plugin updates              - Check for updates
+            plugin repos                - List repositories
+        """
+        from purplesploit.plugins import PluginManager
+
+        # Get or create plugin manager
+        if not hasattr(self, '_plugin_manager'):
+            self._plugin_manager = PluginManager(framework=self.framework)
+
+        if not args:
+            args = ["list"]
+
+        subcommand = args[0].lower()
+
+        if subcommand == "list":
+            return self._plugin_list(args[1:])
+        elif subcommand == "search":
+            return self._plugin_search(args[1:])
+        elif subcommand == "browse":
+            return self._plugin_browse(args[1:])
+        elif subcommand == "install":
+            return self._plugin_install(args[1:])
+        elif subcommand == "update":
+            return self._plugin_update(args[1:])
+        elif subcommand == "uninstall":
+            return self._plugin_uninstall(args[1:])
+        elif subcommand == "enable":
+            return self._plugin_enable(args[1:])
+        elif subcommand == "disable":
+            return self._plugin_disable(args[1:])
+        elif subcommand == "info":
+            return self._plugin_info(args[1:])
+        elif subcommand == "updates":
+            return self._plugin_check_updates()
+        elif subcommand == "repos":
+            return self._plugin_repos()
+        else:
+            self.display.print_error(f"Unknown subcommand: {subcommand}")
+            self.display.print_info("Usage: plugin [list|search|browse|install|update|uninstall|enable|disable|info|updates|repos]")
+            return True
+
+    def _plugin_list(self, args: List[str]) -> bool:
+        """List installed plugins."""
+        from rich.table import Table
+        from purplesploit.plugins.models import PluginStatus
+
+        plugins = self._plugin_manager.list_installed()
+
+        if not plugins:
+            self.display.print_warning("No plugins installed")
+            self.display.print_info("Use 'plugin search <query>' to find plugins")
+            self.display.print_info("Use 'plugin install <name>' to install")
+            return True
+
+        table = Table(title="Installed Plugins")
+        table.add_column("Name", style="cyan")
+        table.add_column("Version", style="white")
+        table.add_column("Category", style="green")
+        table.add_column("Status", style="yellow")
+        table.add_column("Description", style="dim")
+
+        status_colors = {
+            PluginStatus.INSTALLED: "green",
+            PluginStatus.UPDATE_AVAILABLE: "yellow",
+            PluginStatus.DISABLED: "dim",
+            PluginStatus.BROKEN: "red",
+        }
+
+        for plugin in plugins:
+            status_color = status_colors.get(plugin.status, "white")
+            table.add_row(
+                plugin.name,
+                plugin.installed_version or plugin.version,
+                plugin.manifest.category.value,
+                f"[{status_color}]{plugin.status.value}[/{status_color}]",
+                plugin.manifest.description[:40] + "..." if len(plugin.manifest.description) > 40 else plugin.manifest.description,
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _plugin_search(self, args: List[str]) -> bool:
+        """Search for plugins."""
+        from rich.table import Table
+
+        if not args:
+            self.display.print_error("Usage: plugin search <query>")
+            return True
+
+        query = " ".join(args)
+        plugins = self._plugin_manager.search(query)
+
+        if not plugins:
+            self.display.print_warning(f"No plugins found matching: {query}")
+            return True
+
+        table = Table(title=f"Search Results: {query}")
+        table.add_column("Name", style="cyan")
+        table.add_column("Version", style="white")
+        table.add_column("Category", style="green")
+        table.add_column("Author", style="yellow")
+        table.add_column("Downloads", style="magenta")
+        table.add_column("Description", style="dim")
+
+        for plugin in plugins[:20]:  # Limit to 20 results
+            installed = "✓ " if plugin.installed_version else ""
+            table.add_row(
+                installed + plugin.name,
+                plugin.version,
+                plugin.manifest.category.value,
+                plugin.manifest.author,
+                str(plugin.downloads),
+                plugin.manifest.description[:30] + "..." if len(plugin.manifest.description) > 30 else plugin.manifest.description,
+            )
+
+        self.display.console.print(table)
+        self.display.print_info(f"\nFound {len(plugins)} plugin(s). Use 'plugin install <name>' to install.")
+        return True
+
+    def _plugin_browse(self, args: List[str]) -> bool:
+        """Browse plugins by category."""
+        from rich.table import Table
+        from purplesploit.plugins.models import PluginCategory
+
+        category = None
+        if args:
+            try:
+                category = PluginCategory(args[0].lower())
+            except ValueError:
+                self.display.print_error(f"Invalid category: {args[0]}")
+                self.display.print_info("Categories: " + ", ".join(c.value for c in PluginCategory))
+                return True
+
+        if category:
+            plugins = self._plugin_manager.search(category=category)
+            title = f"Plugins - {category.value.upper()}"
+        else:
+            # Show category summary
+            plugins = self._plugin_manager.search()
+            categories = {}
+            for p in plugins:
+                cat = p.manifest.category.value
+                categories[cat] = categories.get(cat, 0) + 1
+
+            table = Table(title="Plugin Categories")
+            table.add_column("Category", style="cyan")
+            table.add_column("Count", style="green")
+
+            for cat, count in sorted(categories.items()):
+                table.add_row(cat, str(count))
+
+            self.display.console.print(table)
+            self.display.print_info("\nUse 'plugin browse <category>' to list plugins in a category")
+            return True
+
+        # Show plugins in category
+        table = Table(title=title)
+        table.add_column("Name", style="cyan")
+        table.add_column("Version", style="white")
+        table.add_column("Author", style="yellow")
+        table.add_column("Rating", style="magenta")
+        table.add_column("Description", style="dim")
+
+        for plugin in plugins[:20]:
+            installed = "✓ " if plugin.installed_version else ""
+            rating = f"{plugin.rating:.1f}" if plugin.rating else "-"
+            table.add_row(
+                installed + plugin.name,
+                plugin.version,
+                plugin.manifest.author,
+                rating,
+                plugin.manifest.description[:35] + "..." if len(plugin.manifest.description) > 35 else plugin.manifest.description,
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _plugin_install(self, args: List[str]) -> bool:
+        """Install a plugin."""
+        if not args:
+            self.display.print_error("Usage: plugin install <name> [--version <ver>]")
+            return True
+
+        name = args[0]
+        version = None
+
+        if "--version" in args:
+            idx = args.index("--version")
+            if idx + 1 < len(args):
+                version = args[idx + 1]
+
+        try:
+            self.display.print_info(f"Installing {name}...")
+            plugin = self._plugin_manager.install(name, version)
+            self.display.print_success(f"Installed {plugin.name} v{plugin.installed_version}")
+
+            if plugin.manifest.description:
+                self.display.console.print(f"  {plugin.manifest.description}")
+            if plugin.manifest.module_path:
+                self.display.console.print(f"  Module: {plugin.manifest.module_path}")
+
+        except ValueError as e:
+            self.display.print_error(f"Plugin not found: {e}")
+        except RuntimeError as e:
+            self.display.print_error(f"Installation failed: {e}")
+        except Exception as e:
+            self.display.print_error(f"Error: {e}")
+
+        return True
+
+    def _plugin_update(self, args: List[str]) -> bool:
+        """Update a plugin."""
+        if not args:
+            self.display.print_error("Usage: plugin update <name>")
+            return True
+
+        name = args[0]
+
+        try:
+            self.display.print_info(f"Updating {name}...")
+            plugin = self._plugin_manager.update(name)
+            self.display.print_success(f"Updated {plugin.name} to v{plugin.installed_version}")
+        except ValueError as e:
+            self.display.print_error(str(e))
+        except Exception as e:
+            self.display.print_error(f"Update failed: {e}")
+
+        return True
+
+    def _plugin_uninstall(self, args: List[str]) -> bool:
+        """Uninstall a plugin."""
+        if not args:
+            self.display.print_error("Usage: plugin uninstall <name>")
+            return True
+
+        name = args[0]
+
+        try:
+            confirm = input(f"Uninstall {name}? [y/N]: ").strip().lower()
+            if confirm == 'y':
+                if self._plugin_manager.uninstall(name):
+                    self.display.print_success(f"Uninstalled {name}")
+                else:
+                    self.display.print_error(f"Failed to uninstall {name}")
+            else:
+                self.display.print_info("Cancelled")
+        except (EOFError, KeyboardInterrupt):
+            self.display.print_info("\nCancelled")
+
+        return True
+
+    def _plugin_enable(self, args: List[str]) -> bool:
+        """Enable a disabled plugin."""
+        if not args:
+            self.display.print_error("Usage: plugin enable <name>")
+            return True
+
+        if self._plugin_manager.enable(args[0]):
+            self.display.print_success(f"Enabled {args[0]}")
+        else:
+            self.display.print_error(f"Plugin not found: {args[0]}")
+
+        return True
+
+    def _plugin_disable(self, args: List[str]) -> bool:
+        """Disable a plugin."""
+        if not args:
+            self.display.print_error("Usage: plugin disable <name>")
+            return True
+
+        if self._plugin_manager.disable(args[0]):
+            self.display.print_success(f"Disabled {args[0]}")
+        else:
+            self.display.print_error(f"Plugin not found: {args[0]}")
+
+        return True
+
+    def _plugin_info(self, args: List[str]) -> bool:
+        """Show plugin details."""
+        if not args:
+            self.display.print_error("Usage: plugin info <name>")
+            return True
+
+        plugin = self._plugin_manager.get_plugin(args[0])
+        if not plugin:
+            self.display.print_error(f"Plugin not found: {args[0]}")
+            return True
+
+        self.display.console.print(f"\n[bold cyan]{plugin.name}[/bold cyan] v{plugin.version}")
+        self.display.console.print(f"Author: {plugin.manifest.author}")
+        self.display.console.print(f"Category: {plugin.manifest.category.value}")
+        self.display.console.print(f"License: {plugin.manifest.license}")
+
+        if plugin.manifest.tags:
+            self.display.console.print(f"Tags: {', '.join(plugin.manifest.tags)}")
+
+        self.display.console.print(f"\n[bold]Description:[/bold]")
+        self.display.console.print(f"  {plugin.manifest.description}")
+
+        if plugin.installed_version:
+            self.display.console.print(f"\n[bold]Installation:[/bold]")
+            self.display.console.print(f"  Installed: v{plugin.installed_version}")
+            self.display.console.print(f"  Path: {plugin.install_path}")
+            self.display.console.print(f"  Status: {plugin.status.value}")
+            self.display.console.print(f"  Enabled: {plugin.enabled}")
+
+            if plugin.has_update:
+                self.display.console.print(f"  [yellow]Update available: v{plugin.latest_version}[/yellow]")
+
+        if plugin.manifest.python_dependencies:
+            self.display.console.print(f"\n[bold]Python Dependencies:[/bold]")
+            for dep in plugin.manifest.python_dependencies:
+                self.display.console.print(f"  - {dep}")
+
+        if plugin.manifest.homepage:
+            self.display.console.print(f"\nHomepage: {plugin.manifest.homepage}")
+        if plugin.manifest.repository:
+            self.display.console.print(f"Repository: {plugin.manifest.repository}")
+
+        return True
+
+    def _plugin_check_updates(self) -> bool:
+        """Check for plugin updates."""
+        self.display.print_info("Checking for updates...")
+
+        updates = self._plugin_manager.check_updates()
+
+        if not updates:
+            self.display.print_success("All plugins are up to date!")
+            return True
+
+        from rich.table import Table
+        table = Table(title="Available Updates")
+        table.add_column("Plugin", style="cyan")
+        table.add_column("Current", style="white")
+        table.add_column("Available", style="green")
+
+        for plugin in updates:
+            table.add_row(
+                plugin.name,
+                plugin.installed_version or "?",
+                plugin.latest_version or "?",
+            )
+
+        self.display.console.print(table)
+        self.display.print_info(f"\n{len(updates)} update(s) available. Use 'plugin update <name>' to update.")
+        return True
+
+    def _plugin_repos(self) -> bool:
+        """List configured repositories."""
+        from rich.table import Table
+
+        repos = self._plugin_manager.list_repositories()
+
+        table = Table(title="Plugin Repositories")
+        table.add_column("Name", style="cyan")
+        table.add_column("URL", style="white")
+
+        for repo in repos:
+            table.add_row(repo.name, repo.url or "(local)")
+
+        self.display.console.print(table)
+        return True
+
+    # =========================================================================
+    # Advanced: Smart Auto-Enumeration
+    # =========================================================================
+
+    def cmd_auto(self, args: List[str]) -> bool:
+        """
+        Smart auto-enumeration pipeline.
+
+        Usage:
+            auto <target>                  - Run auto-enum on target
+            auto <target1> <target2> ...   - Multiple targets
+            auto --scope light             - Quick enumeration
+            auto --scope aggressive        - Full enumeration
+            auto --scope stealth           - Slow, evasive enumeration
+            auto --parallel                - Parallel target enumeration
+            auto status                    - Show running auto-enum status
+            auto stop                      - Stop running enumeration
+
+        Examples:
+            auto 192.168.1.0/24
+            auto 10.0.0.1 10.0.0.2 --scope aggressive
+            auto 192.168.1.50 --parallel
+        """
+        from purplesploit.core.auto_enum import (
+            AutoEnumPipeline, create_auto_enum, EnumScope, EnumPhase
+        )
+
+        if not args:
+            # Use current target if set
+            current = self.framework.session.targets.current
+            if current:
+                args = [current.identifier]
+            else:
+                self.display.print_error("Usage: auto <target> [--scope <scope>] [--parallel]")
+                self.display.print_info("Scopes: passive, light, normal, aggressive, stealth")
+                return True
+
+        # Handle subcommands
+        if args[0] == "status":
+            return self._auto_status()
+        elif args[0] == "stop":
+            return self._auto_stop()
+
+        # Parse arguments
+        targets = []
+        scope = "normal"
+        parallel = False
+        phases = None
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--scope" and i + 1 < len(args):
+                scope = args[i + 1]
+                i += 2
+            elif arg == "--parallel":
+                parallel = True
+                i += 1
+            elif arg == "--phases" and i + 1 < len(args):
+                phase_str = args[i + 1]
+                phases = [EnumPhase(p.strip()) for p in phase_str.split(",")]
+                i += 2
+            elif arg.startswith("--"):
+                i += 1
+            else:
+                targets.append(arg)
+                i += 1
+
+        if not targets:
+            self.display.print_error("No targets specified")
+            return True
+
+        # Create pipeline
+        self.display.console.print()
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print("[bold white]              SMART AUTO-ENUMERATION PIPELINE                       [/bold white]")
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print()
+
+        self.display.print_info(f"Targets: {', '.join(targets)}")
+        self.display.print_info(f"Scope: {scope}")
+        self.display.print_info(f"Parallel: {parallel}")
+        self.display.console.print()
+
+        # Create and configure pipeline
+        pipeline = create_auto_enum(self.framework, scope=scope)
+
+        # Store for status/stop commands
+        self._auto_pipeline = pipeline
+
+        # Set up callbacks
+        def on_progress(progress):
+            self.display.console.print(
+                f"[dim][{progress.phase.value}][/dim] {progress.current_step} → {progress.current_target}"
+            )
+
+        def on_service_found(target, service, port):
+            self.display.print_success(f"  Found: {service}:{port} on {target}")
+
+        def on_credential_found(cred):
+            username = cred.get('username', 'unknown')
+            domain = cred.get('domain', '')
+            if domain:
+                self.display.print_success(f"  [bold green]CREDENTIAL:[/bold green] {domain}\\{username}")
+            else:
+                self.display.print_success(f"  [bold green]CREDENTIAL:[/bold green] {username}")
+
+        def on_finding(finding):
+            severity = finding.get('severity', 'info').upper()
+            title = finding.get('title', 'Unknown')
+            colors = {
+                'CRITICAL': 'red',
+                'HIGH': 'red',
+                'MEDIUM': 'yellow',
+                'LOW': 'green',
+                'INFO': 'blue',
+            }
+            color = colors.get(severity, 'white')
+            self.display.console.print(f"  [{color}][{severity}][/{color}] {title}")
+
+        def on_step_complete(result):
+            if result.success:
+                status = "[green]✓[/green]"
+            else:
+                status = "[red]✗[/red]"
+            self.display.console.print(
+                f"  {status} {result.module} ({result.duration:.1f}s)"
+            )
+
+        pipeline.on_progress = on_progress
+        pipeline.on_service_found = on_service_found
+        pipeline.on_credential_found = on_credential_found
+        pipeline.on_finding = on_finding
+        pipeline.on_step_complete = on_step_complete
+
+        # Run enumeration
+        try:
+            self.display.console.print("[bold]Starting enumeration...[/bold]")
+            self.display.console.print()
+
+            summary = pipeline.run(
+                targets=targets,
+                phases=phases,
+                parallel=parallel,
+            )
+
+            # Display summary
+            self._display_auto_summary(summary)
+
+        except KeyboardInterrupt:
+            self.display.print_warning("\nEnumeration interrupted by user")
+            pipeline.stop()
+        except Exception as e:
+            self.display.print_error(f"Enumeration error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def _auto_status(self) -> bool:
+        """Show auto-enumeration status."""
+        if not hasattr(self, '_auto_pipeline') or not self._auto_pipeline:
+            self.display.print_warning("No auto-enumeration running")
+            return True
+
+        pipeline = self._auto_pipeline
+
+        self.display.console.print("\n[bold cyan]Auto-Enumeration Status[/bold cyan]")
+        self.display.console.print(f"Modules executed: {len(pipeline.results)}")
+        self.display.console.print(f"Services found: {sum(len(s) for s in pipeline.discovered_services.values())}")
+        self.display.console.print(f"Credentials found: {len(pipeline.discovered_credentials)}")
+        self.display.console.print(f"Users found: {sum(len(u) for u in pipeline.discovered_users.values())}")
+
+        return True
+
+    def _auto_stop(self) -> bool:
+        """Stop running auto-enumeration."""
+        if not hasattr(self, '_auto_pipeline') or not self._auto_pipeline:
+            self.display.print_warning("No auto-enumeration running")
+            return True
+
+        self._auto_pipeline.stop()
+        self.display.print_success("Stop signal sent")
+        return True
+
+    def _display_auto_summary(self, summary: Dict) -> bool:
+        """Display auto-enumeration summary."""
+        from rich.table import Table
+        from rich.panel import Panel
+
+        self.display.console.print()
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print("[bold white]                    ENUMERATION SUMMARY                            [/bold white]")
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print()
+
+        # Statistics
+        self.display.console.print(f"[bold]Duration:[/bold] {summary['duration_seconds']:.1f} seconds")
+        self.display.console.print(f"[bold]Targets Scanned:[/bold] {summary['targets_scanned']}")
+        self.display.console.print(f"[bold]Modules Executed:[/bold] {summary['modules_executed']}")
+        self.display.console.print(f"  ✓ Successful: {summary['successful_executions']}")
+        self.display.console.print(f"  ✗ Failed: {summary['failed_executions']}")
+        self.display.console.print()
+
+        # Services discovered
+        if summary['services_discovered']:
+            self.display.console.print("[bold]Services Discovered:[/bold]")
+            for target, services in summary['services_discovered'].items():
+                self.display.console.print(f"  {target}: {', '.join(services)}")
+            self.display.console.print()
+
+        # Credentials
+        if summary['credentials_discovered'] > 0:
+            self.display.console.print(f"[bold green]Credentials Discovered:[/bold green] {summary['credentials_discovered']}")
+            self.display.print_info("Use 'creds list' to view credentials")
+            self.display.console.print()
+
+        # Users
+        if summary['users_discovered'] > 0:
+            self.display.console.print(f"[bold]Users Discovered:[/bold] {summary['users_discovered']}")
+            self.display.console.print()
+
+        # Findings
+        if summary['findings'] > 0:
+            self.display.console.print(f"[bold yellow]Findings:[/bold yellow] {summary['findings']}")
+            self.display.print_info("Use 'findings list' to view findings")
+            self.display.console.print()
+
+        # Execution details table
+        if summary['results']:
+            table = Table(title="Module Execution Details")
+            table.add_column("Module", style="cyan")
+            table.add_column("Operation", style="white")
+            table.add_column("Target", style="green")
+            table.add_column("Status", style="bold")
+            table.add_column("Duration", style="dim")
+
+            for result in summary['results'][:20]:  # Limit to 20
+                status = "[green]✓[/green]" if result['success'] else "[red]✗[/red]"
+                table.add_row(
+                    result['module'],
+                    result['operation'] or "-",
+                    result['target'],
+                    status,
+                    f"{result['duration']:.1f}s",
+                )
+
+            self.display.console.print(table)
+
+            if len(summary['results']) > 20:
+                self.display.console.print(f"  ... and {len(summary['results']) - 20} more")
+
+        # Next steps suggestion
+        self.display.console.print()
+        self.display.console.print("[bold]Suggested Next Steps:[/bold]")
+
+        if summary['credentials_discovered'] > 0:
+            self.display.console.print("  • Try credentials with: [cyan]use network/nxc_smb[/cyan] → [cyan]run[/cyan]")
+            self.display.console.print("  • Spray credentials with: [cyan]spray <target>[/cyan]")
+
+        if summary['findings'] > 0:
+            self.display.console.print("  • Review findings: [cyan]findings list[/cyan]")
+            self.display.console.print("  • Generate report: [cyan]report generate html[/cyan]")
+
+        if summary['services_discovered']:
+            services_flat = set()
+            for svcs in summary['services_discovered'].values():
+                services_flat.update(svcs)
+
+            if 'ldap' in services_flat or 'kerberos' in services_flat:
+                self.display.console.print("  • AD enumeration: [cyan]use ad/kerbrute[/cyan]")
+
+            if 'http' in services_flat or 'https' in services_flat:
+                self.display.console.print("  • Web scanning: [cyan]use web/feroxbuster[/cyan]")
 
         return True
