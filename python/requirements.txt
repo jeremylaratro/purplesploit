@@ -9,3 +9,14 @@ pandas>=2.0.0
 
 # Database
 # No external dependencies needed for sqlite3 (built-in)
+
+# Reporting (optional - install for full report generation)
+# pip install purplesploit[reporting]
+jinja2>=3.1.0          # HTML templating (optional, has fallback)
+openpyxl>=3.1.0        # Excel report generation
+weasyprint>=60.0       # PDF report generation (requires system libs)
+
+# OSINT (optional - install for OSINT modules)
+# pip install purplesploit[osint]
+shodan>=1.30.0         # Shodan API integration
+# censys>=2.2.0        # Censys API integration

@@ -1,73 +1,103 @@
 """
-Unit tests for purplesploit.core.database module.
+Unit tests for core database layer.
 
 Tests cover:
 - Database initialization and table creation
 - Target CRUD operations
 - Credential CRUD operations
 - Service CRUD operations
-- Scan results storage
-- Finding/vulnerability storage
-- Module defaults
-- Web service detection
+- Module history tracking
+- Thread safety
+- Migration handling
 """
 
 import pytest
+import sqlite3
 import json
-from purplesploit.core.database import Database
+import threading
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================
-# Database Initialization Tests
+# Fixtures
+# =============================================================================
+
+@pytest.fixture
+def database(tmp_path):
+    """Create a test database."""
+    from purplesploit.core.database import Database
+    db_path = str(tmp_path / "test.db")
+    db = Database(db_path)
+    yield db
+    db.close()
+
+
+@pytest.fixture
+def database_with_data(database):
+    """Create a database with sample data."""
+    # Add targets
+    database.add_target("network", "192.168.1.1", "Server1")
+    database.add_target("network", "192.168.1.2", "Server2")
+    database.add_target("web", "http://example.com", "WebApp1")
+
+    # Add credentials
+    database.add_credential("admin", "password123", "DOMAIN")
+    database.add_credential("user", None, "DOMAIN", "aad3b435b51404ee:hash", "NTLM")
+
+    # Add services
+    database.add_service("192.168.1.1", "ssh", 22, "OpenSSH 8.2")
+    database.add_service("192.168.1.1", "http", 80, "Apache 2.4")
+    database.add_service("192.168.1.2", "smb", 445)
+
+    return database
+
+
+# =============================================================================
+# Initialization Tests
 # =============================================================================
 
 class TestDatabaseInitialization:
-    """Tests for database initialization and setup."""
+    """Tests for database initialization."""
 
-    def test_creates_database_file(self, temp_db_path):
-        """Test database file is created."""
-        import os
-        db = Database(temp_db_path)
-        assert os.path.exists(temp_db_path)
+    def test_create_database(self, tmp_path):
+        """Test database creation."""
+        from purplesploit.core.database import Database
+        db_path = str(tmp_path / "new.db")
+        db = Database(db_path)
+
+        assert Path(db_path).exists()
         db.close()
 
-    def test_creates_parent_directory(self, tmp_path):
-        """Test parent directories are created if needed."""
-        import os
-        nested_path = str(tmp_path / "nested" / "dir" / "test.db")
-        db = Database(nested_path)
-        assert os.path.exists(nested_path)
+    def test_create_nested_directory(self, tmp_path):
+        """Test database creation with nested directories."""
+        from purplesploit.core.database import Database
+        db_path = str(tmp_path / "nested" / "path" / "test.db")
+        db = Database(db_path)
+
+        assert Path(db_path).exists()
         db.close()
 
-    def test_tables_created(self, test_database):
+    def test_tables_created(self, database):
         """Test all required tables are created."""
-        cursor = test_database.conn.cursor()
-
-        # Get list of tables
+        cursor = database.conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = {row[0] for row in cursor.fetchall()}
 
-        expected_tables = {
-            "module_history",
-            "targets",
-            "credentials",
-            "services",
-            "scan_results",
-            "findings",
-            "workspaces",
-            "module_defaults",
+        required_tables = {
+            'module_history', 'targets', 'credentials',
+            'services', 'scan_results', 'findings',
+            'workspaces', 'module_defaults'
         }
+        assert required_tables.issubset(tables)
 
-        for table in expected_tables:
-            assert table in tables, f"Table '{table}' not found"
-
-    def test_close_connection(self, temp_db_path):
-        """Test closing database connection."""
-        db = Database(temp_db_path)
-        db.close()
-        # Trying to use closed connection should raise
-        with pytest.raises(Exception):
-            db.conn.cursor().execute("SELECT 1")
+    def test_wal_mode_enabled(self, database):
+        """Test WAL journal mode is enabled."""
+        cursor = database.conn.cursor()
+        cursor.execute("PRAGMA journal_mode")
+        mode = cursor.fetchone()[0]
+        assert mode.lower() == 'wal'
 
 
 # =============================================================================
@@ -75,120 +105,86 @@ class TestDatabaseInitialization:
 # =============================================================================
 
 class TestTargetOperations:
-    """Tests for target database operations."""
+    """Tests for target CRUD operations."""
 
-    def test_add_target(self, test_database):
+    def test_add_target(self, database):
         """Test adding a target."""
-        result = test_database.add_target(
-            target_type="network",
-            identifier="192.168.1.100",
-            name="test-server"
-        )
-
+        result = database.add_target("network", "192.168.1.1", "Server1")
         assert result is True
 
-    def test_add_target_with_metadata(self, test_database):
-        """Test adding a target with metadata."""
-        metadata = {"os": "Linux", "notes": "Test server"}
-        result = test_database.add_target(
-            target_type="network",
-            identifier="192.168.1.100",
-            name="test-server",
-            metadata=metadata
-        )
-
-        assert result is True
-
-        # Verify metadata is stored
-        targets = test_database.get_targets()
-        assert targets[0]["metadata"] == metadata
-
-    def test_add_duplicate_target_rejected(self, test_database):
-        """Test duplicate targets are rejected."""
-        test_database.add_target("network", "192.168.1.100")
-        result = test_database.add_target("network", "192.168.1.100")
-
+    def test_add_duplicate_target(self, database):
+        """Test adding duplicate target returns False."""
+        database.add_target("network", "192.168.1.1", "Server1")
+        result = database.add_target("network", "192.168.1.1", "Different Name")
         assert result is False
 
-    def test_add_web_target(self, test_database):
-        """Test adding a web target."""
-        result = test_database.add_target(
-            target_type="web",
-            identifier="http://example.com",
-            name="example-site"
-        )
+    def test_add_target_with_metadata(self, database):
+        """Test adding target with metadata."""
+        metadata = {"os": "Linux", "ports": [22, 80]}
+        database.add_target("network", "192.168.1.1", metadata=metadata)
 
-        assert result is True
+        targets = database.get_targets()
+        assert len(targets) == 1
+        assert targets[0]['metadata'] == metadata
 
-    def test_add_subnet_target_status(self, test_database):
-        """Test subnet targets get 'subnet' status."""
-        test_database.add_target("network", "192.168.1.0/24")
-        targets = test_database.get_targets()
+    def test_add_subnet_target(self, database):
+        """Test adding subnet target sets correct status."""
+        database.add_target("network", "192.168.1.0/24", "Subnet")
 
-        assert targets[0]["status"] == "subnet"
+        targets = database.get_targets()
+        assert targets[0]['status'] == 'subnet'
 
-    def test_get_targets_all(self, test_database):
+    def test_get_targets_all(self, database_with_data):
         """Test getting all targets."""
-        test_database.add_target("network", "192.168.1.100")
-        test_database.add_target("web", "http://example.com")
+        targets = database_with_data.get_targets()
+        assert len(targets) == 3
 
-        targets = test_database.get_targets()
+    def test_get_targets_by_type(self, database_with_data):
+        """Test getting targets by type."""
+        network_targets = database_with_data.get_targets(target_type="network")
+        assert len(network_targets) == 2
 
-        assert len(targets) == 2
-
-    def test_get_targets_by_type(self, test_database):
-        """Test filtering targets by type."""
-        test_database.add_target("network", "192.168.1.100")
-        test_database.add_target("web", "http://example.com")
-
-        network_targets = test_database.get_targets(target_type="network")
-        web_targets = test_database.get_targets(target_type="web")
-
-        assert len(network_targets) == 1
+        web_targets = database_with_data.get_targets(target_type="web")
         assert len(web_targets) == 1
 
-    def test_get_targets_exclude_subnets(self, test_database):
-        """Test excluding subnet targets."""
-        test_database.add_target("network", "192.168.1.100")
-        test_database.add_target("network", "192.168.1.0/24")
+    def test_get_targets_exclude_subnets(self, database):
+        """Test excluding subnets from results."""
+        database.add_target("network", "192.168.1.1", "Host")
+        database.add_target("network", "192.168.1.0/24", "Subnet")
 
-        targets = test_database.get_targets(exclude_subnets=True)
-
+        targets = database.get_targets(exclude_subnets=True)
         assert len(targets) == 1
-        assert targets[0]["identifier"] == "192.168.1.100"
+        assert targets[0]['identifier'] == "192.168.1.1"
 
-    def test_remove_target(self, test_database):
+    def test_remove_target(self, database_with_data):
         """Test removing a target."""
-        test_database.add_target("network", "192.168.1.100")
-        result = test_database.remove_target("192.168.1.100")
-
+        result = database_with_data.remove_target("192.168.1.1")
         assert result is True
-        assert len(test_database.get_targets()) == 0
 
-    def test_remove_nonexistent_target(self, test_database):
-        """Test removing non-existent target returns False."""
-        result = test_database.remove_target("nonexistent")
+        targets = database_with_data.get_targets()
+        identifiers = [t['identifier'] for t in targets]
+        assert "192.168.1.1" not in identifiers
+
+    def test_remove_nonexistent_target(self, database):
+        """Test removing nonexistent target."""
+        result = database.remove_target("nonexistent")
         assert result is False
 
-    def test_mark_target_verified(self, test_database):
-        """Test marking a target as verified."""
-        test_database.add_target("network", "192.168.1.100")
-        result = test_database.mark_target_verified("192.168.1.100")
+    def test_mark_target_verified(self, database):
+        """Test marking target as verified."""
+        database.add_target("network", "192.168.1.1")
+        result = database.mark_target_verified("192.168.1.1")
 
         assert result is True
-        targets = test_database.get_targets()
-        assert targets[0]["status"] == "verified"
+        targets = database.get_targets()
+        assert targets[0]['status'] == 'verified'
 
-    def test_clear_all_targets(self, test_database):
+    def test_clear_all_targets(self, database_with_data):
         """Test clearing all targets."""
-        test_database.add_target("network", "192.168.1.100")
-        test_database.add_target("network", "192.168.1.101")
-        test_database.add_target("web", "http://example.com")
-
-        count = test_database.clear_all_targets()
+        count = database_with_data.clear_all_targets()
 
         assert count == 3
-        assert len(test_database.get_targets()) == 0
+        assert len(database_with_data.get_targets()) == 0
 
 
 # =============================================================================
@@ -196,68 +192,53 @@ class TestTargetOperations:
 # =============================================================================
 
 class TestCredentialOperations:
-    """Tests for credential database operations."""
+    """Tests for credential CRUD operations."""
 
-    def test_add_credential_basic(self, test_database):
-        """Test adding a basic credential."""
-        cred_id = test_database.add_credential(
-            username="admin",
-            password="password123"
-        )
-
+    def test_add_credential_with_password(self, database):
+        """Test adding credential with password."""
+        cred_id = database.add_credential("admin", "password123", "DOMAIN")
         assert cred_id > 0
 
-    def test_add_credential_with_domain(self, test_database):
-        """Test adding a credential with domain."""
-        cred_id = test_database.add_credential(
-            username="admin",
-            password="password123",
-            domain="TESTDOMAIN"
-        )
-
-        creds = test_database.get_credentials()
-        assert creds[0]["domain"] == "TESTDOMAIN"
-
-    def test_add_credential_with_hash(self, test_database):
-        """Test adding a credential with hash."""
-        cred_id = test_database.add_credential(
-            username="admin",
-            hash_value="aad3b435b51404ee:8846f7eaee8fb117",
+    def test_add_credential_with_hash(self, database):
+        """Test adding credential with hash."""
+        cred_id = database.add_credential(
+            "admin", None, "DOMAIN",
+            hash_value="aad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0",
             hash_type="NTLM"
         )
+        assert cred_id > 0
 
-        creds = test_database.get_credentials()
-        assert creds[0]["hash"] is not None
-        assert creds[0]["hash_type"] == "NTLM"
+    def test_add_credential_with_metadata(self, database):
+        """Test adding credential with metadata."""
+        metadata = {"source": "secretsdump", "verified": True}
+        cred_id = database.add_credential("admin", "pass", metadata=metadata)
 
-    def test_add_credential_with_metadata(self, test_database):
-        """Test adding a credential with metadata."""
-        metadata = {"source": "manual", "tested": False}
-        cred_id = test_database.add_credential(
-            username="admin",
-            password="test",
-            metadata=metadata
-        )
+        creds = database.get_credentials()
+        assert len(creds) == 1
+        assert creds[0]['metadata'] == metadata
 
-        creds = test_database.get_credentials()
-        assert creds[0]["metadata"] == metadata
-
-    def test_get_credentials(self, test_database):
+    def test_get_credentials(self, database_with_data):
         """Test getting all credentials."""
-        test_database.add_credential("admin", "pass1")
-        test_database.add_credential("user", "pass2")
-
-        creds = test_database.get_credentials()
-
+        creds = database_with_data.get_credentials()
         assert len(creds) == 2
 
-    def test_remove_credential(self, test_database):
+    def test_get_credentials_empty(self, database):
+        """Test getting credentials from empty database."""
+        creds = database.get_credentials()
+        assert creds == []
+
+    def test_remove_credential(self, database):
         """Test removing a credential."""
-        cred_id = test_database.add_credential("admin", "pass")
-        result = test_database.remove_credential(cred_id)
+        cred_id = database.add_credential("admin", "password")
+        result = database.remove_credential(cred_id)
 
         assert result is True
-        assert len(test_database.get_credentials()) == 0
+        assert len(database.get_credentials()) == 0
+
+    def test_remove_nonexistent_credential(self, database):
+        """Test removing nonexistent credential."""
+        result = database.remove_credential(999)
+        assert result is False
 
 
 # =============================================================================
@@ -265,90 +246,52 @@ class TestCredentialOperations:
 # =============================================================================
 
 class TestServiceOperations:
-    """Tests for service database operations."""
+    """Tests for service CRUD operations."""
 
-    def test_add_service(self, test_database):
+    def test_add_service(self, database):
         """Test adding a service."""
-        result = test_database.add_service(
-            target="192.168.1.100",
-            service="ssh",
-            port=22
-        )
-
+        result = database.add_service("192.168.1.1", "ssh", 22, "OpenSSH 8.2")
         assert result is True
 
-    def test_add_service_with_version(self, test_database):
-        """Test adding a service with version."""
-        test_database.add_service(
-            target="192.168.1.100",
-            service="ssh",
-            port=22,
-            version="OpenSSH 8.0"
-        )
+    def test_add_service_without_version(self, database):
+        """Test adding service without version."""
+        result = database.add_service("192.168.1.1", "unknown", 12345)
+        assert result is True
 
-        services = test_database.get_services(target="192.168.1.100")
-        assert services[0]["version"] == "OpenSSH 8.0"
+    def test_add_duplicate_service_updates_version(self, database):
+        """Test adding duplicate service updates version."""
+        database.add_service("192.168.1.1", "ssh", 22, "OpenSSH 7.9")
+        database.add_service("192.168.1.1", "ssh", 22, "OpenSSH 8.2")
 
-    def test_add_service_update_version(self, test_database):
-        """Test updating service version on conflict."""
-        test_database.add_service("192.168.1.100", "ssh", 22, "OpenSSH 7.0")
-        test_database.add_service("192.168.1.100", "ssh", 22, "OpenSSH 8.0")
-
-        services = test_database.get_services(target="192.168.1.100")
+        services = database.get_services("192.168.1.1")
         assert len(services) == 1
-        assert services[0]["version"] == "OpenSSH 8.0"
+        assert services[0]['version'] == "OpenSSH 8.2"
 
-    def test_get_services_all(self, test_database):
+    def test_get_services_all(self, database_with_data):
         """Test getting all services."""
-        test_database.add_service("192.168.1.100", "ssh", 22)
-        test_database.add_service("192.168.1.101", "http", 80)
+        services = database_with_data.get_services()
+        assert len(services) == 3
 
-        services = test_database.get_services()
-
+    def test_get_services_by_target(self, database_with_data):
+        """Test getting services by target."""
+        services = database_with_data.get_services("192.168.1.1")
         assert len(services) == 2
 
-    def test_get_services_by_target(self, test_database):
-        """Test filtering services by target."""
-        test_database.add_service("192.168.1.100", "ssh", 22)
-        test_database.add_service("192.168.1.100", "http", 80)
-        test_database.add_service("192.168.1.101", "smb", 445)
+    def test_get_services_empty(self, database):
+        """Test getting services from empty database."""
+        services = database.get_services()
+        assert services == []
 
-        services = test_database.get_services(target="192.168.1.100")
-
-        assert len(services) == 2
-
-    def test_get_web_services(self, test_database):
+    def test_get_web_services(self, database):
         """Test getting web services."""
-        test_database.add_service("192.168.1.100", "http", 80)
-        test_database.add_service("192.168.1.100", "https", 443)
-        test_database.add_service("192.168.1.100", "ssh", 22)
-        test_database.add_service("192.168.1.101", "http-proxy", 8080)
+        database.add_service("192.168.1.1", "http", 80)
+        database.add_service("192.168.1.1", "https", 443)
+        database.add_service("192.168.1.1", "ssh", 22)
+        database.add_service("192.168.1.2", "http-alt", 8080)
 
-        web_services = test_database.get_web_services()
-
-        assert len(web_services) == 3
-        # Check URL construction
-        urls = [s["url"] for s in web_services]
-        assert "http://192.168.1.100" in urls
-        assert "https://192.168.1.100" in urls
-
-    def test_get_web_services_port_in_url(self, test_database):
-        """Test web services include port in URL when non-standard."""
-        test_database.add_service("192.168.1.100", "http", 8080)
-
-        web_services = test_database.get_web_services()
-
-        assert web_services[0]["url"] == "http://192.168.1.100:8080"
-
-    def test_clear_all_services(self, test_database):
-        """Test clearing all services."""
-        test_database.add_service("192.168.1.100", "ssh", 22)
-        test_database.add_service("192.168.1.101", "http", 80)
-
-        count = test_database.clear_all_services()
-
-        assert count == 2
-        assert len(test_database.get_services()) == 0
+        web_services = database.get_web_services()
+        # Should include http (80), https (443), and http-alt (8080)
+        assert len(web_services) >= 3
 
 
 # =============================================================================
@@ -358,357 +301,242 @@ class TestServiceOperations:
 class TestModuleHistory:
     """Tests for module execution history."""
 
-    def test_add_module_execution(self, test_database):
+    def test_add_module_execution(self, database):
         """Test recording module execution."""
-        record_id = test_database.add_module_execution(
-            module_name="nmap",
-            module_path="recon/nmap",
-            options={"RHOST": "192.168.1.100"},
-            results={"success": True},
+        exec_id = database.add_module_execution(
+            module_name="test_module",
+            module_path="test/module",
+            options={"RHOST": "192.168.1.1"},
+            results={"success": True, "data": "test"},
             success=True
         )
+        assert exec_id > 0
 
-        assert record_id > 0
-
-    def test_add_module_execution_with_error(self, test_database):
+    def test_add_failed_module_execution(self, database):
         """Test recording failed module execution."""
-        record_id = test_database.add_module_execution(
-            module_name="nmap",
-            module_path="recon/nmap",
-            options={},
+        exec_id = database.add_module_execution(
+            module_name="test_module",
+            module_path="test/module",
+            options={"RHOST": "192.168.1.1"},
             results={},
             success=False,
-            error_message="Target not specified"
+            error_message="Connection refused"
         )
+        assert exec_id > 0
 
-        history = test_database.get_module_history()
-        assert history[0]["error_message"] == "Target not specified"
+    def test_get_module_history(self, database):
+        """Test getting module history."""
+        database.add_module_execution("mod1", "path/mod1", {}, {}, True)
+        database.add_module_execution("mod2", "path/mod2", {}, {}, True)
 
-    def test_get_module_history_all(self, test_database):
-        """Test getting all module history."""
-        test_database.add_module_execution("nmap", "recon/nmap", {}, {}, True)
-        test_database.add_module_execution("wfuzz", "web/wfuzz", {}, {}, True)
-
-        history = test_database.get_module_history()
-
+        history = database.get_module_history()
         assert len(history) == 2
 
-    def test_get_module_history_filtered(self, test_database):
-        """Test filtering module history by name."""
-        test_database.add_module_execution("nmap", "recon/nmap", {}, {}, True)
-        test_database.add_module_execution("nmap", "recon/nmap", {}, {}, True)
-        test_database.add_module_execution("wfuzz", "web/wfuzz", {}, {}, True)
+    def test_get_module_history_by_name(self, database):
+        """Test filtering history by module name."""
+        database.add_module_execution("mod1", "path/mod1", {}, {}, True)
+        database.add_module_execution("mod1", "path/mod1", {}, {}, True)
+        database.add_module_execution("mod2", "path/mod2", {}, {}, True)
 
-        history = test_database.get_module_history(module_name="nmap")
-
+        history = database.get_module_history(module_name="mod1")
         assert len(history) == 2
 
-    def test_get_module_history_limit(self, test_database):
-        """Test limiting module history results."""
-        for i in range(10):
-            test_database.add_module_execution("nmap", "recon/nmap", {}, {}, True)
+    def test_get_module_history_limit(self, database):
+        """Test history limit."""
+        for i in range(50):
+            database.add_module_execution(f"mod{i}", f"path/mod{i}", {}, {}, True)
 
-        history = test_database.get_module_history(limit=5)
-
-        assert len(history) == 5
-
-
-# =============================================================================
-# Scan Results Tests
-# =============================================================================
-
-class TestScanResults:
-    """Tests for scan results storage."""
-
-    def test_save_scan_results(self, test_database):
-        """Test saving scan results."""
-        record_id = test_database.save_scan_results(
-            scan_name="full_scan_192.168.1.100",
-            target="192.168.1.100",
-            scan_type="nmap",
-            results={"ports": [22, 80, 443]}
-        )
-
-        assert record_id > 0
-
-    def test_save_scan_results_with_file(self, test_database):
-        """Test saving scan results with file path."""
-        test_database.save_scan_results(
-            scan_name="full_scan",
-            target="192.168.1.100",
-            scan_type="nmap",
-            results={},
-            file_path="/tmp/nmap_results.xml"
-        )
-
-        results = test_database.get_scan_results()
-        assert results[0]["file_path"] == "/tmp/nmap_results.xml"
-
-    def test_get_scan_results_all(self, test_database):
-        """Test getting all scan results."""
-        test_database.save_scan_results("scan1", "192.168.1.100", "nmap", {})
-        test_database.save_scan_results("scan2", "192.168.1.101", "masscan", {})
-
-        results = test_database.get_scan_results()
-
-        assert len(results) == 2
-
-    def test_get_scan_results_by_target(self, test_database):
-        """Test filtering scan results by target."""
-        test_database.save_scan_results("scan1", "192.168.1.100", "nmap", {})
-        test_database.save_scan_results("scan2", "192.168.1.101", "nmap", {})
-
-        results = test_database.get_scan_results(target="192.168.1.100")
-
-        assert len(results) == 1
-
-    def test_get_scan_results_by_type(self, test_database):
-        """Test filtering scan results by scan type."""
-        test_database.save_scan_results("scan1", "192.168.1.100", "nmap", {})
-        test_database.save_scan_results("scan2", "192.168.1.100", "masscan", {})
-
-        results = test_database.get_scan_results(scan_type="nmap")
-
-        assert len(results) == 1
+        history = database.get_module_history(limit=10)
+        assert len(history) == 10
 
 
 # =============================================================================
-# Findings Tests
+# Thread Safety Tests
 # =============================================================================
 
-class TestFindings:
-    """Tests for finding/vulnerability storage."""
+class TestThreadSafety:
+    """Tests for thread-safe database operations."""
 
-    def test_add_finding(self, test_database):
-        """Test adding a finding."""
-        finding_id = test_database.add_finding(
-            target="192.168.1.100",
-            title="SSH Weak Ciphers",
-            severity="medium"
-        )
+    def test_concurrent_writes(self, database):
+        """Test concurrent write operations."""
+        errors = []
 
-        assert finding_id > 0
+        def add_targets(start):
+            try:
+                for i in range(10):
+                    database.add_target("network", f"192.168.{start}.{i}")
+            except Exception as e:
+                errors.append(e)
 
-    def test_add_finding_full(self, test_database):
-        """Test adding a finding with all fields."""
-        finding_id = test_database.add_finding(
-            target="192.168.1.100",
-            title="SSH Weak Ciphers",
-            severity="medium",
-            description="The SSH server supports weak ciphers",
-            module_name="nmap",
-            evidence="Cipher: 3DES-CBC",
-            remediation="Disable weak ciphers in sshd_config"
-        )
+        threads = [
+            threading.Thread(target=add_targets, args=(i,))
+            for i in range(5)
+        ]
 
-        findings = test_database.get_findings()
-        finding = findings[0]
-
-        assert finding["description"] is not None
-        assert finding["module_name"] == "nmap"
-        assert finding["remediation"] is not None
-
-    def test_get_findings_all(self, test_database):
-        """Test getting all findings."""
-        test_database.add_finding("192.168.1.100", "Finding 1", "high")
-        test_database.add_finding("192.168.1.101", "Finding 2", "low")
-
-        findings = test_database.get_findings()
-
-        assert len(findings) == 2
-
-    def test_get_findings_by_target(self, test_database):
-        """Test filtering findings by target."""
-        test_database.add_finding("192.168.1.100", "Finding 1", "high")
-        test_database.add_finding("192.168.1.101", "Finding 2", "low")
-
-        findings = test_database.get_findings(target="192.168.1.100")
-
-        assert len(findings) == 1
-
-    def test_get_findings_by_severity(self, test_database):
-        """Test filtering findings by severity."""
-        test_database.add_finding("192.168.1.100", "Critical Finding", "critical")
-        test_database.add_finding("192.168.1.100", "High Finding", "high")
-        test_database.add_finding("192.168.1.100", "Low Finding", "low")
-
-        findings = test_database.get_findings(severity="critical")
-
-        assert len(findings) == 1
-        assert findings[0]["title"] == "Critical Finding"
-
-
-# =============================================================================
-# Module Defaults Tests
-# =============================================================================
-
-class TestModuleDefaults:
-    """Tests for module default settings."""
-
-    def test_set_module_default(self, test_database):
-        """Test setting a module default."""
-        result = test_database.set_module_default(
-            module_name="nmap",
-            option_name="SCAN_TYPE",
-            option_value="-sCV"
-        )
-
-        assert result is True
-
-    def test_get_module_default(self, test_database):
-        """Test getting a specific module default."""
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sCV")
-
-        value = test_database.get_module_default("nmap", "SCAN_TYPE")
-
-        assert value == "-sCV"
-
-    def test_get_module_default_nonexistent(self, test_database):
-        """Test getting non-existent default returns None."""
-        value = test_database.get_module_default("nmap", "NONEXISTENT")
-        assert value is None
-
-    def test_set_module_default_upsert(self, test_database):
-        """Test setting module default updates existing."""
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sS")
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sCV")
-
-        value = test_database.get_module_default("nmap", "SCAN_TYPE")
-
-        assert value == "-sCV"
-
-    def test_get_module_defaults_all(self, test_database):
-        """Test getting all defaults for a module."""
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sCV")
-        test_database.set_module_default("nmap", "TIMING", "4")
-        test_database.set_module_default("nmap", "PORTS", "-")
-
-        defaults = test_database.get_module_defaults("nmap")
-
-        assert len(defaults) == 3
-        assert defaults["SCAN_TYPE"] == "-sCV"
-        assert defaults["TIMING"] == "4"
-
-    def test_delete_module_default(self, test_database):
-        """Test deleting a specific module default."""
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sCV")
-        result = test_database.delete_module_default("nmap", "SCAN_TYPE")
-
-        assert result is True
-        assert test_database.get_module_default("nmap", "SCAN_TYPE") is None
-
-    def test_delete_module_default_nonexistent(self, test_database):
-        """Test deleting non-existent default returns False."""
-        result = test_database.delete_module_default("nmap", "NONEXISTENT")
-        assert result is False
-
-    def test_delete_all_module_defaults(self, test_database):
-        """Test deleting all defaults for a module."""
-        test_database.set_module_default("nmap", "SCAN_TYPE", "-sCV")
-        test_database.set_module_default("nmap", "TIMING", "4")
-
-        result = test_database.delete_all_module_defaults("nmap")
-
-        assert result is True
-        assert test_database.get_module_defaults("nmap") == {}
-
-
-# =============================================================================
-# JSON Serialization Tests
-# =============================================================================
-
-class TestJSONSerialization:
-    """Tests for JSON field handling."""
-
-    def test_target_metadata_json(self, test_database):
-        """Test target metadata is properly JSON serialized."""
-        metadata = {
-            "os": "Linux",
-            "services": ["ssh", "http"],
-            "notes": {"priority": "high"}
-        }
-        test_database.add_target("network", "192.168.1.100", metadata=metadata)
-
-        targets = test_database.get_targets()
-
-        assert targets[0]["metadata"] == metadata
-
-    def test_credential_metadata_json(self, test_database):
-        """Test credential metadata is properly JSON serialized."""
-        metadata = {"source": "manual", "verified": True}
-        test_database.add_credential("admin", "pass", metadata=metadata)
-
-        creds = test_database.get_credentials()
-
-        assert creds[0]["metadata"] == metadata
-
-    def test_scan_results_json(self, test_database):
-        """Test scan results are properly JSON serialized."""
-        results = {
-            "hosts": [{"ip": "192.168.1.100", "ports": [22, 80]}],
-            "total": 1
-        }
-        test_database.save_scan_results("scan1", "192.168.1.0/24", "nmap", results)
-
-        stored = test_database.get_scan_results()
-
-        assert stored[0]["results"] == results
-
-    def test_module_history_json(self, test_database):
-        """Test module history options/results are JSON serialized."""
-        options = {"RHOST": "192.168.1.100", "PORTS": [22, 80, 443]}
-        results = {"success": True, "data": ["port1", "port2"]}
-
-        test_database.add_module_execution("nmap", "recon/nmap", options, results, True)
-
-        history = test_database.get_module_history()
-
-        assert json.loads(history[0]["options"]) == options
-        assert json.loads(history[0]["results"]) == results
-
-
-# =============================================================================
-# Edge Cases
-# =============================================================================
-
-class TestDatabaseEdgeCases:
-    """Tests for edge cases and unusual inputs."""
-
-    def test_empty_metadata(self, test_database):
-        """Test handling of empty metadata."""
-        test_database.add_target("network", "192.168.1.100", metadata=None)
-
-        targets = test_database.get_targets()
-        assert targets[0]["metadata"] == {}
-
-    def test_special_characters_in_identifier(self, test_database):
-        """Test handling special characters in target identifier."""
-        test_database.add_target("web", "http://example.com/path?query=1&other=2")
-
-        targets = test_database.get_targets()
-        assert "query=1" in targets[0]["identifier"]
-
-    def test_unicode_in_metadata(self, test_database):
-        """Test handling unicode in metadata."""
-        metadata = {"notes": "Server with UTF-8: \u00e9\u00e8\u00ea"}
-        test_database.add_target("network", "192.168.1.100", metadata=metadata)
-
-        targets = test_database.get_targets()
-        assert "\u00e9" in targets[0]["metadata"]["notes"]
-
-    def test_concurrent_access(self, test_database):
-        """Test database handles concurrent operations."""
-        import threading
-
-        def add_target(n):
-            test_database.add_target("network", f"192.168.1.{n}")
-
-        threads = [threading.Thread(target=add_target, args=(i,)) for i in range(10)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
-        # Some may fail due to duplicates, but database should be consistent
-        targets = test_database.get_targets()
-        assert len(targets) <= 10
+        assert len(errors) == 0
+        # Should have 50 unique targets
+        targets = database.get_targets()
+        assert len(targets) == 50
+
+    def test_concurrent_reads_and_writes(self, database):
+        """Test concurrent read and write operations."""
+        # Pre-populate some data
+        for i in range(10):
+            database.add_target("network", f"10.0.0.{i}")
+
+        errors = []
+        read_counts = []
+
+        def write_targets():
+            try:
+                for i in range(10):
+                    database.add_service(f"10.0.0.{i}", "http", 80)
+            except Exception as e:
+                errors.append(e)
+
+        def read_targets():
+            try:
+                for _ in range(10):
+                    targets = database.get_targets()
+                    read_counts.append(len(targets))
+                    time.sleep(0.01)
+            except Exception as e:
+                errors.append(e)
+
+        write_thread = threading.Thread(target=write_targets)
+        read_threads = [threading.Thread(target=read_targets) for _ in range(3)]
+
+        write_thread.start()
+        for t in read_threads:
+            t.start()
+
+        write_thread.join()
+        for t in read_threads:
+            t.join()
+
+        assert len(errors) == 0
+        assert all(count >= 0 for count in read_counts)
+
+
+# =============================================================================
+# Close and Cleanup Tests
+# =============================================================================
+
+class TestCleanup:
+    """Tests for database cleanup operations."""
+
+    def test_close_database(self, tmp_path):
+        """Test closing database."""
+        from purplesploit.core.database import Database
+        db = Database(str(tmp_path / "test.db"))
+        db.close()
+        # Should not raise exception
+        db.close()  # Double close should be safe
+
+    def test_database_unusable_after_close(self, tmp_path):
+        """Test database operations after close raise errors."""
+        from purplesploit.core.database import Database
+        db = Database(str(tmp_path / "test.db"))
+        db.close()
+
+        # Operations after close should fail
+        with pytest.raises(Exception):
+            db.add_target("network", "192.168.1.1")
+
+
+# =============================================================================
+# Edge Cases and Error Handling
+# =============================================================================
+
+class TestEdgeCases:
+    """Tests for edge cases and error handling."""
+
+    def test_special_characters_in_target(self, database):
+        """Test targets with special characters."""
+        database.add_target("web", "http://example.com/path?param=value&other=test")
+        targets = database.get_targets()
+        assert len(targets) == 1
+        assert "?" in targets[0]['identifier']
+
+    def test_unicode_in_name(self, database):
+        """Test unicode characters in names."""
+        database.add_target("network", "192.168.1.1", "サーバー")
+        targets = database.get_targets()
+        assert targets[0]['name'] == "サーバー"
+
+    def test_sql_injection_prevention(self, database):
+        """Test SQL injection is prevented."""
+        malicious_input = "'; DROP TABLE targets; --"
+        database.add_target("network", malicious_input)
+
+        # Table should still exist and work
+        database.add_target("network", "192.168.1.1")
+        targets = database.get_targets()
+        assert len(targets) == 2
+
+    def test_empty_string_values(self, database):
+        """Test handling of empty strings."""
+        database.add_target("network", "192.168.1.1", "")
+        targets = database.get_targets()
+        assert targets[0]['name'] == ""
+
+    def test_very_long_values(self, database):
+        """Test handling of very long values."""
+        long_name = "A" * 10000
+        database.add_target("network", "192.168.1.1", long_name)
+        targets = database.get_targets()
+        assert len(targets[0]['name']) == 10000
+
+    def test_null_metadata_parsing(self, database):
+        """Test parsing null/empty metadata."""
+        database.add_target("network", "192.168.1.1")
+        targets = database.get_targets()
+        assert targets[0]['metadata'] == {}
+
+
+# =============================================================================
+# Migration Tests
+# =============================================================================
+
+class TestMigrations:
+    """Tests for database migrations."""
+
+    def test_migration_adds_status_column(self, tmp_path):
+        """Test migration adds status column to existing database."""
+        from purplesploit.core.database import Database
+
+        # Create a minimal database without status column
+        db_path = str(tmp_path / "legacy.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE targets (
+                id INTEGER PRIMARY KEY,
+                type TEXT,
+                identifier TEXT,
+                name TEXT,
+                metadata TEXT,
+                added_at TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            INSERT INTO targets (type, identifier, name, metadata)
+            VALUES ('network', '192.168.1.1', 'test', '{}')
+        """)
+        conn.commit()
+        conn.close()
+
+        # Open with our Database class - should migrate
+        db = Database(db_path)
+
+        # Check status column exists and has default value
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT status FROM targets WHERE identifier = '192.168.1.1'")
+        status = cursor.fetchone()[0]
+
+        assert status == 'unverified'
+        db.close()

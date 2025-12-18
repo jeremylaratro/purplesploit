@@ -1,0 +1,3 @@
+# Custom report templates go here
+# Templates should be Jinja2 HTML files
+# See html.py for the default template structure
