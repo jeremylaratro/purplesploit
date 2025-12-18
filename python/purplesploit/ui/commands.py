@@ -130,6 +130,11 @@ class CommandHandler:
             "spray": self.cmd_spray,              # Smart credential spraying
             "credspray": self.cmd_spray,          # Alias
 
+            # Advanced: Session/Shell Management
+            "sessions": self.cmd_sessions,        # Session management
+            "session": self.cmd_sessions,         # Alias
+            "interact": self.cmd_interact,        # Interact with session
+
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -5077,5 +5082,615 @@ class CommandHandler:
             self.display.console.print("  • Use valid credentials: [cyan]creds list[/cyan]")
             self.display.console.print("  • Add to attack graph: [cyan]graph add cred <user> <pass>[/cyan]")
             self.display.console.print("  • Try lateral movement: [cyan]use network/nxc_smb[/cyan]")
+
+        return True
+
+    # =========================================================================
+    # Session/Shell Management Commands
+    # =========================================================================
+
+    def cmd_sessions(self, args: List[str]) -> bool:
+        """
+        Session and shell management.
+
+        Usage:
+            sessions                       - List all sessions
+            sessions list                  - List all sessions
+            sessions active                - List active sessions only
+            sessions elevated              - List elevated sessions only
+            sessions add <type> <host>     - Create a session manually
+            sessions select <id>           - Select a session as current
+            sessions close <id>            - Close a session
+            sessions kill <id>             - Alias for close
+            sessions tag <id> <tag>        - Add tag to session
+            sessions untag <id> <tag>      - Remove tag from session
+            sessions info <id>             - Show session details
+            sessions routes                - Show all routes
+            sessions route add <sess> <subnet>  - Add route through session
+            sessions forwards              - Show port forwards
+            sessions forward add <local> <remote_host> <remote_port>
+            sessions stats                 - Show statistics
+            sessions export [file]         - Export sessions to JSON
+            sessions clear                 - Clear all sessions
+
+        Session types: shell, ssh, winrm, meterpreter, beacon, smb_exec, etc.
+
+        Examples:
+            sessions add shell 192.168.1.100
+            sessions add ssh 10.0.0.1 --user admin --priv high
+            sessions select sess:abc123
+            sessions tag sess:abc123 dc
+            sessions route add sess:abc123 10.10.10.0
+        """
+        from purplesploit.core.session_manager import (
+            SessionManager, create_session_manager,
+            SessionType, SessionState, SessionPrivilege
+        )
+
+        # Initialize session manager if not exists
+        if not hasattr(self, '_session_manager') or self._session_manager is None:
+            self._session_manager = create_session_manager(self.framework)
+
+        manager = self._session_manager
+
+        if not args or args[0] == "list":
+            return self._sessions_list(manager, "all")
+
+        subcommand = args[0].lower()
+
+        if subcommand == "active":
+            return self._sessions_list(manager, "active")
+        elif subcommand == "elevated":
+            return self._sessions_list(manager, "elevated")
+        elif subcommand == "add":
+            return self._sessions_add(manager, args[1:])
+        elif subcommand == "select":
+            return self._sessions_select(manager, args[1:])
+        elif subcommand in ["close", "kill"]:
+            return self._sessions_close(manager, args[1:])
+        elif subcommand == "tag":
+            return self._sessions_tag(manager, args[1:], add=True)
+        elif subcommand == "untag":
+            return self._sessions_tag(manager, args[1:], add=False)
+        elif subcommand == "info":
+            return self._sessions_info(manager, args[1:])
+        elif subcommand == "routes":
+            return self._sessions_routes(manager)
+        elif subcommand == "route":
+            return self._sessions_route(manager, args[1:])
+        elif subcommand == "forwards":
+            return self._sessions_forwards(manager)
+        elif subcommand == "forward":
+            return self._sessions_forward(manager, args[1:])
+        elif subcommand == "stats":
+            return self._sessions_stats(manager)
+        elif subcommand == "export":
+            return self._sessions_export(manager, args[1:])
+        elif subcommand == "clear":
+            return self._sessions_clear(manager)
+        else:
+            self.display.print_error(f"Unknown sessions subcommand: {subcommand}")
+            self.display.print_info("Use 'sessions' for usage info")
+
+        return True
+
+    def _sessions_list(self, manager, filter_type: str) -> bool:
+        """List sessions."""
+        from rich.table import Table
+
+        if filter_type == "active":
+            sessions = manager.get_active_sessions()
+            title = "Active Sessions"
+        elif filter_type == "elevated":
+            sessions = manager.get_elevated_sessions()
+            title = "Elevated Sessions"
+        else:
+            sessions = list(manager.sessions.values())
+            title = "All Sessions"
+
+        if not sessions:
+            self.display.print_warning(f"No {filter_type} sessions")
+            return True
+
+        self.display.console.print()
+        table = Table(title=title)
+        table.add_column("ID", style="cyan")
+        table.add_column("Type", style="green")
+        table.add_column("Target", style="white")
+        table.add_column("User", style="yellow")
+        table.add_column("Priv", style="bold")
+        table.add_column("State", style="dim")
+        table.add_column("Tags", style="magenta")
+
+        current_id = manager._current_session_id
+
+        for session in sessions:
+            # Highlight current session
+            id_style = "bold cyan" if session.id == current_id else "cyan"
+            sess_id = f"* {session.id}" if session.id == current_id else session.id
+
+            # Color privilege
+            priv_colors = {
+                "low": "dim",
+                "medium": "white",
+                "high": "yellow",
+                "system": "red",
+                "domain_admin": "bold red",
+            }
+            priv = session.privilege.value
+            priv_display = f"[{priv_colors.get(priv, 'white')}]{priv}[/{priv_colors.get(priv, 'white')}]"
+
+            # Color state
+            state_colors = {
+                "active": "green",
+                "dormant": "yellow",
+                "disconnected": "red",
+                "closed": "dim",
+            }
+            state = session.state.value
+            state_display = f"[{state_colors.get(state, 'white')}]{state}[/{state_colors.get(state, 'white')}]"
+
+            user_display = ""
+            if session.username:
+                if session.domain:
+                    user_display = f"{session.domain}\\{session.username}"
+                else:
+                    user_display = session.username
+
+            table.add_row(
+                sess_id,
+                session.session_type.value,
+                f"{session.target_host}:{session.target_port or '-'}",
+                user_display,
+                priv_display,
+                state_display,
+                ", ".join(session.tags) if session.tags else "",
+            )
+
+        self.display.console.print(table)
+
+        if current_id:
+            self.display.console.print(f"\n[dim]* = current session[/dim]")
+
+        return True
+
+    def _sessions_add(self, manager, args: List[str]) -> bool:
+        """Add a session manually."""
+        if len(args) < 2:
+            self.display.print_error("Usage: sessions add <type> <host> [options]")
+            self.display.print_info("Types: shell, ssh, winrm, meterpreter, beacon, smb_exec")
+            return True
+
+        session_type = args[0]
+        target_host = args[1]
+
+        # Parse options
+        target_port = None
+        username = None
+        domain = None
+        privilege = "low"
+        os_info = None
+
+        i = 2
+        while i < len(args):
+            if args[i] in ["-p", "--port"] and i + 1 < len(args):
+                target_port = int(args[i + 1])
+                i += 2
+            elif args[i] in ["-u", "--user"] and i + 1 < len(args):
+                username = args[i + 1]
+                i += 2
+            elif args[i] in ["-d", "--domain"] and i + 1 < len(args):
+                domain = args[i + 1]
+                i += 2
+            elif args[i] == "--priv" and i + 1 < len(args):
+                privilege = args[i + 1]
+                i += 2
+            elif args[i] == "--os" and i + 1 < len(args):
+                os_info = args[i + 1]
+                i += 2
+            else:
+                i += 1
+
+        try:
+            session = manager.create_session(
+                session_type=session_type,
+                target_host=target_host,
+                target_port=target_port,
+                username=username,
+                domain=domain,
+                privilege=privilege,
+                os=os_info,
+            )
+
+            self.display.print_success(f"Created session: {session.id}")
+            self.display.print_info(f"  Type: {session.session_type.value}")
+            self.display.print_info(f"  Target: {target_host}")
+
+        except ValueError as e:
+            self.display.print_error(f"Invalid session type: {e}")
+
+        return True
+
+    def _sessions_select(self, manager, args: List[str]) -> bool:
+        """Select a session."""
+        if not args:
+            self.display.print_error("Usage: sessions select <session_id>")
+            return True
+
+        session_id = args[0]
+
+        if manager.select_session(session_id):
+            session = manager.get_session(session_id)
+            self.display.print_success(f"Selected session: {session.display_name}")
+        else:
+            self.display.print_error(f"Session not found: {session_id}")
+
+        return True
+
+    def _sessions_close(self, manager, args: List[str]) -> bool:
+        """Close a session."""
+        if not args:
+            self.display.print_error("Usage: sessions close <session_id>")
+            return True
+
+        session_id = args[0]
+
+        if manager.close_session(session_id):
+            self.display.print_success(f"Closed session: {session_id}")
+        else:
+            self.display.print_error(f"Session not found: {session_id}")
+
+        return True
+
+    def _sessions_tag(self, manager, args: List[str], add: bool) -> bool:
+        """Add or remove tag from session."""
+        if len(args) < 2:
+            cmd = "tag" if add else "untag"
+            self.display.print_error(f"Usage: sessions {cmd} <session_id> <tag>")
+            return True
+
+        session_id = args[0]
+        tag = args[1]
+
+        if add:
+            if manager.add_tag(session_id, tag):
+                self.display.print_success(f"Added tag '{tag}' to {session_id}")
+            else:
+                self.display.print_error(f"Session not found: {session_id}")
+        else:
+            if manager.remove_tag(session_id, tag):
+                self.display.print_success(f"Removed tag '{tag}' from {session_id}")
+            else:
+                self.display.print_error(f"Session not found or tag not present")
+
+        return True
+
+    def _sessions_info(self, manager, args: List[str]) -> bool:
+        """Show session details."""
+        if not args:
+            # Show current session if set
+            session = manager.current_session
+            if not session:
+                self.display.print_error("Usage: sessions info <session_id>")
+                return True
+        else:
+            session = manager.get_session(args[0])
+
+        if not session:
+            self.display.print_error(f"Session not found: {args[0]}")
+            return True
+
+        self.display.console.print()
+        self.display.console.print(f"[bold cyan]Session: {session.id}[/bold cyan]")
+        self.display.console.print()
+        self.display.console.print(f"[bold]Type:[/bold] {session.session_type.value}")
+        self.display.console.print(f"[bold]Target:[/bold] {session.target_host}:{session.target_port or '-'}")
+        self.display.console.print(f"[bold]State:[/bold] {session.state.value}")
+        self.display.console.print(f"[bold]Privilege:[/bold] {session.privilege.value}")
+
+        if session.username:
+            user = f"{session.domain}\\{session.username}" if session.domain else session.username
+            self.display.console.print(f"[bold]User:[/bold] {user}")
+
+        if session.os:
+            self.display.console.print(f"[bold]OS:[/bold] {session.os}")
+        if session.arch:
+            self.display.console.print(f"[bold]Arch:[/bold] {session.arch}")
+        if session.process_name:
+            self.display.console.print(f"[bold]Process:[/bold] {session.process_name} (PID: {session.process_id})")
+
+        self.display.console.print(f"[bold]Established:[/bold] {session.established_at}")
+        if session.last_checkin:
+            self.display.console.print(f"[bold]Last Checkin:[/bold] {session.last_checkin}")
+
+        if session.tags:
+            self.display.console.print(f"[bold]Tags:[/bold] {', '.join(session.tags)}")
+        if session.notes:
+            self.display.console.print(f"[bold]Notes:[/bold] {session.notes}")
+
+        # Show routes through this session
+        routes = manager.get_routes_for_session(session.id)
+        if routes:
+            self.display.console.print(f"\n[bold]Routes ({len(routes)}):[/bold]")
+            for route in routes:
+                self.display.console.print(f"  • {route.subnet}/{route.netmask}")
+
+        return True
+
+    def _sessions_routes(self, manager) -> bool:
+        """Show all routes."""
+        from rich.table import Table
+
+        routes = list(manager.routes.values())
+
+        if not routes:
+            self.display.print_warning("No routes configured")
+            return True
+
+        table = Table(title="Network Routes")
+        table.add_column("ID", style="cyan")
+        table.add_column("Session", style="green")
+        table.add_column("Subnet", style="white")
+        table.add_column("Netmask", style="dim")
+        table.add_column("Active", style="bold")
+
+        for route in routes:
+            active = "[green]Yes[/green]" if route.active else "[red]No[/red]"
+            table.add_row(
+                route.id,
+                route.session_id,
+                route.subnet,
+                route.netmask,
+                active,
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _sessions_route(self, manager, args: List[str]) -> bool:
+        """Manage routes."""
+        if not args:
+            self.display.print_error("Usage: sessions route <add|remove> ...")
+            return True
+
+        action = args[0].lower()
+
+        if action == "add":
+            if len(args) < 3:
+                self.display.print_error("Usage: sessions route add <session_id> <subnet> [netmask]")
+                return True
+
+            session_id = args[1]
+            subnet = args[2]
+            netmask = args[3] if len(args) > 3 else "255.255.255.0"
+
+            route = manager.add_route(session_id, subnet, netmask)
+            if route:
+                self.display.print_success(f"Added route: {route.id}")
+            else:
+                self.display.print_error("Failed to add route. Session may not be active.")
+
+        elif action == "remove":
+            if len(args) < 2:
+                self.display.print_error("Usage: sessions route remove <route_id>")
+                return True
+
+            if manager.remove_route(args[1]):
+                self.display.print_success(f"Removed route: {args[1]}")
+            else:
+                self.display.print_error(f"Route not found: {args[1]}")
+
+        return True
+
+    def _sessions_forwards(self, manager) -> bool:
+        """Show port forwards."""
+        from rich.table import Table
+
+        forwards = list(manager.port_forwards.values())
+
+        if not forwards:
+            self.display.print_warning("No port forwards configured")
+            return True
+
+        table = Table(title="Port Forwards")
+        table.add_column("ID", style="cyan")
+        table.add_column("Local", style="green")
+        table.add_column("Remote", style="white")
+        table.add_column("Direction", style="dim")
+        table.add_column("Active", style="bold")
+
+        for fwd in forwards:
+            active = "[green]Yes[/green]" if fwd.active else "[red]No[/red]"
+            table.add_row(
+                fwd.id,
+                f"{fwd.local_host}:{fwd.local_port}",
+                f"{fwd.remote_host}:{fwd.remote_port}",
+                fwd.direction,
+                active,
+            )
+
+        self.display.console.print(table)
+        return True
+
+    def _sessions_forward(self, manager, args: List[str]) -> bool:
+        """Manage port forwards."""
+        if not args:
+            self.display.print_error("Usage: sessions forward <add|remove|start|stop> ...")
+            return True
+
+        action = args[0].lower()
+
+        if action == "add":
+            if len(args) < 4:
+                self.display.print_error("Usage: sessions forward add <local_port> <remote_host> <remote_port>")
+                return True
+
+            local_port = int(args[1])
+            remote_host = args[2]
+            remote_port = int(args[3])
+
+            fwd = manager.create_port_forward(local_port, remote_host, remote_port)
+            self.display.print_success(f"Created port forward: {fwd.id}")
+            self.display.print_info(f"  {fwd.local_host}:{fwd.local_port} → {fwd.remote_host}:{fwd.remote_port}")
+
+        elif action == "start":
+            if len(args) < 2:
+                self.display.print_error("Usage: sessions forward start <forward_id>")
+                return True
+
+            if manager.start_port_forward(args[1]):
+                self.display.print_success(f"Started port forward: {args[1]}")
+            else:
+                self.display.print_error(f"Forward not found: {args[1]}")
+
+        elif action == "stop":
+            if len(args) < 2:
+                self.display.print_error("Usage: sessions forward stop <forward_id>")
+                return True
+
+            if manager.stop_port_forward(args[1]):
+                self.display.print_success(f"Stopped port forward: {args[1]}")
+            else:
+                self.display.print_error(f"Forward not found: {args[1]}")
+
+        elif action == "remove":
+            if len(args) < 2:
+                self.display.print_error("Usage: sessions forward remove <forward_id>")
+                return True
+
+            if manager.remove_port_forward(args[1]):
+                self.display.print_success(f"Removed port forward: {args[1]}")
+            else:
+                self.display.print_error(f"Forward not found: {args[1]}")
+
+        return True
+
+    def _sessions_stats(self, manager) -> bool:
+        """Show session statistics."""
+        from rich.table import Table
+
+        stats = manager.get_statistics()
+
+        self.display.console.print()
+        self.display.console.print("[bold cyan]Session Statistics[/bold cyan]")
+        self.display.console.print()
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", style="cyan")
+
+        table.add_row("Total Sessions", str(stats["total_sessions"]))
+        table.add_row("Active Sessions", str(stats["active_sessions"]))
+        table.add_row("Elevated Sessions", f"[yellow]{stats['elevated_sessions']}[/yellow]")
+        table.add_row("", "")
+        table.add_row("Total Routes", str(stats["total_routes"]))
+        table.add_row("Active Routes", str(stats["active_routes"]))
+        table.add_row("", "")
+        table.add_row("Port Forwards", str(stats["port_forwards"]))
+        table.add_row("Active Forwards", str(stats["active_forwards"]))
+
+        self.display.console.print(table)
+
+        # Sessions by type
+        if stats["by_type"]:
+            self.display.console.print("\n[bold]By Type:[/bold]")
+            for t, count in stats["by_type"].items():
+                self.display.console.print(f"  {t}: {count}")
+
+        # Sessions by host
+        if stats["by_host"]:
+            self.display.console.print("\n[bold]By Host:[/bold]")
+            for h, count in stats["by_host"].items():
+                self.display.console.print(f"  {h}: {count}")
+
+        return True
+
+    def _sessions_export(self, manager, args: List[str]) -> bool:
+        """Export sessions to JSON."""
+        filename = args[0] if args else None
+
+        json_data = manager.to_json(indent=2)
+
+        if filename:
+            with open(filename, 'w') as f:
+                f.write(json_data)
+            self.display.print_success(f"Exported sessions to {filename}")
+        else:
+            self.display.console.print(json_data)
+
+        return True
+
+    def _sessions_clear(self, manager) -> bool:
+        """Clear all sessions."""
+        manager.clear()
+        self.display.print_success("All sessions cleared")
+        return True
+
+    def cmd_interact(self, args: List[str]) -> bool:
+        """
+        Interact with a session.
+
+        Usage:
+            interact                   - Interact with current session
+            interact <session_id>      - Interact with specific session
+            interact -c <command>      - Execute single command
+
+        Examples:
+            interact sess:abc123
+            interact -c whoami
+        """
+        from purplesploit.core.session_manager import SessionInteraction
+
+        # Get session manager
+        if not hasattr(self, '_session_manager') or self._session_manager is None:
+            self.display.print_error("No sessions available. Create one with 'sessions add'")
+            return True
+
+        manager = self._session_manager
+
+        # Parse args
+        session_id = None
+        command = None
+
+        if args:
+            if args[0] == "-c" and len(args) > 1:
+                command = " ".join(args[1:])
+            else:
+                session_id = args[0]
+                if len(args) > 2 and args[1] == "-c":
+                    command = " ".join(args[2:])
+
+        # Get session
+        if session_id:
+            session = manager.get_session(session_id)
+        else:
+            session = manager.current_session
+
+        if not session:
+            self.display.print_error("No session specified. Use 'interact <session_id>' or 'sessions select <id>'")
+            return True
+
+        if not session.is_active:
+            self.display.print_error(f"Session {session.id} is not active (state: {session.state.value})")
+            return True
+
+        interaction = SessionInteraction(session, self.framework)
+
+        if command:
+            # Execute single command
+            result = interaction.execute(command)
+            if result.get("output"):
+                self.display.console.print(result["output"])
+            if result.get("error"):
+                self.display.print_error(result["error"])
+        else:
+            # Interactive mode info
+            self.display.console.print()
+            self.display.console.print(f"[bold cyan]Interacting with: {session.display_name}[/bold cyan]")
+            self.display.console.print(f"Session ID: {session.id}")
+            self.display.console.print(f"Type: {session.session_type.value}")
+            self.display.console.print()
+            self.display.print_info("Use 'interact -c <command>' to execute commands")
+            self.display.print_info("Interactive shell mode is available for real sessions")
 
         return True
