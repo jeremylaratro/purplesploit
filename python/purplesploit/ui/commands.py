@@ -126,6 +126,10 @@ class CommandHandler:
             "graph": self.cmd_graph,              # Attack graph management
             "attackgraph": self.cmd_graph,        # Alias
 
+            # Advanced: Credential Spray Intelligence
+            "spray": self.cmd_spray,              # Smart credential spraying
+            "credspray": self.cmd_spray,          # Alias
+
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
         }
@@ -4653,4 +4657,425 @@ class CommandHandler:
         """Clear the attack graph."""
         graph.clear()
         self.display.print_success("Attack graph cleared")
+        return True
+
+    # =========================================================================
+    # Credential Spray Intelligence Commands
+    # =========================================================================
+
+    def cmd_spray(self, args: List[str]) -> bool:
+        """
+        Credential spray intelligence.
+
+        Usage:
+            spray <target>                      - Spray with context creds/users
+            spray <target> -u users.txt         - Spray with user file
+            spray <target> -p passwords.txt     - Spray with password file
+            spray <target> -u user1,user2 -p pass1,pass2
+            spray --protocol <proto>            - Use specific protocol
+            spray --pattern <pattern>           - Use spray pattern
+            spray --domain <domain>             - Set domain
+            spray --delay <seconds>             - Set delay between attempts
+            spray --jitter <seconds>            - Add random jitter
+            spray --stop-on-success             - Stop after first success
+            spray status                        - Show spray status
+            spray stop                          - Stop current spray
+            spray history                       - Show spray history
+            spray wordlist                      - Generate smart wordlist
+
+        Protocols: smb, ldap, winrm, ssh, rdp, mssql, kerberos
+        Patterns: breadth_first, depth_first, low_and_slow, random, smart
+
+        Examples:
+            spray 192.168.1.100
+            spray dc01.corp.local --protocol ldap --domain CORP
+            spray 10.0.0.1 -u admin,user -p Summer2024,P@ssw0rd
+            spray 10.0.0.1 --pattern low_and_slow --delay 30
+        """
+        from purplesploit.core.credential_spray import (
+            CredentialSpray, create_credential_spray,
+            SprayProtocol, SprayPattern, LockoutPolicy, PasswordGenerator
+        )
+
+        # Initialize spray manager if not exists
+        if not hasattr(self, '_credential_spray') or self._credential_spray is None:
+            self._credential_spray = create_credential_spray(self.framework)
+
+        spray = self._credential_spray
+
+        if not args:
+            self.display.print_error("Usage: spray <target> [options]")
+            self.display.print_info("Use 'spray --help' for full usage")
+            return True
+
+        # Handle subcommands
+        if args[0] == "status":
+            return self._spray_status(spray)
+        elif args[0] == "stop":
+            return self._spray_stop(spray)
+        elif args[0] == "history":
+            return self._spray_history(spray)
+        elif args[0] == "wordlist":
+            return self._spray_wordlist(args[1:])
+        elif args[0] == "--help":
+            self.display.console.print(self.cmd_spray.__doc__)
+            return True
+
+        # Parse arguments
+        targets = []
+        users = []
+        passwords = []
+        protocol = "smb"
+        pattern = "breadth_first"
+        domain = None
+        delay = 0.0
+        jitter = 0.0
+        stop_on_success = False
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in ["-u", "--users"]:
+                if i + 1 < len(args):
+                    user_arg = args[i + 1]
+                    if "," in user_arg:
+                        users.extend(user_arg.split(","))
+                    elif user_arg.endswith(".txt"):
+                        users.extend(self._read_file_lines(user_arg))
+                    else:
+                        users.append(user_arg)
+                    i += 2
+                else:
+                    i += 1
+            elif arg in ["-p", "--passwords"]:
+                if i + 1 < len(args):
+                    pass_arg = args[i + 1]
+                    if "," in pass_arg:
+                        passwords.extend(pass_arg.split(","))
+                    elif pass_arg.endswith(".txt"):
+                        passwords.extend(self._read_file_lines(pass_arg))
+                    else:
+                        passwords.append(pass_arg)
+                    i += 2
+                else:
+                    i += 1
+            elif arg == "--protocol":
+                if i + 1 < len(args):
+                    protocol = args[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            elif arg == "--pattern":
+                if i + 1 < len(args):
+                    pattern = args[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            elif arg in ["-d", "--domain"]:
+                if i + 1 < len(args):
+                    domain = args[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            elif arg == "--delay":
+                if i + 1 < len(args):
+                    delay = float(args[i + 1])
+                    i += 2
+                else:
+                    i += 1
+            elif arg == "--jitter":
+                if i + 1 < len(args):
+                    jitter = float(args[i + 1])
+                    i += 2
+                else:
+                    i += 1
+            elif arg == "--stop-on-success":
+                stop_on_success = True
+                i += 1
+            elif arg.startswith("-"):
+                i += 1
+            else:
+                targets.append(arg)
+                i += 1
+
+        # Use context if not specified
+        if not targets:
+            current = self.framework.session.targets.current
+            if current:
+                targets = [current.identifier]
+            else:
+                self.display.print_error("No target specified")
+                return True
+
+        if not users:
+            # Use context users
+            ctx_users = list(self.framework.session.context.get("users", []))
+            if ctx_users:
+                users = ctx_users
+            else:
+                self.display.print_warning("No users specified. Using common usernames.")
+                users = ["administrator", "admin", "guest", "user"]
+
+        if not passwords:
+            # Generate smart wordlist
+            self.display.print_info("No passwords specified. Generating smart wordlist...")
+            passwords = PasswordGenerator.build_wordlist(
+                include_common=True,
+                include_seasonal=True,
+                usernames=users[:5],  # Use first 5 users for variations
+            )[:20]  # Limit to 20 for safety
+
+        # Display configuration
+        self.display.console.print()
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print("[bold white]              CREDENTIAL SPRAY INTELLIGENCE                        [/bold white]")
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print()
+
+        self.display.print_info(f"Targets: {', '.join(targets)}")
+        self.display.print_info(f"Users: {len(users)}")
+        self.display.print_info(f"Passwords: {len(passwords)}")
+        self.display.print_info(f"Protocol: {protocol}")
+        self.display.print_info(f"Pattern: {pattern}")
+        if domain:
+            self.display.print_info(f"Domain: {domain}")
+        if delay > 0:
+            self.display.print_info(f"Delay: {delay}s")
+
+        total_attempts = len(targets) * len(users) * len(passwords)
+        self.display.print_info(f"Total potential attempts: {total_attempts}")
+        self.display.console.print()
+
+        # Set up callbacks
+        def on_attempt(attempt):
+            status = "[green]✓[/green]" if attempt.success else "[dim]·[/dim]"
+            self.display.console.print(
+                f"  {status} {attempt.username}:{attempt.password[:8]}... → {attempt.target}"
+            )
+
+        def on_success(attempt):
+            self.display.console.print()
+            self.display.print_success(
+                f"[bold green]VALID CREDENTIAL:[/bold green] {attempt.username}:{attempt.password}"
+            )
+            self.display.console.print()
+
+        def on_lockout(username):
+            self.display.print_warning(f"Lockout detected: {username}")
+
+        def on_progress(completed, total):
+            if completed % 10 == 0:
+                pct = int(completed / total * 100)
+                self.display.console.print(f"  [dim]Progress: {completed}/{total} ({pct}%)[/dim]")
+
+        spray.on_attempt = on_attempt
+        spray.on_success = on_success
+        spray.on_lockout = on_lockout
+        spray.on_progress = on_progress
+
+        # Execute spray
+        try:
+            self.display.console.print("[bold]Starting credential spray...[/bold]")
+            self.display.console.print()
+
+            result = spray.spray(
+                targets=targets,
+                users=users,
+                passwords=passwords,
+                protocol=protocol,
+                pattern=SprayPattern(pattern),
+                domain=domain,
+                delay=delay,
+                jitter=jitter,
+                stop_on_success=stop_on_success,
+            )
+
+            # Display results
+            self._display_spray_results(result)
+
+            # Add valid credentials to context
+            for cred in result.valid_credentials:
+                self.framework.session.credentials.add(
+                    cred["username"],
+                    cred.get("password", ""),
+                    domain=cred.get("domain"),
+                    source="credential_spray",
+                )
+
+        except KeyboardInterrupt:
+            self.display.print_warning("\nSpray interrupted by user")
+            spray.stop()
+        except Exception as e:
+            self.display.print_error(f"Spray error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def _read_file_lines(self, filepath: str) -> list[str]:
+        """Read lines from a file."""
+        try:
+            with open(filepath, 'r') as f:
+                return [line.strip() for line in f if line.strip()]
+        except FileNotFoundError:
+            self.display.print_error(f"File not found: {filepath}")
+            return []
+
+    def _spray_status(self, spray) -> bool:
+        """Show spray status."""
+        status = spray.get_status()
+
+        self.display.console.print("\n[bold cyan]Spray Status[/bold cyan]")
+        self.display.console.print(f"Status: {status['status']}")
+
+        if status['status'] != 'idle':
+            self.display.console.print(f"Total attempts: {status['total_attempts']}")
+            self.display.console.print(f"Successful: {status['successful']}")
+            self.display.console.print(f"Locked accounts: {status['locked_accounts']}")
+            self.display.console.print(f"Valid credentials: {status['valid_credentials']}")
+
+        return True
+
+    def _spray_stop(self, spray) -> bool:
+        """Stop running spray."""
+        spray.stop()
+        self.display.print_success("Stop signal sent")
+        return True
+
+    def _spray_history(self, spray) -> bool:
+        """Show spray history."""
+        from rich.table import Table
+
+        if not spray.results:
+            self.display.print_warning("No spray history")
+            return True
+
+        table = Table(title="Spray History")
+        table.add_column("ID", style="cyan")
+        table.add_column("Targets", style="green")
+        table.add_column("Protocol", style="white")
+        table.add_column("Attempts", style="yellow")
+        table.add_column("Success", style="bold green")
+        table.add_column("Locked", style="red")
+        table.add_column("Status", style="dim")
+
+        for result in spray.results[-10:]:  # Last 10
+            table.add_row(
+                result.id[:15],
+                ", ".join(result.targets)[:20],
+                result.protocol.value if result.protocol else "-",
+                str(result.total_attempts),
+                str(result.successful_attempts),
+                str(len(result.locked_accounts)),
+                result.status.value,
+            )
+
+        self.display.console.print(table)
+
+        # Show statistics
+        stats = spray.get_statistics()
+        self.display.console.print()
+        self.display.console.print(f"[bold]Total sprays:[/bold] {stats['total_sprays']}")
+        self.display.console.print(f"[bold]Total attempts:[/bold] {stats['total_attempts']}")
+        self.display.console.print(f"[bold]Success rate:[/bold] {stats['success_rate']:.1f}%")
+        self.display.console.print(f"[bold]Unique valid creds:[/bold] {stats['unique_valid_credentials']}")
+
+        return True
+
+    def _spray_wordlist(self, args: list) -> bool:
+        """Generate smart wordlist."""
+        from purplesploit.core.credential_spray import PasswordGenerator
+
+        company = None
+        usernames = []
+        count = 50
+
+        i = 0
+        while i < len(args):
+            if args[i] == "--company" and i + 1 < len(args):
+                company = args[i + 1]
+                i += 2
+            elif args[i] == "--users" and i + 1 < len(args):
+                usernames = args[i + 1].split(",")
+                i += 2
+            elif args[i] == "--count" and i + 1 < len(args):
+                count = int(args[i + 1])
+                i += 2
+            else:
+                i += 1
+
+        wordlist = PasswordGenerator.build_wordlist(
+            include_common=True,
+            include_seasonal=True,
+            company_name=company,
+            usernames=usernames,
+        )[:count]
+
+        self.display.console.print(f"\n[bold]Generated {len(wordlist)} passwords:[/bold]\n")
+        for pwd in wordlist:
+            self.display.console.print(f"  {pwd}")
+
+        return True
+
+    def _display_spray_results(self, result) -> bool:
+        """Display spray results."""
+        from rich.table import Table
+        from rich.panel import Panel
+
+        self.display.console.print()
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print("[bold white]                    SPRAY RESULTS                                  [/bold white]")
+        self.display.console.print("[bold cyan]═══════════════════════════════════════════════════════════════════[/bold cyan]")
+        self.display.console.print()
+
+        # Duration
+        if result.end_time and result.start_time:
+            duration = (result.end_time - result.start_time).total_seconds()
+            self.display.console.print(f"[bold]Duration:[/bold] {duration:.1f} seconds")
+
+        self.display.console.print(f"[bold]Total Attempts:[/bold] {result.total_attempts}")
+        self.display.console.print(f"[bold]Successful:[/bold] [green]{result.successful_attempts}[/green]")
+        self.display.console.print(f"[bold]Locked Accounts:[/bold] [red]{len(result.locked_accounts)}[/red]")
+        self.display.console.print(f"[bold]Status:[/bold] {result.status.value}")
+        self.display.console.print()
+
+        # Valid credentials
+        if result.valid_credentials:
+            self.display.console.print("[bold green]Valid Credentials Found:[/bold green]")
+            table = Table(show_header=True)
+            table.add_column("Username", style="cyan")
+            table.add_column("Password", style="green")
+            table.add_column("Domain", style="white")
+            table.add_column("Target", style="dim")
+
+            for cred in result.valid_credentials:
+                table.add_row(
+                    cred["username"],
+                    cred["password"],
+                    cred.get("domain", "-"),
+                    cred["target"],
+                )
+
+            self.display.console.print(table)
+            self.display.console.print()
+
+        # Locked accounts
+        if result.locked_accounts:
+            self.display.console.print(f"[bold red]Locked Accounts:[/bold red] {', '.join(result.locked_accounts)}")
+            self.display.console.print()
+
+        # Errors
+        if result.errors:
+            self.display.console.print("[bold yellow]Errors:[/bold yellow]")
+            for error in result.errors:
+                self.display.console.print(f"  • {error}")
+
+        # Suggestions
+        if result.valid_credentials:
+            self.display.console.print()
+            self.display.console.print("[bold]Suggested Next Steps:[/bold]")
+            self.display.console.print("  • Use valid credentials: [cyan]creds list[/cyan]")
+            self.display.console.print("  • Add to attack graph: [cyan]graph add cred <user> <pass>[/cyan]")
+            self.display.console.print("  • Try lateral movement: [cyan]use network/nxc_smb[/cyan]")
+
         return True
