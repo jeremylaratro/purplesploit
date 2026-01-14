@@ -256,67 +256,62 @@ class TestReportGeneratorGenerate:
         with pytest.raises(ValueError, match="Unsupported format"):
             generator_with_findings.generate("invalid_format")
 
-    @patch('purplesploit.reporting.generator.HTMLReportGenerator')
-    def test_generate_html(self, mock_html_gen, generator_with_findings, tmp_path):
+    def test_generate_html(self, generator_with_findings, tmp_path):
         """Test HTML report generation."""
         mock_instance = Mock()
         mock_instance.generate.return_value = str(tmp_path / "report.html")
-        mock_html_gen.return_value = mock_instance
 
-        output_path = tmp_path / "report.html"
-        result = generator_with_findings.generate("html", str(output_path))
+        with patch('purplesploit.reporting.html.HTMLReportGenerator', return_value=mock_instance) as mock_html_gen:
+            output_path = tmp_path / "report.html"
+            result = generator_with_findings.generate("html", str(output_path))
 
-        mock_html_gen.assert_called_once()
-        mock_instance.generate.assert_called_once()
+            mock_html_gen.assert_called_once()
+            mock_instance.generate.assert_called_once()
 
-    @patch('purplesploit.reporting.generator.MarkdownReportGenerator')
-    def test_generate_markdown(self, mock_md_gen, generator_with_findings, tmp_path):
+    def test_generate_markdown(self, generator_with_findings, tmp_path):
         """Test Markdown report generation."""
         mock_instance = Mock()
         mock_instance.generate.return_value = str(tmp_path / "report.md")
-        mock_md_gen.return_value = mock_instance
 
-        output_path = tmp_path / "report.md"
-        result = generator_with_findings.generate("markdown", str(output_path))
+        with patch('purplesploit.reporting.markdown.MarkdownReportGenerator', return_value=mock_instance) as mock_md_gen:
+            output_path = tmp_path / "report.md"
+            result = generator_with_findings.generate("markdown", str(output_path))
 
-        mock_md_gen.assert_called_once()
-        mock_instance.generate.assert_called_once()
+            mock_md_gen.assert_called_once()
+            mock_instance.generate.assert_called_once()
 
-    @patch('purplesploit.reporting.generator.MarkdownReportGenerator')
-    def test_generate_md_alias(self, mock_md_gen, generator_with_findings, tmp_path):
+    def test_generate_md_alias(self, generator_with_findings, tmp_path):
         """Test 'md' as alias for markdown format."""
         mock_instance = Mock()
         mock_instance.generate.return_value = str(tmp_path / "report.md")
-        mock_md_gen.return_value = mock_instance
 
-        output_path = tmp_path / "report.md"
-        result = generator_with_findings.generate("md", str(output_path))
+        with patch('purplesploit.reporting.markdown.MarkdownReportGenerator', return_value=mock_instance) as mock_md_gen:
+            output_path = tmp_path / "report.md"
+            result = generator_with_findings.generate("md", str(output_path))
 
-        mock_md_gen.assert_called_once()
+            mock_md_gen.assert_called_once()
 
-    @patch('purplesploit.reporting.generator.PDFReportGenerator')
-    def test_generate_pdf(self, mock_pdf_gen, generator_with_findings, tmp_path):
+    def test_generate_pdf(self, generator_with_findings, tmp_path):
         """Test PDF report generation."""
         mock_instance = Mock()
         mock_instance.generate.return_value = str(tmp_path / "report.pdf")
-        mock_pdf_gen.return_value = mock_instance
 
-        output_path = tmp_path / "report.pdf"
-        result = generator_with_findings.generate("pdf", str(output_path))
+        with patch('purplesploit.reporting.pdf.PDFReportGenerator', return_value=mock_instance) as mock_pdf_gen:
+            output_path = tmp_path / "report.pdf"
+            result = generator_with_findings.generate("pdf", str(output_path))
 
-        mock_pdf_gen.assert_called_once()
+            mock_pdf_gen.assert_called_once()
 
-    @patch('purplesploit.reporting.generator.XLSXReportGenerator')
-    def test_generate_xlsx(self, mock_xlsx_gen, generator_with_findings, tmp_path):
+    def test_generate_xlsx(self, generator_with_findings, tmp_path):
         """Test XLSX report generation."""
         mock_instance = Mock()
         mock_instance.generate.return_value = str(tmp_path / "report.xlsx")
-        mock_xlsx_gen.return_value = mock_instance
 
-        output_path = tmp_path / "report.xlsx"
-        result = generator_with_findings.generate("xlsx", str(output_path))
+        with patch('purplesploit.reporting.xlsx.XLSXReportGenerator', return_value=mock_instance) as mock_xlsx_gen:
+            output_path = tmp_path / "report.xlsx"
+            result = generator_with_findings.generate("xlsx", str(output_path))
 
-        mock_xlsx_gen.assert_called_once()
+            mock_xlsx_gen.assert_called_once()
 
     def test_generate_creates_parent_directory(self, generator_with_findings, tmp_path):
         """Test that generate creates parent directories."""

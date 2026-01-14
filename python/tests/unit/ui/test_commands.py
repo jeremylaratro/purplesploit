@@ -607,3 +607,366 @@ class TestEdgeCases:
         assert result1 is True
         assert result2 is True
         assert result3 is True
+
+
+# =============================================================================
+# Module Command Tests
+# =============================================================================
+
+class TestModuleCommand:
+    """Tests for module command."""
+
+    def test_module_select_no_modules(self, command_handler, mock_framework):
+        """Test module select when no modules available."""
+        mock_framework.list_modules.return_value = []
+
+        result = command_handler.cmd_module(["select"])
+
+        assert result is True
+        command_handler.display.print_warning.assert_called()
+
+    def test_module_invalid_subcommand(self, command_handler, mock_framework):
+        """Test module with invalid subcommand."""
+        result = command_handler.cmd_module(["invalid"])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+
+# =============================================================================
+# Unset Command Tests
+# =============================================================================
+
+class TestUnsetCommand:
+    """Tests for unset command."""
+
+    def test_unset_no_module(self, command_handler, mock_framework):
+        """Test unset when no module loaded."""
+        mock_framework.session.current_module = None
+
+        result = command_handler.cmd_unset(["RHOST"])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+    def test_unset_no_args(self, command_handler, mock_framework):
+        """Test unset without arguments."""
+        mock_framework.session.current_module = MagicMock()
+
+        result = command_handler.cmd_unset([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+    def test_unset_option(self, command_handler, mock_framework):
+        """Test unsetting an option (calls set_option with None)."""
+        mock_module = MagicMock()
+        mock_module.set_option.return_value = True
+        mock_framework.session.current_module = mock_module
+
+        result = command_handler.cmd_unset(["RHOST"])
+
+        assert result is True
+        # unset calls set_option with None
+        mock_module.set_option.assert_called_once_with("RHOST", None)
+
+
+# =============================================================================
+# Check Command Tests
+# =============================================================================
+
+class TestCheckCommand:
+    """Tests for check command."""
+
+    def test_check_no_module(self, command_handler, mock_framework):
+        """Test check when no module loaded."""
+        mock_framework.session.current_module = None
+
+        result = command_handler.cmd_check([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+    def test_check_with_module(self, command_handler, mock_framework):
+        """Test check with module loaded."""
+        mock_module = MagicMock()
+        mock_module.check.return_value = {"success": True, "message": "Check passed"}
+        mock_framework.session.current_module = mock_module
+
+        result = command_handler.cmd_check([])
+
+        assert result is True
+        mock_module.check.assert_called_once()
+
+
+# =============================================================================
+# Services Command Tests
+# =============================================================================
+
+class TestServicesCommand:
+    """Tests for services command."""
+
+    def test_services_list(self, command_handler, mock_framework):
+        """Test services list."""
+        mock_framework.session.services.services = {}
+
+        result = command_handler.cmd_services(["list"])
+
+        assert result is True
+
+    def test_services_no_args(self, command_handler, mock_framework):
+        """Test services without args defaults to list."""
+        mock_framework.session.services.services = {}
+
+        result = command_handler.cmd_services([])
+
+        assert result is True
+
+
+# =============================================================================
+# Wordlists Command Tests
+# =============================================================================
+
+class TestWordlistsCommand:
+    """Tests for wordlists command."""
+
+    def test_wordlists_list(self, command_handler, mock_framework):
+        """Test wordlists list."""
+        mock_framework.session.wordlists.list.return_value = {}
+
+        result = command_handler.cmd_wordlists(["list"])
+
+        assert result is True
+
+    def test_wordlists_no_args(self, command_handler, mock_framework):
+        """Test wordlists without args defaults to list."""
+        mock_framework.session.wordlists.list.return_value = {}
+
+        result = command_handler.cmd_wordlists([])
+
+        assert result is True
+
+
+# =============================================================================
+# Ops Command Tests
+# =============================================================================
+
+class TestOpsCommand:
+    """Tests for ops command."""
+
+    def test_ops_no_module(self, command_handler, mock_framework):
+        """Test ops when no module loaded."""
+        mock_framework.session.current_module = None
+
+        result = command_handler.cmd_ops([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+    def test_ops_with_module(self, command_handler, mock_framework):
+        """Test ops with module loaded."""
+        mock_module = MagicMock()
+        mock_module.has_operations.return_value = True
+        mock_module.get_operations.return_value = [
+            {"name": "Basic Scan", "description": "Basic scan op"}
+        ]
+        mock_framework.session.current_module = mock_module
+
+        result = command_handler.cmd_ops([])
+
+        assert result is True
+
+
+# =============================================================================
+# Go Command Tests
+# =============================================================================
+
+class TestGoCommand:
+    """Tests for go command."""
+
+    def test_go_no_module(self, command_handler, mock_framework):
+        """Test go when no module loaded."""
+        mock_framework.session.current_module = None
+
+        result = command_handler.cmd_go([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+
+# =============================================================================
+# Recent Command Tests
+# =============================================================================
+
+class TestRecentCommand:
+    """Tests for recent command."""
+
+    def test_recent_commands(self, command_handler, mock_framework):
+        """Test recent shows command history."""
+        mock_framework.session.command_history = [
+            {"command": "help", "timestamp": "2025-01-01"},
+            {"command": "search nmap", "timestamp": "2025-01-01"},
+        ]
+
+        result = command_handler.cmd_recent([])
+
+        assert result is True
+
+
+# =============================================================================
+# Findings Command Tests
+# =============================================================================
+
+class TestFindingsCommand:
+    """Tests for findings command."""
+
+    def test_findings_list(self, command_handler, mock_framework):
+        """Test findings list."""
+        mock_framework.findings = MagicMock()
+        mock_framework.findings.list_findings.return_value = []
+
+        result = command_handler.cmd_findings(["list"])
+
+        assert result is True
+
+    def test_findings_no_args(self, command_handler, mock_framework):
+        """Test findings without args defaults to list."""
+        mock_framework.findings = MagicMock()
+        mock_framework.findings.list_findings.return_value = []
+
+        result = command_handler.cmd_findings([])
+
+        assert result is True
+
+
+# =============================================================================
+# Workflow Command Tests
+# =============================================================================
+
+class TestWorkflowCommand:
+    """Tests for workflow command."""
+
+    def test_workflow_list(self, command_handler, mock_framework):
+        """Test workflow list."""
+        mock_framework.workflow_engine = MagicMock()
+        mock_framework.workflow_engine.list_workflows.return_value = []
+
+        result = command_handler.cmd_workflow(["list"])
+
+        assert result is True
+
+    def test_workflow_templates(self, command_handler, mock_framework):
+        """Test workflow templates."""
+        mock_framework.workflow_engine = MagicMock()
+        mock_framework.workflow_engine.list_templates.return_value = []
+
+        result = command_handler.cmd_workflow(["templates"])
+
+        assert result is True
+
+
+# =============================================================================
+# Report Command Tests
+# =============================================================================
+
+class TestReportCommand:
+    """Tests for report command."""
+
+    def test_report_no_args(self, command_handler):
+        """Test report without args shows usage."""
+        result = command_handler.cmd_report([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+
+# =============================================================================
+# Plugin Command Tests
+# =============================================================================
+
+class TestPluginCommand:
+    """Tests for plugin command."""
+
+    def test_plugin_list(self, command_handler, mock_framework):
+        """Test plugin list."""
+        mock_framework.plugin_manager = MagicMock()
+        mock_framework.plugin_manager.list_plugins.return_value = []
+
+        result = command_handler.cmd_plugin(["list"])
+
+        assert result is True
+
+
+# =============================================================================
+# Auto Command Tests
+# =============================================================================
+
+class TestAutoCommand:
+    """Tests for auto command."""
+
+    def test_auto_no_target(self, command_handler, mock_framework):
+        """Test auto without target shows error."""
+        mock_framework.session.targets.get_current.return_value = None
+
+        result = command_handler.cmd_auto([])
+
+        assert result is True
+        command_handler.display.print_error.assert_called()
+
+
+# =============================================================================
+# Graph Command Tests
+# =============================================================================
+
+class TestGraphCommand:
+    """Tests for graph command."""
+
+    def test_graph_list(self, command_handler, mock_framework):
+        """Test graph list."""
+        mock_framework.attack_graph = MagicMock()
+        mock_framework.attack_graph.get_statistics.return_value = {}
+
+        result = command_handler.cmd_graph(["stats"])
+
+        assert result is True
+
+
+# =============================================================================
+# Spray Command Tests
+# =============================================================================
+
+class TestSprayCommand:
+    """Tests for spray command."""
+
+    def test_spray_no_args(self, command_handler):
+        """Test spray without args shows usage."""
+        result = command_handler.cmd_spray([])
+
+        assert result is True
+        command_handler.display.print_info.assert_called()
+
+
+# =============================================================================
+# Sessions Command Tests
+# =============================================================================
+
+class TestSessionsCommand:
+    """Tests for sessions command."""
+
+    def test_sessions_list(self, command_handler, mock_framework):
+        """Test sessions list."""
+        mock_framework.session_manager = MagicMock()
+        mock_framework.session_manager.list_sessions.return_value = []
+
+        result = command_handler.cmd_sessions(["list"])
+
+        assert result is True
+
+    def test_sessions_no_args(self, command_handler, mock_framework):
+        """Test sessions without args defaults to list."""
+        mock_framework.session_manager = MagicMock()
+        mock_framework.session_manager.list_sessions.return_value = []
+
+        result = command_handler.cmd_sessions([])
+
+        assert result is True

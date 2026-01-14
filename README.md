@@ -1,4 +1,4 @@
-# PurpleSploit Framework v6.7.0
+# PurpleSploit Framework v6.8.1
 
 <div align="center">
 
@@ -292,15 +292,10 @@ httpx
 
 ## 📚 Documentation
 
-### **[📖 Wiki](wiki/)** - Complete Documentation
-- **[Commands Reference](wiki/Commands-Reference.md)** - All commands with tables
-- **[Framework Guide](wiki/Framework-Guide.md)** - Architecture and concepts
-- **[Web Portal Guide](wiki/Web-Portal.md)** - Web interface and API
-
-### Additional Guides
+### Guides
 - **[Quick Start](QUICKSTART.md)** - Get started in 5 minutes
 - **[Contributing](docs/CONTRIBUTING.md)** - Add your own modules
-- **[Changelog](docs/CHANGELOG.md)** - Version history
+- **[Changelog](CHANGELOG.md)** - Version history
 - **[Disclaimer](docs/DISCLAIMER.md)** - Legal and authorized use
 
 ---
