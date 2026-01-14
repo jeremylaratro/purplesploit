@@ -32,7 +32,7 @@ class TestFrameworkErrorHandling:
         db_path = str(tmp_path / "test.db")
         modules_path = Path(__file__).parent.parent.parent.parent / "purplesploit" / "modules"
 
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             fw = Framework(modules_path=str(modules_path), db_path=db_path)
 
         yield fw
@@ -50,7 +50,7 @@ class TestFrameworkErrorHandling:
 
     def test_add_duplicate_target(self, framework):
         """Test adding duplicate target returns False."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result1 = framework.add_target("network", "192.168.1.1")
             result2 = framework.add_target("network", "192.168.1.1")
 
