@@ -5,21 +5,40 @@ Provides agent deployment, task distribution, and
 centralized findings aggregation across multiple nodes.
 """
 
-from .agent import Agent, AgentConfig, AgentStatus
-from .coordinator import Coordinator, CoordinatorConfig
-from .task import Task, TaskStatus, TaskResult
-from .transport import Transport, HTTPTransport, WebSocketTransport
+# Core modules that always exist
+from .task import Task, TaskStatus, TaskResult, TaskPriority, TaskQueue
+from .transport import (
+    Transport,
+    TransportConfig,
+    HTTPTransport,
+    WebSocketTransport,
+    ProxyTransport,
+    create_transport,
+)
 
 __all__ = [
-    "Agent",
-    "AgentConfig",
-    "AgentStatus",
-    "Coordinator",
-    "CoordinatorConfig",
     "Task",
     "TaskStatus",
     "TaskResult",
+    "TaskPriority",
+    "TaskQueue",
     "Transport",
+    "TransportConfig",
     "HTTPTransport",
     "WebSocketTransport",
+    "ProxyTransport",
+    "create_transport",
 ]
+
+# Optional modules - import only if available
+try:
+    from .agent import Agent, AgentConfig, AgentStatus
+    __all__.extend(["Agent", "AgentConfig", "AgentStatus"])
+except ImportError:
+    pass
+
+try:
+    from .coordinator import Coordinator, CoordinatorConfig
+    __all__.extend(["Coordinator", "CoordinatorConfig"])
+except ImportError:
+    pass

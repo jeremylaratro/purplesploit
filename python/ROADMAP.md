@@ -213,6 +213,110 @@ workflow export <name> <file_path>
 
 ---
 
+## Advanced Features (Implemented)
+
+The following advanced features have been implemented and are available in the current release:
+
+### Smart Auto-Enumeration Pipeline (`auto` command)
+**Status: COMPLETE** | **Location: `purplesploit/core/auto_enum.py`**
+
+Intelligent service-driven enumeration that automatically chains modules based on discovered services.
+
+**Features:**
+- Service-based module recommendations using discovery → enumeration → exploitation phases
+- Configurable scopes: passive, light, normal, aggressive, stealth
+- Automatic service detection from nmap results
+- Priority-based module ordering
+- Background execution with progress tracking
+- Dry-run mode for planning
+
+**CLI Commands:**
+```
+auto start <target> [--scope normal|aggressive|stealth]
+auto stop
+auto status
+auto results
+auto services <target>
+auto dry-run <target>
+```
+
+### Attack Graph Visualization (`graph` command)
+**Status: COMPLETE** | **Location: `purplesploit/core/attack_graph.py`**
+
+Visual representation of attack paths, relationships between hosts, services, credentials, and vulnerabilities.
+
+**Features:**
+- Node types: host, service, credential, vulnerability, user, group, share, session
+- Edge types: has_service, has_vuln, has_cred, trusts, admin_of, member_of, connects_to
+- Path finding algorithms for attack chain discovery
+- Export to JSON, Cytoscape, and GraphViz formats
+- Node status tracking (unknown, discovered, exploited, compromised, owned)
+- Network graph building from discovery results
+
+**CLI Commands:**
+```
+graph show [--format json|cytoscape|graphviz]
+graph add <node_type> <node_id> [--data key=value]
+graph connect <source_id> <target_id> <edge_type>
+graph paths <source_id> <target_id>
+graph export <format> <output_path>
+graph stats
+graph clear
+```
+
+### Credential Spray Intelligence (`spray` command)
+**Status: COMPLETE** | **Location: `purplesploit/core/credential_spray.py`**
+
+Intelligent credential spraying with lockout protection and smart password generation.
+
+**Features:**
+- Protocols: SMB, LDAP, WinRM, SSH, RDP, MSSQL, Kerberos, HTTP (Basic/NTLM/Form), FTP, OWA, O365
+- Spray patterns: low_and_slow, depth_first, breadth_first, random, smart
+- Per-user attempt tracking to avoid lockouts
+- Configurable lockout policies (threshold, observation window, safe attempts)
+- Password generator with seasonal, company-based, and username-based variants
+- Callbacks for attempt, success, lockout, progress, and completion events
+- Stop-on-success mode
+
+**CLI Commands:**
+```
+spray start <target> --users <file|user1,user2> --passwords <file|pass1,pass2>
+spray stop
+spray status
+spray results [--id <spray_id>]
+spray generate --company <name> [--usernames <file>] [--seasonal]
+spray policy [--threshold N] [--window M] [--safe K]
+```
+
+### Session & Shell Management (`sessions`, `interact` commands)
+**Status: COMPLETE** | **Location: `purplesploit/core/session_manager.py`**
+
+Centralized management of remote sessions, shells, routes, and port forwards.
+
+**Features:**
+- Session types: shell, reverse_shell, bind_shell, ssh, meterpreter, beacon, vnc, rdp, winrm, wmi
+- Privilege levels: none, user, admin, system, root
+- Health monitoring with automatic cleanup of dead sessions
+- Routing through pivot sessions
+- Port forwarding (local and remote)
+- Session tagging for organization
+- History tracking for all interactions
+
+**CLI Commands:**
+```
+sessions list [--type <type>] [--alive]
+sessions info <session_id>
+sessions kill <session_id>
+sessions upgrade <session_id>
+sessions route add <session_id> <subnet>
+sessions route list
+sessions forward <session_id> <local_port>:<remote_host>:<remote_port>
+sessions tag <session_id> <tag>
+interact <session_id>
+```
+
+---
+
 ## Phase 4: Enterprise Features (Months 3+)
 
 ### 4.1 Multi-User Collaboration

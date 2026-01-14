@@ -10,6 +10,13 @@ from datetime import datetime
 
 from .models import ReportData, Finding, Severity
 
+# Check if openpyxl is available
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
 
 class XLSXReportGenerator:
     """Generates Excel reports from ReportData"""
@@ -25,6 +32,24 @@ class XLSXReportGenerator:
             return True
         except ImportError:
             return False
+
+    def _get_severity_fill(self, severity: Severity):
+        """Get fill color for a severity level."""
+        if not self._openpyxl_available:
+            return None
+
+        from openpyxl.styles import PatternFill
+
+        severity_colors = {
+            Severity.CRITICAL: "7B241C",
+            Severity.HIGH: "C0392B",
+            Severity.MEDIUM: "E67E22",
+            Severity.LOW: "F1C40F",
+            Severity.INFO: "3498DB",
+        }
+
+        color = severity_colors.get(severity, "95A5A6")
+        return PatternFill(start_color=color, end_color=color, fill_type="solid")
 
     def generate(
         self,

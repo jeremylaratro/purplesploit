@@ -342,6 +342,7 @@ class TestXLSXReportGeneratorFormatting:
 class TestXLSXReportGeneratorHelpers:
     """Tests for helper methods."""
 
+    @pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl not installed")
     def test_get_severity_fill_critical(self):
         """Test fill color for critical severity."""
         gen = XLSXReportGenerator()
@@ -350,6 +351,7 @@ class TestXLSXReportGeneratorHelpers:
         # Should return some fill
         assert fill is not None
 
+    @pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl not installed")
     def test_get_severity_fill_high(self):
         """Test fill color for high severity."""
         gen = XLSXReportGenerator()
@@ -357,6 +359,7 @@ class TestXLSXReportGeneratorHelpers:
 
         assert fill is not None
 
+    @pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl not installed")
     def test_get_severity_fill_medium(self):
         """Test fill color for medium severity."""
         gen = XLSXReportGenerator()
@@ -364,6 +367,7 @@ class TestXLSXReportGeneratorHelpers:
 
         assert fill is not None
 
+    @pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl not installed")
     def test_get_severity_fill_low(self):
         """Test fill color for low severity."""
         gen = XLSXReportGenerator()
@@ -371,12 +375,22 @@ class TestXLSXReportGeneratorHelpers:
 
         assert fill is not None
 
+    @pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl not installed")
     def test_get_severity_fill_info(self):
         """Test fill color for info severity."""
         gen = XLSXReportGenerator()
         fill = gen._get_severity_fill(Severity.INFO)
 
         assert fill is not None
+
+    def test_get_severity_fill_returns_none_without_openpyxl(self):
+        """Test that _get_severity_fill returns None when openpyxl unavailable."""
+        gen = XLSXReportGenerator()
+        gen._openpyxl_available = False
+
+        fill = gen._get_severity_fill(Severity.CRITICAL)
+
+        assert fill is None
 
 
 class TestXLSXReportGeneratorEmptyData:
