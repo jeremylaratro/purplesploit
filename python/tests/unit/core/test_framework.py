@@ -30,7 +30,8 @@ def framework(tmp_path):
     modules_path = str(tmp_path / "modules")
     os.makedirs(modules_path)
 
-    with patch('purplesploit.core.framework.db_manager'):
+    # Mock the lazy-loaded models.database module
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=modules_path, db_path=db_path)
     yield fw
     fw.cleanup()
@@ -44,7 +45,8 @@ def framework_with_modules(tmp_path):
     framework_dir = Path(__file__).parent.parent.parent.parent / "purplesploit" / "modules"
     modules_path = str(framework_dir)
 
-    with patch('purplesploit.core.framework.db_manager'):
+    # Mock the lazy-loaded models.database module
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=modules_path, db_path=db_path)
     yield fw
     fw.cleanup()
@@ -63,7 +65,7 @@ class TestFrameworkInitialization:
         modules_path = str(tmp_path / "modules")
         os.makedirs(modules_path)
 
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             fw = Framework(modules_path=modules_path, db_path=db_path)
 
         assert fw.modules_path == modules_path
@@ -307,7 +309,7 @@ class TestTargetManagement:
 
     def test_add_network_target(self, framework):
         """Test adding a network target."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_target("network", "192.168.1.100", "test-server")
 
         assert result is True
@@ -315,7 +317,7 @@ class TestTargetManagement:
 
     def test_add_web_target(self, framework):
         """Test adding a web target."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_target("web", "http://example.com", "example")
 
         assert result is True
@@ -325,7 +327,7 @@ class TestTargetManagement:
 
     def test_add_target_auto_name(self, framework):
         """Test target gets auto-generated name."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_target("network", "192.168.1.100")
 
         assert result is True
@@ -334,7 +336,7 @@ class TestTargetManagement:
 
     def test_add_duplicate_target_rejected(self, framework):
         """Test duplicate target is rejected."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             framework.add_target("network", "192.168.1.100")
             result = framework.add_target("network", "192.168.1.100")
 
@@ -350,7 +352,7 @@ class TestCredentialManagement:
 
     def test_add_credential_basic(self, framework):
         """Test adding a basic credential."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_credential(username="admin", password="password123")
 
         assert result is True
@@ -358,7 +360,7 @@ class TestCredentialManagement:
 
     def test_add_credential_with_domain(self, framework):
         """Test adding a credential with domain."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_credential(
                 username="admin",
                 password="password123",
@@ -371,7 +373,7 @@ class TestCredentialManagement:
 
     def test_add_credential_with_hash(self, framework):
         """Test adding a credential with hash."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_credential(
                 username="admin",
                 hash_value="aad3b435b51404ee:8846f7eaee8fb117"
@@ -383,7 +385,7 @@ class TestCredentialManagement:
 
     def test_add_credential_auto_name(self, framework):
         """Test credential gets auto-generated name."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result = framework.add_credential(
                 username="admin",
                 password="pass",
@@ -453,7 +455,7 @@ class TestStatistics:
     def test_get_stats_with_data(self, framework_with_modules):
         """Test stats with modules and data."""
         framework_with_modules.discover_modules()
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             framework_with_modules.add_target("network", "192.168.1.100")
             framework_with_modules.add_credential("admin", "password")
 
@@ -481,7 +483,7 @@ class TestStateExport:
 
     def test_export_state_includes_session(self, framework):
         """Test exported state includes session data."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             framework.add_target("network", "192.168.1.100")
 
         state = framework.export_state()
@@ -503,7 +505,7 @@ class TestCleanup:
         modules_path = str(tmp_path / "modules")
         os.makedirs(modules_path)
 
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             fw = Framework(modules_path=modules_path, db_path=db_path)
 
         fw.cleanup()

@@ -9,13 +9,16 @@ import sys
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type, TYPE_CHECKING
 from datetime import datetime
 
 from .module import BaseModule, ModuleMetadata
 from .session import Session
 from .database import Database
-from purplesploit.models.database import db_manager, TargetCreate, CredentialCreate
+
+# Lazy import for models.database to avoid expensive SQLAlchemy import at startup
+if TYPE_CHECKING:
+    from purplesploit.models.database import DatabaseManager, TargetCreate, CredentialCreate
 
 
 class Framework:
@@ -52,6 +55,12 @@ class Framework:
         # Logging
         self.log_messages = []
 
+    def _get_db_manager(self):
+        """Lazy load db_manager to avoid expensive SQLAlchemy import at startup."""
+        # Import only when needed (for API/webserver integration)
+        from purplesploit.models.database import db_manager
+        return db_manager
+
     def _load_persisted_data(self):
         """Load targets and credentials from database into session and sync to models DB."""
         # Load targets
@@ -69,9 +78,11 @@ class Framework:
             # Add to session
             self.session.targets.add(target_dict)
 
-            # Sync to models database (for webserver)
+            # Sync to models database (for webserver) - lazy load db_manager
             if target['type'] == 'network':
                 try:
+                    from purplesploit.models.database import TargetCreate
+                    db_manager = self._get_db_manager()
                     identifier = target['identifier']
                     name = target.get('name') or identifier
                     target_create = TargetCreate(
@@ -99,8 +110,10 @@ class Framework:
             # Add to session
             self.session.credentials.add(cred_dict)
 
-            # Sync to models database (for webserver)
+            # Sync to models database (for webserver) - lazy load db_manager
             try:
+                from purplesploit.models.database import CredentialCreate
+                db_manager = self._get_db_manager()
                 name = cred.get('name') or cred['username']
                 cred_create = CredentialCreate(
                     name=name,
@@ -124,8 +137,9 @@ class Framework:
                 service['port']
             )
 
-            # Sync to models database (for webserver)
+            # Sync to models database (for webserver) - lazy load db_manager
             try:
+                db_manager = self._get_db_manager()
                 db_manager.add_service(
                     service['target'],
                     service['service'],
@@ -154,19 +168,27 @@ class Framework:
             return 0
 
         base_path = Path(base_path)
-        module_files = list(base_path.rglob("*.py"))
 
+        # Optimize: Use os.walk instead of rglob for better performance
         count = 0
-        for module_file in module_files:
-            # Skip __init__.py and test files
-            if module_file.name.startswith('__') or module_file.name.startswith('test_'):
-                continue
+        for root, dirs, files in os.walk(base_path):
+            # Skip __pycache__ directories
+            dirs[:] = [d for d in dirs if d != '__pycache__']
 
-            try:
-                self._register_module(module_file, base_path)
-                count += 1
-            except Exception as e:
-                self.log(f"Error loading module {module_file}: {e}", "warning")
+            for filename in files:
+                # Only process .py files, skip __init__.py and test files
+                if not filename.endswith('.py'):
+                    continue
+                if filename.startswith('__') or filename.startswith('test_'):
+                    continue
+
+                module_file = Path(root) / filename
+
+                try:
+                    self._register_module(module_file, base_path)
+                    count += 1
+                except Exception as e:
+                    self.log(f"Error loading module {module_file}: {e}", "warning")
 
         self.log(f"Discovered {count} modules", "success")
         return count
@@ -421,8 +443,10 @@ class Framework:
         # Add to old database (backwards compatibility)
         self.database.add_target(target_type, identifier, name)
 
-        # Add to new models database (for webserver)
+        # Add to new models database (for webserver) - lazy load
         try:
+            from purplesploit.models.database import TargetCreate
+            db_manager = self._get_db_manager()
             target_create = TargetCreate(
                 name=name,
                 ip=identifier,
@@ -480,8 +504,10 @@ class Framework:
             name=name
         )
 
-        # Add to new models database (for webserver)
+        # Add to new models database (for webserver) - lazy load
         try:
+            from purplesploit.models.database import CredentialCreate
+            db_manager = self._get_db_manager()
             cred_create = CredentialCreate(
                 name=name,
                 username=username,

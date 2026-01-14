@@ -49,6 +49,12 @@ class Database:
         self.conn = None
         self._lock = threading.RLock()  # Reentrant lock for thread safety
         self._local = threading.local()  # Thread-local storage for connections
+
+        # Simple LRU cache for frequently accessed queries
+        self._cache = {}
+        self._cache_ttl = {}  # Time-to-live for cached items
+        self._cache_max_age = 60  # Cache items for 60 seconds
+
         self._connect()
         self._create_tables()
         self._migrate_database()
@@ -102,6 +108,16 @@ class Database:
             )
         """)
 
+        # Create indexes for module_history
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_module_history_name
+            ON module_history(module_name)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_module_history_executed
+            ON module_history(executed_at DESC)
+        """)
+
         # Targets
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS targets (
@@ -114,6 +130,20 @@ class Database:
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(type, identifier)
             )
+        """)
+
+        # Create indexes for targets
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_targets_type
+            ON targets(type)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_targets_status
+            ON targets(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_targets_identifier
+            ON targets(identifier)
         """)
 
         # Credentials
@@ -144,6 +174,20 @@ class Database:
             )
         """)
 
+        # Create indexes for services
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_services_target
+            ON services(target)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_services_port
+            ON services(port)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_services_service
+            ON services(service)
+        """)
+
         # Scan results (nmap, etc.)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scan_results (
@@ -155,6 +199,20 @@ class Database:
                 file_path TEXT,  -- Path to full results file
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        # Create indexes for scan_results
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_results_target
+            ON scan_results(target)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_results_type
+            ON scan_results(scan_type)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_results_created
+            ON scan_results(created_at DESC)
         """)
 
         # Findings/vulnerabilities
@@ -170,6 +228,20 @@ class Database:
                 remediation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        # Create indexes for findings
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_findings_target
+            ON findings(target)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_findings_severity
+            ON findings(severity)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_findings_created
+            ON findings(created_at DESC)
         """)
 
         # Workspaces
@@ -194,6 +266,12 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(module_name, option_name)
             )
+        """)
+
+        # Create index for module_defaults
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_module_defaults_lookup
+            ON module_defaults(module_name, option_name)
         """)
 
         self.conn.commit()
@@ -228,6 +306,57 @@ class Database:
                 ALTER TABLE credentials ADD COLUMN dns TEXT
             """)
             self.conn.commit()
+
+    def _invalidate_cache(self, pattern: str = None):
+        """
+        Invalidate cache entries.
+
+        Args:
+            pattern: If provided, only invalidate keys containing this pattern
+        """
+        if pattern is None:
+            self._cache.clear()
+            self._cache_ttl.clear()
+        else:
+            keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_delete:
+                del self._cache[key]
+                if key in self._cache_ttl:
+                    del self._cache_ttl[key]
+
+    def _get_cached(self, cache_key: str):
+        """
+        Get item from cache if not expired.
+
+        Args:
+            cache_key: Cache key
+
+        Returns:
+            Cached value or None if not found/expired
+        """
+        if cache_key in self._cache:
+            # Check if expired
+            if cache_key in self._cache_ttl:
+                import time
+                if time.time() - self._cache_ttl[cache_key] > self._cache_max_age:
+                    # Expired, remove from cache
+                    del self._cache[cache_key]
+                    del self._cache_ttl[cache_key]
+                    return None
+            return self._cache[cache_key]
+        return None
+
+    def _set_cached(self, cache_key: str, value: Any):
+        """
+        Set item in cache.
+
+        Args:
+            cache_key: Cache key
+            value: Value to cache
+        """
+        import time
+        self._cache[cache_key] = value
+        self._cache_ttl[cache_key] = time.time()
 
     def close(self):
         """Close database connection."""
@@ -323,6 +452,10 @@ class Database:
                     INSERT INTO targets (type, identifier, name, metadata, status)
                     VALUES (?, ?, ?, ?, ?)
                 """, (target_type, identifier, name, json.dumps(metadata or {}), status))
+
+            # Invalidate targets cache
+            self._invalidate_cache('targets_')
+
             return True
         except sqlite3.IntegrityError:
             return False
@@ -338,6 +471,12 @@ class Database:
         Returns:
             List of target dictionaries
         """
+        # Try cache first for common queries
+        cache_key = f"targets_{target_type}_{exclude_subnets}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -355,6 +494,9 @@ class Database:
                 target = dict(row)
                 target['metadata'] = json.loads(target['metadata'])
                 targets.append(target)
+
+            # Cache the result
+            self._set_cached(cache_key, targets)
 
             return targets
 
@@ -484,6 +626,10 @@ class Database:
                     INSERT INTO services (target, service, port, version)
                     VALUES (?, ?, ?, ?)
                 """, (target, service, port, version))
+
+            # Invalidate services cache
+            self._invalidate_cache('services_')
+
             return True
         except sqlite3.IntegrityError:
             # Update version if service already exists
@@ -492,6 +638,10 @@ class Database:
                     UPDATE services SET version = ?, detected_at = CURRENT_TIMESTAMP
                     WHERE target = ? AND service = ? AND port = ?
                 """, (version, target, service, port))
+
+            # Invalidate services cache
+            self._invalidate_cache('services_')
+
             return True
 
     def get_services(self, target: str = None) -> List[Dict]:
@@ -504,6 +654,12 @@ class Database:
         Returns:
             List of service dictionaries
         """
+        # Try cache first
+        cache_key = f"services_{target}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -512,7 +668,12 @@ class Database:
             else:
                 cursor.execute("SELECT * FROM services")
 
-            return [dict(row) for row in cursor.fetchall()]
+            services = [dict(row) for row in cursor.fetchall()]
+
+            # Cache the result
+            self._set_cached(cache_key, services)
+
+            return services
 
     def get_web_services(self) -> List[Dict]:
         """
