@@ -48,7 +48,7 @@ def persistence_framework(tmp_path):
     db_path = str(tmp_path / "persist_test.db")
     modules_path = Path(__file__).parent.parent.parent / "purplesploit" / "modules"
 
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=str(modules_path), db_path=db_path)
         fw.discover_modules()
 
@@ -324,7 +324,7 @@ class TestDatabasePersistence:
 
     def test_target_persisted_to_database(self, persistence_framework):
         """Test targets are persisted to database."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             persistence_framework.add_target("network", "192.168.1.50", "db-server")
 
         # Verify in database
@@ -333,7 +333,7 @@ class TestDatabasePersistence:
 
     def test_credential_persisted_to_database(self, persistence_framework):
         """Test credentials are persisted to database."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             persistence_framework.add_credential(username="dbuser", password="dbpass")
 
         # Verify in database
@@ -351,7 +351,7 @@ class TestStateRecovery:
     def test_framework_state_export_import(self, persistence_framework):
         """Test framework state can be exported and restored."""
         # Add some state
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             persistence_framework.add_target("network", "10.0.0.1")
             persistence_framework.add_credential(username="admin", password="pass")
 

@@ -100,7 +100,7 @@ def framework(tmp_path):
     db_path = str(tmp_path / "test.db")
     modules_path = Path(__file__).parent / "purplesploit" / "modules"
     
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=str(modules_path), db_path=db_path)
     yield fw
     fw.cleanup()

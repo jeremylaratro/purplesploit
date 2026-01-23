@@ -5,6 +5,25 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.8.2] - 2026-01-23
+
+### Fixed
+- **Phase 2 Test Fixes**: Resolved 19 failing tests in UI commands test suite (74% total issue resolution)
+  - Fixed FindingsCommand tests (12 tests) by converting dict access to object attributes in mock findings
+  - Fixed WorkflowCommand tests (6 tests) by pre-assigning internal manager references before method calls
+  - Fixed PluginCommand tests (7 tests) by correcting method names and mock structure for plugin operations
+  - Added `create_mock_finding()` helper function for consistent test fixture creation
+  - Updated integration tests (module_chaining, persistence, workflow) for compatibility with current architecture
+  - Test suite improvements: 3,464 → 3,571 passing tests (+107), failures reduced from 205 to 54 issues
+
+### Changed
+- **Documentation Cleanup**: Removed outdated planning documents from python/ directory
+  - Deleted IMPLEMENTATION_PLAN.md, SPRINT_PLAN.md, and TEST_IMPROVEMENT_PLAN.md
+  - Consolidated documentation in docs/ directory with dated filenames per project standards
+- **Documentation Organization**: Added comprehensive test fix documentation in docs/ directory
+  - Created TEST_FIX_PLAN-23JAN2026.md and TEST_FIX_PLAN_PHASE2-23JAN2026.md
+  - Added UNIT_TESTING_PLAN-23JAN2026.md and DOCUMENTATION_AUDIT-23JAN2026.md
+
 ## [6.8.1] - 2025-11-28
 
 ### Fixed

@@ -27,7 +27,7 @@ def chaining_framework(tmp_path):
     db_path = str(tmp_path / "chaining_test.db")
     modules_path = Path(__file__).parent.parent.parent / "purplesploit" / "modules"
 
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=str(modules_path), db_path=db_path)
         fw.discover_modules()
 
@@ -38,7 +38,7 @@ def chaining_framework(tmp_path):
 @pytest.fixture
 def multi_target_framework(chaining_framework):
     """Framework with multiple targets configured."""
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         chaining_framework.add_target("network", "192.168.1.10", "server1")
         chaining_framework.add_target("network", "192.168.1.20", "server2")
         chaining_framework.add_target("network", "192.168.1.30", "server3")
@@ -107,7 +107,7 @@ class TestDataPassingBetweenModules:
 
     def test_scan_results_available_to_next_module(self, chaining_framework):
         """Test scan results from one module are available to next."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_target("network", "192.168.1.100")
 
         # Simulate nmap scan storing services
@@ -123,7 +123,7 @@ class TestDataPassingBetweenModules:
     def test_discovered_credentials_available(self, chaining_framework):
         """Test credentials discovered by one module available to next."""
         # Simulate credential discovery
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_credential(
                 username="discovered_user",
                 password="discovered_pass",
@@ -141,7 +141,7 @@ class TestDataPassingBetweenModules:
 
     def test_target_context_persists_between_modules(self, chaining_framework):
         """Test target context persists when switching modules."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_target("network", "10.0.0.5", "persistent-target")
 
         modules = chaining_framework.list_modules()
@@ -295,7 +295,7 @@ class TestReconnaissanceChain:
 
     def test_nmap_to_service_enumeration_chain(self, chaining_framework):
         """Test chain: nmap scan -> store services -> service-specific enum."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_target("network", "10.0.0.100")
 
         # Step 1: Simulate nmap scan discovering services
@@ -334,11 +334,11 @@ class TestReconnaissanceChain:
 
     def test_credential_discovery_to_auth_chain(self, chaining_framework):
         """Test chain: discover creds -> use for authentication."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_target("network", "10.0.0.100")
 
         # Step 1: Simulate credential discovery
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_credential(
                 username="admin",
                 password="Winter2024!",
@@ -443,7 +443,7 @@ class TestChainErrorHandling:
 
     def test_context_preserved_after_error(self, chaining_framework):
         """Test session context is preserved after module error."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             chaining_framework.add_target("network", "10.0.0.1")
             chaining_framework.add_credential(username="admin", password="pass")
 

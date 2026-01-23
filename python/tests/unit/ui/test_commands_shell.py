@@ -250,7 +250,7 @@ class TestInteractCommand:
 
     def test_interact_with_session_id(self, command_handler, mock_framework):
         """Test interacting with specific session."""
-        with patch('purplesploit.ui.commands.SessionInteraction') as mock_si:
+        with patch('purplesploit.core.session_manager.SessionInteraction') as mock_si:
             mock_interaction = MagicMock()
             mock_si.return_value = mock_interaction
 
@@ -268,7 +268,7 @@ class TestInteractCommand:
         mock_framework.session_manager.list_sessions.return_value = mock_sessions
         command_handler.interactive.select_from_list.return_value = mock_sessions[0]
 
-        with patch('purplesploit.ui.commands.SessionInteraction') as mock_si:
+        with patch('purplesploit.core.session_manager.SessionInteraction') as mock_si:
             mock_interaction = MagicMock()
             mock_si.return_value = mock_interaction
 
@@ -299,7 +299,7 @@ class TestInteractCommand:
 
     def test_interact_keyboard_interrupt(self, command_handler, mock_framework):
         """Test interact handles keyboard interrupt."""
-        with patch('purplesploit.ui.commands.SessionInteraction') as mock_si:
+        with patch('purplesploit.core.session_manager.SessionInteraction') as mock_si:
             mock_interaction = MagicMock()
             mock_interaction.start.side_effect = KeyboardInterrupt()
             mock_si.return_value = mock_interaction
@@ -510,7 +510,7 @@ class TestSessionsExport:
         """Test exporting sessions to default file."""
         mock_framework.session_manager.export_sessions.return_value = "sessions_default.json"
 
-        with patch('purplesploit.ui.commands.SessionManager'):
+        with patch('purplesploit.core.session_manager.SessionManager'):
             result = command_handler._sessions_export(mock_framework.session_manager, [])
 
             assert result is True
@@ -519,7 +519,7 @@ class TestSessionsExport:
         """Test exporting sessions to custom file."""
         mock_framework.session_manager.export_sessions.return_value = "my_sessions.json"
 
-        with patch('purplesploit.ui.commands.SessionManager'):
+        with patch('purplesploit.core.session_manager.SessionManager'):
             result = command_handler._sessions_export(mock_framework.session_manager, ["my_sessions.json"])
 
             assert result is True
@@ -529,7 +529,7 @@ class TestSessionsExport:
         """Test session export error handling."""
         mock_framework.session_manager.export_sessions.side_effect = Exception("Export failed")
 
-        with patch('purplesploit.ui.commands.SessionManager'):
+        with patch('purplesploit.core.session_manager.SessionManager'):
             result = command_handler._sessions_export(mock_framework.session_manager, [])
 
             assert result is True
@@ -604,7 +604,7 @@ class TestShellErrorHandling:
 
     def test_interact_connection_error(self, command_handler, mock_framework):
         """Test interact with connection error."""
-        with patch('purplesploit.ui.commands.SessionInteraction') as mock_si:
+        with patch('purplesploit.core.session_manager.SessionInteraction') as mock_si:
             mock_interaction = MagicMock()
             mock_interaction.start.side_effect = ConnectionError("Connection lost")
             mock_si.return_value = mock_interaction
@@ -651,7 +651,7 @@ class TestAdvancedSessionFeatures:
             {"id": "sess-1", "type": "shell"}
         ]
 
-        with patch('purplesploit.ui.commands.SessionInteraction') as mock_si:
+        with patch('purplesploit.core.session_manager.SessionInteraction') as mock_si:
             mock_interaction = MagicMock()
             mock_si.return_value = mock_interaction
 

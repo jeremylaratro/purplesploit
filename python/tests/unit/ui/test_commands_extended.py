@@ -682,7 +682,7 @@ class TestExtendedIntegration:
     def test_complete_enumeration_workflow(self, command_handler, mock_framework):
         """Test complete enumeration workflow."""
         # Parse nmap results
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [{"ip": "192.168.1.1", "ports": [80, 443]}],
@@ -834,7 +834,7 @@ class TestCommandAliases:
 
     def test_finding_alias(self, command_handler, mock_framework):
         """Test finding as alias for findings."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.list_findings.return_value = []
             mock_fm.return_value = mock_manager

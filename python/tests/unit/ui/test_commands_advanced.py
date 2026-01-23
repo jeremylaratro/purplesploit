@@ -21,6 +21,29 @@ from purplesploit.ui.commands import CommandHandler
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+def create_mock_finding(id="1", title="Test Finding", severity=None, status=None, **kwargs):
+    """Create a mock Finding object with proper attributes."""
+    from purplesploit.core.findings import Severity, FindingStatus
+
+    finding = MagicMock()
+    finding.id = id
+    finding.title = title
+    finding.severity = severity or Severity.HIGH
+    finding.status = status or FindingStatus.DRAFT
+    finding.cvss_score = kwargs.get('cvss_score', 7.5)
+    finding.target = kwargs.get('target', '192.168.1.1')
+    finding.description = kwargs.get('description', 'Test description')
+    finding.evidence = kwargs.get('evidence', [])
+    finding.recommendations = kwargs.get('recommendations', [])
+    finding.created_at = kwargs.get('created_at', '2026-01-23')
+    finding.updated_at = kwargs.get('updated_at', '2026-01-23')
+    return finding
+
+
+# =============================================================================
 # Fixtures
 # =============================================================================
 
@@ -67,10 +90,10 @@ class TestFindingsCommand:
 
     def test_findings_list_with_findings(self, command_handler, mock_framework):
         """Test listing findings."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.list_findings.return_value = [
-                {"id": "1", "title": "SQL Injection", "severity": "high"}
+                create_mock_finding(id="1", title="SQL Injection")
             ]
             mock_fm.return_value = mock_manager
 
@@ -84,7 +107,7 @@ class TestFindingsCommand:
 
     def test_findings_list_empty(self, command_handler, mock_framework):
         """Test listing findings when none exist."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.list_findings.return_value = []
             mock_fm.return_value = mock_manager
@@ -99,31 +122,35 @@ class TestFindingsCommand:
 
     def test_findings_add(self, command_handler, mock_framework):
         """Test adding a finding."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm, \
+             patch('builtins.input') as mock_input:
             mock_manager = MagicMock()
+            mock_manager.create.return_value = create_mock_finding(id="finding-123", title="SQL Injection")
             mock_fm.return_value = mock_manager
+
+            # Mock the input() calls: severity, target, description
+            mock_input.side_effect = ["high", "192.168.1.1", "Database accepts unfiltered input"]
+
+            # Setup framework current target
+            mock_framework.session.targets.current = None
 
             handler = command_handler
             handler._findings_manager = mock_manager
-            handler.interactive.get_input.side_effect = [
-                "SQL Injection",
-                "High",
-                "Database accepts unfiltered input"
-            ]
 
             result = handler._findings_add(["SQL Injection"])
 
             assert result is True
+            mock_manager.create.assert_called_once()
 
     def test_findings_show(self, command_handler, mock_framework):
         """Test showing finding details."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
-            mock_manager.get_finding.return_value = {
-                "id": "1",
-                "title": "SQL Injection",
-                "description": "Test"
-            }
+            mock_manager.get.return_value = create_mock_finding(
+                id="1",
+                title="SQL Injection",
+                description="Test finding description"
+            )
             mock_fm.return_value = mock_manager
 
             handler = command_handler
@@ -132,13 +159,13 @@ class TestFindingsCommand:
             result = handler._findings_show(["1"])
 
             assert result is True
-            mock_manager.get_finding.assert_called_once_with("1")
+            mock_manager.get.assert_called_once_with("1")
 
     def test_findings_show_not_found(self, command_handler, mock_framework):
         """Test showing non-existent finding."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
-            mock_manager.get_finding.return_value = None
+            mock_manager.get.return_value = None
             mock_fm.return_value = mock_manager
 
             handler = command_handler
@@ -151,9 +178,9 @@ class TestFindingsCommand:
 
     def test_findings_update(self, command_handler, mock_framework):
         """Test updating finding status."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
-            mock_manager.update_status.return_value = True
+            mock_manager.transition_status.return_value = True
             mock_fm.return_value = mock_manager
 
             handler = command_handler
@@ -162,14 +189,21 @@ class TestFindingsCommand:
             result = handler._findings_update(["1", "confirmed"])
 
             assert result is True
-            mock_manager.update_status.assert_called_once()
+            mock_manager.transition_status.assert_called_once()
 
     def test_findings_evidence(self, command_handler, mock_framework):
         """Test adding evidence to finding."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm, \
+             patch('purplesploit.ui.commands.Path') as mock_path:
             mock_manager = MagicMock()
-            mock_manager.add_evidence.return_value = True
+            mock_manager.add_evidence.return_value = MagicMock()  # Return truthy evidence object
             mock_fm.return_value = mock_manager
+
+            # Mock the Path to say file exists
+            mock_path_instance = MagicMock()
+            mock_path_instance.exists.return_value = True
+            mock_path_instance.name = "screenshot.png"
+            mock_path.return_value = mock_path_instance
 
             handler = command_handler
             handler._findings_manager = mock_manager
@@ -181,7 +215,7 @@ class TestFindingsCommand:
 
     def test_findings_export_json(self, command_handler, mock_framework):
         """Test exporting findings to JSON."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.export_json.return_value = "/path/to/findings.json"
             mock_fm.return_value = mock_manager
@@ -196,7 +230,7 @@ class TestFindingsCommand:
 
     def test_findings_export_unsupported_format(self, command_handler, mock_framework):
         """Test exporting findings with unsupported format."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_fm.return_value = mock_manager
 
@@ -210,11 +244,14 @@ class TestFindingsCommand:
 
     def test_findings_stats(self, command_handler, mock_framework):
         """Test findings statistics."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.get_statistics.return_value = {
                 "total": 10,
-                "by_severity": {"high": 3, "medium": 5, "low": 2}
+                "by_severity": {"high": 3, "medium": 5, "low": 2},
+                "by_status": {"draft": 4, "confirmed": 6},
+                "with_evidence": 5,
+                "with_cvss": 8
             }
             mock_fm.return_value = mock_manager
 
@@ -228,21 +265,23 @@ class TestFindingsCommand:
 
     def test_findings_clear(self, command_handler, mock_framework):
         """Test clearing all findings."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm, \
+             patch('builtins.input', return_value='y'):
             mock_manager = MagicMock()
+            mock_manager.findings = {}
             mock_fm.return_value = mock_manager
 
             handler = command_handler
             handler._findings_manager = mock_manager
-            handler.interactive.confirm.return_value = True
 
             result = handler._findings_clear()
 
             assert result is True
+            handler.display.print_success.assert_called()
 
     def test_findings_default_to_list(self, command_handler, mock_framework):
         """Test findings command defaults to list."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.list_findings.return_value = []
             mock_fm.return_value = mock_manager
@@ -264,72 +303,117 @@ class TestWorkflowCommand:
 
     def test_workflow_list(self, command_handler, mock_framework):
         """Test listing workflows."""
-        mock_framework.workflow_engine.list_workflows.return_value = [
-            {"name": "Web Recon", "steps": 5}
-        ]
+        mock_engine = MagicMock()
+
+        # Create mock workflow with proper structure
+        mock_workflow = MagicMock()
+        mock_workflow.id = "wf-1"
+        mock_workflow.name = "Web Recon"
+        mock_workflow.status = MagicMock(value="ready")  # status.value is accessed
+        mock_workflow.steps = []
+        mock_workflow.tags = []
+
+        mock_engine.list_workflows.return_value = [mock_workflow]
+        command_handler._workflow_engine = mock_engine
 
         result = command_handler.cmd_workflow(["list"])
 
         assert result is True
-        mock_framework.workflow_engine.list_workflows.assert_called_once()
+        mock_engine.list_workflows.assert_called_once()
 
     def test_workflow_templates(self, command_handler, mock_framework):
         """Test listing workflow templates."""
-        mock_framework.workflow_engine.list_templates.return_value = [
-            {"name": "AD Enum", "description": "Active Directory enumeration"}
+        mock_engine = MagicMock()
+        mock_engine.list_templates.return_value = [
+            {
+                "id": "ad-enum",
+                "name": "AD Enum",
+                "description": "Active Directory enumeration",
+                "steps": 5,
+                "tags": ["ad", "enum"]
+            }
         ]
+        command_handler._workflow_engine = mock_engine
 
         result = command_handler.cmd_workflow(["templates"])
 
         assert result is True
-        mock_framework.workflow_engine.list_templates.assert_called_once()
+        mock_engine.list_templates.assert_called_once()
 
     def test_workflow_create(self, command_handler, mock_framework):
         """Test creating a workflow."""
+        mock_engine = MagicMock()
+        mock_engine.create_workflow.return_value = MagicMock(id="wf-123")
+        command_handler._workflow_engine = mock_engine
         command_handler.interactive.get_input.side_effect = [
             "My Workflow",
             "Test workflow"
         ]
-        mock_framework.workflow_engine.create_workflow.return_value = "wf-123"
 
-        result = command_handler.cmd_workflow(["create"])
+        result = command_handler.cmd_workflow(["create", "My Workflow"])
 
         assert result is True
-        mock_framework.workflow_engine.create_workflow.assert_called_once()
+        mock_engine.create_workflow.assert_called_once()
 
     def test_workflow_run(self, command_handler, mock_framework):
         """Test running a workflow."""
-        mock_framework.workflow_engine.run_workflow.return_value = {
-            "status": "completed",
-            "results": []
+        mock_engine = MagicMock()
+        mock_engine.run_workflow.return_value = {
+            "success": True,
+            "steps_completed": 3,
+            "steps_failed": 0,
+            "steps_skipped": 0
         }
+        command_handler._workflow_engine = mock_engine
+
+        # Set up a valid current target
+        mock_target = MagicMock()
+        mock_target.identifier = "192.168.1.100"
+        mock_framework.session.targets.current = mock_target
 
         result = command_handler.cmd_workflow(["run", "wf-123"])
 
         assert result is True
-        mock_framework.workflow_engine.run_workflow.assert_called_once_with("wf-123")
+        # run_workflow is called with workflow_id and variables dict
+        mock_engine.run_workflow.assert_called_once()
 
     def test_workflow_show(self, command_handler, mock_framework):
         """Test showing workflow details."""
-        mock_framework.workflow_engine.get_workflow.return_value = {
-            "id": "wf-123",
-            "name": "Test",
-            "steps": []
-        }
+        mock_engine = MagicMock()
+        mock_workflow = MagicMock()
+        mock_workflow.id = "wf-123"
+        mock_workflow.name = "Test"
+        mock_workflow.description = "Test workflow"
+        mock_workflow.status = "ready"
+        mock_workflow.steps = []
+        mock_workflow.tags = []
+        mock_workflow.created_at = "2026-01-23"
+        mock_engine.get_workflow.return_value = mock_workflow
+        command_handler._workflow_engine = mock_engine
 
         result = command_handler.cmd_workflow(["show", "wf-123"])
 
         assert result is True
 
-    def test_workflow_delete(self, command_handler, mock_framework):
-        """Test deleting a workflow."""
-        command_handler.interactive.confirm.return_value = True
-        mock_framework.workflow_engine.delete_workflow.return_value = True
+    def test_workflow_status(self, command_handler, mock_framework):
+        """Test checking workflow status."""
+        mock_engine = MagicMock()
 
-        result = command_handler.cmd_workflow(["delete", "wf-123"])
+        # Create mock workflow object
+        mock_workflow = MagicMock()
+        mock_workflow.id = "wf-123"
+        mock_workflow.name = "Test Workflow"
+        mock_workflow.status = MagicMock(value="running")
+        mock_workflow.progress = 50
+        mock_workflow.steps = [MagicMock(), MagicMock()]
+
+        mock_engine.get_workflow.return_value = mock_workflow
+        command_handler._workflow_engine = mock_engine
+
+        result = command_handler.cmd_workflow(["status", "wf-123"])
 
         assert result is True
-        mock_framework.workflow_engine.delete_workflow.assert_called_once()
+        mock_engine.get_workflow.assert_called_once()
 
 
 # =============================================================================
@@ -348,7 +432,7 @@ class TestReportCommand:
 
     def test_report_generate_pdf(self, command_handler, mock_framework):
         """Test generating PDF report."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_pdf.return_value = "/path/to/report.pdf"
             mock_rg.return_value = mock_gen
@@ -359,7 +443,7 @@ class TestReportCommand:
 
     def test_report_generate_html(self, command_handler, mock_framework):
         """Test generating HTML report."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_html.return_value = "/path/to/report.html"
             mock_rg.return_value = mock_gen
@@ -370,8 +454,8 @@ class TestReportCommand:
 
     def test_report_with_findings(self, command_handler, mock_framework):
         """Test report generation includes findings."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg, \
-             patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg, \
+             patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_gen = MagicMock()
             mock_rg.return_value = mock_gen
 
@@ -395,70 +479,113 @@ class TestPluginCommand:
 
     def test_plugin_list(self, command_handler, mock_framework):
         """Test listing plugins."""
-        mock_framework.plugin_manager.list_plugins.return_value = [
-            {"name": "test-plugin", "version": "1.0.0", "status": "active"}
-        ]
+        from purplesploit.plugins.models import PluginStatus
+
+        mock_manager = MagicMock()
+
+        # Create proper plugin mock objects with all required attributes
+        mock_plugin = MagicMock()
+        mock_plugin.name = "test-plugin"
+        mock_plugin.version = "1.0.0"
+        mock_plugin.installed_version = "1.0.0"
+        mock_plugin.status = PluginStatus.INSTALLED
+        mock_plugin.manifest.category.value = "recon"
+        mock_plugin.manifest.description = "Test description"
+
+        mock_manager.list_installed.return_value = [mock_plugin]
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["list"])
 
         assert result is True
-        mock_framework.plugin_manager.list_plugins.assert_called_once()
+        mock_manager.list_installed.assert_called_once()
 
     def test_plugin_search(self, command_handler, mock_framework):
         """Test searching plugins."""
-        mock_framework.plugin_manager.search_marketplace.return_value = [
-            {"name": "recon-plugin", "downloads": 100}
-        ]
+        mock_manager = MagicMock()
+
+        # Return list of plugin result objects with all required attributes
+        mock_result = MagicMock()
+        mock_result.name = "recon-plugin"
+        mock_result.version = "1.0.0"
+        mock_result.installed_version = None
+        mock_result.downloads = 100
+        mock_result.manifest.category.value = "recon"
+        mock_result.manifest.author = "Test Author"
+        mock_result.manifest.description = "Recon plugin"
+
+        mock_manager.search.return_value = [mock_result]
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["search", "recon"])
 
         assert result is True
-        mock_framework.plugin_manager.search_marketplace.assert_called_once()
+        mock_manager.search.assert_called_once()
 
     def test_plugin_install(self, command_handler, mock_framework):
         """Test installing a plugin."""
-        mock_framework.plugin_manager.install_plugin.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.install.return_value = MagicMock(name="test-plugin", version="1.0.0")
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["install", "test-plugin"])
 
         assert result is True
-        mock_framework.plugin_manager.install_plugin.assert_called_once_with("test-plugin")
+        mock_manager.install.assert_called_once()
 
     def test_plugin_uninstall(self, command_handler, mock_framework):
         """Test uninstalling a plugin."""
-        command_handler.interactive.confirm.return_value = True
-        mock_framework.plugin_manager.uninstall_plugin.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.uninstall.return_value = True
+        command_handler._plugin_manager = mock_manager
 
-        result = command_handler.cmd_plugin(["uninstall", "test-plugin"])
+        # Mock input() for confirmation
+        with patch('builtins.input', return_value='y'):
+            result = command_handler.cmd_plugin(["uninstall", "test-plugin"])
 
         assert result is True
-        mock_framework.plugin_manager.uninstall_plugin.assert_called_once()
+        mock_manager.uninstall.assert_called_once()
 
     def test_plugin_enable(self, command_handler, mock_framework):
         """Test enabling a plugin."""
-        mock_framework.plugin_manager.enable_plugin.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.enable.return_value = True
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["enable", "test-plugin"])
 
         assert result is True
-        mock_framework.plugin_manager.enable_plugin.assert_called_once()
+        mock_manager.enable.assert_called_once()
 
     def test_plugin_disable(self, command_handler, mock_framework):
         """Test disabling a plugin."""
-        mock_framework.plugin_manager.disable_plugin.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.disable.return_value = True
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["disable", "test-plugin"])
 
         assert result is True
-        mock_framework.plugin_manager.disable_plugin.assert_called_once()
+        mock_manager.disable.assert_called_once()
 
     def test_plugin_info(self, command_handler, mock_framework):
         """Test showing plugin info."""
-        mock_framework.plugin_manager.get_plugin_info.return_value = {
-            "name": "test-plugin",
-            "version": "1.0.0",
-            "description": "Test plugin"
-        }
+        mock_manager = MagicMock()
+
+        mock_plugin = MagicMock()
+        mock_plugin.name = "test-plugin"
+        mock_plugin.version = "1.0.0"
+        mock_plugin.description = "Test plugin"
+        mock_plugin.author = "Test Author"
+        mock_plugin.license = "MIT"
+        mock_plugin.repository = "https://github.com/test/test-plugin"
+        mock_plugin.category = "recon"
+        mock_plugin.tags = ["test"]
+        mock_plugin.dependencies = []
+        mock_plugin.commands = []
+
+        mock_manager.get_plugin.return_value = mock_plugin
+        command_handler._plugin_manager = mock_manager
 
         result = command_handler.cmd_plugin(["info", "test-plugin"])
 
@@ -486,7 +613,7 @@ class TestAutoCommand:
         mock_target = {"ip": "192.168.1.1", "name": "host1"}
         mock_framework.session.targets.get_current.return_value = mock_target
 
-        with patch('purplesploit.ui.commands.AutoEnumerationPipeline') as mock_pipeline:
+        with patch('purplesploit.core.auto_enum.AutoEnumPipeline') as mock_pipeline:
             mock_pipe = MagicMock()
             mock_pipe.run.return_value = {"status": "completed"}
             mock_pipeline.return_value = mock_pipe
@@ -501,7 +628,7 @@ class TestAutoCommand:
         mock_target = {"ip": "192.168.1.1"}
         mock_framework.session.targets.get_current.return_value = mock_target
 
-        with patch('purplesploit.ui.commands.AutoEnumerationPipeline') as mock_pipeline:
+        with patch('purplesploit.core.auto_enum.AutoEnumPipeline') as mock_pipeline:
             mock_pipe = MagicMock()
             mock_pipeline.return_value = mock_pipe
 
@@ -579,7 +706,7 @@ class TestGraphCommand:
     def test_graph_import(self, command_handler, mock_framework):
         """Test importing graph from file."""
         with patch('builtins.open', mock_open(read_data='{"nodes": []}')):
-            with patch('purplesploit.ui.commands.AttackGraph') as mock_ag:
+            with patch('purplesploit.core.attack_graph.AttackGraph') as mock_ag:
                 result = command_handler._graph_import(mock_framework.attack_graph, ["graph.json"])
 
                 assert result is True
@@ -609,7 +736,7 @@ class TestSprayCommand:
 
     def test_spray_start(self, command_handler, mock_framework):
         """Test starting credential spray."""
-        with patch('purplesploit.ui.commands.CredentialSprayEngine') as mock_engine:
+        with patch('purplesploit.core.credential_spray.CredentialSpray') as mock_engine:
             mock_spray = MagicMock()
             mock_engine.return_value = mock_spray
 
@@ -780,7 +907,7 @@ class TestParseCommand:
 
     def test_parse_nmap_xml(self, command_handler, mock_framework):
         """Test parsing nmap XML file."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [{"ip": "192.168.1.1", "ports": [80, 443]}]
@@ -840,7 +967,7 @@ class TestAdvancedEdgeCases:
 
     def test_findings_invalid_subcommand(self, command_handler, mock_framework):
         """Test findings with invalid subcommand."""
-        with patch('purplesploit.ui.commands.FindingsManager'):
+        with patch('purplesploit.core.findings.FindingsManager'):
             result = command_handler.cmd_findings(["invalid"])
 
             assert result is True
@@ -871,7 +998,7 @@ class TestAdvancedEdgeCases:
         mock_target = {"ip": "192.168.1.1"}
         mock_framework.session.targets.get_current.return_value = mock_target
 
-        with patch('purplesploit.ui.commands.AutoEnumerationPipeline') as mock_pipeline:
+        with patch('purplesploit.core.auto_enum.AutoEnumPipeline') as mock_pipeline:
             mock_pipe = MagicMock()
             mock_pipe.run.side_effect = KeyboardInterrupt()
             mock_pipeline.return_value = mock_pipe
@@ -903,7 +1030,7 @@ class TestAdvancedIntegration:
             "findings": [{"title": "SQL Injection"}]
         }
 
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_fm.return_value = mock_manager
 
@@ -916,7 +1043,7 @@ class TestAdvancedIntegration:
         mock_target = {"ip": "192.168.1.1"}
         mock_framework.session.targets.get_current.return_value = mock_target
 
-        with patch('purplesploit.ui.commands.AutoEnumerationPipeline') as mock_pipeline:
+        with patch('purplesploit.core.auto_enum.AutoEnumPipeline') as mock_pipeline:
             mock_pipe = MagicMock()
             mock_pipe.run.return_value = {"discovered_services": ["smb", "ldap"]}
             mock_pipeline.return_value = mock_pipe

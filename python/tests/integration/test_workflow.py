@@ -34,7 +34,7 @@ def integration_framework(tmp_path):
     # Use the real modules directory
     modules_path = Path(__file__).parent.parent.parent / "purplesploit" / "modules"
 
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         fw = Framework(modules_path=str(modules_path), db_path=db_path)
         fw.discover_modules()
 
@@ -45,7 +45,7 @@ def integration_framework(tmp_path):
 @pytest.fixture
 def framework_with_target(integration_framework):
     """Framework with a pre-configured target."""
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         integration_framework.add_target("network", "192.168.1.100", "test-target")
     return integration_framework
 
@@ -53,7 +53,7 @@ def framework_with_target(integration_framework):
 @pytest.fixture
 def framework_with_credentials(framework_with_target):
     """Framework with target and credentials."""
-    with patch('purplesploit.core.framework.db_manager'):
+    with patch('purplesploit.models.database.db_manager'):
         framework_with_target.add_credential(
             username="admin",
             password="password123",
@@ -187,7 +187,7 @@ class TestTargetIntegration:
 
     def test_add_target_available_in_session(self, integration_framework):
         """Test added target is available in session."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_target("network", "10.0.0.1", "server1")
 
         targets = integration_framework.session.targets.list()
@@ -196,7 +196,7 @@ class TestTargetIntegration:
 
     def test_multiple_targets_management(self, integration_framework):
         """Test managing multiple targets."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_target("network", "10.0.0.1", "server1")
             integration_framework.add_target("network", "10.0.0.2", "server2")
             integration_framework.add_target("web", "http://example.com", "webserver")
@@ -218,7 +218,7 @@ class TestTargetIntegration:
 
     def test_switching_targets_updates_context(self, integration_framework):
         """Test switching targets updates the context."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_target("network", "10.0.0.1", "server1")
             integration_framework.add_target("network", "10.0.0.2", "server2")
 
@@ -241,7 +241,7 @@ class TestCredentialIntegration:
 
     def test_add_credential_available_in_session(self, integration_framework):
         """Test added credential is available in session."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_credential(
                 username="testuser",
                 password="testpass"
@@ -253,7 +253,7 @@ class TestCredentialIntegration:
 
     def test_credential_with_domain(self, integration_framework):
         """Test credential with domain is stored correctly."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_credential(
                 username="admin",
                 password="password",
@@ -303,7 +303,7 @@ class TestCombinedWorkflow:
 
     def test_workflow_with_web_target(self, integration_framework):
         """Test workflow with web target type."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             integration_framework.add_target("web", "http://testsite.com", "testsite")
 
         # Find a web module
@@ -416,7 +416,7 @@ class TestErrorRecovery:
 
     def test_duplicate_target_rejected(self, integration_framework):
         """Test duplicate targets are rejected gracefully."""
-        with patch('purplesploit.core.framework.db_manager'):
+        with patch('purplesploit.models.database.db_manager'):
             result1 = integration_framework.add_target("network", "10.0.0.1")
             result2 = integration_framework.add_target("network", "10.0.0.1")
 

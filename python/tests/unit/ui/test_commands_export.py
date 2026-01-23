@@ -210,7 +210,7 @@ class TestGraphExportImport:
         graph_data = {"nodes": [{"id": "1", "label": "host1"}], "edges": []}
 
         with patch('builtins.open', mock_open(read_data=json.dumps(graph_data))), \
-             patch('purplesploit.ui.commands.AttackGraph') as mock_ag:
+             patch('purplesploit.core.attack_graph.AttackGraph') as mock_ag:
             mock_graph = MagicMock()
             mock_ag.from_json.return_value = mock_graph
 
@@ -252,7 +252,7 @@ class TestFindingsExport:
 
     def test_findings_export_json(self, command_handler, mock_framework):
         """Test exporting findings to JSON."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.export_json.return_value = "findings_default.json"
             mock_fm.return_value = mock_manager
@@ -267,7 +267,7 @@ class TestFindingsExport:
 
     def test_findings_export_custom_filename(self, command_handler, mock_framework):
         """Test exporting findings with custom filename."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.export_json.return_value = "my_findings.json"
             mock_fm.return_value = mock_manager
@@ -282,7 +282,7 @@ class TestFindingsExport:
 
     def test_findings_export_no_format(self, command_handler, mock_framework):
         """Test findings export without format."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_fm.return_value = mock_manager
 
@@ -296,7 +296,7 @@ class TestFindingsExport:
 
     def test_findings_export_unsupported_format(self, command_handler, mock_framework):
         """Test findings export with unsupported format."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_fm.return_value = mock_manager
 
@@ -353,7 +353,7 @@ class TestNmapParse:
 
     def test_parse_nmap_xml_success(self, command_handler, mock_framework):
         """Test parsing nmap XML file."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [
@@ -394,7 +394,7 @@ class TestNmapParse:
 
     def test_parse_invalid_xml(self, command_handler, mock_framework):
         """Test parsing invalid XML."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.side_effect = Exception("Invalid XML")
             mock_nmap.return_value = mock_module
@@ -407,7 +407,7 @@ class TestNmapParse:
 
     def test_parse_creates_targets(self, command_handler, mock_framework):
         """Test parse creates targets in database."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [{"ip": "192.168.1.1", "ports": [80]}],
@@ -423,7 +423,7 @@ class TestNmapParse:
 
     def test_parse_creates_services(self, command_handler, mock_framework):
         """Test parse creates service entries."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [{
@@ -452,7 +452,7 @@ class TestReportGeneration:
 
     def test_report_pdf(self, command_handler, mock_framework):
         """Test generating PDF report."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_pdf.return_value = "/path/to/report.pdf"
             mock_rg.return_value = mock_gen
@@ -463,7 +463,7 @@ class TestReportGeneration:
 
     def test_report_html(self, command_handler, mock_framework):
         """Test generating HTML report."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_html.return_value = "/path/to/report.html"
             mock_rg.return_value = mock_gen
@@ -474,7 +474,7 @@ class TestReportGeneration:
 
     def test_report_xlsx(self, command_handler, mock_framework):
         """Test generating XLSX report."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_xlsx.return_value = "/path/to/report.xlsx"
             mock_rg.return_value = mock_gen
@@ -485,7 +485,7 @@ class TestReportGeneration:
 
     def test_report_default_filename(self, command_handler, mock_framework):
         """Test report generation with default filename."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_pdf.return_value = "/path/to/report_default.pdf"
             mock_rg.return_value = mock_gen
@@ -496,8 +496,8 @@ class TestReportGeneration:
 
     def test_report_includes_findings(self, command_handler, mock_framework):
         """Test report includes findings data."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg, \
-             patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg, \
+             patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_gen = MagicMock()
             mock_rg.return_value = mock_gen
 
@@ -513,7 +513,7 @@ class TestReportGeneration:
 
     def test_report_error_handling(self, command_handler, mock_framework):
         """Test report generation error handling."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_pdf.side_effect = Exception("Generation failed")
             mock_rg.return_value = mock_gen
@@ -562,7 +562,7 @@ class TestExportIntegration:
     def test_nmap_to_targets_workflow(self, command_handler, mock_framework):
         """Test complete workflow: parse nmap -> create targets -> export hosts."""
         # Parse nmap XML
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.return_value = {
                 "hosts": [{"ip": "192.168.1.1", "ports": [80, 443]}],
@@ -586,8 +586,8 @@ class TestExportIntegration:
 
     def test_findings_to_report_workflow(self, command_handler, mock_framework):
         """Test workflow: create findings -> export findings -> generate report."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm, \
-             patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm, \
+             patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             # Create findings manager with data
             mock_manager = MagicMock()
             mock_manager.list_findings.return_value = [
@@ -626,7 +626,7 @@ class TestExportIntegration:
 
         # Import
         with patch('builtins.open', mock_open(read_data=json.dumps(graph_data))), \
-             patch('purplesploit.ui.commands.AttackGraph') as mock_ag:
+             patch('purplesploit.core.attack_graph.AttackGraph') as mock_ag:
             mock_graph = MagicMock()
             mock_ag.from_json.return_value = mock_graph
 
@@ -666,7 +666,7 @@ class TestExportErrorHandling:
 
     def test_parse_malformed_xml(self, command_handler, mock_framework):
         """Test parsing malformed XML."""
-        with patch('purplesploit.ui.commands.NmapModule') as mock_nmap:
+        with patch('purplesploit.modules.recon.nmap.NmapModule') as mock_nmap:
             mock_module = MagicMock()
             mock_module.parse_xml_results.side_effect = ValueError("Malformed XML")
             mock_nmap.return_value = mock_module
@@ -720,7 +720,7 @@ class TestAdvancedExportFeatures:
 
     def test_findings_export_filtered(self, command_handler, mock_framework):
         """Test exporting filtered findings."""
-        with patch('purplesploit.ui.commands.FindingsManager') as mock_fm:
+        with patch('purplesploit.core.findings.FindingsManager') as mock_fm:
             mock_manager = MagicMock()
             mock_manager.export_json.return_value = "findings_high.json"
             mock_fm.return_value = mock_manager
@@ -754,7 +754,7 @@ class TestAdvancedExportFeatures:
 
     def test_report_multiple_formats(self, command_handler, mock_framework):
         """Test generating report in multiple formats."""
-        with patch('purplesploit.ui.commands.ReportGenerator') as mock_rg:
+        with patch('purplesploit.reporting.generator.ReportGenerator') as mock_rg:
             mock_gen = MagicMock()
             mock_gen.generate_pdf.return_value = "report.pdf"
             mock_gen.generate_html.return_value = "report.html"
