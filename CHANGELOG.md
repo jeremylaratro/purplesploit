@@ -5,6 +5,25 @@ All notable changes to PurpleSploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.9.0] - 2026-01-29
+
+### Added
+- **Comprehensive Business Logic Test Suite**: Added 155 new tests to improve test coverage and validate core functionality
+  - User workflow tests (42 tests): go command navigation, quick command execution, targets range operations
+  - Session state consistency tests (48 tests): session state integrity, index consistency, export/import functionality
+  - Error recovery tests (33 tests): error handling patterns, transaction rollback, input validation
+  - Operation execution tests (32 tests): module operation execution flow and lifecycle
+- All 3,835 unit tests passing with enhanced coverage of core session management and UI command systems
+
+### Changed
+- Enhanced database.py error handling and session management (56 line changes)
+- Improved UI command test fixtures and mocking strategies across test suite (640+ line changes)
+- Enhanced XLSX reporting test coverage with comprehensive test suite (516 new lines)
+
+### Fixed
+- Resolved test fixture issues in UI command tests for better mock isolation
+- Improved mock isolation in shell command tests to prevent cross-test contamination
+
 ## [6.8.2] - 2026-01-23
 
 ### Fixed

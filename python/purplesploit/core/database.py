@@ -56,8 +56,8 @@ class Database:
         self._cache_max_age = 60  # Cache items for 60 seconds
 
         self._connect()
+        self._migrate_database()  # Run migrations before creating tables/indexes
         self._create_tables()
-        self._migrate_database()
 
     def _connect(self):
         """Establish database connection."""
@@ -280,32 +280,38 @@ class Database:
         """Apply database migrations for schema changes."""
         cursor = self.conn.cursor()
 
-        # Migration: Add 'status' column to targets table if it doesn't exist
-        try:
-            cursor.execute("SELECT status FROM targets LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("""
-                ALTER TABLE targets ADD COLUMN status TEXT DEFAULT 'unverified'
-            """)
-            self.conn.commit()
+        # Check if tables exist first - if not, skip migrations (they'll be created fresh)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='targets'")
+        if cursor.fetchone():
+            # Migration: Add 'status' column to targets table if it doesn't exist
+            try:
+                cursor.execute("SELECT status FROM targets LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                cursor.execute("""
+                    ALTER TABLE targets ADD COLUMN status TEXT DEFAULT 'unverified'
+                """)
+                self.conn.commit()
 
-        # Migration: Add 'dcip' and 'dns' columns to credentials table if they don't exist
-        try:
-            cursor.execute("SELECT dcip FROM credentials LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("""
-                ALTER TABLE credentials ADD COLUMN dcip TEXT
-            """)
-            self.conn.commit()
+        # Check if credentials table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='credentials'")
+        if cursor.fetchone():
+            # Migration: Add 'dcip' and 'dns' columns to credentials table if they don't exist
+            try:
+                cursor.execute("SELECT dcip FROM credentials LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("""
+                    ALTER TABLE credentials ADD COLUMN dcip TEXT
+                """)
+                self.conn.commit()
 
-        try:
-            cursor.execute("SELECT dns FROM credentials LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("""
-                ALTER TABLE credentials ADD COLUMN dns TEXT
-            """)
-            self.conn.commit()
+            try:
+                cursor.execute("SELECT dns FROM credentials LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("""
+                    ALTER TABLE credentials ADD COLUMN dns TEXT
+                """)
+                self.conn.commit()
 
     def _invalidate_cache(self, pattern: str = None):
         """

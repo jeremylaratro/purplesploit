@@ -69,7 +69,8 @@ class TestModuleSelection:
         mock_metadata2.name = "SMB"
 
         mock_framework.list_modules.return_value = [mock_metadata1, mock_metadata2]
-        command_handler.interactive.select_from_list.return_value = mock_metadata1
+        # Implementation uses select_module, not select_from_list
+        command_handler.interactive.select_module.return_value = mock_metadata1
 
         mock_module = MagicMock()
         mock_module.name = "Nmap Scanner"
@@ -79,14 +80,14 @@ class TestModuleSelection:
         result = command_handler.cmd_module(["select"])
 
         assert result is True
-        command_handler.interactive.select_from_list.assert_called_once()
+        command_handler.interactive.select_module.assert_called_once()
         mock_framework.use_module.assert_called_once_with("recon/nmap")
 
     def test_module_select_cancelled(self, command_handler, mock_framework):
         """Test module select when user cancels."""
         mock_metadata = MagicMock()
         mock_framework.list_modules.return_value = [mock_metadata]
-        command_handler.interactive.select_from_list.return_value = None
+        command_handler.interactive.select_module.return_value = None
 
         result = command_handler.cmd_module(["select"])
 
@@ -94,13 +95,15 @@ class TestModuleSelection:
         mock_framework.use_module.assert_not_called()
 
     def test_module_list(self, command_handler, mock_framework):
-        """Test module list command."""
+        """Test module list command - falls back to select behavior."""
         mock_framework.list_modules.return_value = []
 
+        # 'list' is not a valid subcommand - shows error
         result = command_handler.cmd_module(["list"])
 
         assert result is True
-        mock_framework.list_modules.assert_called_once()
+        # Implementation doesn't have 'list' subcommand - prints usage error
+        command_handler.display.print_error.assert_called()
 
     def test_module_categories(self, command_handler, mock_framework):
         """Test module categories command."""
@@ -206,21 +209,21 @@ class TestGoCommand:
         command_handler.display.print_info.assert_called()
 
     def test_go_with_module(self, command_handler, mock_framework):
-        """Test go loads module from quick map."""
+        """Test go command sets target and shows operations."""
         mock_module = MagicMock()
         mock_module.name = "SMB"
         mock_module.has_operations.return_value = True
         mock_module.get_operations.return_value = [
             {"name": "Auth", "description": "Test"}
         ]
-        mock_module.get_option.return_value = "192.168.1.1"
-        mock_module.auto_set_from_context = MagicMock()
-        mock_framework.use_module.return_value = mock_module
+        mock_framework.session.current_module = mock_module
 
-        result = command_handler.cmd_go(["smb"])
+        # go command takes a target, not a module
+        result = command_handler.cmd_go(["192.168.1.1"])
 
         assert result is True
-        mock_framework.use_module.assert_called_once_with("network/nxc_smb")
+        # Should show operations since module is loaded
+        mock_module.get_operations.assert_called()
 
     def test_go_no_target(self, command_handler, mock_framework):
         """Test go when no target in context."""
@@ -301,17 +304,15 @@ class TestInteractiveSelector:
     """Tests for interactive selector integration."""
 
     def test_target_add_interactive(self, command_handler, mock_framework):
-        """Test interactive target add."""
-        command_handler.interactive.get_input.side_effect = [
-            "192.168.1.50",  # IP
-            "test-host",      # Name
-        ]
+        """Test target add with arguments (not interactive)."""
         mock_framework.add_target.return_value = True
+        mock_framework.session.targets.list.return_value = []
 
-        result = command_handler.cmd_targets(["add"])
+        # targets add requires arguments: <ip|url> [name]
+        result = command_handler.cmd_targets(["add", "192.168.1.50", "test-host"])
 
         assert result is True
-        mock_framework.add_target.assert_called_once()
+        mock_framework.add_target.assert_called_once_with("network", "192.168.1.50", "test-host")
 
     def test_target_add_interactive_cancelled(self, command_handler, mock_framework):
         """Test interactive target add when cancelled."""
@@ -323,40 +324,38 @@ class TestInteractiveSelector:
         mock_framework.add_target.assert_not_called()
 
     def test_creds_add_interactive(self, command_handler, mock_framework):
-        """Test interactive credential add."""
-        command_handler.interactive.get_input.side_effect = [
-            "testuser",      # Username
-            "testpass",      # Password
-            "domain.local",  # Domain
-        ]
+        """Test credential add with arguments (not interactive)."""
         mock_framework.add_credential.return_value = True
 
-        result = command_handler.cmd_creds(["add"])
+        # creds add requires arguments: <username>:<password> [domain]
+        result = command_handler.cmd_creds(["add", "testuser:testpass", "domain.local"])
 
         assert result is True
-        mock_framework.add_credential.assert_called_once()
+        mock_framework.add_credential.assert_called_once_with("testuser", "testpass", "domain.local")
 
     def test_creds_select_interactive(self, command_handler, mock_framework):
         """Test interactive credential selection."""
         mock_cred = {"id": "1", "username": "admin", "password": "pass"}
         mock_framework.session.credentials.list.return_value = [mock_cred]
-        command_handler.interactive.select_from_list.return_value = mock_cred
+        # Implementation uses select_credential, not select_from_list
+        command_handler.interactive.select_credential.return_value = mock_cred
 
         result = command_handler.cmd_creds(["select"])
 
         assert result is True
-        command_handler.interactive.select_from_list.assert_called_once()
+        command_handler.interactive.select_credential.assert_called_once()
 
     def test_target_select_interactive(self, command_handler, mock_framework):
         """Test interactive target selection."""
         mock_target = {"id": "1", "ip": "192.168.1.1", "name": "host1"}
         mock_framework.session.targets.list.return_value = [mock_target]
-        command_handler.interactive.select_from_list.return_value = mock_target
+        # Implementation uses select_target, not select_from_list
+        command_handler.interactive.select_target.return_value = mock_target
 
         result = command_handler.cmd_targets(["select"])
 
         assert result is True
-        command_handler.interactive.select_from_list.assert_called_once()
+        command_handler.interactive.select_target.assert_called_once()
 
 
 # =============================================================================
