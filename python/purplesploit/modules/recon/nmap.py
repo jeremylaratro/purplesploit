@@ -4,7 +4,7 @@ Nmap Scan Module
 Network scanning and service detection using Nmap.
 """
 
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET  # XXE-safe XML parsing
 import os
 from pathlib import Path
 from typing import List, Dict, Any

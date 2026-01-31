@@ -7,15 +7,20 @@ import subprocess
 import asyncio
 import json
 import ipaddress
+import os
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import defusedxml.ElementTree as ET  # XXE-safe XML parsing
 
 from purplesploit.models.database import (
     db_manager,
@@ -27,6 +32,22 @@ from purplesploit.models.database import (
 from purplesploit.core.framework import Framework
 from purplesploit.ui.banner import show_banner
 
+# Security configuration via environment variables
+DEBUG_MODE = os.getenv('PURPLESPLOIT_DEBUG', 'false').lower() == 'true'
+CORS_ORIGINS = os.getenv('PURPLESPLOIT_CORS_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+
+
+def sanitize_error(e: Exception) -> str:
+    """Sanitize error messages based on debug mode."""
+    if DEBUG_MODE:
+        return str(e)
+    # In production, hide internal details
+    return "An internal error occurred"
+
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, enabled=not DEBUG_MODE)
+
 # Create FastAPI app
 app = FastAPI(
     title="PurpleSploit API",
@@ -36,10 +57,14 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# Enable CORS
+# Register rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Enable CORS with configurable origins (defaults to localhost only)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,7 +100,6 @@ else:
 
 # Initialize Framework for C2 operations
 # Use project-local database path
-import os
 if os.getenv('PURPLESPLOIT_DB'):
     db_path = os.getenv('PURPLESPLOIT_DB')
 else:
@@ -410,7 +434,7 @@ async def upload_nmap_results(file: UploadFile = File(...)):
     try:
         # Save uploaded file temporarily
         import tempfile
-        import xml.etree.ElementTree as ET
+        # Note: XML parsing uses defusedxml (imported at module level) to prevent XXE attacks
 
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xml') as tmp_file:
             content = await file.read()
@@ -452,7 +476,7 @@ async def upload_nmap_results(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing nmap results: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing nmap results: {sanitize_error(e)}")
 
 
 # ============================================================================
@@ -460,15 +484,16 @@ async def upload_nmap_results(file: UploadFile = File(...)):
 # ============================================================================
 
 @app.post("/api/execute", response_model=CommandResponse)
-async def execute_command(request: CommandRequest):
-    """Execute a shell command"""
+@limiter.limit("10/minute")
+async def execute_command(request: Request, cmd_request: CommandRequest):
+    """Execute a shell command (rate limited: 10/minute)"""
     try:
         result = subprocess.run(
-            request.command,
+            cmd_request.command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=request.timeout
+            timeout=cmd_request.timeout
         )
 
         return CommandResponse(
@@ -480,15 +505,16 @@ async def execute_command(request: CommandRequest):
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=408, detail="Command timed out")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @app.post("/api/scan/nmap")
-async def scan_nmap(request: ScanRequest, background_tasks: BackgroundTasks):
-    """Run nmap scan"""
-    command = f"nmap {request.scan_type} {request.target}"
-    if request.ports:
-        command += f" -p {request.ports}"
+@limiter.limit("30/minute")
+async def scan_nmap(request: Request, scan_request: ScanRequest, background_tasks: BackgroundTasks):
+    """Run nmap scan (rate limited: 30/minute)"""
+    command = f"nmap {scan_request.scan_type} {scan_request.target}"
+    if scan_request.ports:
+        command += f" -p {scan_request.ports}"
 
     try:
         result = subprocess.run(
@@ -506,7 +532,7 @@ async def scan_nmap(request: ScanRequest, background_tasks: BackgroundTasks):
             return_code=result.returncode
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 # ============================================================================
@@ -759,24 +785,25 @@ async def get_module_info(module_path: str):
 
 
 @app.post("/api/c2/module/execute")
-async def execute_module(request: ModuleExecuteRequest):
-    """Execute a module with provided options"""
+@limiter.limit("30/minute")
+async def execute_module(request: Request, module_request: ModuleExecuteRequest):
+    """Execute a module with provided options (rate limited: 30/minute)"""
     try:
         # Load module
-        module = framework.use_module(request.module_path)
+        module = framework.use_module(module_request.module_path)
         if not module:
             raise HTTPException(status_code=404, detail="Module not found")
 
         # Set options if provided
-        if request.options:
-            for key, value in request.options.items():
+        if module_request.options:
+            for key, value in module_request.options.items():
                 module.set_option(key, value)
 
         # Run module
         results = framework.run_module(module)
 
         # Store in session history
-        session_id = request.session_id
+        session_id = module_request.session_id
         if session_id not in sessions:
             sessions[session_id] = {
                 "history": [],
@@ -788,7 +815,7 @@ async def execute_module(request: ModuleExecuteRequest):
 
         sessions[session_id]["history"].append({
             "type": "module_execution",
-            "module": request.module_path,
+            "module": module_request.module_path,
             "timestamp": datetime.now().isoformat(),
             "results": results
         })
@@ -801,7 +828,7 @@ async def execute_module(request: ModuleExecuteRequest):
             "session_id": session_id
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
 
 
 @app.post("/api/c2/command")

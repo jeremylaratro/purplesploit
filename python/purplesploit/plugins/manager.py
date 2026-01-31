@@ -249,9 +249,26 @@ class PluginManager:
 
         install_path.mkdir(parents=True)
 
-        # Extract package
+        # Extract package with path traversal protection
         with tarfile.open(package_path, "r:gz") as tar:
-            tar.extractall(install_path.parent)
+            # Validate all paths before extraction to prevent directory traversal attacks
+            extract_base = install_path.parent.resolve()
+            for member in tar.getmembers():
+                member_path = (extract_base / member.name).resolve()
+                # Check if resolved path escapes the extraction directory
+                if not str(member_path).startswith(str(extract_base)):
+                    raise RuntimeError(
+                        f"Security: Malicious path detected in plugin archive: {member.name}"
+                    )
+                # Also check for symlinks pointing outside
+                if member.issym() or member.islnk():
+                    link_target = (extract_base / member.linkname).resolve()
+                    if not str(link_target).startswith(str(extract_base)):
+                        raise RuntimeError(
+                            f"Security: Malicious symlink detected in plugin archive: {member.name} -> {member.linkname}"
+                        )
+            # Safe to extract after validation
+            tar.extractall(extract_base)
 
         # Install Python dependencies
         if plugin.manifest.python_dependencies:

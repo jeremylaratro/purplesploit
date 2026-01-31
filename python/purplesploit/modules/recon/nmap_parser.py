@@ -5,7 +5,7 @@ Parses nmap XML output and populates the service database with detected services
 Also runs searchsploit on discovered service versions to find potential exploits.
 """
 
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET  # XXE-safe XML parsing
 import subprocess
 import re
 from typing import Dict, Any, List, Tuple

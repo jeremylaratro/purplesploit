@@ -11,7 +11,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="purplesploit",
-    version="6.9.0",
+    version="6.9.1",
     author="PurpleSploit Team",
     author_email="purplesploit@example.com",
     description="Hybrid pentesting framework - Python advanced features",
@@ -32,6 +32,10 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
+        # Security
+        "defusedxml>=0.7.1",
+        "slowapi>=0.1.9",
+        # Web framework
         "fastapi>=0.104.0",
         "uvicorn[standard]>=0.24.0",
         "sqlalchemy>=2.0.0",

@@ -1,5 +1,9 @@
 # PurpleSploit Python Framework Requirements
 
+# Security
+defusedxml==0.7.1      # XXE prevention for safe XML parsing
+slowapi==0.1.9         # Rate limiting for API protection
+
 # Console and UI
 prompt-toolkit>=3.0.0
 rich>=13.0.0
