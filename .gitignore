@@ -138,3 +138,5 @@ dmypy.json
 
 # Project-local data directory
 .data/
+training/HackTheBox-writeups
+training/
