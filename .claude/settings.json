@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if jq -r '.tool_input.command // \"\"' | grep -qE 'claude\\.ai/code/session_|[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*.*[Cc]laude|[Gg]enerated[[:space:]]+with[[:space:]]+.*[Cc]laude|🤖[[:space:]]*Generated[[:space:]]+with'; then echo 'Rejected: command contains Claude attribution / session link. Strip it before retrying.' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
