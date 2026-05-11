@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Reject commit messages that contain Claude attribution / session links.
+# Enable: git config core.hooksPath .githooks
+set -eu
+
+msg_file="$1"
+msg="$(cat "$msg_file")"
+
+bad_patterns=(
+  'https?://claude\.ai/code/session_'
+  'Co-Authored-By:.*[Cc]laude'
+  '[Gg]enerated[[:space:]]+with[[:space:]]+.*[Cc]laude'
+  '🤖[[:space:]]*Generated[[:space:]]+with'
+)
+
+for pat in "${bad_patterns[@]}"; do
+  if printf '%s' "$msg" | grep -Eq "$pat"; then
+    echo "commit-msg hook: rejected — message contains Claude attribution / session link." >&2
+    echo "matched pattern: $pat" >&2
+    echo "strip the offending line(s) and re-commit." >&2
+    exit 1
+  fi
+done
+
+author_email="$(git var GIT_AUTHOR_IDENT | sed -n 's/.*<\(.*\)>.*/\1/p')"
+author_name="$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*\) <.*/\1/p')"
+if [ "$author_email" = "noreply@anthropic.com" ] || [ "$author_name" = "Claude" ]; then
+  echo "commit-msg hook: rejected — author is set to Claude." >&2
+  echo "fix with: git config user.name jeremylaratro && \\" >&2
+  echo "           git config user.email 62393443+jeremylaratro@users.noreply.github.com" >&2
+  exit 1
+fi
+
+exit 0
