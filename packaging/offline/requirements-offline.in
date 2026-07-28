@@ -1,0 +1,52 @@
+# PurpleSploit — complete offline dependency set
+#
+# This is the SUPERSET used to build the offline wheelhouse. It intentionally
+# includes optional/guarded dependencies (reporting, OSINT, AI) so the air-gapped
+# install has everything, rather than silently degrading at runtime.
+#
+# Derived from python/setup.py install_requires plus every third-party top-level
+# import found in python/purplesploit/ (setup.py was missing requests,
+# websockets, packaging, shodan).
+
+# --- Security ---
+defusedxml>=0.7.1
+slowapi>=0.1.9
+
+# --- Console / UI ---
+rich>=13.0.0
+prompt_toolkit>=3.0.0
+
+# --- Web API + dashboard ---
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+aiofiles>=23.0.0
+httpx>=0.25.0
+websockets>=12.0
+jinja2>=3.1.0
+
+# --- Data / persistence ---
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+pandas>=2.0.0
+pyyaml>=6.0
+packaging>=23.0
+requests>=2.31.0
+
+# --- Reporting (guarded imports; PDF also needs system libs — see INSTALL.md) ---
+openpyxl>=3.1.0
+weasyprint>=60.0
+python-docx>=1.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# --- Misc declared in setup.py ---
+cryptography>=41.0.0
+click>=8.1.0
+
+# --- OSINT (guarded) ---
+shodan>=1.30.0
+
+# --- AI modules (guarded) ---
+openai>=1.0.0
+anthropic>=0.7.0
