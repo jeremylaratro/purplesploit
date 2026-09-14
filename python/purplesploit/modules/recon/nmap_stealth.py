@@ -67,7 +67,7 @@ class NmapStealthModule(NmapModule):
 
         # Add fragmentation if enabled
         fragment = self.get_option("FRAGMENT")
-        if fragment and fragment.lower() == "true":
+        if self.option_enabled("FRAGMENT"):
             cmd = cmd.replace("nmap ", "nmap -f ")
 
         # Add decoys if specified

@@ -2,6 +2,9 @@
 Tests for purplesploit.plugins.manager module.
 """
 
+import io
+import tarfile
+
 import pytest
 from pathlib import Path
 from datetime import datetime
@@ -238,6 +241,73 @@ class TestPluginManagerInstall:
         assert plugin.installed_version == "1.0.0"
         # Should not have called download since already installed
         mock_repo.download_plugin.assert_not_called()
+
+    def test_install_extracts_wrapped_archive_inside_plugin_directory(self, tmp_path):
+        """A normal wrapped package is installed without escaping its directory."""
+        archive = tmp_path / "test-plugin.tar.gz"
+        payload = b"plugin contents"
+        with tarfile.open(archive, "w:gz") as package:
+            member = tarfile.TarInfo("test-plugin/module.py")
+            member.size = len(payload)
+            member.mode = 0o644
+            package.addfile(member, io.BytesIO(payload))
+
+        manager = PluginManager(plugins_dir=tmp_path / "plugins", config_dir=tmp_path / "config")
+        plugin = Plugin(manifest=PluginManifest(
+            name="test-plugin", version="1.0.0", description="Test", author="Author",
+        ))
+        repository = Mock()
+        repository.get_plugin.return_value = plugin
+        repository.download_plugin.return_value = archive
+        manager._repositories = {"test": repository}
+
+        installed = manager.install("test-plugin")
+
+        assert installed.status is PluginStatus.INSTALLED
+        assert (tmp_path / "plugins" / "test-plugin" / "module.py").read_bytes() == payload
+
+    def test_install_rejects_archive_path_traversal(self, tmp_path):
+        """Wrapped archives cannot use dot-dot paths to overwrite sibling plugins."""
+        archive = tmp_path / "malicious.tar.gz"
+        payload = b"malicious"
+        with tarfile.open(archive, "w:gz") as package:
+            member = tarfile.TarInfo("test-plugin/../other-plugin/payload.py")
+            member.size = len(payload)
+            package.addfile(member, io.BytesIO(payload))
+
+        manager = PluginManager(plugins_dir=tmp_path / "plugins", config_dir=tmp_path / "config")
+        plugin = Plugin(manifest=PluginManifest(
+            name="test-plugin", version="1.0.0", description="Test", author="Author",
+        ))
+        repository = Mock()
+        repository.get_plugin.return_value = plugin
+        repository.download_plugin.return_value = archive
+        manager._repositories = {"test": repository}
+
+        with pytest.raises(RuntimeError, match="Malicious path"):
+            manager.install("test-plugin")
+        assert not (tmp_path / "plugins" / "other-plugin" / "payload.py").exists()
+
+    def test_install_rejects_links(self, tmp_path):
+        """Archive links are rejected even when their immediate target appears local."""
+        archive = tmp_path / "link.tar.gz"
+        with tarfile.open(archive, "w:gz") as package:
+            member = tarfile.TarInfo("test-plugin/link")
+            member.type = tarfile.SYMTYPE
+            member.linkname = "module.py"
+            package.addfile(member)
+
+        manager = PluginManager(plugins_dir=tmp_path / "plugins", config_dir=tmp_path / "config")
+        plugin = Plugin(manifest=PluginManifest(
+            name="test-plugin", version="1.0.0", description="Test", author="Author",
+        ))
+        repository = Mock()
+        repository.get_plugin.return_value = plugin
+        repository.download_plugin.return_value = archive
+        manager._repositories = {"test": repository}
+
+        with pytest.raises(RuntimeError, match="Unsupported archive entry"):
+            manager.install("test-plugin")
 
 
 class TestPluginManagerUninstall:

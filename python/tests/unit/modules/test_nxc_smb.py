@@ -8,6 +8,8 @@ Tests cover:
 - Edge cases and error handling
 """
 
+import shlex
+
 import pytest
 from unittest.mock import MagicMock, patch
 from purplesploit.modules.network.nxc_smb import NXCSMBModule
@@ -148,14 +150,13 @@ class TestBuildAuth:
         """Test _build_auth with username only."""
         nxc_with_target.set_option("USERNAME", "admin")
         auth = nxc_with_target._build_auth()
-        assert "-u 'admin'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", ""]
         assert "-p ''" in auth  # Empty password
 
     def test_build_auth_username_password(self, nxc_with_creds):
         """Test _build_auth with username and password."""
         auth = nxc_with_creds._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-p 'password123'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", "password123"]
 
     def test_build_auth_with_hash(self, nxc_with_target):
         """Test _build_auth with NTLM hash."""
@@ -163,8 +164,7 @@ class TestBuildAuth:
         # Ensure HASH option exists in the options dict
         nxc_with_target.options["HASH"] = {"value": "aad3b435b51404ee:8846f7eaee8fb117", "required": False}
         auth = nxc_with_target._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-H 'aad3b435b51404ee:8846f7eaee8fb117'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-H", "aad3b435b51404ee:8846f7eaee8fb117"]
         assert "-p" not in auth
 
     def test_build_auth_hash_takes_precedence(self, nxc_with_creds):
@@ -172,7 +172,7 @@ class TestBuildAuth:
         # Ensure HASH option exists in the options dict
         nxc_with_creds.options["HASH"] = {"value": "somehash", "required": False}
         auth = nxc_with_creds._build_auth()
-        assert "-H 'somehash'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-H", "somehash"]
         assert "-p" not in auth
 
 
@@ -529,8 +529,7 @@ class TestNXCSMBEdgeCases:
         nxc_with_target.set_option("PASSWORD", "P@ss'word\"123!")
 
         auth = nxc_with_target._build_auth()
-        assert "-u 'admin'" in auth
-        # Password should be quoted
+        assert shlex.split(auth) == ["-u", "admin", "-p", "P@ss'word\"123!"]
 
     def test_empty_domain(self, nxc_with_creds):
         """Test handling empty domain."""

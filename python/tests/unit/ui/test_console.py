@@ -34,10 +34,11 @@ class TestConsoleInitialization:
 
     @patch('purplesploit.ui.console.PromptSession')
     @patch('purplesploit.ui.console.FileHistory')
-    def test_console_creates_history_file(self, mock_file_history, mock_prompt_session, mock_framework):
-        """Test that console sets up file history."""
-        from purplesploit.ui.console import Console
-        console = Console(mock_framework)
+    def test_console_creates_history_file_when_opted_in(self, mock_file_history, mock_prompt_session, mock_framework):
+        """Test that explicit opt-in enables persistent history."""
+        with patch.dict('os.environ', {'PURPLESPLOIT_PERSIST_HISTORY': 'true'}):
+            from purplesploit.ui.console import Console
+            Console(mock_framework)
         mock_file_history.assert_called_once()
 
     @patch('purplesploit.ui.console.PromptSession')

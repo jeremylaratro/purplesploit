@@ -373,7 +373,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(items):
                         return items[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -395,7 +395,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(modules):
                         return modules[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -415,7 +415,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(operations):
                         return operations[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -440,7 +440,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(targets):
                         return targets[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -465,7 +465,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(credentials):
                         return credentials[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -489,11 +489,11 @@ class InteractiveSelector:
         # Format services for display
         lines = []
         for i, service in enumerate(services, 1):
-            target = service.get('target', '')
-            port = service.get('port', '')
-            protocol = service.get('protocol', '')
-            name = service.get('name', '')
-            version = service.get('version', '')
+            target = str(service.get('target', ''))
+            port = str(service.get('port', ''))
+            protocol = str(service.get('protocol', ''))
+            name = str(service.get('name', service.get('service', '')))
+            version = str(service.get('version', ''))
 
             # Format: "1. target:port/protocol - service version"
             line = f"{i:2d}. {target:20s} {port:6s}/{protocol:5s} {name:15s} {version}"
@@ -539,7 +539,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(services):
                         return services[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None
@@ -611,7 +611,7 @@ class InteractiveSelector:
                     index = int(choice) - 1
                     if 0 <= index < len(wordlists):
                         return wordlists[index]
-        except (ValueError, KeyboardInterrupt, EOFError):
+        except (OSError, ValueError, KeyboardInterrupt, EOFError):
             pass
 
         return None

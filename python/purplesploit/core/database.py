@@ -38,12 +38,13 @@ class Database:
             # Default to ~/.purplesploit/purplesploit.db
             home = Path.home()
             ps_dir = home / ".purplesploit"
-            ps_dir.mkdir(exist_ok=True)
+            ps_dir.mkdir(mode=0o700, exist_ok=True)
+            ps_dir.chmod(0o700)
             db_path = str(ps_dir / "purplesploit.db")
 
         # Ensure parent directory exists for custom paths
         db_path_obj = Path(db_path)
-        db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        db_path_obj.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
         self.db_path = db_path
         self.conn = None
@@ -72,6 +73,8 @@ class Database:
         # Enable WAL mode for better concurrent read performance
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        if self.db_path != ":memory:":
+            Path(self.db_path).chmod(0o600)
 
     @contextmanager
     def _get_cursor(self):
@@ -154,6 +157,8 @@ class Database:
                 username TEXT NOT NULL,
                 password TEXT,
                 domain TEXT,
+                dcip TEXT,
+                dns TEXT,
                 hash TEXT,
                 hash_type TEXT,
                 metadata TEXT,  -- JSON
@@ -518,7 +523,10 @@ class Database:
         """
         with self._get_cursor() as cursor:
             cursor.execute("DELETE FROM targets WHERE identifier = ?", (identifier,))
-            return cursor.rowcount > 0
+            removed = cursor.rowcount > 0
+        if removed:
+            self._invalidate_cache('targets_')
+        return removed
 
     def mark_target_verified(self, identifier: str) -> bool:
         """
@@ -545,11 +553,13 @@ class Database:
             cursor.execute("SELECT COUNT(*) FROM targets")
             count = cursor.fetchone()[0]
             cursor.execute("DELETE FROM targets")
-            return count
+        self._invalidate_cache('targets_')
+        return count
 
     # Credential Methods
     def add_credential(self, username: str, password: str = None,
-                      domain: str = None, hash_value: str = None,
+                      domain: str = None, dcip: str = None, dns: str = None,
+                      hash_value: str = None,
                       hash_type: str = None, name: str = None,
                       metadata: Dict = None) -> int:
         """
@@ -570,10 +580,10 @@ class Database:
         with self._get_cursor() as cursor:
             cursor.execute("""
                 INSERT INTO credentials
-                (username, password, domain, hash, hash_type, name, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (username, password, domain, dcip, dns, hash, hash_type, name, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                username, password, domain, hash_value, hash_type, name,
+                username, password, domain, dcip, dns, hash_value, hash_type, name,
                 json.dumps(metadata or {})
             ))
             return cursor.lastrowid
@@ -610,6 +620,29 @@ class Database:
         with self._get_cursor() as cursor:
             cursor.execute("DELETE FROM credentials WHERE id = ?", (cred_id,))
             return cursor.rowcount > 0
+
+    def remove_credential_record(self, username: str, domain: str = None,
+                                 name: str = None) -> bool:
+        """Remove one credential using its stable identity fields."""
+        with self._get_cursor() as cursor:
+            cursor.execute(
+                """DELETE FROM credentials WHERE id = (
+                       SELECT id FROM credentials
+                       WHERE (name = ? AND ? IS NOT NULL)
+                          OR (username = ? AND domain IS ?)
+                       ORDER BY id LIMIT 1
+                   )""",
+                (name, name, username, domain),
+            )
+            return cursor.rowcount > 0
+
+    def clear_all_credentials(self) -> int:
+        """Remove every stored credential and return the number removed."""
+        with self._get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM credentials")
+            count = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM credentials")
+        return count
 
     # Service Methods
     def add_service(self, target: str, service: str, port: int,

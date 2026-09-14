@@ -169,7 +169,8 @@ class AutoEnumModule(ExternalToolModule):
         import shutil
         return shutil.which(tool_name) is not None
 
-    def _run_command(self, cmd: str, output_file: str = None, timeout: int = None) -> Dict[str, Any]:
+    def _run_command(self, cmd: str, output_file: str = None, timeout: int = None,
+                     input_text: str = None) -> Dict[str, Any]:
         """
         Run a command and optionally save output.
 
@@ -182,13 +183,18 @@ class AutoEnumModule(ExternalToolModule):
             Dictionary with success status and output
         """
         try:
-            self.log(f"Running: {cmd}", "info")
+            import shlex
+            argv = shlex.split(cmd)
+            if not argv:
+                return {"success": False, "error": "Empty command", "output": ""}
+            self.log(f"Running: {shlex.join(argv)}", "info")
 
             result = subprocess.run(
-                cmd,
-                shell=True,
+                argv,
+                shell=False,
                 capture_output=True,
                 text=True,
+                input=input_text,
                 timeout=timeout
             )
 
@@ -326,7 +332,7 @@ class AutoEnumModule(ExternalToolModule):
         if self._check_tool("httpx"):
             self.log("Running httpx for web service discovery...", "info")
             ports_str = ",".join(map(str, ports))
-            cmd = f"echo {target} | httpx -p {ports_str} -title -tech-detect -status-code -silent"
+            cmd = f"httpx -u '{target}' -p {ports_str} -title -tech-detect -status-code -silent"
             result = self._run_command(cmd, f"{output_dir}/web/httpx.txt", timeout=300)
 
             if result["success"]:
@@ -564,8 +570,7 @@ class AutoEnumModule(ExternalToolModule):
 
             # Add entry (requires sudo)
             entry = f"{target} {domain}\n"
-            cmd = f"echo '{entry}' | sudo tee -a /etc/hosts"
-            result = self._run_command(cmd)
+            result = self._run_command("sudo tee -a /etc/hosts", input_text=entry)
 
             if result["success"]:
                 self.log(f"Added {domain} to /etc/hosts", "success")
@@ -649,53 +654,53 @@ class AutoEnumModule(ExternalToolModule):
             self.output_dir = self._setup_output_dir()
 
             # Add to hosts if requested
-            if self.get_option("ADD_TO_HOSTS") and self.get_option("ADD_TO_HOSTS").lower() == "true":
+            if self.option_enabled("ADD_TO_HOSTS"):
                 self._add_to_hosts()
 
             # Track what we're running
             enabled_scans = []
-            if self.get_option("NETWORK_SCAN").lower() == "true":
+            if self.option_enabled("NETWORK_SCAN"):
                 enabled_scans.append("network")
-            if self.get_option("WEB_SCAN").lower() == "true":
+            if self.option_enabled("WEB_SCAN"):
                 enabled_scans.append("web")
-            if self.get_option("DIR_SCAN").lower() == "true":
+            if self.option_enabled("DIR_SCAN"):
                 enabled_scans.append("directory")
-            if self.get_option("DNS_SCAN").lower() == "true":
+            if self.option_enabled("DNS_SCAN"):
                 enabled_scans.append("dns")
-            if self.get_option("SMB_SCAN").lower() == "true":
+            if self.option_enabled("SMB_SCAN"):
                 enabled_scans.append("smb")
-            if self.get_option("EXPLOIT_SEARCH").lower() == "true":
+            if self.option_enabled("EXPLOIT_SEARCH"):
                 enabled_scans.append("exploits")
 
             self.log(f"Enabled scans: {', '.join(enabled_scans)}", "info")
 
             # 1. Network Enumeration
             open_ports = []
-            if self.get_option("NETWORK_SCAN").lower() == "true":
+            if self.option_enabled("NETWORK_SCAN"):
                 network_results = self._network_enumeration()
                 open_ports = network_results.get("ports", [])
 
             # 2. Web Enumeration
             live_urls = []
-            if self.get_option("WEB_SCAN").lower() == "true":
+            if self.option_enabled("WEB_SCAN"):
                 web_results = self._web_enumeration(open_ports)
                 live_urls = web_results.get("live_urls", [])
 
             # 3. Directory Enumeration
-            if self.get_option("DIR_SCAN").lower() == "true" and live_urls:
+            if self.option_enabled("DIR_SCAN") and live_urls:
                 self._directory_enumeration(live_urls)
 
             # 4. DNS Enumeration
-            if self.get_option("DNS_SCAN").lower() == "true":
+            if self.option_enabled("DNS_SCAN"):
                 self._dns_enumeration()
 
             # 5. SMB Enumeration (if port 445 is open)
-            if self.get_option("SMB_SCAN").lower() == "true" and 445 in open_ports:
+            if self.option_enabled("SMB_SCAN") and 445 in open_ports:
                 target = self.get_option("TARGET")
                 self._smb_enumeration(target)
 
             # 6. Exploit Search
-            if self.get_option("EXPLOIT_SEARCH").lower() == "true":
+            if self.option_enabled("EXPLOIT_SEARCH"):
                 services = self.results.get("network", {}).get("services", [])
                 if services:
                     self._exploit_search(services)

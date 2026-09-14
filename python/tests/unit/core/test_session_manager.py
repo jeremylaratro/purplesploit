@@ -577,14 +577,14 @@ class TestSessionManagerPortForwarding:
         assert forward.local_port == 8080
 
     def test_start_port_forward(self):
-        """Test starting a port forward."""
+        """A placeholder forward must not claim to be active without a transport."""
         manager = SessionManager()
 
         forward = manager.create_port_forward(8080, "192.168.1.1", 80)
         result = manager.start_port_forward(forward.id)
 
-        assert result is True
-        assert forward.active is True
+        assert result is False
+        assert forward.active is False
 
     def test_stop_port_forward(self):
         """Test stopping a port forward."""

@@ -42,6 +42,32 @@ def mock_framework():
     framework.session.add_command = MagicMock()
     framework.database = MagicMock()
 
+    # The command handler delegates operation execution to Framework. Keep this
+    # fixture focused on the UI boundary while core tests exercise the real
+    # validation, redaction, persistence, and audit pipeline.
+    def run_operation(module, operation):
+        handler = operation.get("handler")
+        if handler is None:
+            return {"success": False, "error": "No handler defined for operation"}
+        if isinstance(handler, str):
+            method = getattr(module, handler, None)
+            if method is None or not callable(method):
+                return {"success": False, "error": f"Handler method not found: {handler}"}
+            try:
+                result = method()
+            except Exception as exc:
+                return {"success": False, "error": f"Operation execution error: {exc}"}
+        elif callable(handler):
+            try:
+                result = handler()
+            except Exception as exc:
+                return {"success": False, "error": f"Operation execution error: {exc}"}
+        else:
+            return {"success": False, "error": f"Invalid handler type: {type(handler).__name__}"}
+        return result if isinstance(result, dict) else {"success": True, "output": str(result)}
+
+    framework.run_operation.side_effect = run_operation
+
     return framework
 
 

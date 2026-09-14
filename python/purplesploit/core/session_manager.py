@@ -345,6 +345,15 @@ class SessionManager:
 
         session.state = SessionState.CLOSED
 
+        # A closed pivot must never remain eligible for routing or forwarding.
+        for route_id, route in list(self.routes.items()):
+            if route.session_id == session_id:
+                route.active = False
+                del self.routes[route_id]
+        for forward_id, forward in list(self.port_forwards.items()):
+            if forward.session_id == session_id:
+                self.remove_port_forward(forward_id)
+
         if self._current_session_id == session_id:
             self._current_session_id = None
 
@@ -468,6 +477,9 @@ class SessionManager:
         for route in self.routes.values():
             if not route.active:
                 continue
+            session = self.sessions.get(route.session_id)
+            if session is None or not session.is_active:
+                continue
 
             try:
                 network = ipaddress.ip_network(f"{route.subnet}/{route.netmask}", strict=False)
@@ -513,9 +525,10 @@ class SessionManager:
         if not forward:
             return False
 
-        # In a real implementation, this would start the actual forwarding
-        forward.active = True
-        return True
+        # A forward without a transport process is configuration, not an active
+        # forwarding path. Callers must attach a real transport implementation.
+        forward.active = False
+        return False
 
     def stop_port_forward(self, forward_id: str) -> bool:
         """Stop a port forward."""
@@ -670,13 +683,10 @@ class SessionInteraction:
             "timestamp": datetime.now().isoformat(),
         }
 
-        # This would integrate with actual session handlers
-        # For now, simulate for testing
-        if self.session.session_type == SessionType.SHELL:
-            result["output"] = f"[simulated] Would execute: {command}"
-            result["return_code"] = 0
-        else:
-            result["error"] = f"Command execution not supported for {self.session.session_type.value}"
+        result["error"] = (
+            f"Command execution transport is not configured for "
+            f"{self.session.session_type.value} sessions"
+        )
 
         self.command_history.append(result)
         return result

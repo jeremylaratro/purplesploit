@@ -123,7 +123,7 @@ class ImpacketKerberoastModule(ExternalToolModule):
             cmd += f" -dc-ip {dc}"
 
         # Request TGS tickets
-        if request and request.lower() == "true":
+        if self.option_enabled("REQUEST"):
             cmd += " -request"
 
         # Output file

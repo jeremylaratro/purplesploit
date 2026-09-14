@@ -133,6 +133,18 @@ class NmapModule(ExternalToolModule):
                 "required": False,
                 "description": "Run scan in background (true/false)",
                 "default": "true"
+            },
+            "SKIP_DISCOVERY": {
+                "value": "false",
+                "required": False,
+                "description": "Skip host discovery (-Pn)",
+                "default": "false"
+            },
+            "TRACEROUTE": {
+                "value": "false",
+                "required": False,
+                "description": "Trace the network path to each host",
+                "default": "false"
             }
         })
 
@@ -196,6 +208,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("TIMING", "4")
         self.set_option("MIN_RATE", "3900")
         self.set_option("MAX_RTT_TIMEOUT", "4.5")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "false")
 
         return self.run()
 
@@ -210,6 +224,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("MAX_RTT_TIMEOUT", "2")
         self.set_option("MAX_RETRIES", "1")
         self.set_option("VERSION_INTENSITY", "2")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "false")
 
         return self.run()
 
@@ -222,6 +238,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("TIMING", "4")
         self.set_option("MIN_RATE", "3900")
         self.set_option("MAX_RTT_TIMEOUT", "4.5")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "false")
 
         return self.run()
 
@@ -232,6 +250,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("OS_DETECTION", "true")
         self.set_option("VERSION_INTENSITY", "9")
         self.set_option("TIMING", "4")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "true")
 
         # Run the scan
         result = self.run()
@@ -249,6 +269,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("MIN_RATE", "100")
         self.set_option("MAX_RTT_TIMEOUT", "10")
         self.set_option("PORTS", "-")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "false")
 
         return self.run()
 
@@ -260,6 +282,8 @@ class NmapModule(ExternalToolModule):
         self.set_option("PORTS", None)
         self.set_option("TIMING", "4")
         self.set_option("MIN_RATE", "1000")
+        self.set_option("SKIP_DISCOVERY", "false")
+        self.set_option("TRACEROUTE", "false")
 
         return self.run()
 
@@ -268,14 +292,10 @@ class NmapModule(ExternalToolModule):
         # Set no ping scan options
         self.set_option("PORTS", "-")
         self.set_option("SCAN_TYPE", "sCV")
+        self.set_option("SKIP_DISCOVERY", "true")
+        self.set_option("TRACEROUTE", "false")
 
-        # Run the scan
-        result = self.run()
-
-        # Note: -Pn flag would need to be added in build_command
-        # For now, users can add it via custom options if the module supports it
-
-        return result
+        return self.run()
 
     def build_command(self) -> str:
         """
@@ -298,48 +318,56 @@ class NmapModule(ExternalToolModule):
         max_rtt_timeout = self.get_option("MAX_RTT_TIMEOUT")
         max_retries = self.get_option("MAX_RETRIES")
         host_timeout = self.get_option("HOST_TIMEOUT")
+        skip_discovery = self.get_option("SKIP_DISCOVERY")
+        traceroute = self.get_option("TRACEROUTE")
 
         # Base command
         cmd = f"nmap"
 
         # Scan type
         if scan_type:
-            cmd += f" -{scan_type}"
+            cmd += f" {self.quote_arg('-' + str(scan_type))}"
 
         # Ports
         if ports:
-            cmd += f" -p {ports}"
+            cmd += f" -p {self.quote_arg(ports)}"
         elif top_ports:
-            cmd += f" --top-ports {top_ports}"
+            cmd += f" --top-ports {self.quote_arg(top_ports)}"
 
         # Timing
         if timing:
-            cmd += f" -T{timing}"
+            cmd += f" {self.quote_arg('-T' + str(timing))}"
 
         # OS detection
-        if os_detection and os_detection.lower() == "true":
+        if self.option_enabled("OS_DETECTION"):
             cmd += " -O"
+
+        if self.option_enabled("SKIP_DISCOVERY"):
+            cmd += " -Pn"
+
+        if self.option_enabled("TRACEROUTE"):
+            cmd += " --traceroute"
 
         # Version intensity
         if version_intensity:
-            cmd += f" --version-intensity {version_intensity}"
+            cmd += f" --version-intensity {self.quote_arg(version_intensity)}"
 
         # Performance options
         if min_rate:
-            cmd += f" --min-rate {min_rate}"
+            cmd += f" --min-rate {self.quote_arg(min_rate)}"
 
         if max_rtt_timeout:
-            cmd += f" --max-rtt-timeout {max_rtt_timeout}"
+            cmd += f" --max-rtt-timeout {self.quote_arg(max_rtt_timeout)}"
 
         if max_retries:
-            cmd += f" --max-retries {max_retries}"
+            cmd += f" --max-retries {self.quote_arg(max_retries)}"
 
         if host_timeout:
-            cmd += f" --host-timeout {host_timeout}"
+            cmd += f" --host-timeout {self.quote_arg(host_timeout)}"
 
         # Scripts
         if script:
-            cmd += f" --script={script}"
+            cmd += f" {self.quote_arg('--script=' + str(script))}"
 
         # Output
         # If no output file specified but format is set, use target name
@@ -350,16 +378,16 @@ class NmapModule(ExternalToolModule):
 
         if output_file:
             if output_format == "xml":
-                cmd += f" -oX {output_file}"
+                cmd += f" -oX {self.quote_arg(output_file)}"
             elif output_format == "grepable":
-                cmd += f" -oG {output_file}"
+                cmd += f" -oG {self.quote_arg(output_file)}"
             elif output_format == "all":
-                cmd += f" -oA {output_file}"
+                cmd += f" -oA {self.quote_arg(output_file)}"
             else:
-                cmd += f" -oN {output_file}"
+                cmd += f" -oN {self.quote_arg(output_file)}"
 
         # Target
-        cmd += f" {rhost}"
+        cmd += f" {self.quote_arg(rhost)}"
 
         return cmd
 
@@ -621,7 +649,9 @@ class NmapModule(ExternalToolModule):
 
                 # Only import services from stdout if scanning a single host (not a network range)
                 # For network ranges, we need XML output to distinguish individual IPs
-                is_network_range = "/" in rhost or "-" in rhost.split(".")[-1] if "." in rhost else False
+                is_network_range = "/" in rhost or (
+                    "." in rhost and "-" in rhost.split(".")[-1]
+                )
 
                 if not is_network_range:
                     # Import detected services into framework (for single host scans without XML)

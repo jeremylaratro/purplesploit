@@ -72,7 +72,7 @@ class TestWfuzzCommandBuilding:
         command = wfuzz_module.build_command()
 
         assert "wfuzz" in command
-        assert "-w '/usr/share/wordlists/test.txt'" in command
+        assert "-w /usr/share/wordlists/test.txt" in command
         assert "http://example.com/FUZZ" in command
 
     def test_build_command_with_threads(self, wfuzz_module):

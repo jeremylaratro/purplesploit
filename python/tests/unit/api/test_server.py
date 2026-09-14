@@ -37,7 +37,8 @@ def mock_db_manager():
 @pytest.fixture
 def mock_framework():
     """Create a mock framework for API tests."""
-    with patch('purplesploit.api.server.framework') as mock:
+    with patch('purplesploit.api.server.framework') as mock, \
+         patch('purplesploit.api.server.get_session_framework') as get_session_framework:
         mock.session = MagicMock()
         mock.session.targets = MagicMock()
         mock.session.credentials = MagicMock()
@@ -47,6 +48,7 @@ def mock_framework():
         mock.get_categories.return_value = []
         mock.database = MagicMock()
         mock.database.db_path = "/test/path.db"
+        get_session_framework.return_value = mock
         yield mock
 
 
@@ -55,7 +57,7 @@ def test_client(mock_db_manager, mock_framework):
     """Create a test client for the FastAPI app."""
     # Import after patches are applied
     from purplesploit.api.server import app
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 # =============================================================================
@@ -294,7 +296,8 @@ class TestCommandExecution:
 
     def test_execute_command_success(self, test_client):
         """Test successful command execution."""
-        with patch('purplesploit.api.server.subprocess.run') as mock_run:
+        with patch('purplesploit.api.server.ENABLE_SHELL_API', True), \
+             patch('purplesploit.api.server.subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout="command output",
@@ -308,10 +311,13 @@ class TestCommandExecution:
             data = response.json()
             assert data["success"] is True
             assert "command output" in data["stdout"]
+            assert mock_run.call_args.args[0] == ["echo", "test"]
+            assert mock_run.call_args.kwargs["shell"] is False
 
     def test_execute_command_failure(self, test_client):
         """Test failed command execution."""
-        with patch('purplesploit.api.server.subprocess.run') as mock_run:
+        with patch('purplesploit.api.server.ENABLE_SHELL_API', True), \
+             patch('purplesploit.api.server.subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1,
                 stdout="",
@@ -328,7 +334,8 @@ class TestCommandExecution:
     def test_execute_command_timeout(self, test_client):
         """Test command execution timeout."""
         import subprocess
-        with patch('purplesploit.api.server.subprocess.run') as mock_run:
+        with patch('purplesploit.api.server.ENABLE_SHELL_API', True), \
+             patch('purplesploit.api.server.subprocess.run') as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired("cmd", 300)
 
             response = test_client.post("/api/execute", json={
@@ -336,6 +343,10 @@ class TestCommandExecution:
                 "timeout": 1
             })
             assert response.status_code == 408
+
+    def test_execute_command_disabled_by_default(self, test_client):
+        response = test_client.post("/api/execute", json={"command": "echo test"})
+        assert response.status_code == 403
 
 
 # =============================================================================
@@ -347,7 +358,8 @@ class TestNmapScan:
 
     def test_scan_nmap_success(self, test_client):
         """Test successful nmap scan."""
-        with patch('purplesploit.api.server.subprocess.run') as mock_run:
+        with patch('purplesploit.api.server.ENABLE_SHELL_API', True), \
+             patch('purplesploit.api.server.subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout="PORT   STATE SERVICE\n22/tcp open ssh",
@@ -1132,7 +1144,7 @@ class TestSessionManagement:
         assert "created_at" in data
 
     def test_clear_session_success(self, test_client, mock_framework):
-        """Test clearing session history."""
+        """Test deleting a session and its runtime state."""
         # Create session
         test_client.post("/api/c2/command", json={
             "command": "help",
@@ -1142,7 +1154,8 @@ class TestSessionManagement:
         # Clear session
         response = test_client.delete("/api/c2/session/clear_test_session")
         assert response.status_code == 200
-        assert "cleared" in response.json()["message"]
+        assert "deleted" in response.json()["message"]
+        assert test_client.get("/api/c2/session/clear_test_session").status_code == 404
 
 
 # =============================================================================
@@ -1195,7 +1208,8 @@ class TestCommandExecutionErrors:
 
     def test_execute_command_exception(self, test_client):
         """Test command execution with exception."""
-        with patch('purplesploit.api.server.subprocess.run') as mock_run:
+        with patch('purplesploit.api.server.ENABLE_SHELL_API', True), \
+             patch('purplesploit.api.server.subprocess.run') as mock_run:
             mock_run.side_effect = Exception("Unexpected error")
 
             response = test_client.post("/api/execute", json={

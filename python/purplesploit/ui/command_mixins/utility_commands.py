@@ -6,6 +6,7 @@ Handles help, history, stats, shell, webserver, and other utilities.
 
 from typing import List, Dict, Any
 from pathlib import Path
+import os
 
 
 class UtilityCommandsMixin:
@@ -211,8 +212,9 @@ class UtilityCommandsMixin:
         # Check if ligolo-ng is installed
         ligolo_cmd = None
         for cmd in ["ligolo-ng", "ligolo", "ligolo-proxy"]:
-            if shutil.which(cmd):
-                ligolo_cmd = cmd
+            resolved = shutil.which(cmd)
+            if resolved:
+                ligolo_cmd = resolved
                 break
 
         if not ligolo_cmd:
@@ -233,7 +235,7 @@ class UtilityCommandsMixin:
                 self.display.print_info("Attaching to existing ligolo-ng session...")
                 self.display.print_info("Press CTRL+B then D to detach (keeps session running)")
                 self.display.console.print()
-                os.system("tmux attach-session -t ligolo")
+                subprocess.run(["tmux", "attach-session", "-t", "ligolo"], check=False)
             else:
                 self.display.print_info("Creating new ligolo-ng session...")
                 self.display.print_info("Press CTRL+B then D to detach (keeps session running)")
@@ -244,8 +246,10 @@ class UtilityCommandsMixin:
                 else:
                     cmd_args = [ligolo_cmd, "-selfcert"]
 
-                cmd_str = " ".join(cmd_args)
-                os.system(f"tmux new-session -s ligolo '{cmd_str}'")
+                subprocess.run(
+                    ["tmux", "new-session", "-s", "ligolo", *cmd_args],
+                    check=False,
+                )
 
             self.display.console.print()
             self.display.print_success("Returned to PurpleSploit")
@@ -269,15 +273,16 @@ class UtilityCommandsMixin:
             if args:
                 cmd = " ".join(args)
                 self.display.print_info(f"Executing: {cmd}")
-                subprocess.run(cmd, shell=True)
+                user_shell = os.environ.get('SHELL') or '/bin/bash'
+                subprocess.run([user_shell, "-lc", cmd], check=False)
                 return True
             else:
                 self.display.print_info("Dropping to localhost shell...")
                 self.display.print_info("Press CTRL+D (EOF) to return to PurpleSploit")
                 self.display.console.print()
 
-                user_shell = os.environ.get('SHELL', '/bin/bash')
-                os.system(user_shell)
+                user_shell = os.environ.get('SHELL') or '/bin/bash'
+                subprocess.run([user_shell], check=False)
 
                 self.display.console.print()
                 self.display.print_success("Returned to PurpleSploit")
@@ -376,7 +381,7 @@ class UtilityCommandsMixin:
                 return True
 
             port = 5000
-            host = "0.0.0.0"
+            host = "127.0.0.1"
 
             # Parse flags
             i = 1
@@ -392,6 +397,9 @@ class UtilityCommandsMixin:
                     host = args[i + 1]
                     i += 1
                 i += 1
+            if host not in {"127.0.0.1", "localhost", "::1"} and not os.getenv("PURPLESPLOIT_API_TOKEN"):
+                self.display.print_error("Remote binding requires PURPLESPLOIT_API_TOKEN")
+                return True
 
             try:
                 try:
@@ -586,8 +594,11 @@ class UtilityCommandsMixin:
                             tmp.write(entry + "\n")
                         tmp_path = tmp.name
 
-                    cmd = f"sudo bash -c 'cat {tmp_path} >> /etc/hosts'"
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    with open(tmp_path, "r", encoding="utf-8") as input_file:
+                        result = subprocess.run(
+                            ["sudo", "tee", "-a", "/etc/hosts"], stdin=input_file,
+                            capture_output=True, text=True, check=False,
+                        )
 
                     os.unlink(tmp_path)
 

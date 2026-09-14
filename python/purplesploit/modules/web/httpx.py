@@ -108,37 +108,34 @@ class HTTPxModule(ExternalToolModule):
         timeout = self.get_option("TIMEOUT")
 
         # Base command
-        if target.startswith("http"):
-            cmd = f"echo '{target}' | httpx"
-        else:
-            cmd = f"httpx -u '{target}'"
+        cmd = f"httpx -u {self.quote_arg(target)}"
 
         # Ports
         if ports:
-            cmd += f" -p {ports}"
+            cmd += f" -p {self.quote_arg(ports)}"
 
         # Threads
         if threads:
-            cmd += f" -threads {threads}"
+            cmd += f" -threads {self.quote_arg(threads)}"
 
         # Timeout
         if timeout:
-            cmd += f" -timeout {timeout}"
+            cmd += f" -timeout {self.quote_arg(timeout)}"
 
         # Output options
-        if self.get_option("TITLE") and self.get_option("TITLE").lower() == "true":
+        if self.option_enabled("TITLE"):
             cmd += " -title"
 
-        if self.get_option("STATUS_CODE") and self.get_option("STATUS_CODE").lower() == "true":
+        if self.option_enabled("STATUS_CODE"):
             cmd += " -status-code"
 
-        if self.get_option("TECH_DETECT") and self.get_option("TECH_DETECT").lower() == "true":
+        if self.option_enabled("TECH_DETECT"):
             cmd += " -tech-detect"
 
-        if self.get_option("CONTENT_LENGTH") and self.get_option("CONTENT_LENGTH").lower() == "true":
+        if self.option_enabled("CONTENT_LENGTH"):
             cmd += " -content-length"
 
-        if self.get_option("FOLLOW_REDIRECTS") and self.get_option("FOLLOW_REDIRECTS").lower() == "true":
+        if self.option_enabled("FOLLOW_REDIRECTS"):
             cmd += " -follow-redirects"
 
         # Silent mode for cleaner output

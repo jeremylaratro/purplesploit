@@ -9,6 +9,8 @@ Tests cover:
 - Tool-specific error handling
 """
 
+import shlex
+
 import pytest
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -327,8 +329,7 @@ class TestEdgeCaseInputs:
         nxc_module.set_option("PASSWORD", "P@ss'w\"ord$!#%")
 
         auth = nxc_module._build_auth()
-        assert "-u 'admin'" in auth
-        # Password should be in the auth string
+        assert shlex.split(auth) == ["-u", "admin", "-p", "P@ss'w\"ord$!#%"]
 
     def test_nxc_empty_domain(self, nxc_module):
         """Test NXC with empty domain."""

@@ -13,14 +13,24 @@ from pathlib import Path
 def test_import_framework(benchmark):
     """Benchmark framework import time."""
     def import_framework():
-        # Clear from cache to ensure fresh import measurement
+        # Restore the test process module cache after each cold-import sample;
+        # otherwise objects collected by later tests refer to stale module
+        # instances and patching resolves against different globals.
         import sys
-        modules_to_clear = [k for k in sys.modules.keys() if k.startswith('purplesploit')]
-        for mod in modules_to_clear:
-            del sys.modules[mod]
-
-        from purplesploit.core.framework import Framework
-        return Framework
+        saved_modules = {
+            key: value for key, value in sys.modules.items()
+            if key.startswith('purplesploit')
+        }
+        try:
+            for module_name in saved_modules:
+                sys.modules.pop(module_name, None)
+            from purplesploit.core.framework import Framework
+            return Framework
+        finally:
+            for module_name in list(sys.modules):
+                if module_name.startswith('purplesploit'):
+                    sys.modules.pop(module_name, None)
+            sys.modules.update(saved_modules)
 
     result = benchmark(import_framework)
     assert result is not None

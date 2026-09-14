@@ -184,35 +184,35 @@
                 return;
             }
 
-            tbody.innerHTML = targets.map(target => `
+            tbody.innerHTML = targets.map((target, index) => `
                 <tr>
-                    <td><strong>${target.name}</strong></td>
-                    <td><code>${target.ip}</code></td>
-                    <td><span class="badge badge-info" id="services-${target.ip}">0</span></td>
-                    <td><span class="badge badge-warning" id="exploits-${target.ip}">0</span></td>
-                    <td id="critical-${target.ip}">-</td>
+                    <td><strong>${Utils.escapeHtml(target.name)}</strong></td>
+                    <td><code>${Utils.escapeHtml(target.ip)}</code></td>
+                    <td><span class="badge badge-info" id="services-${index}">0</span></td>
+                    <td><span class="badge badge-warning" id="exploits-${index}">0</span></td>
+                    <td id="critical-${index}">-</td>
                     <td>
-                        <a href="/static/target.html?ip=${target.ip}" class="btn btn-sm">View Analysis</a>
+                        <a href="/static/target.html?ip=${encodeURIComponent(target.ip)}" class="btn btn-sm">View Analysis</a>
                     </td>
                 </tr>
             `).join('');
 
             // Load service/exploit counts for each target
-            targets.forEach(async (target) => {
+            targets.forEach(async (target, index) => {
                 try {
                     const services = await API.getServicesForTarget(target.ip);
-                    document.getElementById(`services-${target.ip}`).textContent = services.length;
+                    document.getElementById(`services-${index}`).textContent = services.length;
 
                     const exploits = await API.getExploitsForTarget(target.ip);
-                    document.getElementById(`exploits-${target.ip}`).textContent = exploits.length;
+                    document.getElementById(`exploits-${index}`).textContent = exploits.length;
 
                     // Show critical services
                     const critical = services.filter(s =>
                         ['smb', 'rdp', 'ssh', 'telnet', 'ftp', 'mssql'].includes(s.service)
                     );
                     if (critical.length > 0) {
-                        document.getElementById(`critical-${target.ip}`).innerHTML =
-                            critical.map(s => `<span class="badge badge-danger">${s.service}:${s.port}</span>`).join(' ');
+                        document.getElementById(`critical-${index}`).innerHTML =
+                            critical.map(s => `<span class="badge badge-danger">${Utils.escapeHtml(s.service)}:${Utils.escapeHtml(s.port)}</span>`).join(' ');
                     }
                 } catch (error) {
                     console.error(`Error loading data for ${target.ip}:`, error);
@@ -235,7 +235,7 @@
                 return `
                     <div class="chart-bar">
                         <div class="bar-label">
-                            <span class="service-name">${service}</span>
+                            <span class="service-name">${Utils.escapeHtml(service)}</span>
                             <span class="service-count">${count} (${percentage}%)</span>
                         </div>
                         <div class="bar-container">
@@ -256,15 +256,15 @@
             container.innerHTML = exploits.map(exploit => `
                 <div class="exploit-item">
                     <div class="exploit-header">
-                        <span class="exploit-title">${exploit.exploit_title}</span>
-                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${exploit.edb_id}</span>` : ''}
+                        <span class="exploit-title">${Utils.escapeHtml(exploit.exploit_title)}</span>
+                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${Utils.escapeHtml(exploit.edb_id)}</span>` : ''}
                     </div>
                     <div class="exploit-meta">
-                        <span><strong>Target:</strong> ${exploit.target}</span>
-                        <span><strong>Service:</strong> ${exploit.service}:${exploit.port}</span>
-                        ${exploit.version ? `<span><strong>Version:</strong> ${exploit.version}</span>` : ''}
+                        <span><strong>Target:</strong> ${Utils.escapeHtml(exploit.target)}</span>
+                        <span><strong>Service:</strong> ${Utils.escapeHtml(exploit.service)}:${Utils.escapeHtml(exploit.port)}</span>
+                        ${exploit.version ? `<span><strong>Version:</strong> ${Utils.escapeHtml(exploit.version)}</span>` : ''}
                     </div>
-                    ${exploit.exploit_path ? `<div class="exploit-path"><code>${exploit.exploit_path}</code></div>` : ''}
+                    ${exploit.exploit_path ? `<div class="exploit-path"><code>${Utils.escapeHtml(exploit.exploit_path)}</code></div>` : ''}
                 </div>
             `).join('');
         }

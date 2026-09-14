@@ -54,16 +54,17 @@ class TestShellCommand:
 
     def test_shell_interactive(self, command_handler):
         """Test launching interactive shell."""
-        with patch('os.system') as mock_system, \
+        with patch('subprocess.run') as mock_run, \
              patch('os.environ.get', return_value='/bin/bash'):
             result = command_handler.cmd_shell([])
 
             assert result is True
-            mock_system.assert_called_once_with('/bin/bash')
+            mock_run.assert_called_once_with(['/bin/bash'], check=False)
 
     def test_shell_execute_command(self, command_handler):
         """Test executing single command in shell."""
-        with patch('subprocess.run') as mock_run:
+        with patch('subprocess.run') as mock_run, \
+             patch('os.environ.get', return_value='/bin/bash'):
             mock_run.return_value = MagicMock(returncode=0)
 
             result = command_handler.cmd_shell(["ls", "-la"])
@@ -71,30 +72,30 @@ class TestShellCommand:
             assert result is True
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert "ls -la" in call_args[0][0]
+            assert call_args[0][0] == ['/bin/bash', '-lc', 'ls -la']
 
     def test_shell_with_custom_shell(self, command_handler):
         """Test shell with custom SHELL environment variable."""
-        with patch('os.system') as mock_system, \
+        with patch('subprocess.run') as mock_run, \
              patch('os.environ.get', return_value='/bin/zsh'):
             result = command_handler.cmd_shell([])
 
             assert result is True
-            mock_system.assert_called_once_with('/bin/zsh')
+            mock_run.assert_called_once_with(['/bin/zsh'], check=False)
 
     def test_shell_default_to_bash(self, command_handler):
         """Test shell defaults to bash if SHELL not set."""
-        with patch('os.system') as mock_system, \
+        with patch('subprocess.run') as mock_run, \
              patch('os.environ.get', return_value=None):
             result = command_handler.cmd_shell([])
 
             assert result is True
             # Should default to /bin/bash
-            mock_system.assert_called_once()
+            mock_run.assert_called_once_with(['/bin/bash'], check=False)
 
     def test_shell_keyboard_interrupt(self, command_handler):
         """Test shell handles keyboard interrupt."""
-        with patch('os.system', side_effect=KeyboardInterrupt()):
+        with patch('subprocess.run', side_effect=KeyboardInterrupt()):
             result = command_handler.cmd_shell([])
 
             assert result is True
@@ -102,7 +103,7 @@ class TestShellCommand:
 
     def test_shell_exception(self, command_handler):
         """Test shell handles exceptions."""
-        with patch('os.system', side_effect=Exception("Shell error")):
+        with patch('subprocess.run', side_effect=Exception("Shell error")):
             result = command_handler.cmd_shell([])
 
             assert result is True

@@ -55,11 +55,11 @@ class NXCRDPModule(ExternalToolModule):
         hash_val = self.get_option("HASH")
         if not username:
             return ""
-        auth = f"-u '{username}'"
+        auth = f"-u {self.quote_arg(username)}"
         if hash_val:
-            auth += f" -H '{hash_val}'"
+            auth += f" -H {self.quote_arg(hash_val)}"
         elif password:
-            auth += f" -p '{password}'"
+            auth += f" -p {self.quote_arg(password)}"
         else:
             auth += " -p ''"
         return auth
@@ -67,7 +67,7 @@ class NXCRDPModule(ExternalToolModule):
     def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
         rhost = self.get_option("RHOST")
         auth = self._build_auth()
-        cmd = f"nxc rdp {rhost} {auth}"
+        cmd = f"nxc rdp {self.quote_arg(rhost)} {auth}"
         if extra_args:
             cmd += f" {extra_args}"
         return self.execute_command(cmd, timeout=60)

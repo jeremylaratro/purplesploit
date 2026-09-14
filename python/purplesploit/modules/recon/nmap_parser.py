@@ -125,8 +125,8 @@ class NmapParser(BaseModule):
             Dictionary with parsed results
         """
         xml_file = self.get_option("XML_FILE")
-        auto_add = self.get_option("AUTO_ADD_TARGETS").lower() == "true"
-        run_searchsploit = self.get_option("RUN_SEARCHSPLOIT").lower() == "true"
+        auto_add = self.option_enabled("AUTO_ADD_TARGETS")
+        run_searchsploit = self.option_enabled("RUN_SEARCHSPLOIT")
 
         try:
             # Parse XML file
@@ -145,8 +145,10 @@ class NmapParser(BaseModule):
                 if status is None or status.get('state') != 'up':
                     continue
 
-                # Get IP address
-                address = host.find('address')
+                # Prefer routable IP addresses; the first address is often a MAC.
+                address = host.find('address[@addrtype="ipv4"]')
+                if address is None:
+                    address = host.find('address[@addrtype="ipv6"]')
                 if address is None:
                     continue
 

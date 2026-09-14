@@ -512,18 +512,12 @@ class TestInvalidStateRecovery:
     """Tests for recovery from invalid internal state."""
 
     def test_current_index_beyond_list(self, session):
-        """Document known behavior: current_index beyond bounds causes IndexError.
-
-        This test documents the current behavior where get_current() doesn't
-        validate current_index bounds. A fix would add bounds checking.
-        """
+        """An invalid current index is handled without crashing callers."""
         # Add then remove all items
         session.targets.add({"ip": "10.0.0.1", "name": "test"})
         session.targets.current_index = 10  # Invalid
 
-        # Current implementation raises IndexError - documents this behavior
-        with pytest.raises(IndexError):
-            session.targets.get_current()
+        assert session.targets.get_current() is None
 
     def test_negative_current_index(self, session):
         """Test handling of negative current_index."""

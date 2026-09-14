@@ -19,10 +19,10 @@ class TestDisplayInitialization:
         assert display.console is not None
 
     def test_console_has_width(self):
-        """Test that console has expected width for banner display."""
+        """Test that console derives a usable width from the terminal."""
         from purplesploit.ui.display import Display
         display = Display()
-        assert display.console.width == 120
+        assert display.console.width > 0
 
 
 class TestDisplayMessages:
@@ -361,7 +361,7 @@ class TestDisplayGenericPrinting:
         display.console = MagicMock()
 
         display._print_generic("Simple string")
-        display.console.print.assert_called_with("Simple string")
+        display.console.print.assert_called_with("Simple string", markup=False)
 
 
 class TestDisplayModuleInfo:

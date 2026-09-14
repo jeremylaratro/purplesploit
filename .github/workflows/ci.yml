@@ -103,7 +103,7 @@ jobs:
         working-directory: python
         run: |
           bandit -r purplesploit/ -ll --skip B404,B603,B602,B607,B608 -f json -o bandit-report.json || true
-          cat bandit-report.json | python -c "import sys, json; data=json.load(sys.stdin); issues=data.get('results',[]); print(f'Security issues: {len(issues)}'); [print(f\"  [{i['severity']}] {i['filename']}:{i['line_number']} - {i['issue_text']}\") for i in issues[:10]]"
+          python -c "import json; data=json.load(open('bandit-report.json')); issues=data.get('results',[]); print(f'Security issues: {len(issues)}'); [print(f\"  [{i['issue_severity']}] {i['filename']}:{i['line_number']} - {i['issue_text']}\") for i in issues[:10]]"
 
       - name: Upload Bandit report
         if: always()

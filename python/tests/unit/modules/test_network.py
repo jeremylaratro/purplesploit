@@ -4,6 +4,8 @@ Tests for the Network modules (NXC-based).
 Tests the NetExec SSH, LDAP, MSSQL, RDP, WinRM modules.
 """
 
+import shlex
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -105,8 +107,7 @@ class TestNXCSSHAuthBuild:
         nxc_ssh_module.set_option("USERNAME", "root")
         nxc_ssh_module.set_option("PASSWORD", "toor")
         auth = nxc_ssh_module._build_auth()
-        assert "-u 'root'" in auth
-        assert "-p 'toor'" in auth
+        assert shlex.split(auth) == ["-u", "root", "-p", "toor"]
 
 
 # =============================================================================

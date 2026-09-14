@@ -148,12 +148,12 @@ class NXCSMBModule(ExternalToolModule):
         if not username:
             return ""
 
-        auth = f"-u '{username}'"
+        auth = f"-u {self.quote_arg(username)}"
 
         if hash_val:
-            auth += f" -H '{hash_val}'"
+            auth += f" -H {self.quote_arg(hash_val)}"
         elif password:
-            auth += f" -p '{password}'"
+            auth += f" -p {self.quote_arg(password)}"
         else:
             auth += " -p ''"
 
@@ -166,10 +166,10 @@ class NXCSMBModule(ExternalToolModule):
         auth_type = self.get_option("AUTH_TYPE") or "domain"
         auth = self._build_auth()
 
-        cmd = f"nxc smb {rhost} {auth}"
+        cmd = f"nxc smb {self.quote_arg(rhost)} {auth}"
 
         if domain and domain != "WORKGROUP":
-            cmd += f" -d {domain}"
+            cmd += f" -d {self.quote_arg(domain)}"
 
         # Add authentication type flags
         if auth_type == "local":

@@ -7,6 +7,7 @@ Kerberos user enumeration and password spraying using kerbrute.
 from purplesploit.core.module import ExternalToolModule
 from typing import List, Dict, Any
 import os
+import tempfile
 
 
 class KerbruteModule(ExternalToolModule):
@@ -133,27 +134,26 @@ class KerbruteModule(ExternalToolModule):
         dc = self.get_option("DC")
         threads = self.get_option("THREADS")
         output = self.get_option("OUTPUT")
-        safe = self.get_option("SAFE")
 
         cmd = "kerbrute"
 
         # Domain controller
         if dc:
-            cmd += f" --dc {dc}"
+            cmd += f" --dc {self.quote_arg(dc)}"
 
         # Domain
-        cmd += f" -d {domain}"
+        cmd += f" -d {self.quote_arg(domain)}"
 
         # Threads
         if threads:
-            cmd += f" -t {threads}"
+            cmd += f" -t {self.quote_arg(threads)}"
 
         # Output file
         if output:
-            cmd += f" -o {output}"
+            cmd += f" -o {self.quote_arg(output)}"
 
         # Safe mode
-        if safe and safe.lower() == "true":
+        if self.option_enabled("SAFE"):
             cmd += " --safe"
 
         return cmd
@@ -167,10 +167,9 @@ class KerbruteModule(ExternalToolModule):
         cmd += " userenum"
 
         if userlist and os.path.exists(userlist):
-            cmd += f" {userlist}"
+            cmd += f" {self.quote_arg(userlist)}"
         elif username:
-            # Create temp file with single user
-            cmd += f" <(echo '{username}')"
+            return "echo 'Error: USERNAME must be materialized by op_userenum'"
         else:
             return "echo 'Error: USERLIST or USERNAME required'"
 
@@ -185,7 +184,7 @@ class KerbruteModule(ExternalToolModule):
         if not userlist or not password:
             return "echo 'Error: USERLIST and PASSWORD required for spray'"
 
-        cmd += f" passwordspray {userlist} '{password}'"
+        cmd += f" passwordspray {self.quote_arg(userlist)} {self.quote_arg(password)}"
 
         return cmd
 
@@ -198,7 +197,7 @@ class KerbruteModule(ExternalToolModule):
         if not userlist or not passlist:
             return "echo 'Error: USERLIST and PASSLIST required for brute'"
 
-        cmd += f" bruteforce {userlist} {passlist}"
+        cmd += f" bruteforce {self.quote_arg(userlist)} {self.quote_arg(passlist)}"
 
         return cmd
 
@@ -211,17 +210,34 @@ class KerbruteModule(ExternalToolModule):
         if not username or not passlist:
             return "echo 'Error: USERNAME and PASSLIST required for bruteuser'"
 
-        cmd += f" bruteuser {passlist} {username}"
+        cmd += f" bruteuser {self.quote_arg(passlist)} {self.quote_arg(username)}"
 
         return cmd
 
     def op_userenum(self) -> Dict[str, Any]:
         """Enumerate valid domain users."""
-        cmd = self._build_userenum_command()
-        result = self.execute_command(cmd)
+        temporary_userlist = None
+        original_userlist = self.get_option("USERLIST")
+        username = self.get_option("USERNAME")
+        try:
+            if (not original_userlist or not os.path.exists(str(original_userlist))) and username:
+                with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as handle:
+                    handle.write(f"{username}\n")
+                    temporary_userlist = handle.name
+                os.chmod(temporary_userlist, 0o600)
+                self.set_option("USERLIST", temporary_userlist)
+            cmd = self._build_userenum_command()
+            result = self.execute_command(cmd)
+        finally:
+            if temporary_userlist:
+                self.set_option("USERLIST", original_userlist)
+                try:
+                    os.unlink(temporary_userlist)
+                except FileNotFoundError:
+                    pass
 
         if result.get("success"):
-            parsed = self._parse_userenum(result.get("output", ""))
+            parsed = self._parse_userenum(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             result["message"] = f"Found {len(parsed.get('valid_users', []))} valid users"
 
@@ -237,7 +253,7 @@ class KerbruteModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_spray(result.get("output", ""))
+            parsed = self._parse_spray(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             result["message"] = f"Found {len(parsed.get('valid_creds', []))} valid credentials"
 
@@ -254,7 +270,7 @@ class KerbruteModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_brute(result.get("output", ""))
+            parsed = self._parse_brute(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             result["message"] = f"Found {len(parsed.get('valid_creds', []))} valid credentials"
 
@@ -270,7 +286,7 @@ class KerbruteModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_brute(result.get("output", ""))
+            parsed = self._parse_brute(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
 
             if parsed.get("valid_creds"):

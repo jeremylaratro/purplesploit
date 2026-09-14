@@ -54,9 +54,9 @@ class NXCSSHModule(ExternalToolModule):
         password = self.get_option("PASSWORD")
         if not username:
             return ""
-        auth = f"-u '{username}'"
+        auth = f"-u {self.quote_arg(username)}"
         if password:
-            auth += f" -p '{password}'"
+            auth += f" -p {self.quote_arg(password)}"
         else:
             auth += " -p ''"
         return auth
@@ -64,7 +64,7 @@ class NXCSSHModule(ExternalToolModule):
     def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
         rhost = self.get_option("RHOST")
         auth = self._build_auth()
-        cmd = f"nxc ssh {rhost} {auth}"
+        cmd = f"nxc ssh {self.quote_arg(rhost)} {auth}"
         if extra_args:
             cmd += f" {extra_args}"
         return self.execute_command(cmd, timeout=120)

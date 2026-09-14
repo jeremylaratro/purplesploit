@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PurpleSploit - Services</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#312e81;color:#fff;margin:0}.container{max-width:1200px;margin:auto;padding:24px}
+    nav{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}a{color:#fff}.card{background:#ffffff18;border:1px solid #ffffff30;border-radius:10px;padding:20px;margin:16px 0}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #ffffff24}.table-wrap{overflow:auto}
+  </style>
+</head>
+<body><main class="container">
+  <h1>Detected Services</h1>
+  <nav><a href="/">Dashboard</a><a href="/targets">Targets</a><a href="/credentials">Credentials</a><a href="/services">Services</a><a href="/workspaces">Workspaces</a></nav>
+  <p>{{ total_services }} service{{ '' if total_services == 1 else 's' }}</p>
+  {% for target, services in services_by_target.items() %}
+  <section class="card"><h2>{{ target }}</h2><div class="table-wrap"><table><thead><tr><th>Port</th><th>Service</th><th>Version</th></tr></thead><tbody>
+    {% for service in services %}<tr><td>{{ service.port }}</td><td>{{ service.service }}</td><td>{{ service.version or '-' }}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  {% else %}<section class="card">No services detected.</section>{% endfor %}
+</main></body></html>

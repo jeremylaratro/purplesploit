@@ -30,6 +30,7 @@ class Session:
 
         # Module context
         self.current_module = None
+        self.restored_module_name = None
         self.module_history = []
 
         # Persistent context (key differentiator from Metasploit)
@@ -62,6 +63,7 @@ class Session:
             })
 
         self.current_module = module
+        self.restored_module_name = None
 
         # Auto-set options from context
         if hasattr(module, 'auto_set_from_context'):
@@ -133,7 +135,7 @@ class Session:
         """
         return {
             "created_at": self.created_at.isoformat(),
-            "current_module": self.current_module.name if self.current_module else None,
+            "current_module": self.current_module.name if self.current_module else self.restored_module_name,
             "targets": self.targets.export(),
             "credentials": self.credentials.export(),
             "services": self.services.export(),
@@ -165,6 +167,17 @@ class Session:
             self.variables = data["variables"]
         if "run_mode" in data:
             self.run_mode = data["run_mode"]
+        if "current_module" in data:
+            self.restored_module_name = data.get("current_module")
+        if "command_history" in data and isinstance(data["command_history"], list):
+            self.command_history = list(data["command_history"])
+        if data.get("created_at"):
+            try:
+                self.created_at = datetime.fromisoformat(data["created_at"])
+            except (TypeError, ValueError):
+                # Keep the current session timestamp when importing malformed or
+                # legacy data rather than making the whole restore unusable.
+                pass
 
 
 class TargetManager:
@@ -213,8 +226,7 @@ class TargetManager:
                 target.get('url') == identifier or
                 target.get('name') == identifier):
                 self.targets.pop(i)
-                if self.current_index >= len(self.targets):
-                    self.current_index = max(0, len(self.targets) - 1)
+                self._adjust_current_after_removal(i)
                 return True
         return False
 
@@ -230,10 +242,20 @@ class TargetManager:
         """
         if 0 <= index < len(self.targets):
             self.targets.pop(index)
-            if self.current_index >= len(self.targets):
-                self.current_index = max(0, len(self.targets) - 1)
+            self._adjust_current_after_removal(index)
             return True
         return False
+
+    def _adjust_current_after_removal(self, removed_index: int):
+        """Preserve the selected target when list indices shift."""
+        if not self.targets:
+            self.current_index = 0
+        elif removed_index < self.current_index:
+            self.current_index -= 1
+        elif removed_index == self.current_index:
+            self.current_index = min(removed_index, len(self.targets) - 1)
+        else:
+            self.current_index = min(self.current_index, len(self.targets) - 1)
 
     def remove_range(self, start_index: int, end_index: int) -> int:
         """
@@ -294,7 +316,7 @@ class TargetManager:
 
     def get_current(self) -> Optional[Dict]:
         """Get the current active target."""
-        if not self.targets:
+        if not self.targets or not 0 <= self.current_index < len(self.targets):
             return None
         return self.targets[self.current_index]
 
@@ -336,8 +358,13 @@ class TargetManager:
 
     def import_data(self, data: Dict):
         """Import target data."""
-        self.targets = data.get("targets", [])
-        self.current_index = data.get("current_index", 0)
+        targets = data.get("targets", [])
+        self.targets = list(targets) if isinstance(targets, list) else []
+        try:
+            current_index = int(data.get("current_index", 0))
+        except (TypeError, ValueError):
+            current_index = 0
+        self.current_index = min(max(current_index, 0), max(len(self.targets) - 1, 0))
 
 
 class CredentialManager:
@@ -381,8 +408,7 @@ class CredentialManager:
             if (cred.get('username') == identifier or
                 cred.get('name') == identifier):
                 self.credentials.pop(i)
-                if self.current_index >= len(self.credentials):
-                    self.current_index = max(0, len(self.credentials) - 1)
+                self._adjust_current_after_removal(i)
                 return True
         return False
 
@@ -398,10 +424,20 @@ class CredentialManager:
         """
         if 0 <= index < len(self.credentials):
             self.credentials.pop(index)
-            if self.current_index >= len(self.credentials):
-                self.current_index = max(0, len(self.credentials) - 1)
+            self._adjust_current_after_removal(index)
             return True
         return False
+
+    def _adjust_current_after_removal(self, removed_index: int):
+        """Preserve the selected credential when list indices shift."""
+        if not self.credentials:
+            self.current_index = 0
+        elif removed_index < self.current_index:
+            self.current_index -= 1
+        elif removed_index == self.current_index:
+            self.current_index = min(removed_index, len(self.credentials) - 1)
+        else:
+            self.current_index = min(self.current_index, len(self.credentials) - 1)
 
     def remove_range(self, start_index: int, end_index: int) -> int:
         """
@@ -462,7 +498,7 @@ class CredentialManager:
 
     def get_current(self) -> Optional[Dict]:
         """Get the current active credential."""
-        if not self.credentials:
+        if not self.credentials or not 0 <= self.current_index < len(self.credentials):
             return None
         return self.credentials[self.current_index]
 
@@ -503,8 +539,13 @@ class CredentialManager:
 
     def import_data(self, data: Dict):
         """Import credential data."""
-        self.credentials = data.get("credentials", [])
-        self.current_index = data.get("current_index", 0)
+        credentials = data.get("credentials", [])
+        self.credentials = list(credentials) if isinstance(credentials, list) else []
+        try:
+            current_index = int(data.get("current_index", 0))
+        except (TypeError, ValueError):
+            current_index = 0
+        self.current_index = min(max(current_index, 0), max(len(self.credentials) - 1, 0))
 
 
 class ServiceManager:
@@ -651,6 +692,14 @@ class WordlistManager:
         for i, wordlist in enumerate(self.wordlists[category]):
             if wordlist.get('path') == identifier or wordlist.get('name') == identifier:
                 self.wordlists[category].pop(i)
+                selection = self.current_selections.get(category)
+                if selection is not None:
+                    if not self.wordlists[category]:
+                        self.current_selections[category] = None
+                    elif i < selection:
+                        self.current_selections[category] = selection - 1
+                    elif i == selection:
+                        self.current_selections[category] = min(i, len(self.wordlists[category]) - 1)
                 return True
         return False
 
@@ -738,3 +787,7 @@ class WordlistManager:
         """Import wordlist data."""
         self.wordlists = data.get("wordlists", self.wordlists)
         self.current_selections = data.get("current_selections", self.current_selections)
+        for category, selection in list(self.current_selections.items()):
+            entries = self.wordlists.get(category, [])
+            if not isinstance(selection, int) or not 0 <= selection < len(entries):
+                self.current_selections[category] = None

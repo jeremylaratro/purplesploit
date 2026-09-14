@@ -137,13 +137,17 @@ class FeroxbusterModule(ExternalToolModule):
 
                 elif choice == '2':
                     # Use selected target from framework
-                    target = self.framework.session.current_target
-                    if not target:
+                    current_target = self.framework.session.targets.get_current()
+                    if not current_target:
                         print("\n[!] No target selected in framework", file=tty_out)
                         print("[!] Use 'target <ip>' command first", file=tty_out)
                         return None
 
                     # Add http:// protocol if not present
+                    target = current_target.get("url") or current_target.get("ip")
+                    if not target:
+                        print("\n[!] Selected target has no usable address", file=tty_out)
+                        return None
                     if target.startswith('http://') or target.startswith('https://'):
                         url = target
                     else:

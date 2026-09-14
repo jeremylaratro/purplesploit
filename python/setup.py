@@ -4,9 +4,11 @@ PurpleSploit Python Package
 Hybrid pentesting framework - Python components
 """
 
-from setuptools import setup, find_packages
+from pathlib import Path
 
-with open("README.md", "r", encoding="utf-8") as fh:
+from setuptools import find_packages, setup
+
+with (Path(__file__).resolve().parent / "README.md").open("r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -18,7 +20,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jeremylaratro/purplesploit",
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests", "tests.*")),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Information Technology",
@@ -30,7 +32,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     install_requires=[
         # Security
         "defusedxml>=0.7.1",
@@ -44,6 +46,7 @@ setup(
         "jinja2>=3.1.0",
         "aiofiles>=23.0.0",
         "httpx>=0.25.0",
+        "requests>=2.31.0",
         "rich>=13.0.0",
         "textual>=0.40.0",
         "prompt_toolkit>=3.0.0",
@@ -62,6 +65,7 @@ setup(
             "pytest>=7.4.0",
             "pytest-asyncio>=0.21.0",
             "pytest-cov>=4.1.0",
+            "pytest-benchmark>=4.0.0",
             "black>=23.0.0",
             "flake8>=6.0.0",
             "mypy>=1.5.0",
@@ -74,6 +78,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
+            "purplesploit=purplesploit.main:main",
             "purplesploit-api=purplesploit.api.server:main",
             "purplesploit-web=purplesploit.web.dashboard:main",
             "purplesploit-report=purplesploit.reporting.cli:main",
@@ -81,7 +86,9 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "purplesploit.web": ["templates/*.html", "static/*"],
+        "purplesploit.web": [
+            "templates/*.html", "static/*.html", "static/css/*.css", "static/js/*.js"
+        ],
         "purplesploit.reporting": ["templates/*.html", "templates/*.jinja2"],
     },
 )

@@ -287,7 +287,7 @@ def test_query_performance_scaling(benchmark, batch_size):
 
         # Populate with batch_size records
         for i in range(batch_size):
-            db.add_target('network', f'192.168.3.{i % 256}', f'target_{i}')
+            db.add_target('network', f'192.168.{i // 256}.{i % 256}', f'target_{i}')
 
         def query_all():
             return db.get_targets()

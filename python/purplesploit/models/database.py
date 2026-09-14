@@ -7,6 +7,7 @@ Maps to existing SQLite databases created by Bash scripts
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
+import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, Session
@@ -16,7 +17,7 @@ from pydantic import BaseModel, Field
 Base = declarative_base()
 
 # Database paths (compatible with Bash implementation)
-DB_DIR = Path.home() / ".purplesploit"
+DB_DIR = Path(os.getenv("PURPLESPLOIT_HOME", str(Path.home() / ".purplesploit")))
 CREDENTIALS_DB = DB_DIR / "credentials.db"
 TARGETS_DB = DB_DIR / "targets.db"
 WEB_TARGETS_DB = DB_DIR / "web_targets.db"
@@ -167,8 +168,8 @@ class Exploit(Base):
 
 class CredentialCreate(BaseModel):
     """Schema for creating credentials"""
-    name: str
-    username: Optional[str] = None
+    name: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=255)
     password: Optional[str] = None
     domain: Optional[str] = None
     dcip: Optional[str] = None
@@ -179,12 +180,12 @@ class CredentialCreate(BaseModel):
 class CredentialResponse(BaseModel):
     """Schema for credential responses"""
     name: str
-    username: Optional[str]
-    password: Optional[str]
-    domain: Optional[str]
-    dcip: Optional[str]
-    dns: Optional[str]
-    hash: Optional[str]
+    username: Optional[str] = None
+    domain: Optional[str] = None
+    dcip: Optional[str] = None
+    dns: Optional[str] = None
+    has_password: bool = False
+    has_hash: bool = False
 
     class Config:
         from_attributes = True
@@ -192,8 +193,8 @@ class CredentialResponse(BaseModel):
 
 class TargetCreate(BaseModel):
     """Schema for creating targets"""
-    name: str
-    ip: str
+    name: str = Field(min_length=1, max_length=255)
+    ip: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
 
 
@@ -205,6 +206,13 @@ class TargetResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class WebTargetCreate(BaseModel):
+    """Schema for creating web targets."""
+    name: str = Field(min_length=1, max_length=255)
+    url: str = Field(min_length=1, max_length=2048)
+    description: Optional[str] = None
 
 
 class ServiceResponse(BaseModel):
@@ -229,7 +237,15 @@ class DatabaseManager:
     def __init__(self):
         """Initialize database connections"""
         # Ensure database directory exists
-        DB_DIR.mkdir(parents=True, exist_ok=True)
+        DB_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        DB_DIR.chmod(0o700)
+
+        self.CREDENTIALS_DB = CREDENTIALS_DB
+        self.TARGETS_DB = TARGETS_DB
+        self.WEB_TARGETS_DB = WEB_TARGETS_DB
+        self.AD_TARGETS_DB = AD_TARGETS_DB
+        self.SERVICES_DB = SERVICES_DB
+        self.EXPLOITS_DB = EXPLOITS_DB
 
         # Check for corrupted databases and remove them
         self._check_and_fix_databases()
@@ -272,21 +288,16 @@ class DatabaseManager:
             if db_path.exists():
                 try:
                     # Try to open the database
-                    conn = sqlite3.connect(str(db_path), check_same_thread=False)
-                    cursor = conn.cursor()
-                    # Try a simple query to verify it's a valid database
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-                    conn.close()
-                except sqlite3.DatabaseError:
-                    # Database is corrupted, remove it
-                    print(f"[WARNING] Corrupted database detected: {db_path}")
-                    print(f"[INFO] Removing and will recreate: {name}.db")
-                    db_path.unlink()
+                    with sqlite3.connect(str(db_path), check_same_thread=False) as conn:
+                        cursor = conn.cursor()
+                        # Try a simple query to verify it's a valid database
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+                except sqlite3.DatabaseError as e:
+                    raise RuntimeError(
+                        f"Database appears corrupt and was preserved for recovery: {db_path}"
+                    ) from e
                 except Exception as e:
-                    print(f"[WARNING] Error checking {name}.db: {e}")
-                    print(f"[INFO] Removing and will recreate: {name}.db")
-                    if db_path.exists():
-                        db_path.unlink()
+                    raise RuntimeError(f"Unable to validate database {db_path}: {e}") from e
 
     def _create_tables(self):
         """Create all tables"""
@@ -297,6 +308,12 @@ class DatabaseManager:
             Base.metadata.create_all(self.engines["ad_targets"], tables=[ADTarget.__table__])
             Base.metadata.create_all(self.engines["services"], tables=[Service.__table__])
             Base.metadata.create_all(self.engines["exploits"], tables=[Exploit.__table__])
+            for db_path in (
+                CREDENTIALS_DB, TARGETS_DB, WEB_TARGETS_DB,
+                AD_TARGETS_DB, SERVICES_DB, EXPLOITS_DB,
+            ):
+                if db_path.exists():
+                    db_path.chmod(0o600)
         except Exception as e:
             print(f"[ERROR] Failed to create database tables: {e}")
             print("[INFO] Try removing ~/.purplesploit/*.db and restart")
@@ -367,6 +384,8 @@ class DatabaseManager:
         """Add a credential"""
         session = self.get_credentials_session()
         try:
+            if session.query(Credential).filter(Credential.name == cred.name).first():
+                raise ValueError(f"Credential already exists: {cred.name}")
             db_cred = Credential(**cred.dict())
             session.add(db_cred)
             session.commit()
@@ -379,8 +398,89 @@ class DatabaseManager:
         """Add a target"""
         session = self.get_targets_session()
         try:
+            if session.query(Target).filter(
+                (Target.name == target.name) | (Target.ip == target.ip)
+            ).first():
+                raise ValueError(f"Target already exists: {target.name}")
             db_target = Target(**target.dict())
             session.add(db_target)
+            session.commit()
+            session.refresh(db_target)
+            return db_target
+        finally:
+            session.close()
+
+    def add_web_target(self, target: WebTargetCreate) -> WebTarget:
+        """Add a web target to the dedicated web-target database."""
+        session = self.get_web_targets_session()
+        try:
+            if session.query(WebTarget).filter(
+                (WebTarget.name == target.name) | (WebTarget.url == target.url)
+            ).first():
+                raise ValueError(f"Web target already exists: {target.name}")
+            db_target = WebTarget(**target.dict())
+            session.add(db_target)
+            session.commit()
+            session.refresh(db_target)
+            return db_target
+        finally:
+            session.close()
+
+    def upsert_credential(self, cred: CredentialCreate) -> Credential:
+        """Create or refresh a credential used by legacy-database synchronization."""
+        session = self.get_credentials_session()
+        try:
+            db_cred = session.query(Credential).filter(
+                (Credential.name == cred.name) |
+                ((Credential.username == cred.username) & (Credential.domain == cred.domain))
+            ).first()
+            values = cred.dict()
+            if db_cred is None:
+                db_cred = Credential(**values)
+                session.add(db_cred)
+            else:
+                for field, value in values.items():
+                    setattr(db_cred, field, value)
+            session.commit()
+            session.refresh(db_cred)
+            return db_cred
+        finally:
+            session.close()
+
+    def upsert_target(self, target: TargetCreate) -> Target:
+        """Create or refresh a network target during database synchronization."""
+        session = self.get_targets_session()
+        try:
+            db_target = session.query(Target).filter(
+                (Target.name == target.name) | (Target.ip == target.ip)
+            ).first()
+            values = target.dict()
+            if db_target is None:
+                db_target = Target(**values)
+                session.add(db_target)
+            else:
+                for field, value in values.items():
+                    setattr(db_target, field, value)
+            session.commit()
+            session.refresh(db_target)
+            return db_target
+        finally:
+            session.close()
+
+    def upsert_web_target(self, target: WebTargetCreate) -> WebTarget:
+        """Create or refresh a web target during database synchronization."""
+        session = self.get_web_targets_session()
+        try:
+            db_target = session.query(WebTarget).filter(
+                (WebTarget.name == target.name) | (WebTarget.url == target.url)
+            ).first()
+            values = target.dict()
+            if db_target is None:
+                db_target = WebTarget(**values)
+                session.add(db_target)
+            else:
+                for field, value in values.items():
+                    setattr(db_target, field, value)
             session.commit()
             session.refresh(db_target)
             return db_target
@@ -469,9 +569,70 @@ class DatabaseManager:
             Number of targets removed
         """
         session = self.get_targets_session()
+        web_session = self.get_web_targets_session()
         try:
-            count = session.query(Target).count()
+            count = session.query(Target).count() + web_session.query(WebTarget).count()
             session.query(Target).delete()
+            web_session.query(WebTarget).delete()
+            session.commit()
+            web_session.commit()
+            return count
+        finally:
+            session.close()
+            web_session.close()
+
+    def delete_target(self, identifier: str, target_type: str = None) -> bool:
+        """Delete a network or web target by identifier or name."""
+        removed = False
+        if target_type != "web":
+            session = self.get_targets_session()
+            try:
+                rows = session.query(Target).filter(
+                    (Target.ip == identifier) | (Target.name == identifier)
+                ).delete(synchronize_session=False)
+                session.commit()
+                removed = removed or bool(rows)
+            finally:
+                session.close()
+        if target_type != "network":
+            session = self.get_web_targets_session()
+            try:
+                rows = session.query(WebTarget).filter(
+                    (WebTarget.url == identifier) | (WebTarget.name == identifier)
+                ).delete(synchronize_session=False)
+                session.commit()
+                removed = removed or bool(rows)
+            finally:
+                session.close()
+        return removed
+
+    def delete_credential(self, username: str, domain: str = None,
+                          name: str = None) -> bool:
+        """Delete a credential by name or username/domain identity."""
+        session = self.get_credentials_session()
+        try:
+            query = session.query(Credential)
+            if name:
+                credential = query.filter(Credential.name == name).first()
+            else:
+                credential = query.filter(
+                    Credential.username == username,
+                    Credential.domain == domain,
+                ).first()
+            if credential is None:
+                return False
+            session.delete(credential)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def clear_all_credentials(self) -> int:
+        """Remove all dashboard credentials."""
+        session = self.get_credentials_session()
+        try:
+            count = session.query(Credential).count()
+            session.query(Credential).delete()
             session.commit()
             return count
         finally:

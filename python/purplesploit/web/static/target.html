@@ -62,10 +62,10 @@
             container.innerHTML = `
                 <header class="page-header">
                     <div>
-                        <h2>${analysis.target.name}</h2>
+                        <h2>${Utils.escapeHtml(analysis.target.name)}</h2>
                         <p class="subtitle">
-                            <code>${analysis.target.ip}</code>
-                            ${analysis.target.description ? ` - ${analysis.target.description}` : ''}
+                            <code>${Utils.escapeHtml(analysis.target.ip)}</code>
+                            ${analysis.target.description ? ` - ${Utils.escapeHtml(analysis.target.description)}` : ''}
                         </p>
                     </div>
                 </header>
@@ -101,7 +101,7 @@
                 <div class="section">
                     <div class="alert alert-warning">
                         <strong>⚠️ Critical Services Detected:</strong>
-                        ${analysis.critical_services.map(s => `<code>${s}</code>`).join(', ')}
+                        ${analysis.critical_services.map(s => `<code>${Utils.escapeHtml(s)}</code>`).join(', ')}
                     </div>
                 </div>
                 ` : ''}
@@ -130,11 +130,11 @@
                                     return `
                                     <tr>
                                         <td>
-                                            <strong class="${isCritical ? 'text-danger' : ''}">${service.service}</strong>
+                                            <strong class="${isCritical ? 'text-danger' : ''}">${Utils.escapeHtml(service.service)}</strong>
                                             ${isCritical ? ' <span class="badge badge-danger">CRITICAL</span>' : ''}
                                         </td>
-                                        <td><code>${service.port}</code></td>
-                                        <td>${service.version || '<em>Unknown</em>'}</td>
+                                        <td><code>${Utils.escapeHtml(service.port)}</code></td>
+                                        <td>${service.version ? Utils.escapeHtml(service.version) : '<em>Unknown</em>'}</td>
                                         <td>
                                             ${serviceExploits.length > 0 ?
                                                 `<span class="badge badge-warning">${serviceExploits.length} found</span>` :
@@ -159,36 +159,36 @@
                             ${analysis.exploits.map(exploit => `
                             <div class="exploit-card">
                                 <div class="exploit-header">
-                                    <h4>${exploit.exploit_title}</h4>
+                                    <h4>${Utils.escapeHtml(exploit.exploit_title)}</h4>
                                     <div class="exploit-badges">
-                                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${exploit.edb_id}</span>` : ''}
-                                        ${exploit.platform ? `<span class="badge badge-secondary">${exploit.platform}</span>` : ''}
-                                        ${exploit.exploit_type ? `<span class="badge badge-secondary">${exploit.exploit_type}</span>` : ''}
+                                        ${exploit.edb_id ? `<span class="badge badge-info">EDB-${Utils.escapeHtml(exploit.edb_id)}</span>` : ''}
+                                        ${exploit.platform ? `<span class="badge badge-secondary">${Utils.escapeHtml(exploit.platform)}</span>` : ''}
+                                        ${exploit.exploit_type ? `<span class="badge badge-secondary">${Utils.escapeHtml(exploit.exploit_type)}</span>` : ''}
                                     </div>
                                 </div>
 
                                 <div class="exploit-details">
                                     <div class="detail-row">
                                         <span class="detail-label">Service:</span>
-                                        <span class="detail-value"><strong>${exploit.service}:${exploit.port}</strong></span>
+                                        <span class="detail-value"><strong>${Utils.escapeHtml(exploit.service)}:${Utils.escapeHtml(exploit.port)}</strong></span>
                                     </div>
                                     ${exploit.version ? `
                                     <div class="detail-row">
                                         <span class="detail-label">Version:</span>
-                                        <span class="detail-value"><code>${exploit.version}</code></span>
+                                        <span class="detail-value"><code>${Utils.escapeHtml(exploit.version)}</code></span>
                                     </div>
                                     ` : ''}
                                     ${exploit.exploit_path ? `
                                     <div class="detail-row">
                                         <span class="detail-label">Path:</span>
-                                        <span class="detail-value"><code class="exploit-path">${exploit.exploit_path}</code></span>
+                                        <span class="detail-value"><code class="exploit-path">${Utils.escapeHtml(exploit.exploit_path)}</code></span>
                                     </div>
                                     ` : ''}
                                 </div>
 
                                 ${exploit.edb_id ? `
                                 <div class="exploit-actions">
-                                    <a href="https://www.exploit-db.com/exploits/${exploit.edb_id}" target="_blank" class="btn btn-sm btn-secondary">
+                                    <a href="https://www.exploit-db.com/exploits/${encodeURIComponent(exploit.edb_id)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary">
                                         View on Exploit-DB →
                                     </a>
                                 </div>
@@ -214,7 +214,7 @@
                             ` : ''}
                             ${analysis.critical_services.length > 0 ? `
                             <li class="danger">
-                                <strong>🔴 Critical services detected:</strong> ${analysis.critical_services.join(', ')}.
+                                <strong>🔴 Critical services detected:</strong> ${analysis.critical_services.map(Utils.escapeHtml).join(', ')}.
                                 Ensure these services are properly secured, use strong authentication, and limit exposure.
                             </li>
                             ` : ''}

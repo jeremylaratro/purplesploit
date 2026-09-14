@@ -10,6 +10,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import WordCompleter, merge_completers, FuzzyCompleter
 from prompt_toolkit.styles import Style
 from pathlib import Path
+import os
 
 from .display import Display
 from .commands import CommandHandler
@@ -37,11 +38,19 @@ class Console:
 
         # Setup history file
         history_path = Path.home() / ".purplesploit" / "history"
-        history_path.parent.mkdir(exist_ok=True)
+        history_path.parent.mkdir(mode=0o700, exist_ok=True)
+        history_path.parent.chmod(0o700)
+
+        persist_history = os.getenv("PURPLESPLOIT_PERSIST_HISTORY", "false").lower() == "true"
+        history = InMemoryHistory()
+        if persist_history:
+            history_path.touch(mode=0o600, exist_ok=True)
+            history_path.chmod(0o600)
+            history = FileHistory(str(history_path))
 
         # Setup prompt session with file history
         self.session = PromptSession(
-            history=FileHistory(str(history_path)),
+            history=history,
             auto_suggest=AutoSuggestFromHistory(),
             enable_history_search=True,
         )

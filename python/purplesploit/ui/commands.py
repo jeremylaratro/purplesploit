@@ -6,10 +6,38 @@ and utility operations.
 """
 
 import shlex
+import os
 from typing import Dict, List, Callable, Any
 from pathlib import Path
 from .display import Display
 from .interactive import InteractiveSelector
+
+
+def split_command_line(command_line: str) -> List[str]:
+    """Parse quoting without consuming Windows paths or DOMAIN\\user names."""
+    lexer = shlex.shlex(command_line, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    lexer.escape = ""
+    return list(lexer)
+
+
+def redact_command_line(command_line: str) -> str:
+    """Return a history-safe representation of a console command."""
+    try:
+        parts = split_command_line(command_line)
+    except ValueError:
+        return "[unparseable command]"
+    if not parts:
+        return command_line
+    command = parts[0].lower()
+    if command in {"cred", "credential"} and any(":" in value for value in parts[1:]):
+        return f"{parts[0]} [redacted]"
+    if command == "set" and len(parts) > 2:
+        option = parts[1].lower()
+        if any(marker in option for marker in ("pass", "hash", "token", "secret", "key")):
+            return f"set {parts[1]} [redacted]"
+    return command_line
 
 
 class CommandHandler:
@@ -153,11 +181,11 @@ class CommandHandler:
             return True
 
         # Add to history
-        self.framework.session.add_command(command_line)
+        self.framework.session.add_command(redact_command_line(command_line))
 
         try:
             # Parse command using shlex for proper quoted argument handling
-            parts = shlex.split(command_line)
+            parts = split_command_line(command_line)
             command = parts[0].lower()
             args = parts[1:] if len(parts) > 1 else []
 
@@ -750,7 +778,7 @@ class CommandHandler:
 
             # If args provided, select operation by number or name
             if args:
-                operation_id = args[0]
+                operation_id = " ".join(args)
 
                 # Try as number first
                 if operation_id.isdigit():
@@ -821,19 +849,7 @@ class CommandHandler:
 
         # Handle "targets clear" - clear all
         if subcommand == "clear":
-            # Clear from session
-            count = self.framework.session.targets.clear()
-
-            # Clear from legacy database
-            self.framework.database.clear_all_targets()
-
-            # Clear from models database (for dashboard sync)
-            try:
-                from purplesploit.models.database import db_manager
-                db_manager.clear_all_targets()
-            except Exception as e:
-                self.display.print_warning(f"Could not clear dashboard targets: {e}")
-
+            count = self.framework.clear_targets()
             self.display.print_success(f"Cleared {count} target(s) from session and databases")
             return True
 
@@ -852,14 +868,14 @@ class CommandHandler:
                         start, end = subcommand.split('-')
                         start_idx = int(start)
                         end_idx = int(end)
-                        count = self.framework.session.targets.remove_range(start_idx, end_idx)
+                        count = self.framework.remove_targets_by_indices(range(start_idx, end_idx + 1))
                         self.display.print_success(f"Cleared {count} target(s)")
                     except ValueError:
                         self.display.print_error("Invalid range format. Use: targets 1-5 clear")
                 else:
                     try:
                         index = int(subcommand)
-                        if self.framework.session.targets.remove_by_index(index):
+                        if self.framework.remove_targets_by_indices([index]):
                             self.display.print_success(f"Cleared target at index {index}")
                         else:
                             self.display.print_error(f"No target at index {index}")
@@ -881,7 +897,7 @@ class CommandHandler:
                             modifications[key] = value
 
                     if modifications:
-                        if self.framework.session.targets.modify(index, **modifications):
+                        if self.framework.modify_target(index, **modifications):
                             self.display.print_success(f"Modified target at index {index}")
                         else:
                             self.display.print_error(f"No target at index {index}")
@@ -1018,7 +1034,7 @@ class CommandHandler:
                 self.display.print_error("Usage: targets remove <identifier>")
                 return True
 
-            if self.framework.session.targets.remove(args[1]):
+            if self.framework.remove_target(args[1]):
                 self.display.print_success(f"Removed target: {args[1]}")
             else:
                 self.display.print_error("Target not found")
@@ -1068,7 +1084,7 @@ class CommandHandler:
                     modifications[field] = new_val
 
             if modifications:
-                if self.framework.session.targets.modify(index, **modifications):
+                if self.framework.modify_target(index, **modifications):
                     self.display.print_success(f"Modified target")
                     for key, val in modifications.items():
                         self.display.print_info(f"  → Set {key} = {val}")
@@ -1094,7 +1110,7 @@ class CommandHandler:
 
         # Handle "creds clear" - clear all
         if subcommand == "clear":
-            count = self.framework.session.credentials.clear()
+            count = self.framework.clear_credentials()
             self.display.print_success(f"Cleared {count} credential(s)")
             return True
 
@@ -1113,14 +1129,14 @@ class CommandHandler:
                         start, end = subcommand.split('-')
                         start_idx = int(start)
                         end_idx = int(end)
-                        count = self.framework.session.credentials.remove_range(start_idx, end_idx)
+                        count = self.framework.remove_credentials_by_indices(range(start_idx, end_idx + 1))
                         self.display.print_success(f"Cleared {count} credential(s)")
                     except ValueError:
                         self.display.print_error("Invalid range format. Use: creds 1-5 clear")
                 else:
                     try:
                         index = int(subcommand)
-                        if self.framework.session.credentials.remove_by_index(index):
+                        if self.framework.remove_credentials_by_indices([index]):
                             self.display.print_success(f"Cleared credential at index {index}")
                         else:
                             self.display.print_error(f"No credential at index {index}")
@@ -1142,7 +1158,7 @@ class CommandHandler:
                             modifications[key] = value
 
                     if modifications:
-                        if self.framework.session.credentials.modify(index, **modifications):
+                        if self.framework.modify_credential(index, **modifications):
                             self.display.print_success(f"Modified credential at index {index}")
                         else:
                             self.display.print_error(f"No credential at index {index}")
@@ -1258,7 +1274,7 @@ class CommandHandler:
                 self.display.print_error("Usage: creds remove <identifier>")
                 return True
 
-            if self.framework.session.credentials.remove(args[1]):
+            if self.framework.remove_credential(args[1]):
                 self.display.print_success(f"Removed credential: {args[1]}")
             else:
                 self.display.print_error("Credential not found")
@@ -1309,7 +1325,7 @@ class CommandHandler:
                     modifications[field] = new_val
 
             if modifications:
-                if self.framework.session.credentials.modify(index, **modifications):
+                if self.framework.modify_credential(index, **modifications):
                     self.display.print_success(f"Modified credential")
                     for key, val in modifications.items():
                         if key in ['password', 'hash']:
@@ -1354,7 +1370,17 @@ class CommandHandler:
                 self.display.print_warning("No services available")
                 return True
 
-            selected = self.interactive.select_service(services)
+            selectable_services = []
+            for target, service_map in services.items():
+                for service_name, ports in service_map.items():
+                    for port in ports:
+                        selectable_services.append({
+                            "target": target,
+                            "port": port,
+                            "protocol": "tcp",
+                            "name": service_name,
+                        })
+            selected = self.interactive.select_service(selectable_services)
             if selected:
                 self.display.print_success(f"Selected service: {selected.get('target')}:{selected.get('port')} - {selected.get('name')}")
 
@@ -1650,8 +1676,9 @@ class CommandHandler:
         # Check if ligolo-ng is installed
         ligolo_cmd = None
         for cmd in ["ligolo-ng", "ligolo", "ligolo-proxy"]:
-            if shutil.which(cmd):
-                ligolo_cmd = cmd
+            resolved = shutil.which(cmd)
+            if resolved:
+                ligolo_cmd = resolved
                 break
 
         if not ligolo_cmd:
@@ -1674,7 +1701,7 @@ class CommandHandler:
                 self.display.print_info("Attaching to existing ligolo-ng session...")
                 self.display.print_info("Press CTRL+B then D to detach (keeps session running)")
                 self.display.console.print()
-                os.system("tmux attach-session -t ligolo")
+                subprocess.run(["tmux", "attach-session", "-t", "ligolo"], check=False)
             else:
                 # Create new session
                 self.display.print_info("Creating new ligolo-ng session...")
@@ -1689,8 +1716,10 @@ class CommandHandler:
                     cmd_args = [ligolo_cmd, "-selfcert"]
 
                 # Create tmux session and run ligolo
-                cmd_str = " ".join(cmd_args)
-                os.system(f"tmux new-session -s ligolo '{cmd_str}'")
+                subprocess.run(
+                    ["tmux", "new-session", "-s", "ligolo", *cmd_args],
+                    check=False,
+                )
 
             # User returned (via detach or exit)
             self.display.console.print()
@@ -1724,7 +1753,8 @@ class CommandHandler:
                 # Execute single command
                 cmd = " ".join(args)
                 self.display.print_info(f"Executing: {cmd}")
-                result = subprocess.run(cmd, shell=True)
+                user_shell = os.environ.get('SHELL') or '/bin/bash'
+                subprocess.run([user_shell, "-lc", cmd], check=False)
                 return True
             else:
                 # Launch interactive shell
@@ -1733,10 +1763,10 @@ class CommandHandler:
                 self.display.console.print()
 
                 # Get user's shell or default to bash
-                user_shell = os.environ.get('SHELL', '/bin/bash')
+                user_shell = os.environ.get('SHELL') or '/bin/bash'
 
                 # Launch shell with full terminal control
-                os.system(user_shell)
+                subprocess.run([user_shell], check=False)
 
                 # User returned (via CTRL+D or exit)
                 self.display.console.print()
@@ -1871,7 +1901,7 @@ class CommandHandler:
 
             # Parse additional arguments
             port = 5000
-            host = "0.0.0.0"
+            host = "127.0.0.1"
 
             # Parse flags
             i = 1
@@ -1887,6 +1917,10 @@ class CommandHandler:
                     host = args[i + 1]
                     i += 1
                 i += 1
+
+            if host not in {"127.0.0.1", "localhost", "::1"} and not os.getenv("PURPLESPLOIT_API_TOKEN"):
+                self.display.print_error("Remote binding requires PURPLESPLOIT_API_TOKEN")
+                return True
 
             try:
                 # Check if dependencies are available
@@ -2163,9 +2197,12 @@ class CommandHandler:
                             tmp.write(entry + "\n")
                         tmp_path = tmp.name
 
-                    # Append to /etc/hosts using sudo and tee
-                    cmd = f"sudo bash -c 'cat {tmp_path} >> /etc/hosts'"
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    # Append without interpolating a temporary path into a shell.
+                    with open(tmp_path, "r", encoding="utf-8") as input_file:
+                        result = subprocess.run(
+                            ["sudo", "tee", "-a", "/etc/hosts"], stdin=input_file,
+                            capture_output=True, text=True, check=False,
+                        )
 
                     # Clean up temp file
                     import os
@@ -2808,41 +2845,7 @@ class CommandHandler:
         Returns:
             Results dictionary
         """
-        handler = operation.get('handler')
-
-        if handler is None:
-            return {
-                "success": False,
-                "error": "No handler defined for operation"
-            }
-
-        try:
-            # Handler can be a method name (string) or callable
-            if isinstance(handler, str):
-                # Get method from module
-                method = getattr(module, handler, None)
-                if method is None:
-                    return {
-                        "success": False,
-                        "error": f"Handler method not found: {handler}"
-                    }
-                result = method()
-            elif callable(handler):
-                # Call directly
-                result = handler()
-            else:
-                return {
-                    "success": False,
-                    "error": f"Invalid handler type: {type(handler)}"
-                }
-
-            return result if isinstance(result, dict) else {"success": True, "output": str(result)}
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error executing operation: {str(e)}"
-            }
+        return self.framework.run_operation(module, operation)
 
     def cmd_go(self, args: List[str]) -> bool:
         """
@@ -3084,8 +3087,8 @@ class CommandHandler:
             return True
 
         # Get target
-        current_target = self.framework.session.targets.current
-        default_target = current_target.identifier if current_target else ""
+        current_target = self.framework.session.targets.get_current()
+        default_target = (current_target.get("ip") or current_target.get("url")) if current_target else ""
         try:
             target = input(f"Target [{default_target}]: ").strip() or default_target
         except (EOFError, KeyboardInterrupt):
@@ -3413,12 +3416,14 @@ class CommandHandler:
             idx = args.index("--target")
             if idx + 1 < len(args):
                 variables["target"] = args[idx + 1]
+        elif len(args) > 1:
+            variables["target"] = args[1]
 
         # Use current target if not specified
         if "target" not in variables:
-            current = self.framework.session.targets.current
+            current = self.framework.session.targets.get_current()
             if current:
-                variables["target"] = current.identifier
+                variables["target"] = current.get("ip") or current.get("url")
 
         if not variables.get("target"):
             self.display.print_error("No target specified. Use --target or set a current target")
@@ -4036,9 +4041,9 @@ class CommandHandler:
 
         if not args:
             # Use current target if set
-            current = self.framework.session.targets.current
+            current = self.framework.session.targets.get_current()
             if current:
-                args = [current.identifier]
+                args = [current.get("ip") or current.get("url")]
             else:
                 self.display.print_error("Usage: auto <target> [--scope <scope>] [--parallel]")
                 self.display.print_info("Scopes: passive, light, normal, aggressive, stealth")
@@ -4805,16 +4810,20 @@ class CommandHandler:
 
         # Use context if not specified
         if not targets:
-            current = self.framework.session.targets.current
+            current = self.framework.session.targets.get_current()
             if current:
-                targets = [current.identifier]
+                targets = [current.get("ip") or current.get("url")]
             else:
                 self.display.print_error("No target specified")
                 return True
 
         if not users:
-            # Use context users
-            ctx_users = list(self.framework.session.context.get("users", []))
+            # Reuse usernames already present in the session credential context.
+            ctx_users = [
+                credential.get("username")
+                for credential in self.framework.session.credentials.list()
+                if credential.get("username")
+            ]
             if ctx_users:
                 users = ctx_users
             else:
@@ -4861,7 +4870,7 @@ class CommandHandler:
         def on_success(attempt):
             self.display.console.print()
             self.display.print_success(
-                f"[bold green]VALID CREDENTIAL:[/bold green] {attempt.username}:{attempt.password}"
+                f"[bold green]VALID CREDENTIAL:[/bold green] {attempt.username} [secret stored]"
             )
             self.display.console.print()
 
@@ -4900,11 +4909,11 @@ class CommandHandler:
 
             # Add valid credentials to context
             for cred in result.valid_credentials:
-                self.framework.session.credentials.add(
-                    cred["username"],
-                    cred.get("password", ""),
+                self.framework.add_credential(
+                    username=cred["username"],
+                    password=cred.get("password", ""),
                     domain=cred.get("domain"),
-                    source="credential_spray",
+                    name=cred.get("name"),
                 )
 
         except KeyboardInterrupt:

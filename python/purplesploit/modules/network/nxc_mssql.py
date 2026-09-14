@@ -59,11 +59,11 @@ class NXCMSSQLModule(ExternalToolModule):
         hash_val = self.get_option("HASH")
         if not username:
             return ""
-        auth = f"-u '{username}'"
+        auth = f"-u {self.quote_arg(username)}"
         if hash_val:
-            auth += f" -H '{hash_val}'"
+            auth += f" -H {self.quote_arg(hash_val)}"
         elif password:
-            auth += f" -p '{password}'"
+            auth += f" -p {self.quote_arg(password)}"
         else:
             auth += " -p ''"
         return auth
@@ -73,7 +73,7 @@ class NXCMSSQLModule(ExternalToolModule):
         auth_type = self.get_option("AUTH_TYPE") or "domain"
         auth = self._build_auth()
 
-        cmd = f"nxc mssql {rhost} {auth}"
+        cmd = f"nxc mssql {self.quote_arg(rhost)} {auth}"
 
         # Add authentication type flags
         if auth_type == "local":
