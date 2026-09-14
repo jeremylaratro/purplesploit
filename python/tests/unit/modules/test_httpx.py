@@ -4,6 +4,8 @@ Tests for the HTTPx module.
 Tests the HTTPx HTTP probe module properties, command building, and output parsing.
 """
 
+import shlex
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -64,14 +66,14 @@ class TestHTTPxCommandBuilding:
         """Test building command with URL target."""
         httpx_module.set_option("TARGET", "http://example.com")
         cmd = httpx_module.build_command()
-        assert "echo 'http://example.com' | httpx" in cmd
+        assert shlex.split(cmd)[:3] == ["httpx", "-u", "http://example.com"]
         assert "-silent" in cmd
 
     def test_build_command_with_ip(self, httpx_module):
         """Test building command with IP target."""
         httpx_module.set_option("TARGET", "192.168.1.1")
         cmd = httpx_module.build_command()
-        assert "httpx -u '192.168.1.1'" in cmd
+        assert shlex.split(cmd)[:3] == ["httpx", "-u", "192.168.1.1"]
 
     def test_build_command_with_ports(self, httpx_module):
         """Test building command includes ports."""

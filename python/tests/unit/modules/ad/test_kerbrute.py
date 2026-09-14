@@ -235,14 +235,13 @@ class TestUserEnumCommand:
         assert temp_userlist in cmd
 
     def test_build_userenum_with_username(self, kerbrute_module):
-        """Test userenum command with single username."""
+        """Test single usernames are materialized only by the operation wrapper."""
         kerbrute_module.set_option("DOMAIN", "corp.local")
         kerbrute_module.set_option("USERNAME", "admin")
 
         cmd = kerbrute_module._build_userenum_command()
 
-        assert "userenum" in cmd
-        assert "admin" in cmd
+        assert "must be materialized" in cmd
 
     def test_build_userenum_no_users(self, kerbrute_module):
         """Test userenum command without users."""

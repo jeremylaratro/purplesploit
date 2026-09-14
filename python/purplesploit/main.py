@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .core.framework import Framework
 from .ui.console import Console
+from . import __version__
 
 
 def main():
@@ -45,7 +46,7 @@ For more information, visit: https://github.com/jeremylaratro/purplesploit
     parser.add_argument(
         '--version',
         action='version',
-        version='PurpleSploit 6.8.1'
+        version=f'PurpleSploit {__version__}'
     )
 
     args = parser.parse_args()

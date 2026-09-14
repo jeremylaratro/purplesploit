@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 # Add python directory to path
-python_dir = Path(__file__).parent / "python"
+python_dir = Path(__file__).resolve().parent.parent / "python"
 sys.path.insert(0, str(python_dir))
 
 from purplesploit.core.database import Database

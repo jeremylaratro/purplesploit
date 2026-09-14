@@ -16,6 +16,7 @@ if python_dir.exists():
 
 try:
     from purplesploit.models.database import (
+        db_manager, DatabaseManager,
         DB_DIR, CREDENTIALS_DB, TARGETS_DB, WEB_TARGETS_DB,
         AD_TARGETS_DB, SERVICES_DB, EXPLOITS_DB
     )
@@ -58,12 +59,18 @@ try:
     print()
     print("Removing databases...")
 
+    # Release every SQLAlchemy connection before unlinking database files.
+    for engine in db_manager.engines.values():
+        engine.dispose()
+
     # Remove all database files
     removed = 0
     for name, db_path in db_files:
         if db_path.exists():
             try:
                 db_path.unlink()
+                Path(f"{db_path}-wal").unlink(missing_ok=True)
+                Path(f"{db_path}-shm").unlink(missing_ok=True)
                 print(f"  ✓ Removed {name}")
                 removed += 1
             except Exception as e:
@@ -78,7 +85,8 @@ try:
     print()
     print("Recreating databases...")
 
-    from purplesploit.models.database import db_manager
+    recreated_manager = DatabaseManager()
+    recreated_manager.get_all_targets()
 
     print("  ✓ Database tables created successfully")
     print()

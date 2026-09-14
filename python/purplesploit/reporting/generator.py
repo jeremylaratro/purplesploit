@@ -109,9 +109,14 @@ class ReportGenerator:
         if self.framework:
             if hasattr(self.framework, 'database'):
                 db = self.framework.database
-                targets = [t.to_dict() for t in db.get_all_targets()]
-                services = [s.to_dict() for s in db.get_all_services()]
-                credentials = [c.to_dict() for c in db.get_all_credentials()]
+                targets = db.get_targets()
+                services = db.get_services()
+                credentials = []
+                for credential in db.get_credentials():
+                    safe_credential = dict(credential)
+                    safe_credential["has_password"] = bool(safe_credential.pop("password", None))
+                    safe_credential["has_hash"] = bool(safe_credential.pop("hash", None))
+                    credentials.append(safe_credential)
 
         return ReportData(
             config=self.config,

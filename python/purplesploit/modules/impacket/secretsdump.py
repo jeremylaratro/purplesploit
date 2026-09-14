@@ -137,10 +137,10 @@ class ImpacketSecretsDumpModule(ExternalToolModule):
 
         # By default, dumps SAM and LSA
         # For NTDS, need -just-dc flag
-        if ntds and ntds.lower() == "true":
+        if self.option_enabled("NTDS"):
             cmd += " -just-dc"
 
-        if history and history.lower() == "true":
+        if self.option_enabled("HISTORY"):
             cmd += " -history"
 
         # Output file

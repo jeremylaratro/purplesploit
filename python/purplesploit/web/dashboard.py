@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
-from purplesploit.models.database import db_manager
+from purplesploit.models.database import db_manager, Credential, Target
 
 # Get template directory
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -29,7 +29,7 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,8 +78,7 @@ async def dashboard_home(request: Request):
         service_type = service_dict.get('service', 'unknown')
         service_counts[service_type] = service_counts.get(service_type, 0) + 1
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "total_targets": len(targets),
         "total_credentials": len(raw_credentials),
         "total_services": len(services),
@@ -126,8 +125,7 @@ async def targets_page(request: Request):
             services.append(type('obj', (object,), service_data))
         target_services[target_name] = services
 
-    return templates.TemplateResponse("targets.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="targets.html", context={
         "targets": targets,
         "target_services": target_services,
     })
@@ -136,8 +134,16 @@ async def targets_page(request: Request):
 @app.post("/targets/delete/{identifier}")
 async def delete_target_web(identifier: str):
     """Delete a target via web interface"""
-    # Note: For now, we'll skip deletion as it requires more complex logic
-    # with the models database. The API endpoints should be used instead.
+    session = db_manager.get_targets_session()
+    try:
+        target = session.query(Target).filter(
+            (Target.ip == identifier) | (Target.name == identifier)
+        ).first()
+        if target:
+            session.delete(target)
+            session.commit()
+    finally:
+        session.close()
     return RedirectResponse(url="/targets", status_code=303)
 
 
@@ -151,19 +157,30 @@ async def credentials_page(request: Request):
     for i, c in enumerate(raw_credentials):
         cred_dict = c.to_dict()
         cred_dict['index'] = i
+        cred_dict['has_password'] = bool(cred_dict.pop('password', None))
+        cred_dict['has_hash'] = bool(cred_dict.pop('hash', None))
         credentials.append(cred_dict)
 
-    return templates.TemplateResponse("credentials.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="credentials.html", context={
         "credentials": credentials,
     })
 
 
-@app.post("/credentials/delete/{cred_id}")
-async def delete_credential_web(cred_id: int):
+@app.post("/credentials/delete/{identifier}")
+async def delete_credential_web(identifier: str):
     """Delete a credential via web interface"""
-    # Note: For now, we'll skip deletion as it requires more complex logic
-    # with the models database. The API endpoints should be used instead.
+    session = db_manager.get_credentials_session()
+    try:
+        credential = session.query(Credential).filter(Credential.name == identifier).first()
+        if credential is None and identifier.isdigit():
+            credentials = session.query(Credential).all()
+            index = int(identifier)
+            credential = credentials[index] if 0 <= index < len(credentials) else None
+        if credential:
+            session.delete(credential)
+            session.commit()
+    finally:
+        session.close()
     return RedirectResponse(url="/credentials", status_code=303)
 
 
@@ -189,8 +206,7 @@ async def services_page(request: Request):
             services_by_target[target] = []
         services_by_target[target].append(service_obj)
 
-    return templates.TemplateResponse("services.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="services.html", context={
         "services_by_target": services_by_target,
         "total_services": len(raw_services),
     })
@@ -216,8 +232,7 @@ async def workspaces_page(request: Request):
                     "variable_count": var_count,
                 })
 
-    return templates.TemplateResponse("workspaces.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="workspaces.html", context={
         "workspaces": workspaces,
     })
 
@@ -225,9 +240,7 @@ async def workspaces_page(request: Request):
 @app.get("/reports", response_class=HTMLResponse)
 async def reports_page(request: Request):
     """Reports page"""
-    return templates.TemplateResponse("reports.html", {
-        "request": request,
-    })
+    return templates.TemplateResponse(request=request, name="reports.html", context={})
 
 
 # ============================================================================
@@ -239,9 +252,9 @@ def main():
     import uvicorn
     uvicorn.run(
         "purplesploit.web.dashboard:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8000,
-        reload=True,
+        reload=False,
         log_level="info"
     )
 

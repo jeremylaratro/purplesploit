@@ -8,6 +8,7 @@ import os
 import sys
 import importlib.util
 import inspect
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Dict, List, Optional, Type, TYPE_CHECKING
 from datetime import datetime
@@ -79,8 +80,8 @@ class Framework:
             self.session.targets.add(target_dict)
 
             # Sync to models database (for webserver) - lazy load db_manager
-            if target['type'] == 'network':
-                try:
+            try:
+                if target['type'] == 'network':
                     from purplesploit.models.database import TargetCreate
                     db_manager = self._get_db_manager()
                     identifier = target['identifier']
@@ -90,10 +91,18 @@ class Framework:
                         ip=identifier,
                         description=f"Loaded from legacy database - {target['type']}"
                     )
-                    db_manager.add_target(target_create)
-                except Exception:
-                    # Target already exists in models DB, skip
-                    pass
+                    db_manager.upsert_target(target_create)
+                else:
+                    from purplesploit.models.database import WebTargetCreate
+                    identifier = target['identifier']
+                    name = target.get('name') or identifier
+                    self._get_db_manager().upsert_web_target(WebTargetCreate(
+                        name=name, url=identifier,
+                        description="Loaded from legacy database - web",
+                    ))
+            except Exception:
+                # Dashboard synchronization is best-effort during startup.
+                pass
 
         # Load credentials
         db_creds = self.database.get_credentials()
@@ -102,6 +111,8 @@ class Framework:
                 'username': cred['username'],
                 'password': cred['password'],
                 'domain': cred['domain'],
+                'dcip': cred.get('dcip'),
+                'dns': cred.get('dns'),
                 'hash': cred['hash'],
                 'hash_type': cred['hash_type'],
                 'name': cred['name']
@@ -120,9 +131,11 @@ class Framework:
                     username=cred['username'],
                     password=cred.get('password'),
                     domain=cred.get('domain'),
+                    dcip=cred.get('dcip'),
+                    dns=cred.get('dns'),
                     hash=cred.get('hash')
                 )
-                db_manager.add_credential(cred_create)
+                db_manager.upsert_credential(cred_create)
             except Exception:
                 # Credential already exists in models DB, skip
                 pass
@@ -170,7 +183,6 @@ class Framework:
         base_path = Path(base_path)
 
         # Optimize: Use os.walk instead of rglob for better performance
-        count = 0
         for root, dirs, files in os.walk(base_path):
             # Skip __pycache__ directories
             dirs[:] = [d for d in dirs if d != '__pycache__']
@@ -186,10 +198,10 @@ class Framework:
 
                 try:
                     self._register_module(module_file, base_path)
-                    count += 1
                 except Exception as e:
                     self.log(f"Error loading module {module_file}: {e}", "warning")
 
+        count = len(self.modules)
         self.log(f"Discovered {count} modules", "success")
         return count
 
@@ -293,32 +305,22 @@ class Framework:
         if module is None:
             return {"success": False, "error": "No module loaded"}
 
-        # Validate options
+        # Populate implicit context before validating required parameters.
+        module.auto_set_from_context()
         valid, error = module.validate_options()
         if not valid:
             self.log(f"Validation failed: {error}", "error")
             return {"success": False, "error": error}
 
-        # Auto-set from context
-        module.auto_set_from_context()
-
         # Execute module
         self.log(f"Running module: {module.name}", "info")
         try:
-            results = module.run()
+            raw_results = module.run()
+            if not isinstance(raw_results, dict):
+                raw_results = {"success": True, "output": str(raw_results)}
+            results = self._redact_module_results(module, raw_results)
 
-            # Store results
-            self.session.store_results(module.name, results)
-
-            # Log to database
-            self.database.add_module_execution(
-                module_name=module.name,
-                module_path=self.session.current_module.__class__.__module__,
-                options=module.show_options(),
-                results=results,
-                success=results.get('success', False),
-                error_message=results.get('error')
-            )
+            self._record_module_results(module, results)
 
             if results.get('success', False):
                 self.log(f"Module completed successfully", "success")
@@ -329,7 +331,98 @@ class Framework:
         except Exception as e:
             error_msg = f"Module execution error: {str(e)}"
             self.log(error_msg, "error")
-            return {"success": False, "error": error_msg}
+            results = {"success": False, "error": error_msg}
+            self._record_module_results(module, results)
+            return results
+
+    def run_operation(self, module: BaseModule, operation: Dict) -> Dict:
+        """Execute a granular operation through the normal validation/audit pipeline."""
+        if module is None:
+            return {"success": False, "error": "No module loaded"}
+
+        module.auto_set_from_context()
+        valid, error = module.validate_options()
+        if not valid:
+            self.log(f"Validation failed: {error}", "error")
+            return {"success": False, "error": error}
+
+        handler = operation.get("handler")
+        if handler is None:
+            return {"success": False, "error": "No handler defined for operation"}
+
+        try:
+            if isinstance(handler, str):
+                method = getattr(module, handler, None)
+                if method is None or not callable(method):
+                    return {"success": False, "error": f"Handler method not found: {handler}"}
+                result = method()
+            elif callable(handler):
+                result = handler()
+            else:
+                return {"success": False, "error": f"Invalid handler type: {type(handler).__name__}"}
+
+            results = result if isinstance(result, dict) else {"success": True, "output": str(result)}
+            results = self._redact_module_results(module, results)
+            self._record_module_results(module, results)
+            return results
+        except Exception as e:
+            error_msg = f"Operation execution error: {e}"
+            results = {"success": False, "error": error_msg}
+            self._record_module_results(module, results)
+            self.log(error_msg, "error")
+            return results
+
+    def _record_module_results(self, module: BaseModule, results: Dict) -> None:
+        """Persist module output consistently for module and operation execution."""
+        try:
+            options = module.show_options()
+            safe_options = {}
+            for key, option in options.items():
+                safe_option = dict(option)
+                if self._is_sensitive_name(key) and safe_option.get("value") not in (None, ""):
+                    safe_option["value"] = "[redacted]"
+                safe_options[key] = safe_option
+            self.session.store_results(module.name, results)
+            self.database.add_module_execution(
+                module_name=module.name,
+                module_path=module.__class__.__module__,
+                options=safe_options,
+                results=results,
+                success=results.get('success', False),
+                error_message=results.get('error'),
+            )
+        except Exception as e:
+            # An audit-store failure must not replace or crash a completed run.
+            self.log(f"Unable to persist module execution: {e}", "warning")
+
+    @staticmethod
+    def _is_sensitive_name(name: str) -> bool:
+        lowered = str(name).lower()
+        return any(marker in lowered for marker in ("pass", "hash", "token", "secret", "api_key", "apikey"))
+
+    def _redact_module_results(self, module: BaseModule, results: Dict) -> Dict:
+        """Remove option secrets from returned, in-memory, and persisted results."""
+        secrets_to_hide = []
+        for key, option in module.show_options().items():
+            value = option.get("value")
+            if self._is_sensitive_name(key) and value not in (None, "", "[redacted]"):
+                secrets_to_hide.append(str(value))
+
+        def scrub(value, key=""):
+            if self._is_sensitive_name(key) and value not in (None, ""):
+                return "[redacted]"
+            if isinstance(value, dict):
+                return {item_key: scrub(item_value, item_key) for item_key, item_value in value.items()}
+            if isinstance(value, list):
+                return [scrub(item) for item in value]
+            if isinstance(value, tuple):
+                return tuple(scrub(item) for item in value)
+            if isinstance(value, str):
+                for secret in secrets_to_hide:
+                    value = value.replace(secret, "[redacted]")
+            return value
+
+        return scrub(results)
 
     def search_modules(self, query: str) -> List[ModuleMetadata]:
         """
@@ -426,6 +519,17 @@ class Framework:
         Returns:
             True if added successfully
         """
+        target_type = str(target_type).lower().strip()
+        identifier = str(identifier).strip()
+        if target_type not in {"network", "web"} or not identifier or any(
+            char in identifier for char in "\r\n\0"
+        ):
+            return False
+        if target_type == "web":
+            parsed = urlparse(identifier)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                return False
+
         # Generate a name if not provided
         if not name:
             name = identifier
@@ -440,22 +544,7 @@ class Framework:
         if not self.session.targets.add(target_dict):
             return False
 
-        # Add to old database (backwards compatibility)
-        self.database.add_target(target_type, identifier, name)
-
-        # Add to new models database (for webserver) - lazy load
-        try:
-            from purplesploit.models.database import TargetCreate
-            db_manager = self._get_db_manager()
-            target_create = TargetCreate(
-                name=name,
-                ip=identifier,
-                description=f"Added via CLI - {target_type}"
-            )
-            db_manager.add_target(target_create)
-        except Exception as e:
-            # If target already exists, that's fine
-            self.log(f"Target already exists in models database: {e}", "debug")
+        self._persist_target_record(target_dict)
 
         return True
 
@@ -495,33 +584,169 @@ class Framework:
         if not self.session.credentials.add(cred_dict):
             return False
 
-        # Add to old database (backwards compatibility)
-        self.database.add_credential(
-            username=username,
-            password=password,
-            domain=domain,
-            hash_value=hash_value,
-            name=name
-        )
+        self._persist_credential_record(cred_dict)
 
-        # Add to new models database (for webserver) - lazy load
+        return True
+
+    def _persist_target_record(self, target: Dict) -> None:
+        """Write one session target to both supported persistence stores."""
+        target_type = target.get("type") or ("web" if target.get("url") else "network")
+        identifier = target.get("url") if target_type == "web" else target.get("ip")
+        name = target.get("name") or identifier
+        self.database.add_target(target_type, identifier, name)
+        try:
+            from purplesploit.models.database import TargetCreate, WebTargetCreate
+            db_manager = self._get_db_manager()
+            if target_type == "web":
+                db_manager.upsert_web_target(WebTargetCreate(
+                    name=name, url=identifier, description="Added via CLI - web",
+                ))
+            else:
+                db_manager.upsert_target(TargetCreate(
+                    name=name, ip=identifier,
+                    description=f"Added via CLI - {target_type}",
+                ))
+        except Exception as e:
+            self.log(f"Dashboard target sync skipped: {e}", "debug")
+
+    def _delete_target_record(self, target: Dict) -> None:
+        """Delete one target from both persistence stores."""
+        target_type = target.get("type") or ("web" if target.get("url") else "network")
+        identifier = target.get("url") if target_type == "web" else target.get("ip")
+        self.database.remove_target(identifier)
+        try:
+            self._get_db_manager().delete_target(identifier, target_type)
+        except Exception as e:
+            self.log(f"Dashboard target delete skipped: {e}", "warning")
+
+    def remove_target(self, identifier: str) -> bool:
+        """Remove a target from session and all persistence stores."""
+        target = next((item for item in self.session.targets.list() if identifier in {
+            item.get("ip"), item.get("url"), item.get("name")
+        }), None)
+        if target is None:
+            return False
+        self._delete_target_record(target)
+        return self.session.targets.remove(identifier)
+
+    def remove_targets_by_indices(self, indices: List[int]) -> int:
+        """Remove valid target indices without allowing index shifts to change identity."""
+        targets = self.session.targets.list()
+        valid = sorted({index for index in indices if 0 <= index < len(targets)}, reverse=True)
+        for index in valid:
+            self._delete_target_record(targets[index])
+            self.session.targets.remove_by_index(index)
+        return len(valid)
+
+    def clear_targets(self) -> int:
+        """Clear targets from session and both databases."""
+        count = self.session.targets.clear()
+        self.database.clear_all_targets()
+        try:
+            self._get_db_manager().clear_all_targets()
+        except Exception as e:
+            self.log(f"Dashboard target clear skipped: {e}", "warning")
+        return count
+
+    def modify_target(self, index: int, **modifications) -> bool:
+        """Update a target while keeping every persistence representation in sync."""
+        targets = self.session.targets.list()
+        if not 0 <= index < len(targets):
+            return False
+        allowed = {"ip", "url", "name", "type"}
+        updated = dict(targets[index])
+        updated.update({key: value for key, value in modifications.items() if key in allowed})
+        if updated.get("type") == "web" or updated.get("url"):
+            updated["type"] = "web"
+            updated.pop("ip", None)
+        else:
+            updated["type"] = "network"
+            updated.pop("url", None)
+        identifier = updated.get("url") or updated.get("ip")
+        if not identifier:
+            return False
+        self._delete_target_record(targets[index])
+        if not self.session.targets.modify(index, **updated):
+            self._persist_target_record(targets[index])
+            return False
+        self._persist_target_record(self.session.targets.list()[index])
+        return True
+
+    def _persist_credential_record(self, credential: Dict) -> None:
+        """Write one session credential to both supported persistence stores."""
+        self.database.add_credential(
+            username=credential.get("username"), password=credential.get("password"),
+            domain=credential.get("domain"), dcip=credential.get("dcip"),
+            dns=credential.get("dns"), hash_value=credential.get("hash"),
+            hash_type=credential.get("hash_type"), name=credential.get("name"),
+        )
         try:
             from purplesploit.models.database import CredentialCreate
-            db_manager = self._get_db_manager()
-            cred_create = CredentialCreate(
-                name=name,
-                username=username,
-                password=password,
-                domain=domain,
-                dcip=dcip,
-                dns=dns,
-                hash=hash_value
-            )
-            db_manager.add_credential(cred_create)
+            self._get_db_manager().upsert_credential(CredentialCreate(
+                name=credential.get("name") or credential.get("username"),
+                username=credential.get("username"), password=credential.get("password"),
+                domain=credential.get("domain"), dcip=credential.get("dcip"),
+                dns=credential.get("dns"), hash=credential.get("hash"),
+            ))
         except Exception as e:
-            # If credential already exists, that's fine
-            self.log(f"Credential already exists in models database: {e}", "debug")
+            self.log(f"Dashboard credential sync skipped: {e}", "debug")
 
+    def _delete_credential_record(self, credential: Dict) -> None:
+        """Delete one credential from both persistence stores."""
+        self.database.remove_credential_record(
+            credential.get("username"), credential.get("domain"), credential.get("name"),
+        )
+        try:
+            self._get_db_manager().delete_credential(
+                credential.get("username"), credential.get("domain"), credential.get("name"),
+            )
+        except Exception as e:
+            self.log(f"Dashboard credential delete skipped: {e}", "warning")
+
+    def remove_credential(self, identifier: str) -> bool:
+        """Remove a credential from session and all persistence stores."""
+        credential = next((item for item in self.session.credentials.list() if identifier in {
+            item.get("username"), item.get("name")
+        }), None)
+        if credential is None:
+            return False
+        self._delete_credential_record(credential)
+        return self.session.credentials.remove(identifier)
+
+    def remove_credentials_by_indices(self, indices: List[int]) -> int:
+        """Remove valid credential indices using stable pre-removal identities."""
+        credentials = self.session.credentials.list()
+        valid = sorted({index for index in indices if 0 <= index < len(credentials)}, reverse=True)
+        for index in valid:
+            self._delete_credential_record(credentials[index])
+            self.session.credentials.remove_by_index(index)
+        return len(valid)
+
+    def clear_credentials(self) -> int:
+        """Clear credentials from session and both databases."""
+        count = self.session.credentials.clear()
+        self.database.clear_all_credentials()
+        try:
+            self._get_db_manager().clear_all_credentials()
+        except Exception as e:
+            self.log(f"Dashboard credential clear skipped: {e}", "warning")
+        return count
+
+    def modify_credential(self, index: int, **modifications) -> bool:
+        """Update a credential while keeping persistence stores synchronized."""
+        credentials = self.session.credentials.list()
+        if not 0 <= index < len(credentials):
+            return False
+        allowed = {"username", "password", "domain", "dcip", "dns", "hash", "hash_type", "name"}
+        updated = dict(credentials[index])
+        updated.update({key: value for key, value in modifications.items() if key in allowed})
+        if not updated.get("username"):
+            return False
+        self._delete_credential_record(credentials[index])
+        if not self.session.credentials.modify(index, **updated):
+            self._persist_credential_record(credentials[index])
+            return False
+        self._persist_credential_record(self.session.credentials.list()[index])
         return True
 
     def get_stats(self) -> Dict:

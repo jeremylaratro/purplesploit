@@ -275,6 +275,15 @@ class BaseModule(ABC):
             return value
         return option.get("default")
 
+    def option_enabled(self, key: str) -> bool:
+        """Interpret boolean-style options consistently across CLI and JSON callers."""
+        value = self.get_option(key)
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
     def validate_options(self) -> tuple[bool, str]:
         """
         Validate that all required options are set.
@@ -526,6 +535,12 @@ class ExternalToolModule(BaseModule):
         """
         raise NotImplementedError("Subclass must implement build_command()")
 
+    @staticmethod
+    def quote_arg(value: Any) -> str:
+        """Quote a single command argument for the shell-free argv parser."""
+        import shlex
+        return shlex.quote(str(value))
+
     def execute_command(self, command: str, timeout: Optional[int] = None, background: bool = False) -> Dict[str, Any]:
         """
         Execute an external command.
@@ -538,22 +553,37 @@ class ExternalToolModule(BaseModule):
         Returns:
             Dictionary with execution results
         """
+        import shlex
         import subprocess
 
         # Append custom switches if provided
-        switches = self.get_option("SWITCHES")
-        if switches:
-            command = f"{command} {switches}"
+        try:
+            argv = shlex.split(command)
+            switches = self.get_option("SWITCHES")
+            if switches:
+                argv.extend(shlex.split(str(switches)))
+        except ValueError as e:
+            return {"success": False, "error": f"Unable to parse command: {e}"}
+        if not argv:
+            return {"success": False, "error": "Command cannot be empty"}
+
+        sensitive_flags = {
+            "-p", "--password", "-H", "--hash", "--api-token", "--token",
+            "--client-secret", "--secret", "--key",
+        }
+        display_argv = list(argv)
+        for index, value in enumerate(display_argv[:-1]):
+            if value in sensitive_flags:
+                display_argv[index + 1] = "[redacted]"
+        display_command = shlex.join(display_argv)
 
         try:
-            self.log(f"Executing: {command}", "info")
+            self.log(f"Executing: {display_command}", "info")
 
             if background:
-                # Run in background using nohup
-                bg_command = f"nohup {command} &"
                 process = subprocess.Popen(
-                    bg_command,
-                    shell=True,
+                    argv,
+                    shell=False,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
@@ -566,13 +596,13 @@ class ExternalToolModule(BaseModule):
                     "background": True,
                     "pid": process.pid,
                     "message": f"Command running in background (PID: {process.pid})",
-                    "command": command
+                    "command": display_command
                 }
             else:
                 # Run synchronously (original behavior)
                 result = subprocess.run(
-                    command,
-                    shell=True,
+                    argv,
+                    shell=False,
                     capture_output=True,
                     text=True,
                     timeout=timeout
@@ -583,19 +613,19 @@ class ExternalToolModule(BaseModule):
                     "returncode": result.returncode,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
-                    "command": command
+                    "command": display_command
                 }
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
                 "error": f"Command timed out after {timeout} seconds",
-                "command": command
+                "command": display_command
             }
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
-                "command": command
+                "command": display_command
             }
 
     def get_default_command(self) -> str:

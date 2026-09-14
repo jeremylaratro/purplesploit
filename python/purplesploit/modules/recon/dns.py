@@ -111,14 +111,14 @@ class DNSModule(ExternalToolModule):
 
         # Add nameserver if specified
         if nameserver:
-            cmd += f" @{nameserver}"
+            cmd += f" {self.quote_arg('@' + str(nameserver))}"
 
         # Add domain
-        cmd += f" {domain}"
+        cmd += f" {self.quote_arg(domain)}"
 
         # Add record type
         if record_type:
-            cmd += f" {record_type}"
+            cmd += f" {self.quote_arg(record_type)}"
 
         # Add +short for cleaner output in some cases
         cmd += " +noall +answer"
@@ -132,10 +132,11 @@ class DNSModule(ExternalToolModule):
 
         # First get NS records if no nameserver specified
         if not nameserver:
-            ns_cmd = f"dig {domain} NS +short"
+            ns_cmd = f"dig {self.quote_arg(domain)} NS +short"
             ns_result = self.execute_command(ns_cmd)
-            if ns_result.get("success") and ns_result.get("output"):
-                nameservers = ns_result["output"].strip().split('\n')
+            if ns_result.get("success") and ns_result.get("stdout", ns_result.get("output")):
+                nameserver_output = ns_result.get("stdout", ns_result.get("output", ""))
+                nameservers = nameserver_output.strip().split('\n')
                 nameserver = nameservers[0].rstrip('.') if nameservers else domain
             else:
                 nameserver = domain
@@ -145,7 +146,7 @@ class DNSModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            output = result.get("output", "")
+            output = result.get("stdout", result.get("output", ""))
             parsed = self._parse_zone_transfer(output)
             result["parsed"] = parsed
 
@@ -179,9 +180,10 @@ class DNSModule(ExternalToolModule):
             cmd = f"dig {ns_part}{domain} {rtype} +noall +answer"
             result = self.execute_command(cmd)
 
-            if result.get("success") and result.get("output", "").strip():
-                results["records"][rtype] = result["output"].strip()
-                results["output"] += f"\n=== {rtype} Records ===\n{result['output']}"
+            command_output = result.get("stdout", result.get("output", ""))
+            if result.get("success") and command_output.strip():
+                results["records"][rtype] = command_output.strip()
+                results["output"] += f"\n=== {rtype} Records ===\n{command_output}"
 
         results["message"] = f"Queried {len(record_types)} record types, found {len(results['records'])} with data"
         return results
@@ -196,7 +198,7 @@ class DNSModule(ExternalToolModule):
 
         result = self.execute_command(cmd)
         if result.get("success"):
-            result["parsed"] = self._parse_records(result.get("output", ""))
+            result["parsed"] = self._parse_records(result.get("stdout", result.get("output", "")))
         return result
 
     def op_mx_records(self) -> Dict[str, Any]:
@@ -209,7 +211,7 @@ class DNSModule(ExternalToolModule):
 
         result = self.execute_command(cmd)
         if result.get("success"):
-            result["parsed"] = self._parse_records(result.get("output", ""))
+            result["parsed"] = self._parse_records(result.get("stdout", result.get("output", "")))
         return result
 
     def op_txt_records(self) -> Dict[str, Any]:
@@ -222,7 +224,7 @@ class DNSModule(ExternalToolModule):
 
         result = self.execute_command(cmd)
         if result.get("success"):
-            result["parsed"] = self._parse_records(result.get("output", ""))
+            result["parsed"] = self._parse_records(result.get("stdout", result.get("output", "")))
         return result
 
     def op_soa_record(self) -> Dict[str, Any]:
@@ -235,7 +237,7 @@ class DNSModule(ExternalToolModule):
 
         result = self.execute_command(cmd)
         if result.get("success"):
-            result["parsed"] = self._parse_soa(result.get("output", ""))
+            result["parsed"] = self._parse_soa(result.get("stdout", result.get("output", "")))
         return result
 
     def op_reverse_lookup(self) -> Dict[str, Any]:
@@ -248,7 +250,7 @@ class DNSModule(ExternalToolModule):
 
         result = self.execute_command(cmd)
         if result.get("success"):
-            result["parsed"] = self._parse_records(result.get("output", ""))
+            result["parsed"] = self._parse_records(result.get("stdout", result.get("output", "")))
         return result
 
     def _parse_zone_transfer(self, output: str) -> Dict[str, Any]:

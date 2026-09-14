@@ -13,6 +13,7 @@ import shutil
 import logging
 import subprocess
 import sys
+import re
 
 from .models import Plugin, PluginManifest, PluginStatus, PluginCategory
 from .repository import PluginRepository, LocalPluginRepository
@@ -210,6 +211,9 @@ class PluginManager:
             ValueError: If plugin not found
             RuntimeError: If installation fails
         """
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
+            raise ValueError("Invalid plugin name")
+
         # Get plugin info
         plugin = None
         source_repo = None
@@ -249,26 +253,45 @@ class PluginManager:
 
         install_path.mkdir(parents=True)
 
-        # Extract package with path traversal protection
+        # Extract regular files only, with traversal and decompression limits.
         with tarfile.open(package_path, "r:gz") as tar:
-            # Validate all paths before extraction to prevent directory traversal attacks
-            extract_base = install_path.parent.resolve()
-            for member in tar.getmembers():
-                member_path = (extract_base / member.name).resolve()
-                # Check if resolved path escapes the extraction directory
-                if not str(member_path).startswith(str(extract_base)):
+            members = tar.getmembers()
+            if len(members) > 10_000:
+                raise RuntimeError("Plugin archive contains too many entries")
+            if sum(member.size for member in members) > 512 * 1024 * 1024:
+                raise RuntimeError("Plugin archive expands beyond the 512 MiB limit")
+
+            # Support archives either wrapped in a plugin-name directory or
+            # containing the plugin files at their root.
+            top_level = {
+                Path(member.name).parts[0]
+                for member in members if Path(member.name).parts
+            }
+            extract_base = self.plugins_dir if top_level == {name} else install_path
+            resolved_base = install_path.resolve()
+
+            for member in members:
+                destination = (extract_base / member.name).resolve()
+                try:
+                    destination.relative_to(resolved_base)
+                except ValueError:
                     raise RuntimeError(
                         f"Security: Malicious path detected in plugin archive: {member.name}"
                     )
-                # Also check for symlinks pointing outside
-                if member.issym() or member.islnk():
-                    link_target = (extract_base / member.linkname).resolve()
-                    if not str(link_target).startswith(str(extract_base)):
-                        raise RuntimeError(
-                            f"Security: Malicious symlink detected in plugin archive: {member.name} -> {member.linkname}"
-                        )
-            # Safe to extract after validation
-            tar.extractall(extract_base)
+                if member.isdir():
+                    destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    continue
+                if not member.isfile():
+                    raise RuntimeError(
+                        f"Security: Unsupported archive entry: {member.name}"
+                    )
+                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                source = tar.extractfile(member)
+                if source is None:
+                    raise RuntimeError(f"Unable to read plugin archive entry: {member.name}")
+                with source, open(destination, "wb") as output:
+                    shutil.copyfileobj(source, output)
+                destination.chmod((member.mode & 0o155) | 0o600)
 
         # Install Python dependencies
         if plugin.manifest.python_dependencies:

@@ -367,9 +367,9 @@ class TestWorkflowCommand:
         command_handler._workflow_engine = mock_engine
 
         # Set up a valid current target
-        mock_target = MagicMock()
-        mock_target.identifier = "192.168.1.100"
-        mock_framework.session.targets.current = mock_target
+        mock_framework.session.targets.get_current.return_value = {
+            "ip": "192.168.1.100"
+        }
 
         result = command_handler.cmd_workflow(["run", "wf-123"])
 

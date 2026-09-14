@@ -4,6 +4,8 @@ Tests for the SMB Shares Module.
 Tests SMB share browsing and file operations including spider, download, and upload.
 """
 
+import shlex
+
 import pytest
 from unittest.mock import MagicMock, patch
 from typing import Dict, Any
@@ -147,8 +149,7 @@ class TestBuildAuth:
         smb_shares_module.set_option("PASSWORD", "secret")
 
         auth = smb_shares_module._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-p 'secret'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", "secret"]
 
     def test_build_auth_with_username_only(self, smb_shares_module):
         """Test auth string with username only."""
@@ -156,8 +157,7 @@ class TestBuildAuth:
         smb_shares_module.set_option("PASSWORD", None)
 
         auth = smb_shares_module._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-p ''" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", ""]
 
     def test_build_auth_no_username(self, smb_shares_module):
         """Test auth string without username."""
@@ -184,8 +184,7 @@ class TestExecuteNxc:
             mock_exec.assert_called_once()
             call_args = mock_exec.call_args[0][0]
             assert "nxc smb 192.168.1.100" in call_args
-            assert "-u 'admin'" in call_args
-            assert "-p 'password123'" in call_args
+            assert shlex.split(call_args)[3:7] == ["-u", "admin", "-p", "password123"]
 
     def test_execute_nxc_with_domain(self, configured_smb_module):
         """Test NXC execution with domain."""

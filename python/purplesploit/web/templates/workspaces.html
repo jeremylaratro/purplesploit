@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PurpleSploit - Workspaces</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#312e81;color:#fff;margin:0}.container{max-width:1000px;margin:auto;padding:24px}
+    nav{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}a{color:#fff}.card{background:#ffffff18;border:1px solid #ffffff30;border-radius:10px;padding:20px;margin:12px 0}
+    code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body><main class="container">
+  <h1>Workspaces</h1>
+  <nav><a href="/">Dashboard</a><a href="/targets">Targets</a><a href="/credentials">Credentials</a><a href="/services">Services</a><a href="/workspaces">Workspaces</a></nav>
+  {% for workspace in workspaces %}<section class="card"><h2>{{ workspace.name }}</h2><p><code>{{ workspace.path }}</code></p><p>{{ workspace.variable_count }} configured variable{{ '' if workspace.variable_count == 1 else 's' }}</p></section>
+  {% else %}<section class="card">No workspaces found.</section>{% endfor %}
+</main></body></html>

@@ -176,19 +176,10 @@ class TestReportGeneratorBuildData:
 
     def test_build_report_data_with_framework(self):
         """Test building report data with framework database."""
-        mock_target = Mock()
-        mock_target.to_dict.return_value = {"ip": "192.168.1.1", "name": "Host1"}
-
-        mock_service = Mock()
-        mock_service.to_dict.return_value = {"port": 80, "service": "http"}
-
-        mock_cred = Mock()
-        mock_cred.to_dict.return_value = {"username": "admin"}
-
         mock_db = Mock()
-        mock_db.get_all_targets.return_value = [mock_target]
-        mock_db.get_all_services.return_value = [mock_service]
-        mock_db.get_all_credentials.return_value = [mock_cred]
+        mock_db.get_targets.return_value = [{"ip": "192.168.1.1", "name": "Host1"}]
+        mock_db.get_services.return_value = [{"port": 80, "service": "http"}]
+        mock_db.get_credentials.return_value = [{"username": "admin", "password": "secret"}]
 
         mock_framework = Mock()
         mock_framework.database = mock_db
@@ -206,6 +197,8 @@ class TestReportGeneratorBuildData:
         assert len(report_data.targets) == 1
         assert len(report_data.services) == 1
         assert len(report_data.credentials) == 1
+        assert report_data.credentials[0]["has_password"] is True
+        assert "password" not in report_data.credentials[0]
 
 
 class TestReportGeneratorGenerate:

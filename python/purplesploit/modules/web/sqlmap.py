@@ -156,20 +156,20 @@ class SQLMapModule(ExternalToolModule):
             cmd += f" --threads={threads}"
 
         # Batch mode
-        if batch and batch.lower() == "true":
+        if self.option_enabled("BATCH"):
             cmd += " --batch"
 
         # Enumeration options
-        if self.get_option("DBS") and self.get_option("DBS").lower() == "true":
+        if self.option_enabled("DBS"):
             cmd += " --dbs"
 
-        if self.get_option("TABLES") and self.get_option("TABLES").lower() == "true":
+        if self.option_enabled("TABLES"):
             cmd += " --tables"
             db = self.get_option("DB")
             if db:
                 cmd += f" -D {db}"
 
-        if self.get_option("DUMP") and self.get_option("DUMP").lower() == "true":
+        if self.option_enabled("DUMP"):
             cmd += " --dump"
             db = self.get_option("DB")
             tbl = self.get_option("TBL")
@@ -178,7 +178,7 @@ class SQLMapModule(ExternalToolModule):
             if tbl:
                 cmd += f" -T {tbl}"
 
-        if self.get_option("DUMP_ALL") and self.get_option("DUMP_ALL").lower() == "true":
+        if self.option_enabled("DUMP_ALL"):
             cmd += " --dump-all"
 
         return cmd

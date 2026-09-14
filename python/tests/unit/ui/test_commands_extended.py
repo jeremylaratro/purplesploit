@@ -121,21 +121,22 @@ class TestTargetsCommandExtended:
 
     def test_targets_remove(self, command_handler, mock_framework):
         """Test removing a target."""
-        mock_framework.session.targets.remove.return_value = True
+        mock_framework.remove_target.return_value = True
 
         result = command_handler.cmd_targets(["remove", "target-1"])
 
         assert result is True
-        mock_framework.session.targets.remove.assert_called_once_with("target-1")
+        mock_framework.remove_target.assert_called_once_with("target-1")
 
-    def test_targets_remove_cancelled(self, command_handler, mock_framework):
-        """Test remove target when cancelled."""
-        command_handler.interactive.confirm.return_value = False
+    def test_targets_remove_not_found(self, command_handler, mock_framework):
+        """Test remove target reports an unknown identifier."""
+        mock_framework.remove_target.return_value = False
 
         result = command_handler.cmd_targets(["remove", "target-1"])
 
         assert result is True
-        mock_framework.remove_target.assert_not_called()
+        mock_framework.remove_target.assert_called_once_with("target-1")
+        command_handler.display.print_error.assert_called_once()
 
     def test_targets_update(self, command_handler, mock_framework):
         """Test updating a target."""
@@ -204,12 +205,12 @@ class TestCredsCommandExtended:
 
     def test_creds_remove(self, command_handler, mock_framework):
         """Test removing a credential."""
-        mock_framework.session.credentials.remove.return_value = True
+        mock_framework.remove_credential.return_value = True
 
         result = command_handler.cmd_creds(["remove", "cred-1"])
 
         assert result is True
-        mock_framework.session.credentials.remove.assert_called_once_with("cred-1")
+        mock_framework.remove_credential.assert_called_once_with("cred-1")
 
     def test_creds_update(self, command_handler, mock_framework):
         """Test updating a credential."""

@@ -167,38 +167,38 @@ class WfuzzModule(ExternalToolModule):
         follow = self.get_option("FOLLOW")
 
         # Base command
-        cmd = f"wfuzz -w '{wordlist}'"
+        cmd = f"wfuzz -w {self.quote_arg(wordlist)}"
 
         # Threads
         if threads:
-            cmd += f" -t {threads}"
+            cmd += f" -t {self.quote_arg(threads)}"
 
         # Hide responses
         if hide_code:
-            cmd += f" --hc {hide_code}"
+            cmd += f" --hc {self.quote_arg(hide_code)}"
         if hide_words:
-            cmd += f" --hw {hide_words}"
+            cmd += f" --hw {self.quote_arg(hide_words)}"
         if hide_chars:
-            cmd += f" --hh {hide_chars}"
+            cmd += f" --hh {self.quote_arg(hide_chars)}"
 
         # HTTP method
         if method and method.upper() != "GET":
-            cmd += f" -X {method.upper()}"
+            cmd += f" -X {self.quote_arg(method.upper())}"
 
         # POST data
         if data:
-            cmd += f" -d '{data}'"
+            cmd += f" -d {self.quote_arg(data)}"
 
         # Headers
         if headers:
-            cmd += f" -H '{headers}'"
+            cmd += f" -H {self.quote_arg(headers)}"
 
         # Follow redirects
-        if follow and follow.lower() == "true":
+        if self.option_enabled("FOLLOW"):
             cmd += " -L"
 
         # URL (must be last)
-        cmd += f" '{url}'"
+        cmd += f" {self.quote_arg(url)}"
 
         return cmd
 
@@ -396,7 +396,7 @@ class WfuzzModule(ExternalToolModule):
     def _is_smart_filter_enabled(self) -> bool:
         """Check if smart filtering is enabled."""
         smart_filter = self.get_option("SMART_FILTER")
-        return smart_filter and smart_filter.lower() == "true"
+        return self.option_enabled("SMART_FILTER")
 
     def _get_target(self) -> str:
         """
@@ -475,11 +475,12 @@ class WfuzzModule(ExternalToolModule):
             print(f"[*] Command: {cmd[:100]}...")
 
             try:
+                import shlex
                 # Run wfuzz for 5 seconds to sample responses
                 print("[*] Launching process...")
                 process = subprocess.Popen(
-                    cmd,
-                    shell=True,
+                    shlex.split(cmd),
+                    shell=False,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,

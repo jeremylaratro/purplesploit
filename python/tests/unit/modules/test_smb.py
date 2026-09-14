@@ -4,6 +4,8 @@ Tests for the SMB modules.
 Tests the SMB enumeration, authentication, and other SMB module properties and operations.
 """
 
+import shlex
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -141,16 +143,14 @@ class TestSMBEnumerationAuthBuild:
         """Test auth string with username only."""
         smb_enum_module.set_option("USERNAME", "admin")
         auth = smb_enum_module._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-p ''" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", ""]
 
     def test_build_auth_with_username_and_password(self, smb_enum_module):
         """Test auth string with username and password."""
         smb_enum_module.set_option("USERNAME", "admin")
         smb_enum_module.set_option("PASSWORD", "secret123")
         auth = smb_enum_module._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-p 'secret123'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-p", "secret123"]
 
 
 # =============================================================================
@@ -234,8 +234,7 @@ class TestSMBAuthenticationAuthBuild:
         smb_auth_module.set_option("USERNAME", "admin")
         smb_auth_module.set_option("HASH", "aad3b435b51404ee:8846f7eaee8fb117")
         auth = smb_auth_module._build_auth()
-        assert "-u 'admin'" in auth
-        assert "-H 'aad3b435b51404ee:8846f7eaee8fb117'" in auth
+        assert shlex.split(auth) == ["-u", "admin", "-H", "aad3b435b51404ee:8846f7eaee8fb117"]
         assert "-p" not in auth
 
     def test_build_auth_prefers_hash_over_password(self, smb_auth_module):
@@ -244,8 +243,7 @@ class TestSMBAuthenticationAuthBuild:
         smb_auth_module.set_option("PASSWORD", "password")
         smb_auth_module.set_option("HASH", "aad3b435b51404ee:8846f7eaee8fb117")
         auth = smb_auth_module._build_auth()
-        assert "-H 'aad3b435b51404ee:8846f7eaee8fb117'" in auth
-        assert "-p 'password'" not in auth
+        assert shlex.split(auth) == ["-u", "admin", "-H", "aad3b435b51404ee:8846f7eaee8fb117"]
 
 
 # =============================================================================

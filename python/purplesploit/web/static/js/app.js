@@ -6,6 +6,11 @@
 // API Configuration
 const API_BASE_URL = window.location.origin;
 
+function apiHeaders(extra = {}) {
+    const token = localStorage.getItem('purplesploit_api_token');
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
 // API Client
 const API = {
     /**
@@ -13,7 +18,7 @@ const API = {
      */
     async get(endpoint) {
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`);
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers: apiHeaders() });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -31,9 +36,9 @@ const API = {
         try {
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
-                headers: {
+                headers: apiHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify(data),
             });
             if (!response.ok) {
@@ -88,7 +93,7 @@ const API = {
      * Get services for a specific target
      */
     async getServicesForTarget(target) {
-        return await this.get(`/api/services/${target}`);
+        return await this.get(`/api/services/${encodeURIComponent(target)}`);
     },
 
     /**
@@ -102,14 +107,14 @@ const API = {
      * Get exploits for a specific target
      */
     async getExploitsForTarget(target) {
-        return await this.get(`/api/exploits/target/${target}`);
+        return await this.get(`/api/exploits/target/${encodeURIComponent(target)}`);
     },
 
     /**
      * Get comprehensive target analysis
      */
     async getTargetAnalysis(target) {
-        return await this.get(`/api/analysis/${target}`);
+        return await this.get(`/api/analysis/${encodeURIComponent(target)}`);
     },
 
     /**
@@ -160,7 +165,7 @@ const Utils = {
             '"': '&quot;',
             "'": '&#039;',
         };
-        return text.replace(/[&<>"']/g, m => map[m]);
+        return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
     },
 
     /**

@@ -17,6 +17,11 @@ let modules = [];
 let connectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 5;
 
+function apiHeaders(extra = {}) {
+    const token = localStorage.getItem('purplesploit_api_token');
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
 // DOM Elements
 let terminalOutput, terminalInput, promptText, statusDot, statusText;
 let moduleList, moduleSearch, currentModuleDisplay, currentTargetDisplay;
@@ -62,7 +67,7 @@ function initTerminal() {
  */
 async function loadBanner() {
     try {
-        const response = await fetch(`${API_BASE}/api/banner`);
+        const response = await fetch(`${API_BASE}/api/banner`, { headers: apiHeaders() });
         const data = await response.json();
 
         // Display banner with welcome message
@@ -99,7 +104,9 @@ function connectWebSocket() {
     updateConnectionStatus('connecting', 'Connecting...');
 
     try {
-        websocket = new WebSocket(`${WS_BASE}/ws/c2/${sessionId}`);
+        const token = localStorage.getItem('purplesploit_api_token');
+        const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+        websocket = new WebSocket(`${WS_BASE}/ws/c2/${encodeURIComponent(sessionId)}${tokenQuery}`);
 
         websocket.onopen = () => {
             updateConnectionStatus('connected', 'Connected');
@@ -215,7 +222,7 @@ async function executeCommand(command) {
         try {
             const response = await fetch(`${API_BASE}/api/c2/command`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: apiHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ command, session_id: sessionId })
             });
 
@@ -300,7 +307,7 @@ function scrollToBottom() {
  */
 async function loadModules() {
     try {
-        const response = await fetch(`${API_BASE}/api/c2/modules`);
+        const response = await fetch(`${API_BASE}/api/c2/modules`, { headers: apiHeaders() });
         modules = await response.json();
         displayModules(modules);
     } catch (error) {
@@ -326,10 +333,10 @@ function displayModules(modulesToDisplay) {
     let html = '';
     Object.keys(grouped).sort().forEach(category => {
         html += `<div class="module-category">`;
-        html += `<div class="category-header">${category.toUpperCase()}</div>`;
+        html += `<div class="category-header">${escapeHtml(category.toUpperCase())}</div>`;
         grouped[category].forEach(mod => {
             html += `
-                <div class="module-item" onclick="selectModule('${mod.path}')">
+                <div class="module-item" data-module-path="${escapeHtml(mod.path)}">
                     <span class="module-name">${escapeHtml(mod.name)}</span>
                     <span class="module-path">${escapeHtml(mod.path)}</span>
                 </div>
@@ -339,6 +346,9 @@ function displayModules(modulesToDisplay) {
     });
 
     moduleList.innerHTML = html || '<div class="empty">No modules found</div>';
+    moduleList.querySelectorAll('.module-item').forEach(item => {
+        item.addEventListener('click', () => selectModule(item.dataset.modulePath));
+    });
 }
 
 /**
@@ -367,7 +377,7 @@ function handleModuleSearch(e) {
  */
 async function selectModule(modulePath) {
     try {
-        const response = await fetch(`${API_BASE}/api/c2/module/${modulePath}`);
+        const response = await fetch(`${API_BASE}/api/c2/module/${encodeURIComponent(modulePath)}`, { headers: apiHeaders() });
         const moduleInfo = await response.json();
 
         // Show module modal
@@ -458,14 +468,14 @@ function useModuleFromModal() {
 async function updateContext() {
     try {
         // Get current target
-        const statsResponse = await fetch(`${API_BASE}/api/stats/overview`);
+        const statsResponse = await fetch(`${API_BASE}/api/stats/overview`, { headers: apiHeaders() });
         const stats = await statsResponse.json();
 
         document.getElementById('stats-info').textContent =
             `${stats.total_targets}T ${stats.total_services}S`;
 
         // Update current module/target/credential from session
-        const sessionResponse = await fetch(`${API_BASE}/api/c2/session/${sessionId}`);
+        const sessionResponse = await fetch(`${API_BASE}/api/c2/session/${encodeURIComponent(sessionId)}`, { headers: apiHeaders() });
         if (sessionResponse.ok) {
             const session = await sessionResponse.json();
 
@@ -497,7 +507,7 @@ async function updateContext() {
  */
 async function exportSession() {
     try {
-        const response = await fetch(`${API_BASE}/api/c2/session/${sessionId}`);
+        const response = await fetch(`${API_BASE}/api/c2/session/${encodeURIComponent(sessionId)}`, { headers: apiHeaders() });
         const session = await response.json();
 
         const dataStr = JSON.stringify(session, null, 2);
@@ -542,7 +552,7 @@ function autocompleteCommand() {
  */
 function escapeHtml(text) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text ?? '');
     return div.innerHTML;
 }
 
@@ -572,7 +582,7 @@ async function loadTargetsList() {
     const listContainer = document.getElementById('target-list');
 
     try {
-        const response = await fetch(`${API_BASE}/api/targets`);
+        const response = await fetch(`${API_BASE}/api/targets`, { headers: apiHeaders() });
         const targets = await response.json();
 
         if (targets.length === 0) {
@@ -587,11 +597,17 @@ async function loadTargetsList() {
                     <div class="entity-details">${escapeHtml(target.ip)}</div>
                 </div>
                 <div class="entity-actions">
-                    <button onclick="useTarget('${escapeHtml(target.ip)}')">Use</button>
-                    <button class="delete" onclick="deleteTarget('${escapeHtml(target.name)}')">Delete</button>
+                    <button class="use-target" data-target="${escapeHtml(target.ip)}">Use</button>
+                    <button class="delete delete-target" data-target-name="${escapeHtml(target.name)}">Delete</button>
                 </div>
             </div>
         `).join('');
+        listContainer.querySelectorAll('.use-target').forEach(button => {
+            button.addEventListener('click', () => useTarget(button.dataset.target));
+        });
+        listContainer.querySelectorAll('.delete-target').forEach(button => {
+            button.addEventListener('click', () => deleteTarget(button.dataset.targetName));
+        });
     } catch (error) {
         listContainer.innerHTML = '<div class="empty">Failed to load targets</div>';
         console.error('Failed to load targets:', error);
@@ -608,7 +624,7 @@ async function addTarget(event) {
         // Execute via HTTP API to ensure we can wait for completion
         const response = await fetch(`${API_BASE}/api/c2/command`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
                 command: `target ${ip}`,
                 session_id: sessionId
@@ -642,7 +658,7 @@ async function deleteTarget(name) {
     if (!confirm(`Delete target ${name}?`)) return;
 
     try {
-        await fetch(`${API_BASE}/api/targets/${name}`, { method: 'DELETE' });
+        await fetch(`${API_BASE}/api/targets/${encodeURIComponent(name)}`, { method: 'DELETE', headers: apiHeaders() });
         await loadTargetsList();
         appendOutput('System', `Target ${name} deleted`, 'success');
     } catch (error) {
@@ -668,7 +684,7 @@ async function loadCredentialsList() {
     const listContainer = document.getElementById('credential-list');
 
     try {
-        const response = await fetch(`${API_BASE}/api/credentials`);
+        const response = await fetch(`${API_BASE}/api/credentials`, { headers: apiHeaders() });
         const credentials = await response.json();
 
         if (credentials.length === 0) {
@@ -680,14 +696,20 @@ async function loadCredentialsList() {
             <div class="entity-item">
                 <div class="entity-info">
                     <div class="entity-name">${escapeHtml(cred.name)}</div>
-                    <div class="entity-details">${escapeHtml(cred.username)}:${cred.password ? '***' : '[hash]'}</div>
+                    <div class="entity-details">${escapeHtml(cred.username)} [${cred.has_password ? 'password set' : cred.has_hash ? 'hash set' : 'no secret'}]</div>
                 </div>
                 <div class="entity-actions">
-                    <button onclick="useCredential('${escapeHtml(cred.username)}', '${escapeHtml(cred.password || '')}', '${escapeHtml(cred.hash || '')}')">Use</button>
-                    <button class="delete" onclick="deleteCredential('${escapeHtml(cred.name)}')">Delete</button>
+                    <button class="use-credential" data-credential-name="${escapeHtml(cred.name)}">Use</button>
+                    <button class="delete delete-credential" data-credential-name="${escapeHtml(cred.name)}">Delete</button>
                 </div>
             </div>
         `).join('');
+        listContainer.querySelectorAll('.use-credential').forEach(button => {
+            button.addEventListener('click', () => useCredential(button.dataset.credentialName));
+        });
+        listContainer.querySelectorAll('.delete-credential').forEach(button => {
+            button.addEventListener('click', () => deleteCredential(button.dataset.credentialName));
+        });
     } catch (error) {
         listContainer.innerHTML = '<div class="empty">Failed to load credentials</div>';
         console.error('Failed to load credentials:', error);
@@ -702,26 +724,21 @@ async function addCredential(event) {
     const domain = document.getElementById('cred-domain').value.trim();
     const hash = document.getElementById('cred-hash').value.trim();
 
-    // Build command
-    if (password) {
-        executeCommand(`cred ${username}:${password}`);
-    } else {
-        // Use API for complex credentials
-        try {
-            await fetch(`${API_BASE}/api/credentials`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: username,
-                    username: username,
-                    domain: domain || null,
-                    hash: hash || null
-                })
-            });
-            appendOutput('System', `Credential ${username} added`, 'success');
-        } catch (error) {
-            appendOutput('Error', `Failed to add credential: ${error.message}`, 'error');
-        }
+    try {
+        await fetch(`${API_BASE}/api/credentials`, {
+            method: 'POST',
+            headers: apiHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+                name: username,
+                username: username,
+                password: password || null,
+                domain: domain || null,
+                hash: hash || null
+            })
+        });
+        appendOutput('System', `Credential ${username} added`, 'success');
+    } catch (error) {
+        appendOutput('Error', `Failed to add credential: ${error.message}`, 'error');
     }
 
     // Clear form
@@ -731,28 +748,8 @@ async function addCredential(event) {
     setTimeout(() => loadCredentialsList(), 500);
 }
 
-async function useCredential(username, password, hash) {
-    // Build credential command based on what's available
-    if (password) {
-        executeCommand(`cred ${username}:${password}`);
-    } else if (hash) {
-        // For hash-based credentials, we just acknowledge selection
-        // The credential is already in the database
-        appendOutput('System', `Selected credential: ${username} [hash]`, 'success');
-        // Update session manually via API
-        try {
-            const response = await fetch(`${API_BASE}/api/c2/command`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    command: `cred ${username}:${hash}`,
-                    session_id: sessionId
-                })
-            });
-        } catch (error) {
-            console.error('Failed to set credential:', error);
-        }
-    }
+async function useCredential(name) {
+    executeCommand(`cred-select "${String(name).replaceAll('"', '')}"`);
     closeCredentialManager();
     updateContext();
 }
@@ -761,7 +758,7 @@ async function deleteCredential(name) {
     if (!confirm(`Delete credential ${name}?`)) return;
 
     try {
-        await fetch(`${API_BASE}/api/credentials/${name}`, { method: 'DELETE' });
+        await fetch(`${API_BASE}/api/credentials/${encodeURIComponent(name)}`, { method: 'DELETE', headers: apiHeaders() });
         await loadCredentialsList();
         appendOutput('System', `Credential ${name} deleted`, 'success');
     } catch (error) {
@@ -783,7 +780,7 @@ async function configureModuleFromModal() {
     if (!modulePath) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/c2/module/${modulePath}`);
+        const response = await fetch(`${API_BASE}/api/c2/module/${encodeURIComponent(modulePath)}`, { headers: apiHeaders() });
         currentModuleInfo = await response.json();
 
         showConfigModal(currentModuleInfo);
@@ -874,8 +871,9 @@ async function runConfiguredModule(event) {
 
     // Set options
     for (let [key, value] of Object.entries(options)) {
-        appendCommand(`set ${key} ${value}`);
-        appendOutput('', `Set ${key} => ${value}`);
+        const sensitive = /pass|hash|token|secret|key/i.test(key);
+        appendCommand(`set ${key} ${sensitive ? '[redacted]' : value}`);
+        appendOutput('', `Set ${key} => ${sensitive ? '[redacted]' : value}`);
     }
 
     // Execute module
@@ -885,7 +883,7 @@ async function runConfiguredModule(event) {
     try {
         const response = await fetch(`${API_BASE}/api/c2/module/execute`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
                 module_path: currentModuleInfo.path,
                 options: options,

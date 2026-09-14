@@ -87,12 +87,12 @@ class SMBAuthenticationModule(ExternalToolModule):
         if not username:
             return ""
 
-        auth = f"-u '{username}'"
+        auth = f"-u {self.quote_arg(username)}"
 
         if hash_val:
-            auth += f" -H '{hash_val}'"
+            auth += f" -H {self.quote_arg(hash_val)}"
         elif password:
-            auth += f" -p '{password}'"
+            auth += f" -p {self.quote_arg(password)}"
         else:
             auth += " -p ''"
 
@@ -104,10 +104,10 @@ class SMBAuthenticationModule(ExternalToolModule):
         domain = self.get_option("DOMAIN")
         auth = self._build_auth()
 
-        cmd = f"nxc smb {rhost} {auth}"
+        cmd = f"nxc smb {self.quote_arg(rhost)} {auth}"
 
         if domain and domain != "WORKGROUP":
-            cmd += f" -d {domain}"
+            cmd += f" -d {self.quote_arg(domain)}"
 
         if extra_args:
             cmd += f" {extra_args}"

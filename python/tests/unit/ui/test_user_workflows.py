@@ -57,6 +57,9 @@ def mock_framework():
     framework.database = MagicMock()
     framework.use_module = MagicMock(return_value=None)
     framework.search_modules = MagicMock(return_value=[])
+    framework.clear_targets.return_value = 0
+    framework.remove_targets_by_indices.return_value = 0
+    framework.modify_target.return_value = True
 
     return framework
 
@@ -253,19 +256,18 @@ class TestTargetsRangeOperations:
 
     def test_targets_clear_all(self, command_handler, mock_framework):
         """Test targets clear removes all targets."""
-        mock_framework.session.targets.clear.return_value = 5
+        mock_framework.clear_targets.return_value = 5
 
         with patch.dict('sys.modules', {'purplesploit.models.database': MagicMock()}):
             result = command_handler.cmd_targets(["clear"])
 
         assert result is True
-        mock_framework.session.targets.clear.assert_called_once()
-        mock_framework.database.clear_all_targets.assert_called_once()
+        mock_framework.clear_targets.assert_called_once()
         command_handler.display.print_success.assert_called()
 
     def test_targets_clear_syncs_to_models_database(self, command_handler, mock_framework):
         """Test targets clear syncs to models.database for dashboard."""
-        mock_framework.session.targets.clear.return_value = 3
+        mock_framework.clear_targets.return_value = 3
 
         mock_db_manager = MagicMock()
         with patch.dict('sys.modules', {'purplesploit.models.database': MagicMock(db_manager=mock_db_manager)}):
@@ -276,17 +278,18 @@ class TestTargetsRangeOperations:
 
     def test_targets_index_clear(self, command_handler, mock_framework):
         """Test targets <index> clear removes single target."""
-        mock_framework.session.targets.remove_by_index.return_value = True
+        mock_framework.remove_targets_by_indices.return_value = 1
 
         result = command_handler.cmd_targets(["2", "clear"])
 
         assert result is True
-        mock_framework.session.targets.remove_by_index.assert_called_once_with(2)
+        mock_framework.remove_targets_by_indices.assert_called_once()
+        assert list(mock_framework.remove_targets_by_indices.call_args.args[0]) == [2]
         command_handler.display.print_success.assert_called()
 
     def test_targets_index_clear_invalid_index(self, command_handler, mock_framework):
         """Test targets <index> clear with invalid index shows error."""
-        mock_framework.session.targets.remove_by_index.return_value = False
+        mock_framework.remove_targets_by_indices.return_value = 0
 
         result = command_handler.cmd_targets(["99", "clear"])
 
@@ -295,12 +298,12 @@ class TestTargetsRangeOperations:
 
     def test_targets_range_clear(self, command_handler, mock_framework):
         """Test targets 1-5 clear removes range of targets."""
-        mock_framework.session.targets.remove_range.return_value = 5
+        mock_framework.remove_targets_by_indices.return_value = 5
 
         result = command_handler.cmd_targets(["1-5", "clear"])
 
         assert result is True
-        mock_framework.session.targets.remove_range.assert_called_once_with(1, 5)
+        assert list(mock_framework.remove_targets_by_indices.call_args.args[0]) == [1, 2, 3, 4, 5]
         command_handler.display.print_success.assert_called()
 
     def test_targets_range_clear_invalid_format(self, command_handler, mock_framework):
@@ -327,26 +330,26 @@ class TestTargetsModifyOperations:
 
     def test_targets_index_modify(self, command_handler, mock_framework):
         """Test targets <index> modify key=value updates target."""
-        mock_framework.session.targets.modify.return_value = True
+        mock_framework.modify_target.return_value = True
 
         result = command_handler.cmd_targets(["1", "modify", "name=NewName"])
 
         assert result is True
-        mock_framework.session.targets.modify.assert_called_once_with(1, name="NewName")
+        mock_framework.modify_target.assert_called_once_with(1, name="NewName")
         command_handler.display.print_success.assert_called()
 
     def test_targets_index_modify_multiple_fields(self, command_handler, mock_framework):
         """Test targets modify with multiple key=value pairs."""
-        mock_framework.session.targets.modify.return_value = True
+        mock_framework.modify_target.return_value = True
 
         result = command_handler.cmd_targets(["0", "modify", "name=Server1", "ip=10.0.0.1"])
 
         assert result is True
-        mock_framework.session.targets.modify.assert_called_once_with(0, name="Server1", ip="10.0.0.1")
+        mock_framework.modify_target.assert_called_once_with(0, name="Server1", ip="10.0.0.1")
 
     def test_targets_index_modify_invalid_index(self, command_handler, mock_framework):
         """Test targets modify with invalid index shows error."""
-        mock_framework.session.targets.modify.return_value = False
+        mock_framework.modify_target.return_value = False
 
         result = command_handler.cmd_targets(["99", "modify", "name=Test"])
 
@@ -439,7 +442,7 @@ class TestSessionStateConsistency:
 
     def test_targets_clear_syncs_all_layers(self, command_handler, mock_framework):
         """Test targets clear syncs session, database, and models.database."""
-        mock_framework.session.targets.clear.return_value = 3
+        mock_framework.clear_targets.return_value = 3
 
         # Mock the models.database import
         mock_db_module = MagicMock()
@@ -450,12 +453,11 @@ class TestSessionStateConsistency:
             result = command_handler.cmd_targets(["clear"])
 
         # All three layers should be cleared
-        mock_framework.session.targets.clear.assert_called_once()
-        mock_framework.database.clear_all_targets.assert_called_once()
+        mock_framework.clear_targets.assert_called_once()
 
     def test_targets_clear_handles_models_database_exception(self, command_handler, mock_framework):
         """Test targets clear handles models.database exception gracefully."""
-        mock_framework.session.targets.clear.return_value = 2
+        mock_framework.clear_targets.return_value = 2
 
         # Make the models.database import fail
         with patch.dict('sys.modules', {'purplesploit.models.database': MagicMock(side_effect=ImportError)}):
@@ -496,21 +498,21 @@ class TestEdgeCases:
 
     def test_targets_range_zero_based_indexing(self, command_handler, mock_framework):
         """Test range operations use correct zero-based indexing."""
-        mock_framework.session.targets.remove_range.return_value = 3
+        mock_framework.remove_targets_by_indices.return_value = 3
 
         result = command_handler.cmd_targets(["0-2", "clear"])
 
         # Should pass 0 and 2 as start and end
-        mock_framework.session.targets.remove_range.assert_called_once_with(0, 2)
+        assert list(mock_framework.remove_targets_by_indices.call_args.args[0]) == [0, 1, 2]
 
     def test_targets_modify_value_with_equals(self, command_handler, mock_framework):
         """Test modify with value containing equals sign."""
-        mock_framework.session.targets.modify.return_value = True
+        mock_framework.modify_target.return_value = True
 
         result = command_handler.cmd_targets(["0", "modify", "metadata=key=value"])
 
         # Should split only on first equals
-        mock_framework.session.targets.modify.assert_called_once_with(0, metadata="key=value")
+        mock_framework.modify_target.assert_called_once_with(0, metadata="key=value")
 
     def test_targets_add_duplicate_handling(self, command_handler, mock_framework):
         """Test adding duplicate target returns appropriate message."""
@@ -563,17 +565,17 @@ class TestWorkflowIntegration:
 
     def test_bulk_target_cleanup(self, command_handler, mock_framework):
         """Test bulk cleanup of targets."""
-        mock_framework.session.targets.remove_range.return_value = 10
+        mock_framework.remove_targets_by_indices.return_value = 10
 
         result = command_handler.cmd_targets(["0-9", "clear"])
 
         assert result is True
-        mock_framework.session.targets.remove_range.assert_called_once_with(0, 9)
+        assert list(mock_framework.remove_targets_by_indices.call_args.args[0]) == list(range(10))
         command_handler.display.print_success.assert_called()
 
     def test_modify_target_during_assessment(self, command_handler, mock_framework):
         """Test modifying target info during assessment."""
-        mock_framework.session.targets.modify.return_value = True
+        mock_framework.modify_target.return_value = True
 
         # Update hostname after discovery
         result = command_handler.cmd_targets(["0", "modify", "name=ACTUAL-DC01.corp.local"])

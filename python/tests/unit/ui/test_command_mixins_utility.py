@@ -444,10 +444,9 @@ class TestLigoloExtended:
         assert result is True
         utility_handler.display.print_error.assert_called()
 
-    @patch('os.system')
     @patch('subprocess.run')
     @patch('shutil.which')
-    def test_ligolo_attach_existing_session(self, mock_which, mock_run, mock_os_system, utility_handler):
+    def test_ligolo_attach_existing_session(self, mock_which, mock_run, utility_handler):
         """Test ligolo attaches to existing session."""
         mock_which.side_effect = lambda x: '/usr/bin/tmux' if x == 'tmux' else '/usr/bin/ligolo-proxy' if x == 'ligolo-proxy' else None
         # has-session returns 0 (session exists)
@@ -455,12 +454,11 @@ class TestLigoloExtended:
 
         result = utility_handler.cmd_ligolo([])
         assert result is True
-        mock_os_system.assert_called_with("tmux attach-session -t ligolo")
+        assert mock_run.call_args_list[-1].args[0] == ["tmux", "attach-session", "-t", "ligolo"]
 
-    @patch('os.system')
     @patch('subprocess.run')
     @patch('shutil.which')
-    def test_ligolo_create_new_session(self, mock_which, mock_run, mock_os_system, utility_handler):
+    def test_ligolo_create_new_session(self, mock_which, mock_run, utility_handler):
         """Test ligolo creates new session."""
         mock_which.side_effect = lambda x: '/usr/bin/tmux' if x == 'tmux' else '/usr/bin/ligolo-proxy' if x == 'ligolo-proxy' else None
         # has-session returns 1 (no session)
@@ -469,7 +467,9 @@ class TestLigoloExtended:
         result = utility_handler.cmd_ligolo([])
         assert result is True
         # Should create new session with default -selfcert flag
-        mock_os_system.assert_called()
+        assert mock_run.call_args_list[-1].args[0] == [
+            "tmux", "new-session", "-s", "ligolo", "/usr/bin/ligolo-proxy", "-selfcert"
+        ]
 
     @patch('os.system')
     @patch('subprocess.run')
@@ -499,25 +499,25 @@ class TestShellExtended:
         assert result is True
         utility_handler.display.print_info.assert_called()
 
-    @patch('os.system')
+    @patch('subprocess.run')
     @patch('os.environ.get')
-    def test_shell_uses_user_shell(self, mock_environ, mock_os_system, utility_handler):
+    def test_shell_uses_user_shell(self, mock_environ, mock_run, utility_handler):
         """Test shell uses user's default shell."""
         mock_environ.return_value = '/usr/bin/zsh'
 
         result = utility_handler.cmd_shell([])
         assert result is True
-        mock_os_system.assert_called_with('/usr/bin/zsh')
+        mock_run.assert_called_once_with(['/usr/bin/zsh'], check=False)
 
-    @patch('os.system')
+    @patch('subprocess.run')
     @patch('os.environ.get')
-    def test_shell_falls_back_to_bash(self, mock_environ, mock_os_system, utility_handler):
+    def test_shell_falls_back_to_bash(self, mock_environ, mock_run, utility_handler):
         """Test shell falls back to bash if SHELL not set."""
         mock_environ.return_value = '/bin/bash'
 
         result = utility_handler.cmd_shell([])
         assert result is True
-        mock_os_system.assert_called_with('/bin/bash')
+        mock_run.assert_called_once_with(['/bin/bash'], check=False)
 
 
 # =============================================================================

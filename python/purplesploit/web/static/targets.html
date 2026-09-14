@@ -135,11 +135,11 @@
                 return `
                     <div class="target-card">
                         <div class="target-header">
-                            <h3>${target.name}</h3>
-                            <code class="ip-address">${target.ip}</code>
+                            <h3>${Utils.escapeHtml(target.name)}</h3>
+                            <code class="ip-address">${Utils.escapeHtml(target.ip)}</code>
                         </div>
 
-                        ${target.description ? `<p class="target-description">${target.description}</p>` : ''}
+                        ${target.description ? `<p class="target-description">${Utils.escapeHtml(target.description)}</p>` : ''}
 
                         <div class="target-stats">
                             <div class="stat-item">
@@ -162,7 +162,7 @@
                             <div class="service-badges">
                                 ${services.slice(0, 8).map(s => `
                                     <span class="service-badge ${criticalServices.includes(s) ? 'critical' : ''}">
-                                        ${s.service}:${s.port}
+                                        ${Utils.escapeHtml(s.service)}:${Utils.escapeHtml(s.port)}
                                     </span>
                                 `).join('')}
                                 ${services.length > 8 ? `<span class="service-badge">+${services.length - 8} more</span>` : ''}
@@ -177,7 +177,7 @@
                         ` : ''}
 
                         <div class="target-actions">
-                            <a href="/static/target.html?ip=${target.ip}" class="btn btn-primary">View Full Analysis</a>
+                            <a href="/static/target.html?ip=${encodeURIComponent(target.ip)}" class="btn btn-primary">View Full Analysis</a>
                         </div>
                     </div>
                 `;

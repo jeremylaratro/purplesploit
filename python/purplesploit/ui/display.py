@@ -10,8 +10,10 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.syntax import Syntax
 from rich import box
+from rich.markup import escape
 from typing import Dict, List, Any, Optional
 import pandas as pd
+from purplesploit import __version__
 
 # Import banner module
 try:
@@ -31,8 +33,7 @@ class Display:
 
     def __init__(self):
         """Initialize display with Rich console."""
-        # Set width to ensure banner doesn't wrap
-        self.console = RichConsole(width=120, no_color=False)
+        self.console = RichConsole(no_color=False)
 
     def print_banner(self):
         """Print the PurpleSploit banner with random variant."""
@@ -43,7 +44,7 @@ class Display:
         banner = f"""[bold magenta]{banner_text}[/bold magenta]
 
 [cyan]              Offensive Security Framework | Search. Select. Exploit.[/cyan]
-[dim]                                Version 6.7.0 - Python Edition[/dim]
+[dim]                                Version {__version__} - Python Edition[/dim]
 """
         # Print banner without wrapping to prevent cut-off
         self.console.print(banner, overflow="ignore", no_wrap=True)
@@ -51,19 +52,19 @@ class Display:
 
     def print_success(self, message: str):
         """Print a success message."""
-        self.console.print(f"[bold green][+][/bold green] {message}")
+        self.console.print(f"[bold green][+][/bold green] {escape(str(message))}")
 
     def print_error(self, message: str):
         """Print an error message."""
-        self.console.print(f"[bold red][-][/bold red] {message}")
+        self.console.print(f"[bold red][-][/bold red] {escape(str(message))}")
 
     def print_warning(self, message: str):
         """Print a warning message."""
-        self.console.print(f"[bold yellow][!][/bold yellow] {message}")
+        self.console.print(f"[bold yellow][!][/bold yellow] {escape(str(message))}")
 
     def print_info(self, message: str):
         """Print an info message."""
-        self.console.print(f"[bold blue][*][/bold blue] {message}")
+        self.console.print(f"[bold blue][*][/bold blue] {escape(str(message))}")
 
     def print_modules_table(self, modules: List, show_category: bool = True):
         """
@@ -92,13 +93,13 @@ class Display:
         table.add_column("Description", style="white")
 
         for idx, module in enumerate(modules, 1):
-            row = [str(idx)]
+            row = [Text(str(idx))]
             if show_category:
-                row.append(module.category)
+                row.append(Text(str(module.category)))
             row.extend([
-                module.path,
-                module.name,
-                module.description[:60] + "..." if len(module.description) > 60 else module.description
+                Text(str(module.path)),
+                Text(str(module.name)),
+                Text(module.description[:60] + "..." if len(module.description) > 60 else module.description),
             ])
             table.add_row(*row)
 
@@ -131,13 +132,13 @@ class Display:
 
             # Format value display
             if value is None:
-                value_display = "[dim]<not set>[/dim]"
+                value_display = Text("<not set>", style="dim")
             elif len(str(value)) > 30:
-                value_display = str(value)[:27] + "..."
+                value_display = Text(str(value)[:27] + "...")
             else:
-                value_display = str(value)
+                value_display = Text(str(value))
 
-            table.add_row(name, value_display, required, description)
+            table.add_row(Text(str(name)), value_display, Text(required), Text(str(description)))
 
         self.console.print(table)
         self.console.print()
@@ -174,11 +175,11 @@ class Display:
                 added = added[:19]  # Trim timestamp
 
             table.add_row(
-                str(idx),
-                target.get('type', 'unknown'),
-                target_display,
-                name,
-                added
+                Text(str(idx)),
+                Text(str(target.get('type', 'unknown'))),
+                Text(str(target_display)),
+                Text(str(name)),
+                Text(str(added)),
             )
 
         self.console.print(table)
@@ -205,24 +206,24 @@ class Display:
         table.add_column("#", style="dim", width=4, justify="right")
         table.add_column("Name", style="cyan", width=15)
         table.add_column("Username", style="green", width=20)
-        table.add_column("Password", style="yellow", width=20)
+        table.add_column("Password", style="yellow", width=12)
         table.add_column("Domain", style="magenta", width=15)
         table.add_column("Hash", style="red", width=15)
 
         for idx, cred in enumerate(credentials):
             username = cred.get('username', '')
-            password = cred.get('password', '')
+            password = "set" if cred.get('password') else "-"
             domain = cred.get('domain', '')
-            hash_val = cred.get('hash', '')
+            hash_val = "set" if cred.get('hash') else "-"
             name = cred.get('name', '')
 
             table.add_row(
-                str(idx),
-                name,
-                username,
-                password,
-                domain,
-                hash_val
+                Text(str(idx)),
+                Text(str(name)),
+                Text(str(username)),
+                Text(password),
+                Text(str(domain)),
+                Text(hash_val),
             )
 
         self.console.print(table)
@@ -263,8 +264,16 @@ class Display:
         table.add_column("Service", style="green", width=20)
         table.add_column("Port", style="yellow", width=40)
 
-        # Sort targets by IP address
-        sorted_targets = sorted(filtered_services.keys(), key=lambda x: tuple(int(p) if p.isdigit() else p for p in x.replace(":", ".").split(".")))
+        # Sort IP literals numerically and hostnames lexically without mixed types.
+        import ipaddress
+        def target_sort_key(value):
+            try:
+                address = ipaddress.ip_address(value)
+                return (0, address.version, int(address))
+            except ValueError:
+                return (1, 0, str(value).casefold())
+
+        sorted_targets = sorted(filtered_services.keys(), key=target_sort_key)
 
         for target in sorted_targets:
             target_services = filtered_services[target]
@@ -281,11 +290,11 @@ class Display:
             # First row for this host (with hostname in Host column)
             if service_port_pairs:
                 first_service, first_port = service_port_pairs[0]
-                table.add_row(f"[cyan bold]{target}[/cyan bold]", first_service, str(first_port))
+                table.add_row(Text(str(target), style="cyan bold"), Text(str(first_service)), Text(str(first_port)))
 
                 # Subsequent rows for remaining service/port pairs (empty Host column)
                 for service, port in service_port_pairs[1:]:
-                    table.add_row("", service, str(port))
+                    table.add_row("", Text(str(service)), Text(str(port)))
 
         self.console.print(table)
         self.console.print(f"\n[dim]Total hosts: {len(sorted_targets)}[/dim]")
@@ -300,7 +309,7 @@ class Display:
         """
         # Show the command that was executed
         if 'command' in results:
-            self.console.print(f"\n[dim]Command: {results['command']}[/dim]")
+            self.console.print("\n[dim]Command:[/dim]", Text(str(results['command']), style="dim"))
 
         # Print status message with return code if available
         if results.get('success', False):
@@ -316,14 +325,14 @@ class Display:
         # ALWAYS display stdout if present (even on failure - it contains useful info)
         if 'stdout' in results and results['stdout']:
             self.console.print("\n[bold]Output:[/bold]")
-            self.console.print(Panel(results['stdout'], border_style="green"))
+            self.console.print(Panel(Text(str(results['stdout'])), border_style="green"))
         elif 'stdout' in results:
             self.console.print("\n[dim]No stdout output captured[/dim]")
 
         # ALWAYS display stderr if present (even on failure - it contains useful info)
         if 'stderr' in results and results['stderr']:
             self.console.print("\n[bold yellow]Errors/Warnings:[/bold yellow]")
-            self.console.print(Panel(results['stderr'], border_style="yellow"))
+            self.console.print(Panel(Text(str(results['stderr'])), border_style="yellow"))
         elif 'stderr' in results:
             self.console.print("\n[dim]No stderr output captured[/dim]")
 
@@ -335,7 +344,7 @@ class Display:
         # Display any other data
         for key, value in results.items():
             if key not in ['success', 'stdout', 'stderr', 'parsed', 'command', 'returncode']:
-                self.console.print(f"\n[bold]{key.replace('_', ' ').title()}:[/bold]")
+                self.console.print("\n", Text(f"{key.replace('_', ' ').title()}:", style="bold"), sep="")
                 self._print_generic(value)
 
     def _print_generic(self, data: Any):
@@ -352,7 +361,7 @@ class Display:
         elif isinstance(data, pd.DataFrame):
             self._print_dataframe(data)
         else:
-            self.console.print(str(data))
+            self.console.print(str(data), markup=False)
 
     def _print_dict(self, data: Dict):
         """Print a dictionary."""
@@ -365,7 +374,7 @@ class Display:
                 value_str = str(value)[:100] + "..." if len(str(value)) > 100 else str(value)
             else:
                 value_str = str(value)
-            table.add_row(str(key), value_str)
+            table.add_row(Text(str(key)), Text(value_str))
 
         self.console.print(table)
 
@@ -376,7 +385,7 @@ class Display:
                 self.console.print(f"\n[bold cyan]Item {i}:[/bold cyan]")
                 self._print_dict(item)
             else:
-                self.console.print(f"{i}. {item}")
+                self.console.print(f"{i}. ", Text(str(item)))
 
     def _print_dataframe(self, df: pd.DataFrame):
         """Print a pandas DataFrame."""
@@ -384,11 +393,11 @@ class Display:
 
         # Add columns
         for col in df.columns:
-            table.add_column(str(col))
+            table.add_column(Text(str(col)))
 
         # Add rows
         for _, row in df.iterrows():
-            table.add_row(*[str(val) for val in row])
+            table.add_row(*[Text(str(val)) for val in row])
 
         self.console.print(table)
 
@@ -400,10 +409,10 @@ class Display:
             module: Module instance
         """
         info_text = f"""
-[bold cyan]Name:[/bold cyan] {module.name}
-[bold cyan]Description:[/bold cyan] {module.description}
-[bold cyan]Author:[/bold cyan] {module.author}
-[bold cyan]Category:[/bold cyan] {module.category}
+[bold cyan]Name:[/bold cyan] {escape(str(module.name))}
+[bold cyan]Description:[/bold cyan] {escape(str(module.description))}
+[bold cyan]Author:[/bold cyan] {escape(str(module.author))}
+[bold cyan]Category:[/bold cyan] {escape(str(module.category))}
 """
         panel = Panel(
             info_text,
@@ -431,7 +440,7 @@ class Display:
         table.add_column("Description", style="white")
 
         for cmd, desc in sorted(commands.items()):
-            table.add_row(cmd, desc)
+            table.add_row(Text(str(cmd)), Text(str(desc)))
 
         self.console.print(table)
         self.console.print()
@@ -451,5 +460,5 @@ class Display:
         targets = stats.get('targets', 0)
         creds = stats.get('credentials', 0)
 
-        status = f"[cyan]Module:[/cyan] {current_module} | [cyan]Targets:[/cyan] {targets} | [cyan]Creds:[/cyan] {creds}"
+        status = f"[cyan]Module:[/cyan] {escape(str(current_module))} | [cyan]Targets:[/cyan] {escape(str(targets))} | [cyan]Creds:[/cyan] {escape(str(creds))}"
         self.console.print(Panel(status, border_style="dim"))

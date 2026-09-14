@@ -270,7 +270,7 @@ class {class_name}(ExternalToolModule):
         for key, option in self.options.items():
             value = option.get("value")
             if value:
-                command = command.replace(f"{{{{{key}}}}}", str(value))
+                command = command.replace("{{" + key + "}}", str(value))
 
         return command
 

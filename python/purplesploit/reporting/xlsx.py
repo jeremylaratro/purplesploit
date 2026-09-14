@@ -157,7 +157,7 @@ class XLSXReportGenerator:
         chart_start_row = row
         for severity in Severity:
             count = report_data.severity_counts.get(severity.value, 0)
-            ws.cell(row=row, column=1, value=severity.value.upper())
+            ws.cell(row=row, column=1, value=severity.value.title())
             ws.cell(row=row, column=2, value=count)
 
             # Color the severity cell

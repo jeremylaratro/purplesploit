@@ -181,12 +181,14 @@ class AttackGraph:
 
     def _generate_node_id(self, node_type: NodeType, identifier: str) -> str:
         """Generate a unique node ID."""
-        return f"{node_type.value}:{hashlib.md5(identifier.encode()).hexdigest()[:12]}"
+        digest = hashlib.md5(identifier.encode(), usedforsecurity=False).hexdigest()[:12]
+        return f"{node_type.value}:{digest}"
 
     def _generate_edge_id(self, source_id: str, target_id: str, edge_type: EdgeType) -> str:
         """Generate a unique edge ID."""
         combined = f"{source_id}-{edge_type.value}-{target_id}"
-        return f"edge:{hashlib.md5(combined.encode()).hexdigest()[:12]}"
+        digest = hashlib.md5(combined.encode(), usedforsecurity=False).hexdigest()[:12]
+        return f"edge:{digest}"
 
     def add_node(
         self,
@@ -492,7 +494,10 @@ class AttackGraph:
                 return
 
             if current == target:
-                path_id = f"path:{hashlib.md5(':'.join(path_nodes).encode()).hexdigest()[:12]}"
+                digest = hashlib.md5(
+                    ':'.join(path_nodes).encode(), usedforsecurity=False,
+                ).hexdigest()[:12]
+                path_id = f"path:{digest}"
                 paths.append(AttackPath(
                     id=path_id,
                     nodes=path_nodes.copy(),

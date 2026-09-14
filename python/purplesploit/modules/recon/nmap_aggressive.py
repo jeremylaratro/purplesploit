@@ -62,7 +62,7 @@ class NmapAggressiveModule(NmapModule):
 
         # Add traceroute if enabled
         traceroute = self.get_option("TRACEROUTE")
-        if traceroute and traceroute.lower() == "true":
+        if self.option_enabled("TRACEROUTE"):
             cmd = cmd.replace("nmap ", "nmap --traceroute ")
 
         return cmd

@@ -47,7 +47,7 @@ class NmapNoPingModule(NmapModule):
 
         # Insert -Pn flag after 'nmap'
         no_ping = self.get_option("NO_PING")
-        if no_ping and no_ping.lower() == "true":
+        if self.option_enabled("NO_PING"):
             cmd = cmd.replace("nmap ", "nmap -Pn ")
 
         return cmd

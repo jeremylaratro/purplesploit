@@ -16,8 +16,8 @@ python_dir = project_root / "python"
 if python_dir.exists():
     sys.path.insert(0, str(python_dir))
 
-# Use interactive app with mouse and keyboard support
-from purplesploit.tui.app_interactive import main
+# The legacy Textual package was removed; launch the supported Rich console.
+from purplesploit.main import main
 
 if __name__ == "__main__":
     main()

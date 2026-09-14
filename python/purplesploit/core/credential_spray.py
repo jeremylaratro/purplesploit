@@ -348,7 +348,10 @@ class CredentialSpray:
             protocol = SprayProtocol(protocol.lower())
 
         # Generate result ID
-        result_id = f"spray:{hashlib.md5(f'{targets}{users}{datetime.now()}'.encode()).hexdigest()[:12]}"
+        digest = hashlib.md5(
+            f'{targets}{users}{datetime.now()}'.encode(), usedforsecurity=False,
+        ).hexdigest()[:12]
+        result_id = f"spray:{digest}"
 
         # Initialize result
         result = SprayResult(

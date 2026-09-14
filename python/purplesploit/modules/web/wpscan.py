@@ -8,6 +8,8 @@ from purplesploit.core.module import ExternalToolModule
 from typing import List, Dict, Any
 import json
 import re
+import os
+import tempfile
 
 
 class WPScanModule(ExternalToolModule):
@@ -183,28 +185,28 @@ class WPScanModule(ExternalToolModule):
         random_ua = self.get_option("RANDOM_USER_AGENT")
         force = self.get_option("FORCE")
 
-        cmd = f"wpscan --url {url}"
+        cmd = f"wpscan --url {self.quote_arg(url)}"
 
         # API token
         if api_token:
-            cmd += f" --api-token {api_token}"
+            cmd += f" --api-token {self.quote_arg(api_token)}"
 
         # Threads
         if threads:
-            cmd += f" -t {threads}"
+            cmd += f" -t {self.quote_arg(threads)}"
 
         # User agent
         if user_agent:
-            cmd += f" --user-agent '{user_agent}'"
-        elif random_ua and random_ua.lower() == "true":
+            cmd += f" --user-agent {self.quote_arg(user_agent)}"
+        elif self.option_enabled("RANDOM_USER_AGENT"):
             cmd += " --random-user-agent"
 
         # Proxy
         if proxy:
-            cmd += f" --proxy {proxy}"
+            cmd += f" --proxy {self.quote_arg(proxy)}"
 
         # Force
-        if force and force.lower() == "true":
+        if self.option_enabled("FORCE"):
             cmd += " --force"
 
         # JSON output for parsing
@@ -219,10 +221,10 @@ class WPScanModule(ExternalToolModule):
         plugins_detection = self.get_option("PLUGINS_DETECTION")
 
         if enumerate:
-            cmd += f" -e {enumerate}"
+            cmd += f" -e {self.quote_arg(enumerate)}"
 
         if plugins_detection:
-            cmd += f" --plugins-detection {plugins_detection}"
+            cmd += f" --plugins-detection {self.quote_arg(plugins_detection)}"
 
         return cmd
 
@@ -240,7 +242,7 @@ class WPScanModule(ExternalToolModule):
         cmd += " -e ap"  # All plugins
 
         if plugins_detection:
-            cmd += f" --plugins-detection {plugins_detection}"
+            cmd += f" --plugins-detection {self.quote_arg(plugins_detection)}"
 
         return cmd
 
@@ -266,17 +268,17 @@ class WPScanModule(ExternalToolModule):
 
         # Users
         if userlist:
-            cmd += f" -U {userlist}"
+            cmd += f" -U {self.quote_arg(userlist)}"
         elif username:
-            cmd += f" -U {username}"
+            cmd += f" -U {self.quote_arg(username)}"
         else:
             cmd += " -e u"  # Enumerate users first
 
         # Passwords
         if passlist:
-            cmd += f" -P {passlist}"
+            cmd += f" -P {self.quote_arg(passlist)}"
         elif password:
-            cmd += f" -P <(echo '{password}')"
+            return "echo 'Error: PASSWORD must be materialized by op_password_attack'"
         else:
             return "echo 'Error: PASSLIST or PASSWORD required for password attack'"
 
@@ -295,7 +297,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd, timeout=600)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             result["message"] = self._generate_summary(parsed)
 
@@ -311,7 +313,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             users = parsed.get("users", [])
             result["message"] = f"Found {len(users)} users"
@@ -327,7 +329,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd, timeout=600)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             plugins = parsed.get("plugins", [])
             vuln_plugins = [p for p in plugins if p.get("vulnerabilities")]
@@ -341,7 +343,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             themes = parsed.get("themes", [])
             result["message"] = f"Found {len(themes)} themes"
@@ -354,7 +356,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd, timeout=600)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
 
             vuln_count = 0
@@ -372,11 +374,29 @@ class WPScanModule(ExternalToolModule):
 
     def op_password_attack(self) -> Dict[str, Any]:
         """Brute force WordPress login."""
-        cmd = self._build_password_attack_command()
-        result = self.execute_command(cmd, timeout=1800)  # 30 min timeout
+        temporary_passlist = None
+        original_passlist = self.get_option("PASSLIST")
+        password = self.get_option("PASSWORD")
+        try:
+            if not original_passlist and password:
+                with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as handle:
+                    handle.write(f"{password}\n")
+                    temporary_passlist = handle.name
+                os.chmod(temporary_passlist, 0o600)
+                self.set_option("PASSLIST", temporary_passlist)
+
+            cmd = self._build_password_attack_command()
+            result = self.execute_command(cmd, timeout=1800)  # 30 min timeout
+        finally:
+            if temporary_passlist:
+                self.set_option("PASSLIST", original_passlist)
+                try:
+                    os.unlink(temporary_passlist)
+                except FileNotFoundError:
+                    pass
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
 
             valid_creds = parsed.get("password_attack", {}).get("found", [])
@@ -393,7 +413,7 @@ class WPScanModule(ExternalToolModule):
         result = self.execute_command(cmd)
 
         if result.get("success"):
-            parsed = self._parse_json_output(result.get("output", ""))
+            parsed = self._parse_json_output(result.get("stdout", result.get("output", "")))
             result["parsed"] = parsed
             result["message"] = self._generate_summary(parsed)
 
@@ -407,12 +427,28 @@ class WPScanModule(ExternalToolModule):
             json_start = output.find('{')
             if json_start != -1:
                 json_str = output[json_start:]
-                return json.loads(json_str)
+                return self._normalize_json(json.loads(json_str))
         except json.JSONDecodeError:
             pass
 
         # Fall back to text parsing
         return self._parse_text_output(output)
+
+    @staticmethod
+    def _normalize_json(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize WPScan's keyed JSON collections into module list schemas."""
+        for key, name_key in (("users", "username"), ("plugins", "name"), ("themes", "name")):
+            collection = data.get(key)
+            if isinstance(collection, dict):
+                normalized = []
+                for name, details in collection.items():
+                    item = dict(details) if isinstance(details, dict) else {"value": details}
+                    item.setdefault(name_key, name)
+                    normalized.append(item)
+                data[key] = normalized
+            elif collection is None:
+                data[key] = []
+        return data
 
     def _parse_text_output(self, output: str) -> Dict[str, Any]:
         """Parse WPScan text output."""
