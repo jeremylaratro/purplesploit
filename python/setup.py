@@ -5,9 +5,10 @@ Hybrid pentesting framework - Python components
 """
 
 from pathlib import Path
-from setuptools import setup, find_packages
 
-with (Path(__file__).resolve().parent.parent / "README.md").open("r", encoding="utf-8") as fh:
+from setuptools import find_packages, setup
+
+with (Path(__file__).resolve().parent / "README.md").open("r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -19,7 +20,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jeremylaratro/purplesploit",
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests", "tests.*")),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Information Technology",
