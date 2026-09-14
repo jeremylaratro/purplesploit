@@ -45,6 +45,7 @@ setup(
         "jinja2>=3.1.0",
         "aiofiles>=23.0.0",
         "httpx>=0.25.0",
+        "requests>=2.31.0",
         "rich>=13.0.0",
         "textual>=0.40.0",
         "prompt_toolkit>=3.0.0",
