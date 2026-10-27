@@ -39,8 +39,8 @@ def test_cloud_fixture_import_is_deterministic_and_provenanced(provider, importe
     for observation in first.observations:
         assert observation.source_execution_id == f"cloud:{provider}:run-7"
         assert observation.attributes["provider"] == provider
-        assert observation.attributes["source_schema"] == CLOUD_SCHEMA_VERSION
-        assert observation.attributes["raw"]
+        assert observation.source_schema == CLOUD_SCHEMA_VERSION
+        assert observation.raw
 
 
 def test_aws_inventory_preserves_permission_exposure_and_ownership_relations():

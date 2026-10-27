@@ -11,6 +11,7 @@ Tests cover:
 """
 
 import pytest
+import logging
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 from purplesploit.core.session import (
@@ -239,6 +240,17 @@ class TestCredentialManager:
         assert result is False
         assert len(credential_manager.credentials) == 1
 
+    def test_null_scope_credentials_do_not_merge_across_hosts(self, credential_manager):
+        records = [
+            {"name": "alice", "username": "alice", "local_host": "host-a"},
+            {"name": "alice", "username": "alice", "local_host": "host-b"},
+        ]
+
+        assert all(credential_manager.add(record) for record in records)
+        assert credential_manager.add(dict(records[0])) is False
+        assert len(credential_manager.credentials) == 2
+        assert len({item["account_ref"] for item in credential_manager.credentials}) == 2
+
     def test_remove_by_username(self, credential_manager, sample_credential):
         """Test removing a credential by username."""
         credential_manager.add(sample_credential)
@@ -312,6 +324,26 @@ class TestCredentialManager:
 
         assert len(new_manager.credentials) == 1
         assert new_manager.credentials[0]["username"] == sample_credential["username"]
+
+    def test_import_invalid_scope_warns_and_clamps_selection(self, caplog):
+        manager = CredentialManager()
+        data = {
+            "credentials": [
+                {"username": "alice", "scope": "invalid"},
+                {"username": "bob", "scope": "local", "local_host": "host-a"},
+            ],
+            "current_index": 99,
+        }
+
+        with caplog.at_level(logging.WARNING, logger="purplesploit.core.session"):
+            manager.import_data(data)
+
+        assert [credential["username"] for credential in manager.credentials] == [
+            "alice", "bob",
+        ]
+        assert manager.credentials[0]["scope"] is None
+        assert manager.current_index == 1
+        assert "Invalid saved credential scope" in caplog.text
 
 
 # =============================================================================

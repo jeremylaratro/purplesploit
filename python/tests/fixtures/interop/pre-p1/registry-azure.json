@@ -1,0 +1,235 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/cloud/azure.json",
+  "importer": "interop.importers:azure-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "identifier": "sp-1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "automation",
+        "provider": "azure",
+        "raw": {
+          "displayName": "automation",
+          "id": "sp-1"
+        },
+        "record_type": "service_principal",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "azure:tenant:tenant-1",
+            "target_kind": "tenant",
+            "type": "owns"
+          }
+        ],
+        "run_id": null,
+        "source_id": "sp-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "11c03d55-c204-5812-b250-cb1ed829faf1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "sp-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "assignment": true,
+        "identifier": "sp-1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "sp-1",
+        "provider": "azure",
+        "raw": {
+          "id": "assignment-1",
+          "principalId": "sp-1",
+          "roleDefinitionId": "role-1",
+          "scope": "/subscriptions/sub-1"
+        },
+        "record_type": "role_assignment",
+        "relationships": [
+          {
+            "direction": "out",
+            "target": "role-1",
+            "target_kind": "role",
+            "type": "assumes"
+          },
+          {
+            "direction": "out",
+            "target": "/subscriptions/sub-1",
+            "target_kind": "resource",
+            "type": "has_permission"
+          }
+        ],
+        "run_id": null,
+        "source_id": "assignment-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "35c6662c-7860-549b-9513-1c40e88450bd",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "sp-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "vm1",
+        "provider": "azure",
+        "public": true,
+        "raw": {
+          "id": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+          "name": "vm1",
+          "publicIpAddress": "203.0.113.10",
+          "type": "virtualMachine"
+        },
+        "record_type": "resource",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "azure:tenant:tenant-1",
+            "target_kind": "tenant",
+            "type": "owns"
+          },
+          {
+            "direction": "out",
+            "target": "internet",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          }
+        ],
+        "run_id": null,
+        "source_id": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "a9a15d2d-92fa-56fd-aa69-70fca1b1f7f5",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "role-1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "Reader",
+        "provider": "azure",
+        "raw": {
+          "id": "role-1",
+          "name": "Reader"
+        },
+        "record_type": "role_definition",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "role-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "role",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "d5e9a93d-805e-545e-8d9e-37dc053caaf6",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "role-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "user-1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "Alice",
+        "provider": "azure",
+        "raw": {
+          "displayName": "Alice",
+          "id": "user-1",
+          "userPrincipalName": "alice@example.test"
+        },
+        "record_type": "user",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "azure:tenant:tenant-1",
+            "target_kind": "tenant",
+            "type": "owns"
+          }
+        ],
+        "run_id": null,
+        "source_id": "user-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "de8fb408-2102-5a62-93ee-f567a2b26cf4",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "user-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "azure:tenant:tenant-1",
+        "import_id": "be295ce7-5ee8-563f-8fab-7866f8fb12c2",
+        "name": "Example Tenant",
+        "provider": "azure",
+        "raw": {
+          "displayName": "Example Tenant",
+          "tenantId": "tenant-1"
+        },
+        "record_type": "tenant",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "azure:tenant:tenant-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "tenant",
+      "module_path": "interop/cloud/azure",
+      "observation_id": "e298e9d5-d024-52f0-aa65-3ef82b2b7cd1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:azure:a86eb173aa2640e3b418",
+      "target": "azure:tenant:tenant-1",
+      "version": null
+    }
+  ]
+}

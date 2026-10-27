@@ -1,0 +1,65 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/oauth_client.json",
+  "importer": "interop.identity:import_oauth_client",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "720bae321ca5761f0965fe5572810b057ca941de2e52401372e28dea869dd41a",
+        "evidence_type": "document_claim",
+        "identifier": "oauth:client:8547530b9d2789e71c6b997588d7a73081bfcdf471def7152240e6910fcb3785",
+        "import_id": "cb7a5030-101b-5db5-b4d6-5d12fcdd7f81",
+        "inventory": {
+          "application_type": "web",
+          "client_id": "offline-client",
+          "client_name": "Example application",
+          "client_secret_present": false,
+          "grant_types": [
+            "authorization_code",
+            "refresh_token"
+          ],
+          "issuer": null,
+          "jwks_uri": "https://app.example.test/keys",
+          "post_logout_redirect_uris": [
+            "https://app.example.test/logout"
+          ],
+          "redirect_uris": [
+            "https://app.example.test/callback",
+            "com.example.app:/callback"
+          ],
+          "response_types": [
+            "code"
+          ],
+          "scopes": [
+            "openid",
+            "profile",
+            "email"
+          ],
+          "token_endpoint_auth_method": "private_key_jwt"
+        },
+        "name": "oauth:client:8547530b9d2789e71c6b997588d7a73081bfcdf471def7152240e6910fcb3785",
+        "record_type": "oauth_client",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/oauth_client.json",
+        "source_schema": "oauth-client-registration/RFC7591",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "8b6a4f28-fbe8-5424-84cf-a71dab9f7fc1",
+      "observed_at": null,
+      "operation_name": "Import oauth-client",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:cb7a5030-101b-5db5-b4d6-5d12fcdd7f81",
+      "target": "offline-client",
+      "version": null
+    }
+  ]
+}

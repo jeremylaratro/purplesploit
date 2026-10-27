@@ -1,0 +1,138 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/assertion.xml",
+  "importer": "interop.identity:import_saml_assertion",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "234890549caedaa0830be31052e9513fb52b1a02e1c5171f5c3d0e1983204a54",
+        "evidence_type": "document_claim",
+        "identifier": "saml:assertion:234890549caedaa0830be31052e9513fb52b1a02e1c5171f5c3d0e1983204a54:0",
+        "import_id": "102fddda-ceab-5109-a5bf-f83403d2f718",
+        "inventory": {
+          "attribute_statements": [
+            [
+              {
+                "attributes": {
+                  "Name": "department"
+                },
+                "values": [
+                  "engineering"
+                ]
+              },
+              {
+                "attributes": {
+                  "Name": "groups"
+                },
+                "values": [
+                  "readers",
+                  "analysts"
+                ]
+              },
+              {
+                "attributes": {
+                  "Name": "department"
+                },
+                "values": [
+                  "research"
+                ]
+              }
+            ]
+          ],
+          "attributes": {
+            "ID": "assertion-1",
+            "IssueInstant": "2026-10-26T12:00:00Z",
+            "Version": "2.0"
+          },
+          "authenticated": false,
+          "authn_statements": [
+            {
+              "attributes": {
+                "AuthnInstant": "2026-10-26T12:00:00Z",
+                "SessionIndex": "session-123",
+                "SessionNotOnOrAfter": "2026-10-26T13:00:00Z"
+              },
+              "context_class_refs": [
+                "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+              ]
+            }
+          ],
+          "conditions": {
+            "attributes": {
+              "NotBefore": "2026-10-26T11:59:00Z",
+              "NotOnOrAfter": "2026-10-26T12:05:00Z"
+            },
+            "audience_restrictions": [
+              [
+                "https://app.example.test/saml",
+                "urn:example:api"
+              ],
+              [
+                "urn:example:second-restriction"
+              ]
+            ],
+            "evaluated": false,
+            "one_time_use": true,
+            "proxy_restrictions": [
+              {
+                "attributes": {
+                  "Count": "1"
+                },
+                "audiences": [
+                  "urn:example:proxy"
+                ]
+              }
+            ]
+          },
+          "encrypted_attributes_present": false,
+          "issuer": "https://id.example.test/saml",
+          "signature_present": false,
+          "signature_verified": false,
+          "subject": {
+            "confirmations": [
+              {
+                "attributes": {
+                  "Method": "urn:oasis:names:tc:SAML:2.0:cm:bearer"
+                },
+                "data": [
+                  {
+                    "InResponseTo": "request-1",
+                    "NotOnOrAfter": "2026-10-26T12:05:00Z",
+                    "Recipient": "https://app.example.test/acs"
+                  }
+                ]
+              }
+            ],
+            "encrypted_id_present": false,
+            "name_id": "subject-123",
+            "name_id_attributes": {
+              "Format": "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
+            }
+          }
+        },
+        "name": "saml:assertion:234890549caedaa0830be31052e9513fb52b1a02e1c5171f5c3d0e1983204a54:0",
+        "record_type": "saml_assertion",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/assertion.xml",
+        "source_schema": "saml-assertion/2.0",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "b4153acf-ee2a-59a4-8ec2-44366844f28e",
+      "observed_at": null,
+      "operation_name": "Import saml-assertion",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:102fddda-ceab-5109-a5bf-f83403d2f718",
+      "target": "https://id.example.test/saml",
+      "version": null
+    }
+  ]
+}

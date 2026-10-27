@@ -105,10 +105,8 @@ class _InventoryBuilder:
         details = {
             "identifier": key,
             "record_type": record_type,
-            "source_schema": HOST_DATABASE_SCHEMA,
             "import_id": self.import_id,
             "run_id": self.run_id,
-            "raw": raw,
             "relationships": list(relationships),
         }
         if attributes:
@@ -122,6 +120,8 @@ class _InventoryBuilder:
                 service=service,
                 version=version,
                 attributes=details,
+                source_schema=HOST_DATABASE_SCHEMA,
+                raw=raw,
                 source_execution_id=self.result.source_execution_id,
                 module_path=f"interop/{self.result.source_type}",
                 confidence="observed",

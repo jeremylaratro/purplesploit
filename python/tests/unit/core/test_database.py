@@ -99,6 +99,114 @@ class TestDatabaseInitialization:
         mode = cursor.fetchone()[0]
         assert mode.lower() == 'wal'
 
+    def test_credential_migration_adds_account_identity_columns(self, tmp_path):
+        from purplesploit.core.database import Database
+
+        path = tmp_path / "legacy.db"
+        connection = sqlite3.connect(path)
+        connection.execute(
+            """CREATE TABLE credentials (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT, username TEXT NOT NULL, password TEXT, domain TEXT,
+                   dcip TEXT, dns TEXT, hash TEXT, hash_type TEXT, metadata TEXT
+               )"""
+        )
+        connection.execute(
+            "INSERT INTO credentials (name, username, metadata) VALUES (?, ?, ?)",
+            ("alice", "alice", "{}"),
+        )
+        connection.commit()
+        connection.close()
+
+        migrated = Database(str(path))
+        try:
+            credential = migrated.get_credentials()[0]
+            assert credential["account_ref"]
+            assert credential["scope"] is None
+            assert credential["local_host"] is None
+        finally:
+            migrated.close()
+
+    @pytest.mark.parametrize(
+        ("kept_metadata", "preserved_metadata"),
+        [
+            ('{"source": "operator"}', {"source": "operator"}),
+            (None, {}),
+            ("not-json", {}),
+        ],
+    )
+    def test_credential_migration_folds_duplicate_account_candidates(
+        self, tmp_path, kept_metadata, preserved_metadata
+    ):
+        from purplesploit.core.database import Database
+
+        path = tmp_path / "legacy-duplicates.db"
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                """CREATE TABLE credentials (
+                       id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       name TEXT, username TEXT NOT NULL, password TEXT, domain TEXT,
+                       dcip TEXT, dns TEXT, hash TEXT, hash_type TEXT, metadata TEXT
+                   )"""
+            )
+            connection.executemany(
+                """INSERT INTO credentials
+                   (name, username, password, domain, dcip, dns, hash, hash_type, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    (
+                        "admin-primary", "admin", "password-one", "CORP",
+                        "10.0.0.10", "dc01.corp.test", "hash-one", "NTLM",
+                        kept_metadata,
+                    ),
+                    (
+                        "admin-secondary", "admin", "password-two", "CORP",
+                        "10.0.0.11", "dc02.corp.test", "hash-two", "NTLM",
+                        '{"source": "second capture"}',
+                    ),
+                    (
+                        "bob", "bob", "bob-password", "CORP",
+                        None, None, None, None, '{"source": "bob"}',
+                    ),
+                ],
+            )
+
+        migrated = Database(str(path))
+        try:
+            credentials = migrated.get_credentials()
+        finally:
+            migrated.close()
+
+        admin = [row for row in credentials if row["username"] == "admin"]
+        assert len(admin) == 1
+        assert admin[0]["name"] == "admin-primary"
+        assert admin[0]["password"] == "password-one"
+        assert {
+            key: value
+            for key, value in admin[0]["metadata"].items()
+            if key != "folded_candidates"
+        } == preserved_metadata
+        assert admin[0]["metadata"]["folded_candidates"] == [{
+            "name": "admin-secondary",
+            "password": "password-two",
+            "hash": "hash-two",
+            "hash_type": "NTLM",
+            "dcip": "10.0.0.11",
+            "dns": "dc02.corp.test",
+            "metadata": {"source": "second capture"},
+            "original_id": 2,
+        }]
+        bob = next(row for row in credentials if row["username"] == "bob")
+        assert bob["name"] == "bob"
+        assert bob["password"] == "bob-password"
+        assert bob["metadata"] == {"source": "bob"}
+
+        reconstructed = Database(str(path))
+        try:
+            assert reconstructed.get_credentials() == credentials
+        finally:
+            reconstructed.close()
+
 
 # =============================================================================
 # Target CRUD Tests
@@ -216,6 +324,29 @@ class TestCredentialOperations:
         creds = database.get_credentials()
         assert len(creds) == 1
         assert creds[0]['metadata'] == metadata
+
+    def test_duplicate_credential_without_metadata_preserves_existing_metadata(self, database):
+        metadata = {"source": "fixture"}
+        credential_id = database.add_credential("admin", "old", metadata=metadata)
+
+        duplicate_id = database.add_credential("admin", "new")
+
+        assert duplicate_id == credential_id
+        assert database.get_credentials()[0]["metadata"] == metadata
+
+    def test_null_scope_credentials_do_not_merge_across_hosts(self, database):
+        for host in ("host-a", "host-b"):
+            database.add_credential(
+                "alice", name="alice", scope=None, local_host=host
+            )
+        first_id = database.add_credential(
+            "alice", name="alice", scope=None, local_host="host-a"
+        )
+
+        credentials = database.get_credentials()
+        assert len(credentials) == 2
+        assert len({item["account_ref"] for item in credentials}) == 2
+        assert first_id == credentials[0]["id"]
 
     def test_get_credentials(self, database_with_data):
         """Test getting all credentials."""
@@ -540,3 +671,22 @@ class TestMigrations:
 
         assert status == 'unverified'
         db.close()
+
+
+def test_legacy_migration_never_rewrites_an_existing_account_ref(tmp_path):
+    from purplesploit.core.database import Database
+
+    path = str(tmp_path / "refs.db")
+    db = Database(path)
+    db.add_credential("svc", password="pw", domain="CORP", account_ref="aranum-acct-0001")
+    db.add_credential("alice", password="pw")
+    renamed_ref = next(item["account_ref"] for item in db.get_credentials() if item["username"] == "alice")
+    db.conn.execute("UPDATE credentials SET username = 'alice2' WHERE account_ref = ?", (renamed_ref,))
+    db.conn.commit()
+    db.close()
+
+    for _ in range(2):
+        db = Database(path)
+        refs = {item["username"]: item["account_ref"] for item in db.get_credentials()}
+        db.close()
+        assert refs == {"svc": "aranum-acct-0001", "alice2": renamed_ref}

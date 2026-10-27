@@ -2,8 +2,8 @@
 
 ``import_aranum_bundle(root)`` reads snapshots, never launches a producer.
 ``bundle.merge_into(observations, findings)`` imports exact occurrences once.
-Producer metadata lives in Observation.attributes so it survives the common
-execution envelope without imposing Aranum fields on every other backend.
+Producer-specific metadata lives in Observation.attributes; common provenance
+uses the first-class Observation fields.
 """
 
 from dataclasses import dataclass, field
@@ -97,7 +97,7 @@ class AranumBundle:
         for item in self.observations:
             if item.kind != "service" or item.attributes.get("record_type") != "inventory_endpoint":
                 continue
-            if item.attributes["raw"].get("state", "open") != "open":
+            if item.raw.get("state", "open") != "open":
                 continue
             seeds.append({**item.to_dict(), **item.attributes})
         return pipeline.ingest_seeds(seeds, source="aranum")
@@ -163,10 +163,8 @@ def import_aranum_bundle(run_root: str | Path, *, tool_version: str | None = Non
         subject = {"host": target, "port": _port(record.get("port")), "transport": protocol,
                    "service": service, "version": record.get("version"), "hostname": record.get("hostname"),
                    "url": record.get("url")}
-        attributes = {"source_tool": "aranum", "source_tool_version": tool_version or document.get("tool_version"),
-                      "source_schema": schema, "source_id": source_id, "run_id": run_id,
-                      "bundle_fingerprint": fingerprint, "source_file": filename,
-                      "record_type": record_type, "subject": subject, "raw": record,
+        attributes = {"run_id": run_id, "bundle_fingerprint": fingerprint,
+                      "source_file": filename, "record_type": record_type, "subject": subject,
                       "raw_service": raw_service, "hostname": record.get("hostname"),
                       "product": record.get("product"), "extrainfo": record.get("extrainfo"),
                       "tunnel": record.get("tunnel"), "categories": record.get("categories"),
@@ -175,6 +173,9 @@ def import_aranum_bundle(run_root: str | Path, *, tool_version: str | None = Non
         attributes["observed_at"] = observed_at
         observation = Observation(kind=kind, target=target, port=subject["port"], protocol=protocol,
                                   service=service, version=record.get("version"), attributes=attributes,
+                                  source_tool="aranum",
+                                  source_tool_version=tool_version or document.get("tool_version"),
+                                  source_schema=schema, source_id=source_id, raw=record,
                                   source_execution_id=f"aranum:{occurrence}", module_path="interop/aranum",
                                   observed_at=observed_at, observation_id=identifier)
         if identifier not in seen:
@@ -204,7 +205,7 @@ def import_aranum_bundle(run_root: str | Path, *, tool_version: str | None = Non
                           status=FindingStatus.DRAFT, target=observation.target, port=observation.port,
                           service=observation.service, protocol=observation.protocol, url=record.get("url"),
                           description=record.get("line", ""), module_name="interop/aranum",
-                          raw_output=json.dumps(observation.attributes, sort_keys=True),
+                          raw_output=json.dumps(observation.raw, sort_keys=True),
                           tags=list(record.get("tags") or []))
         if record.get("triage_status") != "new":
             finding.notes.append(f"Source triage status {record.get('triage_status')!r} is unmapped; DRAFT is the projection default.")

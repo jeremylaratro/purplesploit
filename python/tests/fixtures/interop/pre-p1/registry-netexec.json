@@ -1,0 +1,194 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/nxc/smb_modern.txt",
+  "importer": "interop.importers:netexec-log",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "admin": false,
+        "authenticated": true,
+        "domain": "CORP.TEST",
+        "status": "success",
+        "username": "alice"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "network/nxc_smb",
+      "observation_id": "04dd773e-da9a-5f7e-8408-9007fd45fe88",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "name": "signing",
+        "value": true
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "network/nxc_smb",
+      "observation_id": "19784725-c19d-5c8b-997f-8a94ff9ce62a",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "name": "Drop",
+        "permissions": [
+          "WRITE (SUBDIR)"
+        ],
+        "readable": false,
+        "remark": "Upload area",
+        "writable": true
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "share",
+      "module_path": "network/nxc_smb",
+      "observation_id": "292f68ef-df01-5d4b-809a-4b07e46540b2",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "state": "open"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "network/nxc_smb",
+      "observation_id": "6ec54743-f4f6-50b6-97ef-4a0ff50ff32e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "name": "CORP.TEST"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "domain",
+      "module_path": "network/nxc_smb",
+      "observation_id": "c355d4ce-da90-5421-ab50-11f3d5623ec6",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "banner": "Windows Server 2022 x64",
+        "domain": "CORP.TEST",
+        "name": "FILE01",
+        "ntlm": true,
+        "signing": true,
+        "smbv1": false
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "network/nxc_smb",
+      "observation_id": "c874b394-ebab-5cc7-a95b-a8d33aa6980e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "hostname": "FILE01"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "network/nxc_smb",
+      "observation_id": "e213b17a-e296-57e2-86b8-28f90efba250",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "name": "Public",
+        "permissions": [
+          "READ",
+          "WRITE (ACL)"
+        ],
+        "readable": true,
+        "remark": "Public area",
+        "writable": true
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "share",
+      "module_path": "network/nxc_smb",
+      "observation_id": "fcc0fd71-e2b6-5a42-b9ce-48dd518d4996",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    },
+    {
+      "attributes": {
+        "name": "smbv1",
+        "value": false
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "network/nxc_smb",
+      "observation_id": "ff0e48b5-4817-5937-a589-278725366419",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 445,
+      "protocol": "tcp",
+      "service": "smb",
+      "source_execution_id": "import:b8429a624451682cff42049c291723f7",
+      "target": "192.0.2.11",
+      "version": null
+    }
+  ]
+}

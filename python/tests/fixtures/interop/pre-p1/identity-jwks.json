@@ -1,0 +1,131 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/jwks.json",
+  "importer": "interop.identity:import_jwks",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "99e68e06045d61b3e200a07b6d0ba7d00bd67821bc14343c017c5d2d5b9cfddd",
+        "evidence_type": "document_claim",
+        "identifier": "jwks:key:83338d1086897c787b557ee92bed21250bd323fb3b158a93630ca73f1ae9de2e",
+        "import_id": "11b273c8-c355-502e-b803-bb981c637175",
+        "inventory": {
+          "alg": "ES256",
+          "crv": "P-256",
+          "kid": "ec-example",
+          "kty": "EC",
+          "private_material_present": false,
+          "public_fingerprint": "6d7387d8460ce6c256cb56679b0cbb747ed5852a49d2b9c50bc01ee741b8862f",
+          "signature_verified": false,
+          "use": "sig",
+          "x": "AQID",
+          "y": "BAUG"
+        },
+        "name": "jwks:key:83338d1086897c787b557ee92bed21250bd323fb3b158a93630ca73f1ae9de2e",
+        "record_type": "jwk",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/jwks.json",
+        "source_schema": "json-web-key-set/RFC7517",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "66f661da-1908-5c36-8c09-47f432b52447",
+      "observed_at": null,
+      "operation_name": "Import jwks",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:11b273c8-c355-502e-b803-bb981c637175",
+      "target": "jwks:key:83338d1086897c787b557ee92bed21250bd323fb3b158a93630ca73f1ae9de2e",
+      "version": null
+    },
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "99e68e06045d61b3e200a07b6d0ba7d00bd67821bc14343c017c5d2d5b9cfddd",
+        "evidence_type": "document_claim",
+        "identifier": "jwks:key:815486a11d756d73b47b0f9cf07c250f114dd374376d0dd1b459fb6b25e55655",
+        "import_id": "11b273c8-c355-502e-b803-bb981c637175",
+        "inventory": {
+          "alg": "RS256",
+          "e": "AQAB",
+          "key_ops": [
+            "verify"
+          ],
+          "kid": "rsa-example",
+          "kty": "RSA",
+          "n": "AQIDBA",
+          "private_material_present": false,
+          "public_fingerprint": "02e0b2df1a545c31e9a5d3e74b7a00a94e91a2ad4ee3491cc7ecf0bcdc277211",
+          "signature_verified": false,
+          "use": "sig"
+        },
+        "name": "jwks:key:815486a11d756d73b47b0f9cf07c250f114dd374376d0dd1b459fb6b25e55655",
+        "record_type": "jwk",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/jwks.json",
+        "source_schema": "json-web-key-set/RFC7517",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "9b8c8fc1-4cfa-50f2-a4c0-ee28e259f63e",
+      "observed_at": null,
+      "operation_name": "Import jwks",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:11b273c8-c355-502e-b803-bb981c637175",
+      "target": "jwks:key:815486a11d756d73b47b0f9cf07c250f114dd374376d0dd1b459fb6b25e55655",
+      "version": null
+    },
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "99e68e06045d61b3e200a07b6d0ba7d00bd67821bc14343c017c5d2d5b9cfddd",
+        "evidence_type": "document_claim",
+        "identifier": "jwks:key:b193e9ef25904173ab10bc42cad9b648a46c52e4cde728aea7393057de45582e",
+        "import_id": "11b273c8-c355-502e-b803-bb981c637175",
+        "inventory": {
+          "alg": "EdDSA",
+          "crv": "Ed25519",
+          "kid": "ed-example",
+          "kty": "OKP",
+          "private_material_present": false,
+          "public_fingerprint": "4c9c9cd9921d50fd584bf2588092db9224e2d757d0ba30e56d5d7e87c7b4bb2e",
+          "signature_verified": false,
+          "x": "AQIDBAUG"
+        },
+        "name": "jwks:key:b193e9ef25904173ab10bc42cad9b648a46c52e4cde728aea7393057de45582e",
+        "record_type": "jwk",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/jwks.json",
+        "source_schema": "json-web-key-set/RFC7517",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "c70d426d-2a78-5ef9-b34d-bfd21bee0c6d",
+      "observed_at": null,
+      "operation_name": "Import jwks",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:11b273c8-c355-502e-b803-bb981c637175",
+      "target": "jwks:key:b193e9ef25904173ab10bc42cad9b648a46c52e4cde728aea7393057de45582e",
+      "version": null
+    }
+  ]
+}

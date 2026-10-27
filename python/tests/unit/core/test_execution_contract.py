@@ -2,11 +2,12 @@
 
 import json
 import subprocess
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 
 from purplesploit.core.execution import (
-    ExecutionOutcome, ExecutionRequest, ExecutionResult, Observation,
+    AuthContext, ExecutionOutcome, ExecutionRequest, ExecutionResult, Observation,
     normalize_observations, normalize_operation,
 )
 from purplesploit.core.framework import Framework
@@ -28,6 +29,128 @@ def test_contract_json_round_trip_preserves_identity():
     result = ExecutionResult(request.request_id, observations=[observation])
     assert ExecutionResult.from_dict(json.loads(json.dumps(result.to_dict()))) == result
     assert Observation.from_dict(observation.to_dict()).observation_id == observation.observation_id
+
+
+def test_auth_context_round_trip_on_all_execution_records():
+    context = AuthContext(
+        account_ref="account-1", scope="domain", domain="example.test",
+        auth_method="kerberos",
+    )
+    request = ExecutionRequest("fixture", auth_context=context)
+    observation = Observation(
+        "identity", "alice", auth_context=context, source_tool="fixture",
+        source_schema="fixture/1", source_id="alice", raw={"name": "alice"},
+    )
+    result = ExecutionResult(
+        request.request_id, auth_context=context, observations=[observation]
+    )
+
+    assert ExecutionRequest.from_dict(request.to_dict()).auth_context == context
+    restored = ExecutionResult.from_dict(result.to_dict())
+    assert restored.auth_context == context
+    assert restored.observations[0].auth_context == context
+
+
+def test_observation_reads_old_attribute_placement_without_identity_drift():
+    legacy = {
+        "kind": "service",
+        "target": "192.0.2.10",
+        "source_execution_id": "legacy-run",
+        "attributes": {
+            "source_tool": "legacy",
+            "source_tool_version": None,
+            "source_schema": "legacy/1",
+            "source_id": "record-1",
+            "raw": {"port": 443},
+            "producer_extra": True,
+        },
+    }
+    restored = Observation.from_dict(legacy)
+
+    assert restored.source_tool == "legacy"
+    assert restored.source_tool_version is None
+    assert restored.source_schema == "legacy/1"
+    assert restored.source_id == "record-1"
+    assert restored.raw == {"port": 443}
+    assert restored.attributes == {"producer_extra": True}
+    identity = [
+        "legacy-run", "service", "192.0.2.10", None, None, None,
+        legacy["attributes"],
+    ]
+    assert restored.observation_id == str(
+        uuid5(NAMESPACE_URL, json.dumps(identity, sort_keys=True))
+    )
+    assert Observation.from_dict({**legacy, "observation_id": "persisted"}).observation_id == "persisted"
+
+
+@pytest.mark.parametrize(
+    "field", ["source_tool", "source_tool_version", "source_schema", "source_id", "raw"],
+)
+@pytest.mark.parametrize("value", [None, "fixture-value"])
+def test_observation_promoted_provenance_placement_preserves_identity(field, value):
+    common = {
+        "kind": "note", "target": "fixture", "source_execution_id": "run-1",
+    }
+    legacy = Observation(
+        **common, attributes={"producer_extra": True, field: value},
+    )
+    promoted = Observation(
+        **common, attributes={"producer_extra": True}, **{field: value},
+    )
+    restored_legacy = Observation.from_dict({
+        **common, "attributes": {"producer_extra": True, field: value},
+    })
+    restored_promoted = Observation.from_dict({
+        **common, "attributes": {"producer_extra": True}, field: value,
+    })
+
+    assert legacy.observation_id == promoted.observation_id
+    assert restored_legacy.observation_id == restored_promoted.observation_id
+    assert promoted.to_dict()[field] == value
+
+
+def test_observation_mixed_provenance_placement_preserves_identity():
+    provenance = {
+        "source_tool": "fixture", "source_tool_version": None,
+        "source_schema": "fixture/1", "source_id": None, "raw": {"value": 1},
+    }
+    legacy = Observation(
+        "note", "fixture", source_execution_id="run-1",
+        attributes={"producer_extra": True, **provenance},
+    )
+    mixed = Observation(
+        "note", "fixture", source_execution_id="run-1",
+        attributes={
+            "producer_extra": True, "source_tool": "fixture", "source_id": None,
+        },
+        source_tool_version=None, source_schema="fixture/1", raw={"value": 1},
+    )
+
+    assert mixed.observation_id == legacy.observation_id
+
+
+def test_observation_does_not_mutate_caller_attributes():
+    attributes = {"source_tool": "fixture", "source_id": None, "value": 1}
+    original = dict(attributes)
+
+    Observation("note", "fixture", attributes=attributes)
+
+    assert attributes == original
+
+
+def test_normalizer_does_not_infer_auth_context():
+    request = ExecutionRequest(
+        "fixture",
+        options={
+            "DOMAIN": "example.test", "USERNAME": "EXAMPLE\\alice",
+            "PASSWORD": "secret", "HASH": "fixture-hash",
+        },
+    )
+    observation = normalize_observations(
+        {"observations": [{"kind": "identity", "target": "alice"}]}, request
+    )[0]
+
+    assert observation.auth_context is None
 
 
 def test_instantiate_preserves_selection_history_and_isolates_options(framework):
@@ -105,6 +228,22 @@ def test_validation_failure_records_without_process(framework, monkeypatch, opti
     result = framework.execute_request(ExecutionRequest('network/nxc_rdp', operation, options=options))
     assert not result.success and expected in result.error
     assert len(framework.database.get_module_history()) == 1
+
+
+@pytest.mark.parametrize("failure", ["missing", "initialization"])
+def test_early_errors_copy_request_auth_context(framework, monkeypatch, failure):
+    context = AuthContext(account_ref="account-1", scope="local", local_host="host-a")
+    request = ExecutionRequest("missing/module", auth_context=context)
+    if failure == "initialization":
+        def fail(_module_path):
+            raise RuntimeError("fixture initialization failure")
+
+        monkeypatch.setattr(framework, "instantiate_module", fail)
+
+    result = framework.execute_request(request)
+
+    assert result.outcome in {ExecutionOutcome.REJECTED, ExecutionOutcome.ERROR}
+    assert result.auth_context == context
 
 
 def test_observation_legacy_bridge_retains_endpoint_and_provenance():

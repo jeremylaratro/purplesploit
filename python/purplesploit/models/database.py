@@ -6,12 +6,15 @@ Maps to existing SQLite databases created by Bash scripts
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Literal, Optional, List
+import json
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, Session
 from pydantic import BaseModel, Field
+
+from purplesploit.core.execution import generate_account_ref
 
 # Base class for all models
 Base = declarative_base()
@@ -35,20 +38,27 @@ class Credential(Base):
     __tablename__ = "credentials"
     __table_args__ = {'extend_existing': True}
 
-    name = Column(String, primary_key=True)
+    account_ref = Column(String, primary_key=True)
+    _storage_name = Column("name", String)
+    name = Column("display_name", String)
     username = Column(String)
     password = Column(String)
+    scope = Column(String)
     domain = Column(String)
+    local_host = Column(String)
     dcip = Column(String)
     dns = Column(String)
     hash = Column(String)
 
     def to_dict(self):
         return {
+            "account_ref": self.account_ref,
             "name": self.name,
             "username": self.username,
             "password": self.password,
+            "scope": self.scope,
             "domain": self.domain,
+            "local_host": self.local_host,
             "dcip": self.dcip,
             "dns": self.dns,
             "hash": self.hash,
@@ -168,10 +178,13 @@ class Exploit(Base):
 
 class CredentialCreate(BaseModel):
     """Schema for creating credentials"""
+    account_ref: Optional[str] = None
     name: str = Field(min_length=1, max_length=255)
     username: str = Field(min_length=1, max_length=255)
     password: Optional[str] = None
+    scope: Optional[Literal["local", "domain", "machine"]] = None
     domain: Optional[str] = None
+    local_host: Optional[str] = None
     dcip: Optional[str] = None
     dns: Optional[str] = None
     hash: Optional[str] = None
@@ -179,9 +192,12 @@ class CredentialCreate(BaseModel):
 
 class CredentialResponse(BaseModel):
     """Schema for credential responses"""
+    account_ref: str
     name: str
     username: Optional[str] = None
+    scope: Optional[Literal["local", "domain", "machine"]] = None
     domain: Optional[str] = None
+    local_host: Optional[str] = None
     dcip: Optional[str] = None
     dns: Optional[str] = None
     has_password: bool = False
@@ -262,6 +278,8 @@ class DatabaseManager:
             "exploits": create_engine(f"sqlite:///{EXPLOITS_DB}", connect_args=sqlite_args),
         }
 
+        self._migrate_credentials_schema()
+
         # Create session makers
         self.session_makers = {
             name: sessionmaker(bind=engine)
@@ -270,6 +288,105 @@ class DatabaseManager:
 
         # Create tables if they don't exist
         self._create_tables()
+
+    def _migrate_credentials_schema(self):
+        """Add P1 account columns and populate stable references in old databases."""
+        import sqlite3
+
+        if not self.CREDENTIALS_DB.exists():
+            return
+        with sqlite3.connect(str(self.CREDENTIALS_DB)) as connection:
+            connection.row_factory = sqlite3.Row
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='credentials'"
+            ).fetchone()
+            if table is None:
+                return
+            connection.execute("BEGIN")
+            original_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(credentials)")
+            }
+            columns = set(original_columns)
+            for column in (
+                "account_ref", "scope", "local_host", "display_name", "metadata"
+            ):
+                if column not in columns:
+                    connection.execute(f"ALTER TABLE credentials ADD COLUMN {column} TEXT")
+                    columns.add(column)
+            connection.execute(
+                "UPDATE credentials SET display_name = name WHERE display_name IS NULL"
+            )
+            rows = connection.execute(
+                "SELECT rowid AS migration_rowid, * FROM credentials ORDER BY rowid"
+            ).fetchall()
+            groups = {}
+            for row in rows:
+                identity = (
+                    row["username"] or "", row["scope"], row["domain"], row["local_host"]
+                )
+                groups.setdefault(identity, []).append(row)
+
+            candidate_fields = ("name", "password", "hash", "hash_type", "dcip", "dns")
+            for identity, group in groups.items():
+                kept = group[0]
+                extras = group[1:]
+                if extras:
+                    try:
+                        kept_metadata = json.loads(kept["metadata"])
+                        if not isinstance(kept_metadata, dict):
+                            kept_metadata = {}
+                    except (TypeError, ValueError):
+                        kept_metadata = {}
+
+                    existing = kept_metadata.get("folded_candidates", [])
+                    if isinstance(existing, list):
+                        folded_candidates = list(existing)
+                    else:
+                        folded_candidates = [existing]
+                    folded_ids = {
+                        item.get("original_id")
+                        for item in folded_candidates
+                        if isinstance(item, dict)
+                    }
+                    for extra in extras:
+                        original_id = extra["migration_rowid"]
+                        if original_id not in folded_ids:
+                            candidate = {
+                                field: extra[field]
+                                for field in candidate_fields
+                                if field in original_columns
+                            }
+                            if "metadata" in original_columns:
+                                candidate["metadata"] = extra["metadata"]
+                                try:
+                                    candidate["metadata"] = json.loads(candidate["metadata"])
+                                except (TypeError, ValueError):
+                                    pass
+                            candidate["original_id"] = original_id
+                            folded_candidates.append(candidate)
+                            folded_ids.add(original_id)
+                    kept_metadata["folded_candidates"] = folded_candidates
+                    connection.execute(
+                        "UPDATE credentials SET metadata = ? WHERE rowid = ?",
+                        (json.dumps(kept_metadata), kept["migration_rowid"]),
+                    )
+                    connection.executemany(
+                        "DELETE FROM credentials WHERE rowid = ?",
+                        [(extra["migration_rowid"],) for extra in extras],
+                    )
+
+                connection.execute(
+                    "UPDATE credentials SET account_ref = ? WHERE rowid = ? "
+                    "AND (account_ref IS NULL OR account_ref = '')",
+                    (
+                        generate_account_ref(*identity),
+                        kept["migration_rowid"],
+                    ),
+                )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_credentials_account_ref "
+                "ON credentials(account_ref)"
+            )
 
     def _check_and_fix_databases(self):
         """Check database files and remove corrupted ones"""
@@ -384,9 +501,25 @@ class DatabaseManager:
         """Add a credential"""
         session = self.get_credentials_session()
         try:
-            if session.query(Credential).filter(Credential.name == cred.name).first():
-                raise ValueError(f"Credential already exists: {cred.name}")
-            db_cred = Credential(**cred.dict())
+            values = cred.dict()
+            values["account_ref"] = values.get("account_ref") or generate_account_ref(
+                values["username"], values.get("scope"), values.get("domain"),
+                values.get("local_host"),
+            )
+            values["_storage_name"] = values["account_ref"]
+            existing = session.query(Credential).filter(
+                Credential.account_ref == values["account_ref"]
+            ).first()
+            if existing is None:
+                existing = session.query(Credential).filter(
+                    Credential.username == values["username"],
+                    Credential.scope == values["scope"],
+                    Credential.domain == values.get("domain"),
+                    Credential.local_host == values.get("local_host"),
+                ).first()
+            if existing is not None:
+                raise ValueError(f"Credential already exists: {existing.account_ref}")
+            db_cred = Credential(**values)
             session.add(db_cred)
             session.commit()
             session.refresh(db_cred)
@@ -430,15 +563,28 @@ class DatabaseManager:
         """Create or refresh a credential used by legacy-database synchronization."""
         session = self.get_credentials_session()
         try:
-            db_cred = session.query(Credential).filter(
-                (Credential.name == cred.name) |
-                ((Credential.username == cred.username) & (Credential.domain == cred.domain))
-            ).first()
             values = cred.dict()
+            values["account_ref"] = values.get("account_ref") or generate_account_ref(
+                values["username"], values.get("scope"), values.get("domain"),
+                values.get("local_host"),
+            )
+            db_cred = session.query(Credential).filter(
+                Credential.account_ref == values["account_ref"]
+            ).first()
             if db_cred is None:
+                db_cred = session.query(Credential).filter(
+                    Credential.username == values["username"],
+                    Credential.scope == values["scope"],
+                    Credential.domain == values.get("domain"),
+                    Credential.local_host == values.get("local_host"),
+                ).first()
+            if db_cred is None:
+                values["_storage_name"] = values["account_ref"]
                 db_cred = Credential(**values)
                 session.add(db_cred)
             else:
+                values["account_ref"] = db_cred.account_ref
+                values["_storage_name"] = db_cred._storage_name or db_cred.account_ref
                 for field, value in values.items():
                     setattr(db_cred, field, value)
             session.commit()
@@ -606,13 +752,23 @@ class DatabaseManager:
                 session.close()
         return removed
 
-    def delete_credential(self, username: str, domain: str = None,
-                          name: str = None) -> bool:
-        """Delete a credential by name or username/domain identity."""
+    def delete_credential(self, username: str = None, domain: str = None,
+                          name: str = None, account_ref: str = None,
+                          scope: str = None, local_host: str = None) -> bool:
+        """Delete a credential by its stable reference or declared identity."""
         session = self.get_credentials_session()
         try:
             query = session.query(Credential)
-            if name:
+            if account_ref:
+                credential = query.filter(Credential.account_ref == account_ref).first()
+            elif scope is not None:
+                credential = query.filter(
+                    Credential.username == username,
+                    Credential.scope == scope,
+                    Credential.domain == domain,
+                    Credential.local_host == local_host,
+                ).first()
+            elif name:
                 credential = query.filter(Credential.name == name).first()
             else:
                 credential = query.filter(

@@ -1,0 +1,274 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/nmap/cwp2.xml",
+  "importer": "modules.recon.nmap_importer:parse_nmap_xml",
+  "normalizations": [
+    "observed_at=null (wall clock; excluded from observation identity)"
+  ],
+  "observations": [
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "hostname": "dns.example.test",
+        "hostnames": [
+          {
+            "name": "dns.example.test",
+            "type": "PTR"
+          }
+        ],
+        "os_matches": [
+          {
+            "accuracy": "98",
+            "name": "Example OS"
+          }
+        ],
+        "scripts": [
+          {
+            "data": [],
+            "id": "clock-skew",
+            "output": "mean: 0s"
+          }
+        ],
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "up"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "recon/nmap",
+      "observation_id": "22426428-ba6b-5ab5-b357-263634f0f3ce",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "192.0.2.53",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "extrainfo": "fixture",
+        "hostname": "web.example.test",
+        "hostnames": [
+          {
+            "name": "web.example.test",
+            "type": "user"
+          }
+        ],
+        "name": "http",
+        "os_matches": [],
+        "port": 8443,
+        "product": "nginx",
+        "protocol": "tcp",
+        "raw_service": "http",
+        "scripts": [
+          {
+            "data": [],
+            "id": "http-title",
+            "output": "Example dashboard"
+          }
+        ],
+        "service": "http",
+        "service_version": "1.26.2",
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "open",
+        "tunnel": "ssl",
+        "version": "nginx 1.26.2"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "recon/nmap",
+      "observation_id": "49f762b7-bd37-5fcb-9816-1360f369bd72",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 8443,
+      "protocol": "tcp",
+      "service": "https",
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "2001:db8::443",
+      "version": "nginx 1.26.2"
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "hostname": null,
+        "hostnames": [],
+        "os_matches": [],
+        "scripts": [],
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "up"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "recon/nmap",
+      "observation_id": "61d191ef-05c9-5f36-8f2c-4a189d15f4f5",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "192.0.2.99",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "hostname": "dns.example.test",
+        "hostnames": [
+          {
+            "name": "dns.example.test",
+            "type": "PTR"
+          }
+        ],
+        "name": "domain",
+        "os_matches": [
+          {
+            "accuracy": "98",
+            "name": "Example OS"
+          }
+        ],
+        "port": 53,
+        "product": "BIND",
+        "protocol": "udp",
+        "raw_service": "domain",
+        "scripts": [],
+        "service": "domain",
+        "service_version": "9.18",
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "open",
+        "version": "BIND 9.18"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "recon/nmap",
+      "observation_id": "a58bbe79-27fb-5293-9322-0acf59a55e50",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "udp",
+      "service": "dns",
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "192.0.2.53",
+      "version": "BIND 9.18"
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "hostname": "web.example.test",
+        "hostnames": [
+          {
+            "name": "web.example.test",
+            "type": "user"
+          }
+        ],
+        "os_matches": [],
+        "scripts": [],
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "up"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "recon/nmap",
+      "observation_id": "be38ea0b-b66c-54b8-8d89-543b8e0f70a0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "2001:db8::443",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+        "hostname": "ns.example.test",
+        "hostnames": [
+          {
+            "name": "dns.example.test",
+            "type": "PTR"
+          }
+        ],
+        "name": "domain",
+        "os_matches": [
+          {
+            "accuracy": "98",
+            "name": "Example OS"
+          }
+        ],
+        "port": 53,
+        "product": "BIND",
+        "protocol": "tcp",
+        "raw_service": "domain",
+        "scripts": [
+          {
+            "data": [
+              {
+                "attributes": {
+                  "key": "answers"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "key": "nsid"
+                    },
+                    "children": [],
+                    "tag": "elem",
+                    "text": "test"
+                  }
+                ],
+                "tag": "table",
+                "text": ""
+              }
+            ],
+            "id": "dns-nsid",
+            "output": "NSID: test"
+          }
+        ],
+        "service": "domain",
+        "service_version": "9.18",
+        "source_file": "tests/fixtures/nmap/cwp2.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "open",
+        "version": "BIND 9.18"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "recon/nmap",
+      "observation_id": "f76886a6-95fd-57a5-b6b9-a5d5393b6747",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "tcp",
+      "service": "dns",
+      "source_execution_id": "nmap:7e635c0ff643eb0c86ce40ade111b0d9d2aa6d8bfcff0ca6f10560a5c187a96b",
+      "target": "192.0.2.53",
+      "version": "BIND 9.18"
+    }
+  ]
+}

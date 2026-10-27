@@ -1,0 +1,196 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/cloud/gcp.json",
+  "importer": "interop.importers:gcp-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "identifier": "gcp:project:project-one",
+        "import_id": "258c28e1-b5d2-5acd-b415-e83e3210a52a",
+        "name": "Project One",
+        "provider": "gcp",
+        "raw": {
+          "name": "Project One",
+          "projectId": "project-one"
+        },
+        "record_type": "project",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "gcp:project:project-one",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "tenant",
+      "module_path": "interop/cloud/gcp",
+      "observation_id": "1b31ca36-3e41-5902-997b-fa98fdf5e6ea",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:gcp:e37fe486901eae1b964f",
+      "target": "gcp:project:project-one",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "serviceAccount:runner@project-one.iam.gserviceaccount.com",
+        "import_id": "258c28e1-b5d2-5acd-b415-e83e3210a52a",
+        "name": "serviceAccount:runner@project-one.iam.gserviceaccount.com",
+        "provider": "gcp",
+        "raw": {
+          "binding": {
+            "members": [
+              "serviceAccount:runner@project-one.iam.gserviceaccount.com"
+            ],
+            "role": "roles/viewer"
+          },
+          "id": "serviceAccount:runner@project-one.iam.gserviceaccount.com"
+        },
+        "record_type": "iam_member",
+        "relationships": [
+          {
+            "direction": "out",
+            "target": "roles/viewer",
+            "target_kind": "role",
+            "type": "assumes"
+          }
+        ],
+        "run_id": null,
+        "source_id": "serviceAccount:runner@project-one.iam.gserviceaccount.com",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/gcp",
+      "observation_id": "913a09a0-1f03-52d5-b7e1-9a10c43d5e1e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:gcp:e37fe486901eae1b964f",
+      "target": "serviceAccount:runner@project-one.iam.gserviceaccount.com",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "roles/viewer",
+        "import_id": "258c28e1-b5d2-5acd-b415-e83e3210a52a",
+        "name": "roles/viewer",
+        "provider": "gcp",
+        "raw": {
+          "members": [
+            "serviceAccount:runner@project-one.iam.gserviceaccount.com"
+          ],
+          "role": "roles/viewer"
+        },
+        "record_type": "iam_role",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "roles/viewer",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "role",
+      "module_path": "interop/cloud/gcp",
+      "observation_id": "aba82d63-7943-533d-9ad6-66d3b9ebeac7",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:gcp:e37fe486901eae1b964f",
+      "target": "roles/viewer",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "runner",
+        "import_id": "258c28e1-b5d2-5acd-b415-e83e3210a52a",
+        "name": "runner",
+        "provider": "gcp",
+        "raw": {
+          "email": "runner@project-one.iam.gserviceaccount.com",
+          "name": "runner",
+          "uniqueId": "10001"
+        },
+        "record_type": "service_account",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "gcp:project:project-one",
+            "target_kind": "tenant",
+            "type": "owns"
+          }
+        ],
+        "run_id": null,
+        "source_id": "runner",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/gcp",
+      "observation_id": "bcf01951-3f01-569f-8ae7-71b621595490",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:gcp:e37fe486901eae1b964f",
+      "target": "runner",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "//compute.googleapis.com/projects/project-one/zones/us-east1-b/instances/vm1",
+        "import_id": "258c28e1-b5d2-5acd-b415-e83e3210a52a",
+        "name": "vm1",
+        "provider": "gcp",
+        "public": true,
+        "raw": {
+          "id": "//compute.googleapis.com/projects/project-one/zones/us-east1-b/instances/vm1",
+          "internet_exposed": true,
+          "name": "vm1",
+          "resource_type": "compute_instance"
+        },
+        "record_type": "resource",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "gcp:project:project-one",
+            "target_kind": "tenant",
+            "type": "owns"
+          },
+          {
+            "direction": "out",
+            "target": "internet",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          }
+        ],
+        "run_id": null,
+        "source_id": "//compute.googleapis.com/projects/project-one/zones/us-east1-b/instances/vm1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/cloud/gcp",
+      "observation_id": "d6650f69-457f-5087-a93a-6cb3599030ba",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:gcp:e37fe486901eae1b964f",
+      "target": "//compute.googleapis.com/projects/project-one/zones/us-east1-b/instances/vm1",
+      "version": null
+    }
+  ]
+}

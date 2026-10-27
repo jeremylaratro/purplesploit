@@ -1,0 +1,237 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/containers/crictl.json",
+  "importer": "interop.importers:crictl-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "digests": [
+          "example.test/worker@sha256:cri-image"
+        ],
+        "identifier": "container:image/sha256%3Acri-image",
+        "import_id": "c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+        "name": "sha256:cri-image",
+        "provider": "crictl",
+        "raw": {
+          "id": "sha256:cri-image",
+          "repoDigests": [
+            "example.test/worker@sha256:cri-image"
+          ],
+          "repoTags": [
+            "example.test/worker:v1"
+          ],
+          "size": "32000"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "reference": "example.test/worker:v1",
+            "target": "container:image/example.test%2Fworker%3Av1",
+            "target_kind": "resource",
+            "type": "identifies"
+          },
+          {
+            "direction": "in",
+            "reference": "example.test/worker@sha256:cri-image",
+            "target": "container:image/example.test%2Fworker%40sha256%3Acri-image",
+            "target_kind": "resource",
+            "type": "identifies"
+          },
+          {
+            "direction": "in",
+            "target": "container:runtime/crictl/unknown",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "runtime": "unknown",
+        "runtime_provider": "crictl",
+        "schema_version": "purplesploit/container-inventory/1",
+        "size": "32000",
+        "source": null,
+        "source_file": null,
+        "source_id": "sha256:cri-image",
+        "source_records": [
+          {
+            "id": "sha256:cri-image",
+            "repoDigests": [
+              "example.test/worker@sha256:cri-image"
+            ],
+            "repoTags": [
+              "example.test/worker:v1"
+            ],
+            "size": "32000"
+          },
+          {
+            "reference": "sha256:cri-image"
+          }
+        ],
+        "source_schema": "crictl/json",
+        "tags": [
+          "example.test/worker:v1"
+        ]
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/crictl",
+      "observation_id": "98961a1c-ab8c-517a-9c57-6da43d1f0495",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+      "target": "container:image/sha256%3Acri-image",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:runtime/crictl/unknown",
+        "import_id": "c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+        "name": "unknown",
+        "provider": "crictl",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "runtime",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/crictl/unknown",
+        "source_schema": "crictl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/crictl",
+      "observation_id": "c16d6c2f-1822-5e5a-88be-fd1bc85f3026",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+      "target": "container:runtime/crictl/unknown",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:runtime/crictl/unknown/container/cri-container",
+        "image": "sha256:cri-image",
+        "import_id": "c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+        "name": "worker",
+        "provider": "crictl",
+        "raw": {
+          "id": "cri-container",
+          "image": {
+            "image": "example.test/worker:v1"
+          },
+          "imageRef": "sha256:cri-image",
+          "metadata": {
+            "attempt": 0,
+            "name": "worker"
+          },
+          "mounts": [
+            {
+              "containerPath": "/cache",
+              "hostPath": "/var/cache/worker",
+              "readonly": true
+            }
+          ],
+          "state": "CONTAINER_RUNNING"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/crictl/unknown",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/sha256%3Acri-image",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "runtime": "unknown",
+        "runtime_provider": "crictl",
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "cri-container",
+        "source_schema": "crictl/json",
+        "state": "CONTAINER_RUNNING"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/crictl",
+      "observation_id": "dfa98685-684c-5c31-922a-15146cdffbd2",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+      "target": "container:runtime/crictl/unknown/container/cri-container",
+      "version": null
+    },
+    {
+      "attributes": {
+        "destination": "/cache",
+        "identifier": "container:runtime/crictl/unknown/container/cri-container/mount/%2Fcache",
+        "import_id": "c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+        "name": "container:runtime/crictl/unknown/container/cri-container/mount/%2Fcache",
+        "provider": "crictl",
+        "raw": {
+          "containerPath": "/cache",
+          "hostPath": "/var/cache/worker",
+          "readonly": true
+        },
+        "raw_redacted": true,
+        "read_only": true,
+        "record_type": "mount",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/crictl/unknown/container/cri-container",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/crictl/unknown/container/cri-container/mount/%2Fcache",
+        "source_path": "/var/cache/worker",
+        "source_schema": "crictl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/crictl",
+      "observation_id": "efa10ce8-85d9-58fa-9f4a-8ebbf92f4495",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:c77cf900-da63-519e-a78f-1cbd56bbd4c3",
+      "target": "container:runtime/crictl/unknown/container/cri-container/mount/%2Fcache",
+      "version": null
+    }
+  ]
+}

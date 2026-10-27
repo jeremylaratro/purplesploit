@@ -394,14 +394,35 @@ async def get_banner(variant: Optional[int] = None):
 def credential_response(cred: Credential) -> CredentialResponse:
     """Serialize credential metadata without returning reusable secrets."""
     return CredentialResponse(
+        account_ref=cred.account_ref,
         name=cred.name,
         username=cred.username,
+        scope=cred.scope,
         domain=cred.domain,
+        local_host=cred.local_host,
         dcip=cred.dcip,
         dns=cred.dns,
         has_password=bool(cred.password),
         has_hash=bool(cred.hash),
     )
+
+
+def _resolve_credential(session, identifier: str) -> Credential:
+    """Resolve a credential by stable reference, then an unambiguous display name."""
+    credential = session.query(Credential).filter(
+        Credential.account_ref == identifier
+    ).first()
+    if credential is not None:
+        return credential
+
+    matches = session.query(Credential).filter(
+        Credential.name == identifier
+    ).limit(2).all()
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="Credential name is ambiguous")
+    if matches:
+        return matches[0]
+    raise HTTPException(status_code=404, detail="Credential not found")
 
 
 def _runtime_frameworks() -> List[Framework]:
@@ -415,7 +436,9 @@ def _runtime_frameworks() -> List[Framework]:
 def _sync_credential_runtime(old: Optional[Dict] = None, new: Optional[Dict] = None) -> None:
     for instance in _runtime_frameworks():
         if old:
-            instance.session.credentials.remove(old.get("name") or old.get("username"))
+            instance.session.credentials.remove(
+                old.get("account_ref") or old.get("name") or old.get("username")
+            )
         if new:
             instance.session.credentials.add(dict(new))
 
@@ -440,7 +463,9 @@ async def create_credential(cred: CredentialCreate):
     try:
         db_cred = db_manager.add_credential(cred)
         framework.database.add_credential(
+            account_ref=db_cred.account_ref,
             username=cred.username, password=cred.password, domain=cred.domain,
+            scope=cred.scope, local_host=cred.local_host,
             dcip=cred.dcip, dns=cred.dns, hash_value=cred.hash, name=cred.name,
         )
         _sync_credential_runtime(new=db_cred.to_dict())
@@ -449,37 +474,41 @@ async def create_credential(cred: CredentialCreate):
         raise HTTPException(status_code=400, detail=sanitize_error(e))
 
 
-@app.get("/api/credentials/{name}", response_model=CredentialResponse)
-async def get_credential(name: str):
+@app.get("/api/credentials/{account_ref}", response_model=CredentialResponse)
+async def get_credential(account_ref: str):
     """Get a specific credential"""
     session = db_manager.get_credentials_session()
     try:
-        cred = session.query(Credential).filter(Credential.name == name).first()
-        if not cred:
-            raise HTTPException(status_code=404, detail="Credential not found")
+        cred = _resolve_credential(session, account_ref)
         return credential_response(cred)
     finally:
         session.close()
 
 
-@app.put("/api/credentials/{name}")
-async def update_credential(name: str, cred: CredentialCreate):
+@app.put("/api/credentials/{account_ref}")
+async def update_credential(account_ref: str, cred: CredentialCreate):
     """Update a credential"""
     session = db_manager.get_credentials_session()
     try:
-        db_cred = session.query(Credential).filter(Credential.name == name).first()
-        if not db_cred:
-            raise HTTPException(status_code=404, detail="Credential not found")
+        db_cred = _resolve_credential(session, account_ref)
 
         old = db_cred.to_dict()
-        for field in ("name", "username", "password", "domain", "dcip", "dns", "hash"):
+        for field in (
+            "name", "username", "password", "scope", "domain", "local_host",
+            "dcip", "dns", "hash",
+        ):
             setattr(db_cred, field, getattr(cred, field))
 
         session.commit()
         session.refresh(db_cred)
-        framework.database.remove_credential_record(old.get("username"), old.get("domain"), old.get("name"))
+        framework.database.remove_credential_record(
+            old.get("username"), old.get("domain"), old.get("name"),
+            old.get("account_ref"), old.get("scope"), old.get("local_host"),
+        )
         framework.database.add_credential(
+            account_ref=db_cred.account_ref,
             username=db_cred.username, password=db_cred.password, domain=db_cred.domain,
+            scope=db_cred.scope, local_host=db_cred.local_host,
             dcip=db_cred.dcip, dns=db_cred.dns, hash_value=db_cred.hash, name=db_cred.name,
         )
         _sync_credential_runtime(old=old, new=db_cred.to_dict())
@@ -488,20 +517,22 @@ async def update_credential(name: str, cred: CredentialCreate):
         session.close()
 
 
-@app.delete("/api/credentials/{name}")
-async def delete_credential(name: str):
+@app.delete("/api/credentials/{account_ref}")
+async def delete_credential(account_ref: str):
     """Delete a credential"""
     session = db_manager.get_credentials_session()
     try:
-        cred = session.query(Credential).filter(Credential.name == name).first()
-        if not cred:
-            raise HTTPException(status_code=404, detail="Credential not found")
+        cred = _resolve_credential(session, account_ref)
+        resolved_account_ref = cred.account_ref
         old = cred.to_dict()
         session.delete(cred)
         session.commit()
-        framework.database.remove_credential_record(old.get("username"), old.get("domain"), old.get("name"))
+        framework.database.remove_credential_record(
+            old.get("username"), old.get("domain"), old.get("name"),
+            old.get("account_ref"), old.get("scope"), old.get("local_host"),
+        )
         _sync_credential_runtime(old=old)
-        return {"message": f"Credential '{name}' deleted"}
+        return {"message": f"Credential '{resolved_account_ref}' deleted"}
     finally:
         session.close()
 

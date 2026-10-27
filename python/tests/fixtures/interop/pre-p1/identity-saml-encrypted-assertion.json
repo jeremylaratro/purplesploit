@@ -1,0 +1,42 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/encrypted_assertion.xml",
+  "importer": "interop.identity:import_saml_assertion",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "23124b4292be18da6fe43c371dd5172946d6c53972cc3e46e4a3811da8e6fe1c",
+        "evidence_type": "document_claim",
+        "identifier": "saml:encrypted:23124b4292be18da6fe43c371dd5172946d6c53972cc3e46e4a3811da8e6fe1c",
+        "import_id": "0d08cc46-370f-539e-a655-f1d36ff20e68",
+        "inventory": {
+          "authenticated": false,
+          "count": 1,
+          "decrypted": false
+        },
+        "name": "saml:encrypted:23124b4292be18da6fe43c371dd5172946d6c53972cc3e46e4a3811da8e6fe1c",
+        "record_type": "saml_encrypted_assertion",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/encrypted_assertion.xml",
+        "source_schema": "saml-assertion/2.0",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "23dcd7cd-c907-5696-ac2c-7fa8d528312f",
+      "observed_at": null,
+      "operation_name": "Import saml-assertion",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0d08cc46-370f-539e-a655-f1d36ff20e68",
+      "target": "saml:encrypted:23124b4292be18da6fe43c371dd5172946d6c53972cc3e46e4a3811da8e6fe1c",
+      "version": null
+    }
+  ]
+}

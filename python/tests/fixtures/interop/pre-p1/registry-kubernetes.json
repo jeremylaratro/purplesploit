@@ -1,0 +1,3376 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/containers/kubernetes.json",
+  "importer": "interop.importers:kubernetes-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "identifier": "container:image/example.test%2Finit%3Av1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "example.test/init:v1",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "example.test/init:v1"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/example.test%2Finit%3Av1",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "02561972-46d6-5bb2-a97f-7377ffbc3cd6",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/example.test%2Finit%3Av1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/secret/apps/web-token",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "web-token",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/web-token",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "11ee6476-8a5b-542a-accc-12ab40c7c5f2",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/web-token",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/statefulset/apps/db/container/db",
+        "image": "postgres:16",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "db",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "postgres:16",
+          "name": "db"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/statefulset/apps/db",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/postgres%3A16",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/statefulset/apps/db/container/db",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "1b2b4ae6-1d2e-5153-8fca-0ff7b6b3f651",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/statefulset/apps/db/container/db",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "cluster_ip": "10.96.0.5",
+        "context": null,
+        "identifier": "k8s:/dev/service/apps/web",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "web",
+            "namespace": "apps"
+          },
+          "spec": {
+            "clusterIP": "10.96.0.5",
+            "ports": [
+              {
+                "name": "dns-tcp",
+                "nodePort": 30053,
+                "port": 53,
+                "protocol": "TCP",
+                "targetPort": 53
+              },
+              {
+                "name": "dns-udp",
+                "nodePort": 30053,
+                "port": 53,
+                "protocol": "UDP",
+                "targetPort": 53
+              }
+            ],
+            "selector": {
+              "app": "web"
+            },
+            "type": "NodePort"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "service",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "exposure": "nodeport",
+            "target": "k8s:/dev/cluster//dev/node-network",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "selector": {
+              "app": "web"
+            },
+            "target": "k8s:/dev/pod/apps/web-1",
+            "target_kind": "resource",
+            "type": "routes_to"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "selector": {
+          "app": "web"
+        },
+        "service_type": "NodePort",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/web",
+        "source_records": [
+          {
+            "metadata": {
+              "name": "web",
+              "namespace": "apps"
+            },
+            "spec": {
+              "clusterIP": "10.96.0.5",
+              "ports": [
+                {
+                  "name": "dns-tcp",
+                  "nodePort": 30053,
+                  "port": 53,
+                  "protocol": "TCP",
+                  "targetPort": 53
+                },
+                {
+                  "name": "dns-udp",
+                  "nodePort": 30053,
+                  "port": 53,
+                  "protocol": "UDP",
+                  "targetPort": 53
+                }
+              ],
+              "selector": {
+                "app": "web"
+              },
+              "type": "NodePort"
+            }
+          },
+          {}
+        ],
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "1cc3781b-6589-5a8f-867b-15bf981cc6ae",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/deployment/apps/web/container/web",
+        "image": "example.test/web:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "example.test/web:v1",
+          "name": "web"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/deployment/apps/web",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/deployment/apps/web/container/web",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "1e5e4ae0-c723-5fb0-9ce3-8e5915b9259b",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/deployment/apps/web/container/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/secret/apps/db",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "keys": [
+          "extra",
+          "password"
+        ],
+        "labels": {},
+        "name": "db",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "data_keys": [
+            "password"
+          ],
+          "metadata": {
+            "name": "db",
+            "namespace": "apps"
+          },
+          "stringData_keys": [
+            "extra"
+          ],
+          "type": "Opaque"
+        },
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "secret_type": "Opaque",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/db",
+        "source_records": [
+          {
+            "data_keys": [
+              "password"
+            ],
+            "metadata": {
+              "name": "db",
+              "namespace": "apps"
+            },
+            "stringData_keys": [
+              "extra"
+            ],
+            "type": "Opaque"
+          },
+          {}
+        ],
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "1f1b930b-4a75-5464-bed7-6d19935fdc17",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/db",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/serviceaccount/apps/web",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "imagePullSecrets": [
+            {
+              "name": "registry"
+            }
+          ],
+          "metadata": {
+            "name": "web",
+            "namespace": "apps"
+          },
+          "secrets": [
+            {
+              "name": "web-token"
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "serviceaccount",
+        "reference_only": false,
+        "relationships": [
+          {
+            "binding": "k8s:/dev/clusterrolebinding//view",
+            "namespace": "",
+            "scope": "cluster",
+            "target": "k8s:/dev/clusterrole//viewer",
+            "target_kind": "role",
+            "type": "has_permission"
+          },
+          {
+            "binding": "k8s:/dev/rolebinding/apps/read",
+            "namespace": "apps",
+            "scope": "namespace",
+            "target": "k8s:/dev/role/apps/reader",
+            "target_kind": "role",
+            "type": "has_permission"
+          },
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/registry",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/web-token",
+            "target_kind": "resource",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/serviceaccount/apps/web",
+        "source_records": [
+          {
+            "imagePullSecrets": [
+              {
+                "name": "registry"
+              }
+            ],
+            "metadata": {
+              "name": "web",
+              "namespace": "apps"
+            },
+            "secrets": [
+              {
+                "name": "web-token"
+              }
+            ]
+          },
+          {}
+        ],
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "279a9ac2-a5cd-5a7f-a484-5c0907df9548",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/serviceaccount/apps/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/daemonset/apps/agent/container/agent",
+        "image": "agent:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "agent",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "agent:v1",
+          "name": "agent"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/daemonset/apps/agent",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/agent%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/daemonset/apps/agent/container/agent",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "2aebe40e-6dbc-5794-8918-407cb95aa2a9",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/daemonset/apps/agent/container/agent",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/ingress/apps/web",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "web",
+            "namespace": "apps"
+          },
+          "spec": {
+            "rules": [
+              {
+                "host": "web.example.test",
+                "http": {
+                  "paths": [
+                    {
+                      "backend": {
+                        "service": {
+                          "name": "web",
+                          "port": {
+                            "number": 53
+                          }
+                        }
+                      },
+                      "path": "/"
+                    }
+                  ]
+                }
+              }
+            ],
+            "tls": [
+              {
+                "hosts": [
+                  "web.example.test"
+                ],
+                "secretName": "tls"
+              }
+            ]
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "ingress",
+        "reference_only": false,
+        "relationships": [
+          {
+            "backend_port": 53,
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "routes_to"
+          },
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "hostname": "web.example.test",
+            "target": "network:hostname/web.example.test",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/tls",
+            "target_kind": "resource",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/ingress/apps/web",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "2f52dcf6-cbb9-5fd9-9ff6-16c140e19e74",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/ingress/apps/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "cluster_ip": null,
+        "context": null,
+        "identifier": "k8s:/dev/service/apps/private-lb",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "private-lb",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "private-lb",
+            "namespace": "apps"
+          },
+          "spec": {
+            "ports": [
+              {
+                "port": 443
+              }
+            ],
+            "type": "LoadBalancer"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "service",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "selector": {},
+        "service_type": "LoadBalancer",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/private-lb",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "32a94acc-644d-5fc1-918c-71429c42bc70",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/private-lb",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "cluster_ip": null,
+        "context": null,
+        "identifier": "k8s:/dev/service/apps/public",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "public",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "public",
+            "namespace": "apps"
+          },
+          "spec": {
+            "ports": [
+              {
+                "port": 443,
+                "targetPort": "https"
+              }
+            ],
+            "type": "LoadBalancer"
+          },
+          "status": {
+            "loadBalancer": {
+              "ingress": [
+                {
+                  "ip": "198.51.100.5"
+                }
+              ]
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "service",
+        "reference_only": false,
+        "relationships": [
+          {
+            "address": "198.51.100.5",
+            "target": "network:address/198.51.100.5",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "selector": {},
+        "service_type": "LoadBalancer",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/public",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "38472674-40ec-58d1-8ed5-ebb4f963c542",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/public",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:image/postgres%3A16",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "postgres:16",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "postgres:16"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/postgres%3A16",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "3dc8720d-e0b4-5de4-9c32-8e0e84d579ba",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/postgres%3A16",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/service/apps/web",
+        "identifier": "k8s:/dev/service/apps/web/port/53/udp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "dns-udp",
+        "port": 53,
+        "protocol": "udp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "name": "dns-udp",
+          "nodePort": 30053,
+          "port": 53,
+          "protocol": "UDP",
+          "targetPort": 53
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "dns-udp",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/web/port/53/udp",
+        "source_schema": "kubectl/json",
+        "target_port": 53
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "4867c6c9-8a0c-50ad-aeb5-08f590c32f53",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "udp",
+      "service": "dns-udp",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/web/port/53/udp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/service/apps/web",
+        "identifier": "k8s:/dev/service/apps/web/port/53/tcp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "dns-tcp",
+        "port": 53,
+        "protocol": "tcp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "name": "dns-tcp",
+          "nodePort": 30053,
+          "port": 53,
+          "protocol": "TCP",
+          "targetPort": 53
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "dns-tcp",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/web/port/53/tcp",
+        "source_schema": "kubectl/json",
+        "target_port": 53
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "4a9f5861-759a-59f0-9142-748fe77cd17e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "tcp",
+      "service": "dns-tcp",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/web/port/53/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "initContainers",
+        "identifier": "k8s:/dev/pod/apps/web-1/container/init",
+        "image": "example.test/init:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "init",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "example.test/init:v1",
+          "name": "init"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/pod/apps/web-1",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Finit%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1/container/init",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "4f6175fe-93b9-5cba-af54-f0682c4dc0ed",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1/container/init",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/daemonset/apps/agent",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "agent",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "agent",
+            "namespace": "apps"
+          },
+          "spec": {
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "agent:v1",
+                    "name": "agent"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "daemonset",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/agent%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/default",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/daemonset/apps/agent",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "503866a3-da45-5d91-8687-0c2c9e8d6479",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/daemonset/apps/agent",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/context//dev-context",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "dev-context",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "context": {
+            "cluster": "dev",
+            "namespace": "apps",
+            "user": "operator"
+          },
+          "name": "dev-context"
+        },
+        "raw_redacted": true,
+        "record_type": "context",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/context//dev-context",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "52b44729-5a2b-5720-9e1b-8af010abcede",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/context//dev-context",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/secret/apps/registry",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "registry",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/registry",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "52bed666-66c4-5457-880c-785b0689c875",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/registry",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:image/agent%3Av1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "agent:v1",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "agent:v1"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/agent%3Av1",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "5b140d18-7bcf-5d66-95f8-6b135f6e1e08",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/agent%3Av1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/secret/apps/shared",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "shared",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/shared",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "5d37a259-c4a5-5b7e-b69e-1692c83a2a1c",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/shared",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/pod/apps/web-1/container/web",
+        "identifier": "k8s:/dev/pod/apps/web-1/container/web/port/53/udp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "53/udp",
+        "port": 53,
+        "protocol": "udp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "containerPort": 53,
+          "protocol": "UDP"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/pod/apps/web-1/container/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/pod/apps/web-1/container/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1/container/web/port/53/udp",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "5e5fa744-7eec-5900-879b-f2fd949822fe",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "udp",
+      "service": "unknown",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1/container/web/port/53/udp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/service/apps/private-lb",
+        "identifier": "k8s:/dev/service/apps/private-lb/port/443/tcp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "443/tcp",
+        "port": 443,
+        "protocol": "tcp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "port": 443
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/private-lb",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/private-lb",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/private-lb/port/443/tcp",
+        "source_schema": "kubectl/json",
+        "target_port": 443
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "687da32c-117d-5506-9a5d-64df3ddb4b04",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 443,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/private-lb/port/443/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/serviceaccount/apps/default",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "default",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "serviceaccount",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/serviceaccount/apps/default",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "691dd5b4-94e0-5e80-951a-95fa0982456a",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/serviceaccount/apps/default",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/rolebinding/apps/read",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "read",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "read",
+            "namespace": "apps"
+          },
+          "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "Role",
+            "name": "reader"
+          },
+          "subjects": [
+            {
+              "kind": "ServiceAccount",
+              "name": "web",
+              "namespace": "apps"
+            },
+            {
+              "kind": "User",
+              "name": "alice"
+            },
+            {
+              "kind": "Group",
+              "name": "developers"
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "rolebinding",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "k8s:/dev/group//developers",
+            "target_kind": "group",
+            "type": "applies_to"
+          },
+          {
+            "target": "k8s:/dev/role/apps/reader",
+            "target_kind": "role",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/web",
+            "target_kind": "identity",
+            "type": "applies_to"
+          },
+          {
+            "target": "k8s:/dev/user//alice",
+            "target_kind": "user",
+            "type": "applies_to"
+          }
+        ],
+        "role_ref": {
+          "apiGroup": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "reader"
+        },
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/rolebinding/apps/read",
+        "source_schema": "kubectl/json",
+        "subjects": [
+          {
+            "kind": "ServiceAccount",
+            "name": "web",
+            "namespace": "apps"
+          },
+          {
+            "kind": "User",
+            "name": "alice"
+          },
+          {
+            "kind": "Group",
+            "name": "developers"
+          }
+        ],
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "6f378b86-abfb-5e00-b973-182e6e77a023",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/rolebinding/apps/read",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/cluster//dev/node-network",
+        "identifier": "k8s:/dev/service/apps/web/nodeport/port/30053/udp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "dns-udp",
+        "port": 30053,
+        "protocol": "udp",
+        "provider": "kubernetes",
+        "published": true,
+        "raw": {
+          "name": "dns-udp",
+          "nodePort": 30053,
+          "port": 30053,
+          "protocol": "UDP",
+          "targetPort": 53
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          },
+          {
+            "exposure": "published",
+            "target": "k8s:/dev/cluster//dev/node-network",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "target": "k8s:/dev/service/apps/web/port/53/udp",
+            "target_kind": "service",
+            "type": "routes_to"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "dns-udp",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/web/nodeport/port/30053/udp",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "7b84f46c-5421-560d-b4c0-dd37169ed861",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 30053,
+      "protocol": "udp",
+      "service": "dns-udp",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/web/nodeport/port/30053/udp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": "v1",
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/pod/apps/web-1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {
+          "app": "web",
+          "tier": "frontend"
+        },
+        "name": "web-1",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "apiVersion": "v1",
+          "metadata": {
+            "labels": {
+              "app": "web",
+              "tier": "frontend"
+            },
+            "name": "web-1",
+            "namespace": "apps",
+            "ownerReferences": [
+              {
+                "kind": "ReplicaSet",
+                "name": "web-rs",
+                "uid": "rs-1"
+              }
+            ],
+            "uid": "pod-1"
+          },
+          "spec": {
+            "containers": [
+              {
+                "envFrom": [
+                  {
+                    "secretRef": {
+                      "name": "shared"
+                    }
+                  },
+                  {
+                    "configMapRef": {
+                      "name": "settings"
+                    }
+                  }
+                ],
+                "image": "example.test/web:v1",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 53,
+                    "protocol": "TCP"
+                  },
+                  {
+                    "containerPort": 53,
+                    "protocol": "UDP"
+                  }
+                ]
+              }
+            ],
+            "ephemeralContainers": [
+              {
+                "image": "example.test/debug:v1",
+                "name": "debug"
+              }
+            ],
+            "imagePullSecrets": [
+              {
+                "name": "registry"
+              }
+            ],
+            "initContainers": [
+              {
+                "image": "example.test/init:v1",
+                "name": "init"
+              }
+            ],
+            "nodeName": "node-a",
+            "serviceAccountName": "web",
+            "volumes": [
+              {
+                "name": "tls"
+              },
+              {
+                "configMap": {
+                  "name": "settings"
+                },
+                "name": "config"
+              },
+              {
+                "name": "projected",
+                "projected": {
+                  "sources": [
+                    {},
+                    {
+                      "configMap": {
+                        "name": "projected-settings"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "pod",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "owner_uid": "rs-1",
+            "target": "k8s:/dev/replicaset/apps/web-rs",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Fdebug%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "container:image/example.test%2Finit%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/configmap/apps/projected-settings",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/configmap/apps/settings",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/node//node-a",
+            "target_kind": "resource",
+            "type": "runs_on"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/projected-secret",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/registry",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/tls",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/web",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1",
+        "source_schema": "kubectl/json",
+        "uid": "pod-1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "7c6de8aa-9b35-5ff5-8da9-19442a01ae6b",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/cronjob/apps/nightly",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "nightly",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "nightly",
+            "namespace": "apps"
+          },
+          "spec": {
+            "jobTemplate": {
+              "spec": {
+                "template": {
+                  "spec": {
+                    "containers": [
+                      {
+                        "image": "backup:v1",
+                        "name": "nightly"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "cronjob",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/backup%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/default",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/cronjob/apps/nightly",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "7f81b9f6-ce6d-57a8-b384-281b8b58055d",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/cronjob/apps/nightly",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:image/example.test%2Fweb%3Av1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "example.test/web:v1",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "example.test/web:v1"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/example.test%2Fweb%3Av1",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "81cff8e5-ea45-5f1f-b4d6-75233bb28e70",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/example.test%2Fweb%3Av1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:image/backup%3Av1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "backup:v1",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "backup:v1"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/backup%3Av1",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "8a83d551-13c2-52ec-b425-46fc27d715bd",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/backup%3Av1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/user//alice",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "alice",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "user",
+        "reference_only": true,
+        "relationships": [
+          {
+            "binding": "k8s:/dev/rolebinding/apps/read",
+            "namespace": "apps",
+            "scope": "namespace",
+            "target": "k8s:/dev/role/apps/reader",
+            "target_kind": "role",
+            "type": "has_permission"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/user//alice",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "user",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "91b23994-c149-5fde-ba97-6774db5c73e8",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/user//alice",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/cluster//dev",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "dev",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "cluster": {
+            "server": "https://127.0.0.1:6443"
+          },
+          "name": "dev"
+        },
+        "raw_redacted": true,
+        "record_type": "cluster",
+        "reference_only": false,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/cluster//dev",
+        "source_records": [
+          {
+            "cluster": {
+              "server": "https://127.0.0.1:6443"
+            },
+            "name": "dev"
+          },
+          {}
+        ],
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "93682e2c-aafd-535c-879c-4a4b145f22fa",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/cluster//dev",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/replicaset/apps/web-rs",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "web-rs",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "replicaset",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/replicaset/apps/web-rs",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "95943364-ae74-5992-b764-335807e504f5",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/replicaset/apps/web-rs",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/pod/apps/web-1/container/web",
+        "image": "example.test/web:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "envFrom": [
+            {
+              "secretRef": {
+                "name": "shared"
+              }
+            },
+            {
+              "configMapRef": {
+                "name": "settings"
+              }
+            }
+          ],
+          "image": "example.test/web:v1",
+          "name": "web",
+          "ports": [
+            {
+              "containerPort": 53,
+              "protocol": "TCP"
+            },
+            {
+              "containerPort": 53,
+              "protocol": "UDP"
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/pod/apps/web-1",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/configmap/apps/settings",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/db",
+            "target_kind": "resource",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/secret/apps/shared",
+            "target_kind": "resource",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1/container/web",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "9c54b79a-b49c-5861-aa4c-1cf134c9c4e4",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1/container/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/node//node-a",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "node-a",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "node-a",
+            "uid": "node-1"
+          },
+          "status": {
+            "addresses": [
+              {
+                "address": "10.0.0.5",
+                "type": "InternalIP"
+              }
+            ]
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "node",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/node//node-a",
+        "source_schema": "kubectl/json",
+        "uid": "node-1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "9d1faa8e-3dca-5a2c-a83a-87ae4cadc0a3",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/node//node-a",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/secret/apps/tls",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "tls",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/tls",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "9e06256e-6234-5d1b-8393-6b1bd216e957",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/tls",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/clusterrole//viewer",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "viewer",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "viewer"
+          },
+          "rules": [
+            {
+              "apiGroups": [
+                "*"
+              ],
+              "resources": [
+                "*"
+              ],
+              "verbs": [
+                "get"
+              ]
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "clusterrole",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "rules": [
+          {
+            "apiGroups": [
+              "*"
+            ],
+            "resources": [
+              "*"
+            ],
+            "verbs": [
+              "get"
+            ]
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/clusterrole//viewer",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "role",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "a4a32ae4-91b4-5f7a-ace4-39fe82020307",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/clusterrole//viewer",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:image/example.test%2Fdebug%3Av1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "example.test/debug:v1",
+        "provider": "kubernetes",
+        "raw": {
+          "reference": "example.test/debug:v1"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/example.test%2Fdebug%3Av1",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "a81fbbe8-daef-50b9-943d-77f4d3e69d17",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "container:image/example.test%2Fdebug%3Av1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "ephemeralContainers",
+        "identifier": "k8s:/dev/pod/apps/web-1/container/debug",
+        "image": "example.test/debug:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "debug",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "example.test/debug:v1",
+          "name": "debug"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/pod/apps/web-1",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Fdebug%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1/container/debug",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "b264aa31-445c-5541-abfe-1da770a47d13",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1/container/debug",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/namespace//apps",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "apps",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "apps",
+            "uid": "ns-1"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "namespace",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/namespace//apps",
+        "source_records": [
+          {
+            "metadata": {
+              "name": "apps",
+              "uid": "ns-1"
+            }
+          },
+          {}
+        ],
+        "source_schema": "kubectl/json",
+        "uid": "ns-1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "bc8cf339-77e4-5ea2-9574-44d50846cbe6",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/namespace//apps",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/clusterrolebinding//view",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "view",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "view"
+          },
+          "roleRef": {
+            "kind": "ClusterRole",
+            "name": "viewer"
+          },
+          "subjects": [
+            {
+              "kind": "ServiceAccount",
+              "name": "web",
+              "namespace": "apps"
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "clusterrolebinding",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cluster//dev",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "k8s:/dev/clusterrole//viewer",
+            "target_kind": "role",
+            "type": "references"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/web",
+            "target_kind": "identity",
+            "type": "applies_to"
+          }
+        ],
+        "role_ref": {
+          "kind": "ClusterRole",
+          "name": "viewer"
+        },
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/clusterrolebinding//view",
+        "source_schema": "kubectl/json",
+        "subjects": [
+          {
+            "kind": "ServiceAccount",
+            "name": "web",
+            "namespace": "apps"
+          }
+        ],
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "bdd22cce-d955-5f6f-b476-11fa413e05b1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/clusterrolebinding//view",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/job/apps/backup/container/backup",
+        "image": "backup:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "backup",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "backup:v1",
+          "name": "backup"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/job/apps/backup",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/backup%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/job/apps/backup/container/backup",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "be8c6f4b-a5a7-5149-8a73-f94725afbd74",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/job/apps/backup/container/backup",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/service/apps/public",
+        "identifier": "k8s:/dev/service/apps/public/port/443/tcp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "443/tcp",
+        "port": 443,
+        "protocol": "tcp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "port": 443,
+          "targetPort": "https"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/public",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/public",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/public/port/443/tcp",
+        "source_schema": "kubectl/json",
+        "target_port": "https"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "c382c5a5-a75b-551d-b246-5d3c458e03b0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 443,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/public/port/443/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/configmap/apps/settings",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "keys": [
+          "logo",
+          "settings.json"
+        ],
+        "labels": {},
+        "name": "settings",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "binaryData_keys": [
+            "logo"
+          ],
+          "data_keys": [
+            "settings.json"
+          ],
+          "metadata": {
+            "name": "settings",
+            "namespace": "apps"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "configmap",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "secret_type": null,
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/configmap/apps/settings",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "c7b83edc-9230-5b74-9b88-4bb6a177cba1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/configmap/apps/settings",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/statefulset/apps/db",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "db",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "db",
+            "namespace": "apps"
+          },
+          "spec": {
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "postgres:16",
+                    "name": "db"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "statefulset",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/postgres%3A16",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/default",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/statefulset/apps/db",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "cfdab4ad-ac1f-529a-8517-e38ae1a231d2",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/statefulset/apps/db",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/secret/apps/projected-secret",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "projected-secret",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "secret",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/secret/apps/projected-secret",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "d5b90f5b-6a7b-5576-ad8b-cbf0ed55b016",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/secret/apps/projected-secret",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/configmap/apps/projected-settings",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "projected-settings",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "configmap",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/configmap/apps/projected-settings",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "e4ca7df5-d47c-5da7-a51c-0d931d29b853",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/configmap/apps/projected-settings",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "egress": [],
+        "identifier": "k8s:/dev/networkpolicy/apps/web-ingress",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "ingress": [
+          {
+            "from": [
+              {
+                "namespaceSelector": {
+                  "matchLabels": {
+                    "team": "frontend"
+                  }
+                }
+              }
+            ],
+            "ports": [
+              {
+                "port": 53,
+                "protocol": "TCP"
+              }
+            ]
+          }
+        ],
+        "labels": {},
+        "name": "web-ingress",
+        "namespace": "apps",
+        "pod_selector": {
+          "matchExpressions": [
+            {
+              "key": "tier",
+              "operator": "In",
+              "values": [
+                "frontend"
+              ]
+            }
+          ],
+          "matchLabels": {
+            "app": "web"
+          }
+        },
+        "policy_types": [
+          "Ingress"
+        ],
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "web-ingress",
+            "namespace": "apps"
+          },
+          "spec": {
+            "ingress": [
+              {
+                "from": [
+                  {
+                    "namespaceSelector": {
+                      "matchLabels": {
+                        "team": "frontend"
+                      }
+                    }
+                  }
+                ],
+                "ports": [
+                  {
+                    "port": 53,
+                    "protocol": "TCP"
+                  }
+                ]
+              }
+            ],
+            "podSelector": {
+              "matchExpressions": [
+                {
+                  "key": "tier",
+                  "operator": "In",
+                  "values": [
+                    "frontend"
+                  ]
+                }
+              ],
+              "matchLabels": {
+                "app": "web"
+              }
+            },
+            "policyTypes": [
+              "Ingress"
+            ]
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "networkpolicy",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "k8s:/dev/pod/apps/web-1",
+            "target_kind": "resource",
+            "type": "applies_to"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/networkpolicy/apps/web-ingress",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "e96c053f-2d03-5e20-9f2d-c790a81a0bdf",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/networkpolicy/apps/web-ingress",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/deployment/apps/web",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "web",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "web",
+            "namespace": "apps"
+          },
+          "spec": {
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app": "web"
+                }
+              },
+              "spec": {
+                "containers": [
+                  {
+                    "image": "example.test/web:v1",
+                    "name": "web"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "deployment",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/default",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/deployment/apps/web",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "f2068a08-b099-5f6b-8434-bfb8566d423f",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/deployment/apps/web",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/pod/apps/web-1/container/web",
+        "identifier": "k8s:/dev/pod/apps/web-1/container/web/port/53/tcp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "53/tcp",
+        "port": 53,
+        "protocol": "tcp",
+        "provider": "kubernetes",
+        "published": false,
+        "raw": {
+          "containerPort": 53,
+          "protocol": "TCP"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/pod/apps/web-1/container/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "k8s:/dev/pod/apps/web-1/container/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/pod/apps/web-1/container/web/port/53/tcp",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "f3029cc0-9d74-5ba8-9225-47b5055b3113",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/pod/apps/web-1/container/web/port/53/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "container_type": "containers",
+        "identifier": "k8s:/dev/cronjob/apps/nightly/container/nightly",
+        "image": "backup:v1",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "nightly",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "image": "backup:v1",
+          "name": "nightly"
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/cronjob/apps/nightly",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/backup%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/cronjob/apps/nightly/container/nightly",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "f8a567a4-47ea-597a-983d-06c34cd7a466",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/cronjob/apps/nightly/container/nightly",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/route/apps/route",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "route",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "route",
+            "namespace": "apps"
+          },
+          "spec": {
+            "host": "route.example.test",
+            "port": {
+              "targetPort": "dns-tcp"
+            },
+            "tls": {
+              "termination": "edge"
+            },
+            "to": {
+              "kind": "Service",
+              "name": "web"
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "route",
+        "reference_only": false,
+        "relationships": [
+          {
+            "backend_port": "dns-tcp",
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "routes_to"
+          },
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "hostname": "route.example.test",
+            "target": "network:hostname/route.example.test",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/route/apps/route",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "fb2aaa71-a65b-57a7-8ed5-8ba9e2f6a94e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/route/apps/route",
+      "version": null
+    },
+    {
+      "attributes": {
+        "cluster": "dev",
+        "identifier": "k8s:/dev/group//developers",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "developers",
+        "namespace": "",
+        "provider": "kubernetes",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "group",
+        "reference_only": true,
+        "relationships": [
+          {
+            "binding": "k8s:/dev/rolebinding/apps/read",
+            "namespace": "apps",
+            "scope": "namespace",
+            "target": "k8s:/dev/role/apps/reader",
+            "target_kind": "role",
+            "type": "has_permission"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/group//developers",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "group",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "fcafd3f7-1d21-5ddf-931a-aab919b20bf7",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/group//developers",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "identifier": "k8s:/dev/role/apps/reader",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "reader",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "reader",
+            "namespace": "apps"
+          },
+          "rules": [
+            {
+              "apiGroups": [
+                ""
+              ],
+              "resources": [
+                "pods",
+                "secrets"
+              ],
+              "verbs": [
+                "get",
+                "list"
+              ]
+            }
+          ]
+        },
+        "raw_redacted": true,
+        "record_type": "role",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "rules": [
+          {
+            "apiGroups": [
+              ""
+            ],
+            "resources": [
+              "pods",
+              "secrets"
+            ],
+            "verbs": [
+              "get",
+              "list"
+            ]
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/role/apps/reader",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "role",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "fd6ea666-fe7f-5795-918d-2d8b4b1e7a29",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/role/apps/reader",
+      "version": null
+    },
+    {
+      "attributes": {
+        "api_version": null,
+        "cluster": "dev",
+        "context": null,
+        "host_network": false,
+        "identifier": "k8s:/dev/job/apps/backup",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "labels": {},
+        "name": "backup",
+        "namespace": "apps",
+        "provider": "kubernetes",
+        "raw": {
+          "metadata": {
+            "name": "backup",
+            "namespace": "apps"
+          },
+          "spec": {
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "backup:v1",
+                    "name": "backup"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "job",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/namespace//apps",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/backup%3Av1",
+            "target_kind": "resource",
+            "type": "uses_image"
+          },
+          {
+            "target": "k8s:/dev/serviceaccount/apps/default",
+            "target_kind": "identity",
+            "type": "references"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/job/apps/backup",
+        "source_schema": "kubectl/json",
+        "uid": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "fd888c48-d071-5138-ac1e-45896b8e6adf",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/job/apps/backup",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "k8s:/dev/cluster//dev/node-network",
+        "identifier": "k8s:/dev/service/apps/web/nodeport/port/30053/tcp",
+        "import_id": "0a49c50a-8af5-5510-8635-310d1af607e9",
+        "name": "dns-tcp",
+        "port": 30053,
+        "protocol": "tcp",
+        "provider": "kubernetes",
+        "published": true,
+        "raw": {
+          "name": "dns-tcp",
+          "nodePort": 30053,
+          "port": 30053,
+          "protocol": "TCP",
+          "targetPort": 53
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "k8s:/dev/service/apps/web",
+            "target_kind": "resource",
+            "type": "has_service"
+          },
+          {
+            "exposure": "published",
+            "target": "k8s:/dev/cluster//dev/node-network",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "target": "k8s:/dev/service/apps/web/port/53/tcp",
+            "target_kind": "service",
+            "type": "routes_to"
+          }
+        ],
+        "resource_owner": "k8s:/dev/service/apps/web",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "dns-tcp",
+        "source": null,
+        "source_file": null,
+        "source_id": "k8s:/dev/service/apps/web/nodeport/port/30053/tcp",
+        "source_schema": "kubectl/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/kubernetes",
+      "observation_id": "ff19aec6-2074-5c01-9acf-9500ccb14d32",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 30053,
+      "protocol": "tcp",
+      "service": "dns-tcp",
+      "source_execution_id": "import:0a49c50a-8af5-5510-8635-310d1af607e9",
+      "target": "k8s:/dev/service/apps/web/nodeport/port/30053/tcp",
+      "version": null
+    }
+  ]
+}

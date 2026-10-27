@@ -1,0 +1,621 @@
+{
+  "findings": [
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [
+        "CVE-2026-12345"
+      ],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "Fixture only",
+      "discovered_at": null,
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "a474e834-6b5d-515e-970c-1623153fce7b",
+      "impact": "",
+      "metadata": {
+        "source_observation": {
+          "attributes": {
+            "affected_resource": "container:image/sha256%3Afixture",
+            "aliases": [
+              "CVE-2026-12345"
+            ],
+            "cve_ids": [
+              "CVE-2026-12345"
+            ],
+            "cves": [
+              "CVE-2026-12345"
+            ],
+            "cvss": [
+              {
+                "metrics": {
+                  "baseScore": 8.1
+                },
+                "version": "3.1"
+              }
+            ],
+            "data_source": "https://example.test/advisory",
+            "description": "Fixture only",
+            "fix_state": "fixed",
+            "fixed_versions": [
+              "3.0.1"
+            ],
+            "identifier": "container:finding/e8d1a7b33d7de39337c6be8b",
+            "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+            "match_details": [
+              {
+                "matcher": "dpkg-matcher",
+                "type": "exact-direct-match"
+              }
+            ],
+            "name": "GHSA-fixture-test",
+            "original_severity": "High",
+            "package": "container:package/5f789c96d78e8b8f6d3f7311",
+            "provider": "grype",
+            "purl": "pkg:deb/debian/openssl@3.0.0",
+            "raw": {
+              "artifact": {
+                "id": "openssl-id",
+                "name": "openssl",
+                "purl": "pkg:deb/debian/openssl@3.0.0",
+                "type": "deb",
+                "version": "3.0.0"
+              },
+              "matchDetails": [
+                {
+                  "matcher": "dpkg-matcher",
+                  "type": "exact-direct-match"
+                }
+              ],
+              "relatedVulnerabilities": [
+                {
+                  "id": "CVE-2026-12345",
+                  "severity": "Critical"
+                }
+              ],
+              "vulnerability": {
+                "cvss": [
+                  {
+                    "metrics": {
+                      "baseScore": 8.1
+                    },
+                    "version": "3.1"
+                  }
+                ],
+                "dataSource": "https://example.test/advisory",
+                "description": "Fixture only",
+                "fix": {
+                  "state": "fixed",
+                  "versions": [
+                    "3.0.1"
+                  ]
+                },
+                "id": "GHSA-fixture-test",
+                "severity": "High",
+                "urls": [
+                  "https://example.test/GHSA-fixture-test"
+                ]
+              }
+            },
+            "raw_redacted": true,
+            "record_type": "finding",
+            "references": [
+              "https://example.test/GHSA-fixture-test"
+            ],
+            "relationships": [
+              {
+                "direction": "in",
+                "target": "container:package/5f789c96d78e8b8f6d3f7311",
+                "target_kind": "resource",
+                "type": "has_vulnerability"
+              }
+            ],
+            "run_id": null,
+            "schema_version": "purplesploit/container-inventory/1",
+            "severity": "high",
+            "source": null,
+            "source_file": null,
+            "source_id": "container:finding/e8d1a7b33d7de39337c6be8b",
+            "source_schema": "grype/0.100.0",
+            "title": "GHSA-fixture-test",
+            "vulnerability_id": "GHSA-fixture-test"
+          },
+          "confidence": "observed",
+          "engagement_id": null,
+          "kind": "finding",
+          "module_path": "interop/containers/grype",
+          "observation_id": "a474e834-6b5d-515e-970c-1623153fce7b",
+          "observed_at": null,
+          "operation_name": null,
+          "port": null,
+          "protocol": null,
+          "service": null,
+          "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+          "target": "container:finding/e8d1a7b33d7de39337c6be8b",
+          "version": null
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/grype-json",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "high",
+      "status": "draft",
+      "tags": [],
+      "target": "container:image/sha256%3Afixture",
+      "title": "GHSA-fixture-test",
+      "url": null,
+      "verified_at": null
+    },
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [
+        "CVE-2026-54321"
+      ],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "",
+      "discovered_at": null,
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "a61b2d2f-88db-52c8-b1d0-45bb958f80a5",
+      "impact": "",
+      "metadata": {
+        "source_observation": {
+          "attributes": {
+            "affected_resource": "container:image/sha256%3Afixture",
+            "aliases": [],
+            "cve_ids": [
+              "CVE-2026-54321"
+            ],
+            "cves": [
+              "CVE-2026-54321"
+            ],
+            "cvss": [],
+            "data_source": null,
+            "description": null,
+            "fix_state": "not-fixed",
+            "fixed_versions": [],
+            "identifier": "container:finding/f654592240784579fd612652",
+            "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+            "match_details": [],
+            "name": "CVE-2026-54321",
+            "original_severity": "Negligible",
+            "package": "container:package/ade05134a085d36592d306f5",
+            "provider": "grype",
+            "purl": null,
+            "raw": {
+              "artifact": {
+                "id": "libc-id",
+                "name": "libc",
+                "type": "deb",
+                "version": "2.36"
+              },
+              "vulnerability": {
+                "fix": {
+                  "state": "not-fixed",
+                  "versions": []
+                },
+                "id": "CVE-2026-54321",
+                "severity": "Negligible"
+              }
+            },
+            "raw_redacted": true,
+            "record_type": "finding",
+            "references": [],
+            "relationships": [
+              {
+                "direction": "in",
+                "target": "container:package/ade05134a085d36592d306f5",
+                "target_kind": "resource",
+                "type": "has_vulnerability"
+              }
+            ],
+            "run_id": null,
+            "schema_version": "purplesploit/container-inventory/1",
+            "severity": "info",
+            "source": null,
+            "source_file": null,
+            "source_id": "container:finding/f654592240784579fd612652",
+            "source_schema": "grype/0.100.0",
+            "title": "CVE-2026-54321",
+            "vulnerability_id": "CVE-2026-54321"
+          },
+          "confidence": "observed",
+          "engagement_id": null,
+          "kind": "finding",
+          "module_path": "interop/containers/grype",
+          "observation_id": "a61b2d2f-88db-52c8-b1d0-45bb958f80a5",
+          "observed_at": null,
+          "operation_name": null,
+          "port": null,
+          "protocol": null,
+          "service": null,
+          "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+          "target": "container:finding/f654592240784579fd612652",
+          "version": null
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/grype-json",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "info",
+      "status": "draft",
+      "tags": [],
+      "target": "container:image/sha256%3Afixture",
+      "title": "CVE-2026-54321",
+      "url": null,
+      "verified_at": null
+    }
+  ],
+  "fixture": "python/tests/fixtures/containers/grype.json",
+  "importer": "interop.importers:grype-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "identifier": "container:package/5f789c96d78e8b8f6d3f7311",
+        "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+        "name": "openssl",
+        "package_id": "openssl-id",
+        "package_type": "deb",
+        "provider": "grype",
+        "raw": {
+          "id": "openssl-id",
+          "name": "openssl",
+          "purl": "pkg:deb/debian/openssl@3.0.0",
+          "type": "deb",
+          "version": "3.0.0"
+        },
+        "raw_redacted": true,
+        "record_type": "package",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "openssl-id",
+        "source_schema": "grype/0.100.0",
+        "version": "3.0.0"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/grype",
+      "observation_id": "1ed8f5a3-243d-570d-835c-b5a1889e50bd",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+      "target": "container:package/5f789c96d78e8b8f6d3f7311",
+      "version": "3.0.0"
+    },
+    {
+      "attributes": {
+        "identifier": "container:package/ade05134a085d36592d306f5",
+        "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+        "name": "libc",
+        "package_id": "libc-id",
+        "package_type": "deb",
+        "provider": "grype",
+        "raw": {
+          "id": "libc-id",
+          "name": "libc",
+          "type": "deb",
+          "version": "2.36"
+        },
+        "raw_redacted": true,
+        "record_type": "package",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "libc-id",
+        "source_schema": "grype/0.100.0",
+        "version": "2.36"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/grype",
+      "observation_id": "71be1f8c-53a7-53e0-91a6-af0ebfdb6de0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+      "target": "container:package/ade05134a085d36592d306f5",
+      "version": "2.36"
+    },
+    {
+      "attributes": {
+        "affected_resource": "container:image/sha256%3Afixture",
+        "aliases": [
+          "CVE-2026-12345"
+        ],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "cves": [
+          "CVE-2026-12345"
+        ],
+        "cvss": [
+          {
+            "metrics": {
+              "baseScore": 8.1
+            },
+            "version": "3.1"
+          }
+        ],
+        "data_source": "https://example.test/advisory",
+        "description": "Fixture only",
+        "fix_state": "fixed",
+        "fixed_versions": [
+          "3.0.1"
+        ],
+        "identifier": "container:finding/e8d1a7b33d7de39337c6be8b",
+        "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+        "match_details": [
+          {
+            "matcher": "dpkg-matcher",
+            "type": "exact-direct-match"
+          }
+        ],
+        "name": "GHSA-fixture-test",
+        "original_severity": "High",
+        "package": "container:package/5f789c96d78e8b8f6d3f7311",
+        "provider": "grype",
+        "purl": "pkg:deb/debian/openssl@3.0.0",
+        "raw": {
+          "artifact": {
+            "id": "openssl-id",
+            "name": "openssl",
+            "purl": "pkg:deb/debian/openssl@3.0.0",
+            "type": "deb",
+            "version": "3.0.0"
+          },
+          "matchDetails": [
+            {
+              "matcher": "dpkg-matcher",
+              "type": "exact-direct-match"
+            }
+          ],
+          "relatedVulnerabilities": [
+            {
+              "id": "CVE-2026-12345",
+              "severity": "Critical"
+            }
+          ],
+          "vulnerability": {
+            "cvss": [
+              {
+                "metrics": {
+                  "baseScore": 8.1
+                },
+                "version": "3.1"
+              }
+            ],
+            "dataSource": "https://example.test/advisory",
+            "description": "Fixture only",
+            "fix": {
+              "state": "fixed",
+              "versions": [
+                "3.0.1"
+              ]
+            },
+            "id": "GHSA-fixture-test",
+            "severity": "High",
+            "urls": [
+              "https://example.test/GHSA-fixture-test"
+            ]
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "finding",
+        "references": [
+          "https://example.test/GHSA-fixture-test"
+        ],
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:package/5f789c96d78e8b8f6d3f7311",
+            "target_kind": "resource",
+            "type": "has_vulnerability"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "severity": "high",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:finding/e8d1a7b33d7de39337c6be8b",
+        "source_schema": "grype/0.100.0",
+        "title": "GHSA-fixture-test",
+        "vulnerability_id": "GHSA-fixture-test"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/containers/grype",
+      "observation_id": "a474e834-6b5d-515e-970c-1623153fce7b",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+      "target": "container:finding/e8d1a7b33d7de39337c6be8b",
+      "version": null
+    },
+    {
+      "attributes": {
+        "affected_resource": "container:image/sha256%3Afixture",
+        "aliases": [],
+        "cve_ids": [
+          "CVE-2026-54321"
+        ],
+        "cves": [
+          "CVE-2026-54321"
+        ],
+        "cvss": [],
+        "data_source": null,
+        "description": null,
+        "fix_state": "not-fixed",
+        "fixed_versions": [],
+        "identifier": "container:finding/f654592240784579fd612652",
+        "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+        "match_details": [],
+        "name": "CVE-2026-54321",
+        "original_severity": "Negligible",
+        "package": "container:package/ade05134a085d36592d306f5",
+        "provider": "grype",
+        "purl": null,
+        "raw": {
+          "artifact": {
+            "id": "libc-id",
+            "name": "libc",
+            "type": "deb",
+            "version": "2.36"
+          },
+          "vulnerability": {
+            "fix": {
+              "state": "not-fixed",
+              "versions": []
+            },
+            "id": "CVE-2026-54321",
+            "severity": "Negligible"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "finding",
+        "references": [],
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:package/ade05134a085d36592d306f5",
+            "target_kind": "resource",
+            "type": "has_vulnerability"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "severity": "info",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:finding/f654592240784579fd612652",
+        "source_schema": "grype/0.100.0",
+        "title": "CVE-2026-54321",
+        "vulnerability_id": "CVE-2026-54321"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/containers/grype",
+      "observation_id": "a61b2d2f-88db-52c8-b1d0-45bb958f80a5",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+      "target": "container:finding/f654592240784579fd612652",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifact_type": "image",
+        "identifier": "container:image/sha256%3Afixture",
+        "import_id": "919857ba-3cf2-5347-9fe3-e65ebb273663",
+        "name": "sha256:fixture",
+        "provider": "grype",
+        "raw": {
+          "target": {
+            "imageID": "sha256:fixture",
+            "userInput": "example.test/web:v1"
+          },
+          "type": "image"
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "relationships": [],
+        "run_id": null,
+        "scanner": "grype",
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/sha256%3Afixture",
+        "source_schema": "grype/0.100.0"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/grype",
+      "observation_id": "e07b9724-7ec4-53b3-a975-5734cf3f21d9",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:919857ba-3cf2-5347-9fe3-e65ebb273663",
+      "target": "container:image/sha256%3Afixture",
+      "version": null
+    }
+  ]
+}

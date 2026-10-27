@@ -119,8 +119,7 @@ def _json(document, result):
 
 def _emit(result, record_type, identifier, inventory, *, kind="identity", target=None):
     attrs = {
-        "source_tool": "identity-import", "source_file": result.source,
-        "source_schema": result.source_schema, "schema_version": result.schema_version,
+        "source_file": result.source, "schema_version": result.schema_version,
         "import_id": result.import_id, "run_id": result.run_id,
         "document_fingerprint": result.document_fingerprint,
         "record_type": record_type, "identifier": identifier,
@@ -134,6 +133,7 @@ def _emit(result, record_type, identifier, inventory, *, kind="identity", target
     if all(item.observation_id != observation_id for item in result.observations):
         result.observations.append(Observation(
             kind=kind, target=str(target or identifier), attributes=attrs,
+            source_tool="identity-import", source_schema=result.source_schema,
             source_execution_id=f"import:{result.import_id}", module_path="interop/identity",
             operation_name=f"Import {result.protocol}", observed_at=result.observed_at,
             observation_id=observation_id,

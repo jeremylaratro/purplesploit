@@ -122,8 +122,8 @@ def test_kubernetes_secret_references_are_metadata_only_and_do_not_mutate_input(
     for value in ("FIXTURE_CA_BYTES", "FIXTURE_LITERAL_ENV", "FIXTURE_ANNOTATION_SECRET", "FIXTURE_BASE64_SECRET",
                   "FIXTURE_SECRET_STRING", "FIXTURE_CONFIG_PAYLOAD", "FIXTURE_BINARY_PAYLOAD", "FIXTURE_ROUTE_KEY", "FIXTURE_ROUTE_CERT"):
         assert value not in serialized
-    assert secret.attributes["raw"]["data_keys"] == ["password"]
-    assert "data" not in secret.attributes["raw"]
+    assert secret.raw["data_keys"] == ["password"]
+    assert "data" not in secret.raw
 
 
 def test_kubeconfig_contexts_multiple_clusters_and_credentials_omitted():
@@ -222,7 +222,7 @@ def test_crictl_inventory_and_inspect_status():
     record = fixture("crictl.json")["containers"][0]
     inspected = import_crictl_inventory({"status": record, "info": {"pid": 456}}, runtime="cri-host")
     assert inspected.status == "ok"
-    assert of_type(inspected, "container")[0].attributes["raw"]["pid"] == 456
+    assert of_type(inspected, "container")[0].raw["pid"] == 456
     inspected_image = import_crictl_inventory({"status": fixture("crictl.json")["images"][0]}, runtime="cri-host")
     assert inspected_image.status == "ok"
     assert len(of_type(inspected_image, "image")) == 1
@@ -245,7 +245,7 @@ def test_trivy_packages_vulnerability_metadata_and_graph_relationships():
     assert relationships(finding, "has_vulnerability")[0]["target"] == package.target
     assert relationships(finding, "has_vulnerability")[0]["direction"] == "in"
     assert package.attributes["version"] == "3.0.0"
-    assert all(item.attributes["source_schema"] == "trivy/2" for item in result.observations)
+    assert all(item.source_schema == "trivy/2" for item in result.observations)
 
 
 def test_grype_aliases_keep_primary_scanner_severity_and_fix_state():
@@ -285,7 +285,7 @@ def test_trivy_secret_results_never_retained():
                                             "Code": {"Lines": [{"Content": "FIXTURE_LINE_SECRET"}]}}]
     result = import_trivy_json(document)
     assert result.status == "partial"
-    assert all("FIXTURE_" not in json.dumps(item.attributes["raw"]) for item in result.observations)
+    assert all("FIXTURE_" not in json.dumps(item.raw) for item in result.observations)
     assert any("Secrets" in item["message"] for item in result.diagnostics)
 
 
@@ -304,7 +304,7 @@ def test_determinism_provenance_path_inputs_merge_and_scope(importer, filename, 
     assert all(item.observed_at is None for item in first.observations)
     assert all(item.attributes["provider"] == first.provider and item.attributes["source"] == filename
                and item.attributes["run_id"] == "run-1" and item.attributes["import_id"] == first.import_id
-               and item.attributes["source_id"] and item.attributes["source_schema"]
+               and item.source_id and item.source_schema
                and item.attributes["raw_redacted"] is True for item in first.observations)
     assert importer(json.dumps(document).encode(), source=filename, run_id="run-1", **kwargs).to_dict() == first.to_dict()
     assert importer(FIXTURES / filename, source=filename, run_id="run-1", **kwargs).to_dict() == first.to_dict()

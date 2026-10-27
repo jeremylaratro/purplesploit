@@ -31,8 +31,8 @@ def test_network_inventory_keeps_host_endpoint_and_producer_identity():
     assert web.attributes["product"] == "nginx" and web.version == "fixture"
     assert web.attributes["extrainfo"] == "TLS endpoint" and web.attributes["tunnel"] == "ssl"
     assert web.attributes["categories"] == ["http", "https"]
-    assert web.attributes["source_schema"] == INVENTORY_SCHEMA
-    assert web.attributes["source_id"] is None and web.attributes["source_tool_version"] is None
+    assert web.source_schema == INVENTORY_SCHEMA
+    assert web.source_id is None and web.source_tool_version is None
     assert web.attributes["run_id"] == "network-fixture-run"
     assert Observation.from_dict(json.loads(json.dumps(web.to_dict()))) == web
 
@@ -73,7 +73,7 @@ def test_posture_retains_every_status_without_manufacturing_findings():
     assert len(checks) == 7
     assert {item.attributes["status"] for item in checks} == {"PASS", "FAIL", "WARN", "INFO", "NA", "ERR"}
     assert len(bundle.findings) == 2
-    assert {item.attributes["source_id"] for item in bundle.observations if item.kind == "finding"} == {"AR-fixture-host", "AR-fixture-domain"}
+    assert {item.source_id for item in bundle.observations if item.kind == "finding"} == {"AR-fixture-host", "AR-fixture-domain"}
     domain = next(item for item in checks if item.target == "example.test")
     assert domain.attributes["scope"] == "domain"
     assert domain.attributes["observed_from"][0]["host"] == "192.0.2.31"
@@ -81,8 +81,8 @@ def test_posture_retains_every_status_without_manufacturing_findings():
     assert bundle.findings[0].status is FindingStatus.DRAFT
     assert "unmapped" in bundle.findings[1].notes[0]
     metadata = next(item for item in bundle.observations if item.attributes["source_file"] == "findings.json" and item.attributes["record_type"] == "snapshot_metadata")
-    assert metadata.attributes["raw"]["kb"]["checks"]["LIN-FAIL"]["remediation"]["steps"]
-    host_finding = next(item for item in bundle.observations if item.attributes["source_id"] == "AR-fixture-host")
+    assert metadata.raw["kb"]["checks"]["LIN-FAIL"]["remediation"]["steps"]
+    host_finding = next(item for item in bundle.observations if item.source_id == "AR-fixture-host")
     assert len(host_finding.attributes["artifacts"]) == 1
     assert host_finding.attributes["artifacts"][0]["exists"] is True
     assert Path(bundle.findings[0].evidence[0].file_path).is_file()
@@ -93,7 +93,7 @@ def test_posture_retains_every_status_without_manufacturing_findings():
 def test_partial_error_skipped_unassessed_and_redacted_paths_stay_visible():
     bundle = import_aranum_bundle(FIXTURES / "partial")
     assert not bundle.findings
-    raw = [item.attributes["raw"] for item in bundle.observations]
+    raw = [item.raw for item in bundle.observations]
     assert {item.get("status") for item in raw} >= {"ERR", "failed", "skipped", "unassessed"}
     metadata = next(item for item in raw if item.get("partial"))
     assert metadata["errors"][0]["error"] == "missing optional dependency"

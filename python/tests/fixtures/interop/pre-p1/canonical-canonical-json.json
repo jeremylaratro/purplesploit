@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "extensions": {
+        "source_fields": {
+          "future": {
+            "keep": true
+          }
+        }
+      },
+      "id": "f1",
+      "severity": "high",
+      "target": "192.0.2.1",
+      "title": "Fixture finding"
+    }
+  ],
+  "fixture": "python/tests/fixtures/canonical/golden.json",
+  "importer": "interop.canonical:CanonicalDocument.from_json",
+  "normalizations": [],
+  "observations": []
+}

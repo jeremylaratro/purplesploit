@@ -1,0 +1,621 @@
+{
+  "findings": [
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [
+        "CVE-2026-12345"
+      ],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "Recorded fixture only",
+      "discovered_at": null,
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "81e00c46-5590-5072-9463-b8f8a372f136",
+      "impact": "",
+      "metadata": {
+        "source_observation": {
+          "attributes": {
+            "affected_resource": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+            "aliases": [],
+            "cve_ids": [
+              "CVE-2026-12345"
+            ],
+            "cves": [
+              "CVE-2026-12345"
+            ],
+            "cvss": {
+              "nvd": {
+                "V3Score": 9.8
+              }
+            },
+            "data_source": {
+              "ID": "debian"
+            },
+            "description": "Recorded fixture only",
+            "fixed_versions": [
+              "3.0.1",
+              "3.1.0"
+            ],
+            "identifier": "container:finding/cad3d6dd555edef3d5c48e02",
+            "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+            "name": "Fixture vulnerability",
+            "original_severity": "CRITICAL",
+            "package": "container:package/a44d27da2e6a9b7ad144f9c4",
+            "provider": "trivy",
+            "raw": {
+              "CVSS": {
+                "nvd": {
+                  "V3Score": 9.8
+                }
+              },
+              "DataSource": {
+                "ID": "debian"
+              },
+              "Description": "Recorded fixture only",
+              "FixedVersion": "3.0.1, 3.1.0",
+              "InstalledVersion": "3.0.0",
+              "PkgID": "openssl@3.0.0",
+              "PkgName": "openssl",
+              "References": [
+                "https://example.test/CVE-2026-12345"
+              ],
+              "Severity": "CRITICAL",
+              "Title": "Fixture vulnerability",
+              "VulnerabilityID": "CVE-2026-12345"
+            },
+            "raw_redacted": true,
+            "record_type": "finding",
+            "references": [
+              "https://example.test/CVE-2026-12345"
+            ],
+            "relationships": [
+              {
+                "direction": "in",
+                "target": "container:package/a44d27da2e6a9b7ad144f9c4",
+                "target_kind": "resource",
+                "type": "has_vulnerability"
+              }
+            ],
+            "run_id": null,
+            "schema_version": "purplesploit/container-inventory/1",
+            "severity": "critical",
+            "source": null,
+            "source_file": null,
+            "source_id": "container:finding/cad3d6dd555edef3d5c48e02",
+            "source_schema": "trivy/2",
+            "title": "Fixture vulnerability",
+            "vulnerability_id": "CVE-2026-12345"
+          },
+          "confidence": "observed",
+          "engagement_id": null,
+          "kind": "finding",
+          "module_path": "interop/containers/trivy",
+          "observation_id": "81e00c46-5590-5072-9463-b8f8a372f136",
+          "observed_at": null,
+          "operation_name": null,
+          "port": null,
+          "protocol": null,
+          "service": null,
+          "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+          "target": "container:finding/cad3d6dd555edef3d5c48e02",
+          "version": null
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/trivy-json",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "critical",
+      "status": "draft",
+      "tags": [],
+      "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+      "title": "Fixture vulnerability",
+      "url": null,
+      "verified_at": null
+    },
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [
+        "CVE-2026-12346"
+      ],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "",
+      "discovered_at": null,
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "b9fac676-b66a-5450-ac06-9b3150cf08dc",
+      "impact": "",
+      "metadata": {
+        "source_observation": {
+          "attributes": {
+            "affected_resource": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+            "aliases": [],
+            "cve_ids": [
+              "CVE-2026-12346"
+            ],
+            "cves": [
+              "CVE-2026-12346"
+            ],
+            "cvss": {},
+            "data_source": {},
+            "description": null,
+            "fixed_versions": [],
+            "identifier": "container:finding/ab228eb6f286b89660bda3ed",
+            "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+            "name": "CVE-2026-12346",
+            "original_severity": "UNKNOWN",
+            "package": "container:package/fa471d8013a89f01cbe0f69e",
+            "provider": "trivy",
+            "raw": {
+              "InstalledVersion": "1",
+              "PkgName": "missing-package",
+              "Severity": "UNKNOWN",
+              "VulnerabilityID": "CVE-2026-12346"
+            },
+            "raw_redacted": true,
+            "record_type": "finding",
+            "references": [],
+            "relationships": [
+              {
+                "direction": "in",
+                "target": "container:package/fa471d8013a89f01cbe0f69e",
+                "target_kind": "resource",
+                "type": "has_vulnerability"
+              }
+            ],
+            "run_id": null,
+            "schema_version": "purplesploit/container-inventory/1",
+            "severity": "unknown",
+            "source": null,
+            "source_file": null,
+            "source_id": "container:finding/ab228eb6f286b89660bda3ed",
+            "source_schema": "trivy/2",
+            "title": "CVE-2026-12346",
+            "vulnerability_id": "CVE-2026-12346"
+          },
+          "confidence": "observed",
+          "engagement_id": null,
+          "kind": "finding",
+          "module_path": "interop/containers/trivy",
+          "observation_id": "b9fac676-b66a-5450-ac06-9b3150cf08dc",
+          "observed_at": null,
+          "operation_name": null,
+          "port": null,
+          "protocol": null,
+          "service": null,
+          "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+          "target": "container:finding/ab228eb6f286b89660bda3ed",
+          "version": null
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/trivy-json",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "info",
+      "status": "draft",
+      "tags": [],
+      "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+      "title": "CVE-2026-12346",
+      "url": null,
+      "verified_at": null
+    }
+  ],
+  "fixture": "python/tests/fixtures/containers/trivy.json",
+  "importer": "interop.importers:trivy-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "identifier": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "example.test/web:v1 (debian 12)",
+        "provider": "trivy",
+        "raw": {
+          "Class": "os-pkgs",
+          "Target": "example.test/web:v1 (debian 12)",
+          "Type": "debian"
+        },
+        "raw_redacted": true,
+        "record_type": "scan_target",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+        "source_schema": "trivy/2",
+        "target_class": "os-pkgs",
+        "target_type": "debian"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "3f8fabf0-ec23-5889-ae5b-c0cddd3d8216",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:package/50558e1206bd6a912d755483",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "libc",
+        "package_id": "libc@2.36",
+        "package_type": "debian",
+        "provider": "trivy",
+        "raw": {
+          "ID": "libc@2.36",
+          "Name": "libc",
+          "Version": "2.36"
+        },
+        "raw_redacted": true,
+        "record_type": "package",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "libc@2.36",
+        "source_schema": "trivy/2",
+        "version": "2.36"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "5bb243dc-d3f0-5c40-ba32-9139c3de2ddd",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:package/50558e1206bd6a912d755483",
+      "version": "2.36"
+    },
+    {
+      "attributes": {
+        "artifact_type": "container_image",
+        "identifier": "container:image/sha256%3Afixture",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "example.test/web:v1",
+        "provider": "trivy",
+        "raw": {
+          "ArtifactID": "sha256:fixture",
+          "ArtifactName": "example.test/web:v1",
+          "ArtifactType": "container_image",
+          "SchemaVersion": 2
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "identifies"
+          }
+        ],
+        "run_id": null,
+        "scanner": "trivy",
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:image/sha256%3Afixture",
+        "source_schema": "trivy/2"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "66ad1634-24be-5036-90e7-5ddb823e801f",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:image/sha256%3Afixture",
+      "version": null
+    },
+    {
+      "attributes": {
+        "affected_resource": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+        "aliases": [],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "cves": [
+          "CVE-2026-12345"
+        ],
+        "cvss": {
+          "nvd": {
+            "V3Score": 9.8
+          }
+        },
+        "data_source": {
+          "ID": "debian"
+        },
+        "description": "Recorded fixture only",
+        "fixed_versions": [
+          "3.0.1",
+          "3.1.0"
+        ],
+        "identifier": "container:finding/cad3d6dd555edef3d5c48e02",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "Fixture vulnerability",
+        "original_severity": "CRITICAL",
+        "package": "container:package/a44d27da2e6a9b7ad144f9c4",
+        "provider": "trivy",
+        "raw": {
+          "CVSS": {
+            "nvd": {
+              "V3Score": 9.8
+            }
+          },
+          "DataSource": {
+            "ID": "debian"
+          },
+          "Description": "Recorded fixture only",
+          "FixedVersion": "3.0.1, 3.1.0",
+          "InstalledVersion": "3.0.0",
+          "PkgID": "openssl@3.0.0",
+          "PkgName": "openssl",
+          "References": [
+            "https://example.test/CVE-2026-12345"
+          ],
+          "Severity": "CRITICAL",
+          "Title": "Fixture vulnerability",
+          "VulnerabilityID": "CVE-2026-12345"
+        },
+        "raw_redacted": true,
+        "record_type": "finding",
+        "references": [
+          "https://example.test/CVE-2026-12345"
+        ],
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:package/a44d27da2e6a9b7ad144f9c4",
+            "target_kind": "resource",
+            "type": "has_vulnerability"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "severity": "critical",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:finding/cad3d6dd555edef3d5c48e02",
+        "source_schema": "trivy/2",
+        "title": "Fixture vulnerability",
+        "vulnerability_id": "CVE-2026-12345"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "81e00c46-5590-5072-9463-b8f8a372f136",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:finding/cad3d6dd555edef3d5c48e02",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:package/a44d27da2e6a9b7ad144f9c4",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "openssl",
+        "package_id": "openssl@3.0.0",
+        "package_type": "debian",
+        "provider": "trivy",
+        "raw": {
+          "ID": "openssl@3.0.0",
+          "Name": "openssl",
+          "Version": "3.0.0"
+        },
+        "raw_redacted": true,
+        "record_type": "package",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "openssl@3.0.0",
+        "source_schema": "trivy/2",
+        "version": "3.0.0"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "9c2e6553-18d8-58a5-bffc-63f987dfb49c",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:package/a44d27da2e6a9b7ad144f9c4",
+      "version": "3.0.0"
+    },
+    {
+      "attributes": {
+        "affected_resource": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+        "aliases": [],
+        "cve_ids": [
+          "CVE-2026-12346"
+        ],
+        "cves": [
+          "CVE-2026-12346"
+        ],
+        "cvss": {},
+        "data_source": {},
+        "description": null,
+        "fixed_versions": [],
+        "identifier": "container:finding/ab228eb6f286b89660bda3ed",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "CVE-2026-12346",
+        "original_severity": "UNKNOWN",
+        "package": "container:package/fa471d8013a89f01cbe0f69e",
+        "provider": "trivy",
+        "raw": {
+          "InstalledVersion": "1",
+          "PkgName": "missing-package",
+          "Severity": "UNKNOWN",
+          "VulnerabilityID": "CVE-2026-12346"
+        },
+        "raw_redacted": true,
+        "record_type": "finding",
+        "references": [],
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:package/fa471d8013a89f01cbe0f69e",
+            "target_kind": "resource",
+            "type": "has_vulnerability"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "severity": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:finding/ab228eb6f286b89660bda3ed",
+        "source_schema": "trivy/2",
+        "title": "CVE-2026-12346",
+        "vulnerability_id": "CVE-2026-12346"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "b9fac676-b66a-5450-ac06-9b3150cf08dc",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:finding/ab228eb6f286b89660bda3ed",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:package/fa471d8013a89f01cbe0f69e",
+        "import_id": "534c7157-fccf-52bd-883e-33d420756bb7",
+        "name": "missing-package",
+        "package_id": null,
+        "package_type": "debian",
+        "provider": "trivy",
+        "raw": {
+          "ID": null,
+          "Name": "missing-package",
+          "Version": "1"
+        },
+        "raw_redacted": true,
+        "record_type": "package",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:image/sha256%3Afixture/target/example.test%2Fweb%3Av1%20%28debian%2012%29",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:package/fa471d8013a89f01cbe0f69e",
+        "source_schema": "trivy/2",
+        "version": "1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/trivy",
+      "observation_id": "ce7bdab4-2b35-553c-b626-99f9439cc6f1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:534c7157-fccf-52bd-883e-33d420756bb7",
+      "target": "container:package/fa471d8013a89f01cbe0f69e",
+      "version": "1"
+    }
+  ]
+}

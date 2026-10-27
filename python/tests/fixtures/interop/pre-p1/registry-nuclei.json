@@ -1,0 +1,225 @@
+{
+  "findings": [
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [
+        "CVE-2026-0001"
+      ],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "Fixture only",
+      "discovered_at": "2026-10-26T12:00:00+00:00",
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "nuclei:0d903c3796b478c16dcbbda0db39551e",
+      "impact": "",
+      "metadata": {
+        "source_format": "nuclei-jsonl",
+        "source_record": {
+          "future": {
+            "preserve": true
+          },
+          "host": "https://example.test",
+          "info": {
+            "classification": {
+              "cve-id": [
+                "CVE-2026-0001"
+              ]
+            },
+            "description": "Fixture only",
+            "name": "Legacy TLS",
+            "severity": "high"
+          },
+          "matched-at": "https://example.test:443",
+          "template-id": "fixture-tls",
+          "timestamp": "2026-10-26T12:00:00+00:00"
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "nuclei",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "{'template-id': 'fixture-tls', 'info': {'name': 'Legacy TLS', 'severity': 'high', 'description': 'Fixture only', 'classification': {'cve-id': ['CVE-2026-0001']}}, 'host': 'https://example.test', 'matched-at': 'https://example.test:443', 'timestamp': '2026-10-26T12:00:00+00:00', 'future': {'preserve': True}}",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "high",
+      "status": "draft",
+      "tags": [],
+      "target": "https://example.test",
+      "title": "Legacy TLS",
+      "url": "https://example.test:443",
+      "verified_at": null
+    },
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "",
+      "discovered_at": null,
+      "duplicate_of": null,
+      "evidence": [],
+      "host": null,
+      "id": "nuclei:531191f746e766251455367394f34908",
+      "impact": "",
+      "metadata": {
+        "source_format": "nuclei-jsonl",
+        "source_record": {
+          "host": "https://example.test",
+          "info": {
+            "name": "Missing header",
+            "severity": "low"
+          },
+          "matched-at": "https://example.test/path",
+          "matcher-name": "header",
+          "template-id": "fixture-header"
+        }
+      },
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "nuclei",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "{'template-id': 'fixture-header', 'info': {'name': 'Missing header', 'severity': 'low'}, 'host': 'https://example.test', 'matched-at': 'https://example.test/path', 'matcher-name': 'header'}",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": null,
+      "severity": "low",
+      "status": "draft",
+      "tags": [],
+      "target": "https://example.test",
+      "title": "Missing header",
+      "url": "https://example.test/path",
+      "verified_at": null
+    }
+  ],
+  "fixture": "python/tests/fixtures/canonical/nuclei.jsonl",
+  "importer": "interop.importers:nuclei-jsonl",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "classification": {
+          "cve-id": [
+            "CVE-2026-0001"
+          ]
+        },
+        "description": "Fixture only",
+        "extracted_results": [],
+        "host": "example.test",
+        "matched_at": "https://example.test:443",
+        "matcher_name": null,
+        "port": 443,
+        "raw": {
+          "future": {
+            "preserve": true
+          },
+          "host": "https://example.test",
+          "info": {
+            "classification": {
+              "cve-id": [
+                "CVE-2026-0001"
+              ]
+            },
+            "description": "Fixture only",
+            "name": "Legacy TLS",
+            "severity": "high"
+          },
+          "matched-at": "https://example.test:443",
+          "template-id": "fixture-tls",
+          "timestamp": "2026-10-26T12:00:00+00:00"
+        },
+        "references": [],
+        "scheme": "https",
+        "severity": "high",
+        "source": "nuclei",
+        "template_id": "fixture-tls",
+        "title": "Legacy TLS",
+        "url": "https://example.test:443"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "recon/nuclei",
+      "observation_id": "5b2ac67b-2a69-575a-95cd-2310bd7b7f2c",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 443,
+      "protocol": "tcp",
+      "service": "https",
+      "source_execution_id": "import:ab27c0d7c81af37ac1793721f3684aa6",
+      "target": "https://example.test:443",
+      "version": null
+    },
+    {
+      "attributes": {
+        "classification": {},
+        "description": "",
+        "extracted_results": [],
+        "host": "example.test",
+        "matched_at": "https://example.test/path",
+        "matcher_name": "header",
+        "port": 443,
+        "raw": {
+          "host": "https://example.test",
+          "info": {
+            "name": "Missing header",
+            "severity": "low"
+          },
+          "matched-at": "https://example.test/path",
+          "matcher-name": "header",
+          "template-id": "fixture-header"
+        },
+        "references": [],
+        "scheme": "https",
+        "severity": "low",
+        "source": "nuclei",
+        "template_id": "fixture-header",
+        "title": "Missing header",
+        "url": "https://example.test/path"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "recon/nuclei",
+      "observation_id": "84e803f7-c494-51ec-b942-65a99adbbb91",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 443,
+      "protocol": "tcp",
+      "service": "https",
+      "source_execution_id": "import:ab27c0d7c81af37ac1793721f3684aa6",
+      "target": "https://example.test/path",
+      "version": null
+    }
+  ]
+}

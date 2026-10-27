@@ -1,0 +1,531 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/aranum/partial",
+  "importer": "interop.importers:aranum-bundle",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "redacted": true,
+          "schema_version": "1"
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "partial-fixture-run",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "234ecc83-9668-592b-b4d7-bb65c30d6c10",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "errors": [
+            {
+              "error": "missing optional dependency",
+              "path": "<redacted>/tool.log"
+            }
+          ],
+          "partial": true,
+          "posture_quarantine": [
+            {
+              "error": "malformed check",
+              "host": "host-redacted",
+              "line": "<redacted untrusted line>",
+              "path": "<redacted>/posture.log"
+            }
+          ],
+          "redacted": true,
+          "schema_version": "2",
+          "summary": {
+            "coverage": [
+              {
+                "host": "host-redacted",
+                "status": "unassessed"
+              }
+            ]
+          }
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "partial-fixture-run",
+        "source_file": "findings.json",
+        "source_id": null,
+        "source_schema": "aranum/findings/2",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "542730a1-0417-5347-9cf7-dd91c0368883",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "summary": {
+            "hosts": 1,
+            "open_ports": 0
+          }
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "partial-fixture-run",
+        "source_file": "inventory.json",
+        "source_id": null,
+        "source_schema": "aranum/inventory-unversioned;adapter=1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "7bfea262-1cc4-5068-a35e-4305f630b356",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "rc": 4,
+          "reason": "missing dependency",
+          "run_id": "partial-fixture-run",
+          "service": "smb",
+          "status": "unassessed",
+          "target": "host-redacted",
+          "task_id": "fixture-task"
+        },
+        "raw_service": "smb",
+        "record_type": "task_execution",
+        "run_id": "partial-fixture-run",
+        "source_file": "queue.state.jsonl",
+        "source_id": "fixture-task",
+        "source_schema": "aranum/queue.state.jsonl/unversioned",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "unassessed",
+        "subject": {
+          "host": "host-redacted",
+          "hostname": null,
+          "port": null,
+          "service": "smb",
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "8efa2f21-13c7-5303-8bf2-8647f1a4fa53",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": "smb",
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "host-redacted",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "rc": 4,
+          "reason": "missing dependency",
+          "service": "smb",
+          "status": "failed"
+        },
+        "raw_service": "smb",
+        "record_type": "service_execution",
+        "run_id": "partial-fixture-run",
+        "source_file": "run-state.json",
+        "source_id": null,
+        "source_schema": "aranum/run-state/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "failed",
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": "smb",
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "aed006ef-3a1e-5889-808f-cd760bdb2753",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": "smb",
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "<redacted>/posture.log",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "check_id": "UNKNOWN-ERR",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "missing dependency",
+          "status": "ERR"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "partial-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "ERR",
+        "subject": {
+          "host": "host-redacted",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "b7ef4f32-4ac7-54e6-971b-d4c4c4100d51",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "host-redacted",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "<redacted>/posture.log",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "checks": {
+            "UNKNOWN-ERR": {
+              "detail": "missing dependency",
+              "status": "ERR"
+            }
+          },
+          "domain_observations": {},
+          "os": "unknown",
+          "source": "<redacted>/posture.log"
+        },
+        "raw_service": null,
+        "record_type": "posture_subject",
+        "run_id": "partial-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "host-redacted",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "ddc0fbf2-ed2b-5df6-bb31-79f31ccd7495",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "host-redacted",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": "",
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "hostname": "",
+          "ip": "host-redacted",
+          "state": "unknown"
+        },
+        "raw_service": null,
+        "record_type": "inventory_host",
+        "run_id": "partial-fixture-run",
+        "source_file": "inventory.json",
+        "source_id": null,
+        "source_schema": "aranum/inventory-unversioned;adapter=1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "host-redacted",
+          "hostname": "",
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "e709d5ed-4043-5899-bd02-44588c556150",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "host-redacted",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "rc": 0,
+          "reason": "not selected",
+          "service": "http",
+          "status": "skipped"
+        },
+        "raw_service": "http",
+        "record_type": "service_execution",
+        "run_id": "partial-fixture-run",
+        "source_file": "run-state.json",
+        "source_id": null,
+        "source_schema": "aranum/run-state/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "skipped",
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": "http",
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "f5980d21-68d1-506f-92b6-e577699cb302",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": "http",
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "59ef4459bfec077505e5a924f114693c6ce42c50ecc641eca23eec60b7225981",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "queue_authoritative": true,
+          "run_id": "partial-fixture-run",
+          "schema_version": 1
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "partial-fixture-run",
+        "source_file": "run-state.json",
+        "source_id": null,
+        "source_schema": "aranum/run-state/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "f88f7a10-2572-5071-b866-72f9a7b7dfb0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:partial-fixture-run",
+      "target": "",
+      "version": null
+    }
+  ]
+}

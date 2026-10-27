@@ -1,0 +1,76 @@
+{
+  "findings": [
+    {
+      "cvss_score": 8.1,
+      "description": "Untrusted query",
+      "extensions": {
+        "sarif": {
+          "result": {
+            "level": "error",
+            "locations": [
+              {
+                "physicalLocation": {
+                  "artifactLocation": {
+                    "uri": "src/api.py"
+                  },
+                  "region": {
+                    "startLine": 17
+                  }
+                }
+              }
+            ],
+            "message": {
+              "text": "Untrusted query"
+            },
+            "partialFingerprints": {
+              "primaryLocationLineHash": "source-fingerprint"
+            },
+            "properties": {
+              "custom-trace": [
+                "input",
+                "query"
+              ]
+            },
+            "ruleIndex": 0
+          },
+          "rule": {
+            "id": "CWE-89",
+            "properties": {
+              "security-severity": "8.1",
+              "vendor-field": true
+            },
+            "shortDescription": {
+              "text": "SQL injection"
+            }
+          },
+          "run_index": 0
+        }
+      },
+      "fingerprints": {
+        "primaryLocationLineHash": "source-fingerprint"
+      },
+      "id": "sarif:2fb6112d5aaa51e4594db1b8dcdd2213",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "src/api.py"
+            },
+            "region": {
+              "startLine": 17
+            }
+          }
+        }
+      ],
+      "rule_id": "CWE-89",
+      "severity": "high",
+      "source_id": "sarif:2fb6112d5aaa51e4594db1b8dcdd2213",
+      "target": "src/api.py",
+      "title": "SQL injection"
+    }
+  ],
+  "fixture": "python/tests/fixtures/canonical/tier1.sarif.json",
+  "importer": "interop.canonical:import_sarif",
+  "normalizations": [],
+  "observations": []
+}
