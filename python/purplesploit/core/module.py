@@ -591,6 +591,7 @@ class ExternalToolModule(BaseModule):
             request_id=request.request_id, module_path=request.module_path,
             operation_name=request.operation_name, correlation_id=request.correlation_id,
             engagement_id=request.engagement_id, job_id=request.job_id, tool=self.tool_name,
+            auth_context=request.auth_context,
         )
 
         def finish(results):

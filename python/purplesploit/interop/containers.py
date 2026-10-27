@@ -230,8 +230,8 @@ class _Builder:
             known.extend(item for item in relations if item not in known)
             known.sort(key=_canonical)
             raw = _raw(record)
-            if raw and raw != observation.attributes["raw"]:
-                evidence = observation.attributes.setdefault("source_records", [observation.attributes["raw"]])
+            if raw and raw != observation.raw:
+                evidence = observation.attributes.setdefault("source_records", [observation.raw])
                 if raw not in evidence:
                     evidence.append(raw)
                     evidence.sort(key=_canonical)
@@ -239,21 +239,23 @@ class _Builder:
             if observation.attributes.get("reference_only") and not attributes.get("reference_only"):
                 observation.attributes.update(attributes)
                 observation.attributes["reference_only"] = False
-                observation.attributes["raw"] = _raw(record)
+                observation.raw = _raw(record)
                 observation.attributes["record_type"] = record_type
             return observation
         attrs = {
             "identifier": identifier, "name": attributes.pop("name", None) or identifier,
             "record_type": record_type, "provider": self.result.provider,
-            "source_schema": self.result.source_schema, "schema_version": CONTAINER_SCHEMA_VERSION,
+            "schema_version": CONTAINER_SCHEMA_VERSION,
             "source": self.result.source, "source_file": self.result.source,
-            "source_id": str(record.get("id") or record.get("Id") or record.get("ID") or identifier),
             "run_id": self.result.run_id, "import_id": self.result.import_id,
-            "raw": _raw(record), "raw_redacted": True, "relationships": relations,
+            "raw_redacted": True, "relationships": relations,
             **attributes,
         }
         observation = Observation(
             kind=kind, target=identifier, attributes=attrs, observed_at=None,
+            source_schema=self.result.source_schema,
+            source_id=str(record.get("id") or record.get("Id") or record.get("ID") or identifier),
+            raw=_raw(record),
             source_execution_id=self.result.source_execution_id,
             module_path=f"interop/containers/{self.result.provider}",
             observation_id=str(uuid5(NAMESPACE_URL, _canonical([self.result.import_id, kind, identifier]))),

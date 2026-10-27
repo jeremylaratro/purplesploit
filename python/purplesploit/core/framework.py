@@ -131,9 +131,12 @@ class Framework:
         db_creds = self.database.get_credentials()
         for cred in db_creds:
             cred_dict = {
+                'account_ref': cred.get('account_ref'),
                 'username': cred['username'],
                 'password': cred['password'],
+                'scope': cred.get('scope'),
                 'domain': cred['domain'],
+                'local_host': cred.get('local_host'),
                 'dcip': cred.get('dcip'),
                 'dns': cred.get('dns'),
                 'hash': cred['hash'],
@@ -150,10 +153,13 @@ class Framework:
                 db_manager = self._get_db_manager()
                 name = cred.get('name') or cred['username']
                 cred_create = CredentialCreate(
+                    account_ref=cred.get('account_ref'),
                     name=name,
                     username=cred['username'],
                     password=cred.get('password'),
+                    scope=cred.get('scope'),
                     domain=cred.get('domain'),
+                    local_host=cred.get('local_host'),
                     dcip=cred.get('dcip'),
                     dns=cred.get('dns'),
                     hash=cred.get('hash')
@@ -398,6 +404,7 @@ class Framework:
                 request_id=request.request_id, module_path=request.module_path,
                 operation_name=request.operation_name, correlation_id=request.correlation_id,
                 engagement_id=request.engagement_id, job_id=request.job_id,
+                auth_context=request.auth_context,
                 outcome=ExecutionOutcome.ERROR, started_at=started_at, finished_at=utc_now(),
                 error=f'Module initialization failed: {exc}',
             )
@@ -406,6 +413,7 @@ class Framework:
                 request_id=request.request_id, module_path=request.module_path,
                 operation_name=request.operation_name, correlation_id=request.correlation_id,
                 engagement_id=request.engagement_id, job_id=request.job_id,
+                auth_context=request.auth_context,
                 outcome=ExecutionOutcome.REJECTED, started_at=started_at, finished_at=utc_now(),
                 error=f'Module not found: {request.module_path}',
             )
@@ -453,6 +461,7 @@ class Framework:
             request_id=request.request_id, module_path=request.module_path,
             operation_name=request.operation_name, correlation_id=request.correlation_id,
             engagement_id=request.engagement_id, job_id=request.job_id,
+            auth_context=request.auth_context.to_dict() if request.auth_context else None,
             observations=[item.to_dict() for item in observations],
             raw_result={key: value for key, value in results.items() if key not in {'execution', 'observations'}},
         )
@@ -767,7 +776,9 @@ class Framework:
 
     def add_credential(self, username: str, password: str = None,
                       domain: str = None, dcip: str = None, dns: str = None,
-                      hash_value: str = None, name: str = None) -> bool:
+                      hash_value: str = None, name: str = None,
+                      account_ref: str = None, scope: str = None,
+                      local_host: str = None) -> bool:
         """
         Add a credential to both session and database.
 
@@ -788,9 +799,12 @@ class Framework:
             name = f"{domain}/{username}" if domain else username
 
         cred_dict = {
+            'account_ref': account_ref,
             'username': username,
             'password': password,
+            'scope': scope,
             'domain': domain,
+            'local_host': local_host,
             'dcip': dcip,
             'dns': dns,
             'hash': hash_value,
@@ -893,16 +907,21 @@ class Framework:
         """Write one session credential to both supported persistence stores."""
         self.database.add_credential(
             username=credential.get("username"), password=credential.get("password"),
+            account_ref=credential.get("account_ref"), scope=credential.get("scope"),
             domain=credential.get("domain"), dcip=credential.get("dcip"),
+            local_host=credential.get("local_host"),
             dns=credential.get("dns"), hash_value=credential.get("hash"),
             hash_type=credential.get("hash_type"), name=credential.get("name"),
         )
         try:
             from purplesploit.models.database import CredentialCreate
             self._get_db_manager().upsert_credential(CredentialCreate(
+                account_ref=credential.get("account_ref"),
                 name=credential.get("name") or credential.get("username"),
                 username=credential.get("username"), password=credential.get("password"),
+                scope=credential.get("scope"),
                 domain=credential.get("domain"), dcip=credential.get("dcip"),
+                local_host=credential.get("local_host"),
                 dns=credential.get("dns"), hash=credential.get("hash"),
             ))
         except Exception as e:
@@ -912,10 +931,14 @@ class Framework:
         """Delete one credential from both persistence stores."""
         self.database.remove_credential_record(
             credential.get("username"), credential.get("domain"), credential.get("name"),
+            credential.get("account_ref"), credential.get("scope"),
+            credential.get("local_host"),
         )
         try:
             self._get_db_manager().delete_credential(
                 credential.get("username"), credential.get("domain"), credential.get("name"),
+                credential.get("account_ref"), credential.get("scope"),
+                credential.get("local_host"),
             )
         except Exception as e:
             self.log(f"Dashboard credential delete skipped: {e}", "warning")
@@ -954,7 +977,10 @@ class Framework:
         credentials = self.session.credentials.list()
         if not 0 <= index < len(credentials):
             return False
-        allowed = {"username", "password", "domain", "dcip", "dns", "hash", "hash_type", "name"}
+        allowed = {
+            "account_ref", "username", "password", "scope", "domain", "local_host",
+            "dcip", "dns", "hash", "hash_type", "name",
+        }
         updated = dict(credentials[index])
         updated.update({key: value for key, value in modifications.items() if key in allowed})
         if not updated.get("username"):

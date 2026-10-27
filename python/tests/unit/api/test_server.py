@@ -200,6 +200,7 @@ class TestCredentialsAPI:
         """Test getting a non-existent credential."""
         mock_session = MagicMock()
         mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.query.return_value.filter.return_value.limit.return_value.all.return_value = []
         mock_db_manager.get_credentials_session.return_value = mock_session
 
         response = test_client.get("/api/credentials/nonexistent")
@@ -221,6 +222,7 @@ class TestCredentialsAPI:
         """Test deleting a non-existent credential."""
         mock_session = MagicMock()
         mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.query.return_value.filter.return_value.limit.return_value.all.return_value = []
         mock_db_manager.get_credentials_session.return_value = mock_session
 
         response = test_client.delete("/api/credentials/nonexistent")
@@ -662,6 +664,7 @@ class TestCredentialsAPIExtended:
     def test_update_credential_success(self, test_client, mock_db_manager):
         """Test updating a credential successfully."""
         mock_cred = MagicMock()
+        mock_cred.account_ref = "existing_cred"
         mock_cred.name = "existing_cred"
         mock_cred.username = "olduser"
         mock_cred.password = "oldpass"
@@ -686,6 +689,7 @@ class TestCredentialsAPIExtended:
         """Test updating a non-existent credential."""
         mock_session = MagicMock()
         mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.query.return_value.filter.return_value.limit.return_value.all.return_value = []
         mock_db_manager.get_credentials_session.return_value = mock_session
 
         response = test_client.put("/api/credentials/nonexistent", json={

@@ -6,7 +6,9 @@ explicit open ports become service observations. TCP and UDP retain identities.
 
 from hashlib import sha256
 import ipaddress
+import json
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 import defusedxml.ElementTree as ET
 
@@ -15,6 +17,25 @@ from purplesploit.core.execution import Observation
 
 SERVICE_ALIASES = {"microsoft-ds": "smb", "netbios-ssn": "smb", "ms-wbt-server": "rdp",
                    "ms-sql-s": "mssql", "wsman": "winrm", "domain": "dns", "ldaps": "ldap"}
+
+
+def _observation(*, kind, target, attributes, source_execution_id, module_path, **values):
+    """Promote provenance while retaining the exact pre-P1 identity input."""
+    legacy_attributes = dict(attributes)
+    identity = [
+        source_execution_id, kind, target, values.get("port"), values.get("protocol"),
+        values.get("service"), legacy_attributes,
+    ]
+    provenance = {
+        name: attributes.pop(name, None)
+        for name in ("source_tool", "source_tool_version", "source_schema", "source_id", "raw")
+    }
+    return Observation(
+        kind=kind, target=target, attributes=attributes,
+        source_execution_id=source_execution_id, module_path=module_path,
+        observation_id=str(uuid5(NAMESPACE_URL, json.dumps(identity, sort_keys=True))),
+        **provenance, **values,
+    )
 
 
 def _scripts(parent):
@@ -35,8 +56,10 @@ def observations_for_hosts(hosts, *, source_execution_id="", module_path="recon/
         common = {**(metadata or {}), "source_tool": "nmap", "hostname": host.get("hostname"),
                   "hostnames": host.get("hostnames", []), "scripts": host.get("scripts", []),
                   "os_matches": host.get("os_matches", [])}
-        observations.append(Observation(kind="host", target=target, attributes={**common, "state": "up"},
-                                        source_execution_id=source_execution_id, module_path=module_path))
+        observations.append(_observation(
+            kind="host", target=target, attributes={**common, "state": "up"},
+            source_execution_id=source_execution_id, module_path=module_path,
+        ))
         for service in host.get("services", {}).values():
             raw_name = service.get("service", "unknown")
             name = SERVICE_ALIASES.get(raw_name, raw_name)
@@ -44,10 +67,12 @@ def observations_for_hosts(hosts, *, source_execution_id="", module_path="recon/
                 name = "https"
             attributes = {**common, **service, "raw_service": raw_name,
                           "hostname": service.get("hostname") or host.get("hostname")}
-            observations.append(Observation(kind="service", target=target, port=service["port"],
-                                            protocol=service.get("protocol", "tcp"), service=name,
-                                            version=service.get("version"), attributes=attributes,
-                                            source_execution_id=source_execution_id, module_path=module_path))
+            observations.append(_observation(
+                kind="service", target=target, port=service["port"],
+                protocol=service.get("protocol", "tcp"), service=name,
+                version=service.get("version"), attributes=attributes,
+                source_execution_id=source_execution_id, module_path=module_path,
+            ))
     return observations
 
 

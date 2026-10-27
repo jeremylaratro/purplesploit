@@ -311,7 +311,7 @@ def test_all_adapters_provenance_stable_ids_merge_roundtrip_and_graph(adapter, d
         assert Observation.from_dict(item.to_dict()).to_dict() == item.to_dict()
         attrs = item.attributes
         assert attrs["schema_version"] == ADAPTER_SCHEMA_VERSION
-        assert attrs["source_schema"] == first.source_schema
+        assert item.source_schema == first.source_schema
         assert attrs["source_file"] == "offline-export"
         assert attrs["run_id"] == "producer-run"
         assert attrs["import_id"] == first.import_id

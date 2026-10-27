@@ -170,11 +170,8 @@ class _Builder:
             "name": _display(record, identifier),
             "provider": self.provider,
             "record_type": record_type,
-            "source_schema": CLOUD_SCHEMA_VERSION,
-            "source_id": str(source_id),
             "run_id": self.run_id,
             "import_id": self.import_id,
-            "raw": dict(record),
             "relationships": [item for item in relationships if item is not None],
         }
         if extra:
@@ -183,6 +180,9 @@ class _Builder:
             kind=kind,
             target=identifier,
             attributes=attributes,
+            source_schema=CLOUD_SCHEMA_VERSION,
+            source_id=str(source_id),
+            raw=dict(record),
             source_execution_id=self.result.source_execution_id,
             module_path=f"interop/cloud/{self.provider}",
             confidence="observed",

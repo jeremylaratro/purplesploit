@@ -9,6 +9,12 @@ context persists across module switches.
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import json
+import logging
+
+from .execution import generate_account_ref
+
+
+logger = logging.getLogger(__name__)
 
 
 class Session:
@@ -384,13 +390,31 @@ class CredentialManager:
         Returns:
             True if added successfully
         """
-        # Check for duplicates
+        scope = cred.get("scope")
+        if scope not in {None, "local", "domain", "machine"}:
+            raise ValueError("credential scope must be 'local', 'domain', 'machine', or None")
+        cred.setdefault("scope", None)
+        cred.setdefault("local_host", None)
+        cred.setdefault("domain", None)
+        cred["account_ref"] = cred.get("account_ref") or generate_account_ref(
+            str(cred.get("username") or ""), scope, cred.get("domain"), cred.get("local_host")
+        )
+
+        # Explicit references and the null-safe account identity tuple both
+        # identify duplicates. A local_host keeps unknown-scope accounts
+        # distinct per host without treating them as domain-wide.
         for existing in self.credentials:
-            if (existing.get('username') == cred.get('username') and
-                existing.get('domain') == cred.get('domain')):
+            if existing.get("account_ref") == cred["account_ref"]:
+                return False
+            if (
+                existing.get("username"), existing.get("scope"),
+                existing.get("domain"), existing.get("local_host"),
+            ) == (
+                cred.get("username"), scope, cred.get("domain"), cred.get("local_host"),
+            ):
                 return False
 
-        cred['added_at'] = datetime.now().isoformat()
+        cred.setdefault('added_at', datetime.now().isoformat())
         self.credentials.append(cred)
         return True
 
@@ -405,7 +429,8 @@ class CredentialManager:
             True if removed
         """
         for i, cred in enumerate(self.credentials):
-            if (cred.get('username') == identifier or
+            if (cred.get('account_ref') == identifier or
+                cred.get('username') == identifier or
                 cred.get('name') == identifier):
                 self.credentials.pop(i)
                 self._adjust_current_after_removal(i)
@@ -487,7 +512,10 @@ class CredentialManager:
         """
         if 0 <= index < len(self.credentials):
             for key, value in kwargs.items():
-                if key in ['username', 'password', 'domain', 'dcip', 'dns', 'hash', 'hash_type', 'name']:
+                if key in [
+                    'account_ref', 'username', 'password', 'scope', 'domain', 'local_host',
+                    'dcip', 'dns', 'hash', 'hash_type', 'name',
+                ]:
                     self.credentials[index][key] = value
             return True
         return False
@@ -523,7 +551,8 @@ class CredentialManager:
 
         # Try matching by identifier
         for i, cred in enumerate(self.credentials):
-            if (cred.get('username') == identifier or
+            if (cred.get('account_ref') == identifier or
+                cred.get('username') == identifier or
                 cred.get('name') == identifier):
                 self.current_index = i
                 return True
@@ -540,7 +569,18 @@ class CredentialManager:
     def import_data(self, data: Dict):
         """Import credential data."""
         credentials = data.get("credentials", [])
-        self.credentials = list(credentials) if isinstance(credentials, list) else []
+        self.credentials = []
+        if isinstance(credentials, list):
+            for credential in credentials:
+                if isinstance(credential, dict):
+                    loaded = dict(credential)
+                    if loaded.get("scope") not in {None, "local", "domain", "machine"}:
+                        logger.warning(
+                            "Invalid saved credential scope %r for %r; loading as None",
+                            loaded.get("scope"), loaded.get("username"),
+                        )
+                        loaded["scope"] = None
+                    self.add(loaded)
         try:
             current_index = int(data.get("current_index", 0))
         except (TypeError, ValueError):

@@ -36,7 +36,7 @@ def test_linux_snapshot_emits_host_and_inventory_resources():
         item for item in result.observations
         if item.attributes["record_type"] == "credential_artifact"
     )
-    assert "private_key_reference" in json.dumps(credential.attributes["raw"])
+    assert "private_key_reference" in json.dumps(credential.raw)
     assert "PRIVATE KEY" not in json.dumps(result.to_dict())
 
 

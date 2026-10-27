@@ -18,6 +18,8 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
+from .execution import generate_account_ref
+
 
 class Database:
     """
@@ -153,10 +155,13 @@ class Database:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_ref TEXT NOT NULL UNIQUE,
                 name TEXT,
                 username TEXT NOT NULL,
                 password TEXT,
+                scope TEXT,
                 domain TEXT,
+                local_host TEXT,
                 dcip TEXT,
                 dns TEXT,
                 hash TEXT,
@@ -164,6 +169,11 @@ class Database:
                 metadata TEXT,  -- JSON
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_credentials_account_ref
+            ON credentials(account_ref)
         """)
 
         # Services detected on targets
@@ -301,22 +311,84 @@ class Database:
         # Check if credentials table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='credentials'")
         if cursor.fetchone():
-            # Migration: Add 'dcip' and 'dns' columns to credentials table if they don't exist
-            try:
-                cursor.execute("SELECT dcip FROM credentials LIMIT 1")
-            except sqlite3.OperationalError:
-                cursor.execute("""
-                    ALTER TABLE credentials ADD COLUMN dcip TEXT
-                """)
-                self.conn.commit()
+            with self.conn:
+                cursor.execute("BEGIN")
+                original_columns = {
+                    row["name"] for row in cursor.execute("PRAGMA table_info(credentials)")
+                }
+                columns = set(original_columns)
+                for column in (
+                    "dcip", "dns", "account_ref", "scope", "local_host", "metadata"
+                ):
+                    if column not in columns:
+                        cursor.execute(f"ALTER TABLE credentials ADD COLUMN {column} TEXT")
+                        columns.add(column)
 
-            try:
-                cursor.execute("SELECT dns FROM credentials LIMIT 1")
-            except sqlite3.OperationalError:
-                cursor.execute("""
-                    ALTER TABLE credentials ADD COLUMN dns TEXT
-                """)
-                self.conn.commit()
+                rows = cursor.execute(
+                    "SELECT rowid AS migration_rowid, * FROM credentials ORDER BY id, rowid"
+                ).fetchall()
+                groups = {}
+                for row in rows:
+                    identity = (
+                        row["username"], row["scope"], row["domain"], row["local_host"]
+                    )
+                    groups.setdefault(identity, []).append(row)
+
+                candidate_fields = (
+                    "name", "password", "hash", "hash_type", "dcip", "dns", "metadata"
+                )
+                for identity, group in groups.items():
+                    kept = group[0]
+                    extras = group[1:]
+                    if extras:
+                        try:
+                            kept_metadata = json.loads(kept["metadata"])
+                            if not isinstance(kept_metadata, dict):
+                                kept_metadata = {}
+                        except (TypeError, ValueError):
+                            kept_metadata = {}
+
+                        existing = kept_metadata.get("folded_candidates", [])
+                        if isinstance(existing, list):
+                            folded_candidates = list(existing)
+                        else:
+                            folded_candidates = [existing]
+                        folded_ids = {
+                            item.get("original_id")
+                            for item in folded_candidates
+                            if isinstance(item, dict)
+                        }
+                        for extra in extras:
+                            original_id = extra["id"]
+                            if original_id not in folded_ids:
+                                candidate = {
+                                    field: extra[field]
+                                    for field in candidate_fields
+                                    if field in original_columns
+                                }
+                                if "metadata" in candidate:
+                                    try:
+                                        candidate["metadata"] = json.loads(candidate["metadata"])
+                                    except (TypeError, ValueError):
+                                        pass
+                                candidate["original_id"] = original_id
+                                folded_candidates.append(candidate)
+                                folded_ids.add(original_id)
+                        kept_metadata["folded_candidates"] = folded_candidates
+                        cursor.execute(
+                            "UPDATE credentials SET metadata = ? WHERE id = ?",
+                            (json.dumps(kept_metadata), kept["id"]),
+                        )
+                        cursor.executemany(
+                            "DELETE FROM credentials WHERE id = ?",
+                            [(extra["id"],) for extra in extras],
+                        )
+
+                    cursor.execute(
+                        "UPDATE credentials SET account_ref = ? WHERE id = ? "
+                        "AND (account_ref IS NULL OR account_ref = '')",
+                        (generate_account_ref(*identity), kept["id"]),
+                    )
 
     def _invalidate_cache(self, pattern: str = None):
         """
@@ -561,7 +633,8 @@ class Database:
                       domain: str = None, dcip: str = None, dns: str = None,
                       hash_value: str = None,
                       hash_type: str = None, name: str = None,
-                      metadata: Dict = None) -> int:
+                      metadata: Dict = None, account_ref: str = None,
+                      scope: str = None, local_host: str = None) -> int:
         """
         Add a credential set.
 
@@ -577,13 +650,48 @@ class Database:
         Returns:
             ID of inserted record
         """
+        if scope not in {None, "local", "domain", "machine"}:
+            raise ValueError("credential scope must be 'local', 'domain', 'machine', or None")
+        account_ref = account_ref or generate_account_ref(
+            username, scope, domain, local_host
+        )
         with self._get_cursor() as cursor:
+            cursor.execute(
+                "SELECT id, account_ref, metadata FROM credentials WHERE account_ref = ?",
+                (account_ref,),
+            )
+            existing = cursor.fetchone()
+            if existing is None:
+                cursor.execute(
+                    """SELECT id, account_ref, metadata FROM credentials
+                       WHERE username IS ? AND scope IS ? AND domain IS ? AND local_host IS ?
+                       ORDER BY id LIMIT 1""",
+                    (username, scope, domain, local_host),
+                )
+                existing = cursor.fetchone()
+            if existing is not None:
+                account_ref = existing["account_ref"]
+                metadata_value = (
+                    existing["metadata"] if metadata is None else json.dumps(metadata)
+                )
+                cursor.execute(
+                    """UPDATE credentials SET account_ref = ?, username = ?, password = ?,
+                       scope = ?, domain = ?, local_host = ?, dcip = ?, dns = ?, hash = ?,
+                       hash_type = ?, name = ?, metadata = ? WHERE id = ?""",
+                    (
+                        account_ref, username, password, scope, domain, local_host, dcip, dns,
+                        hash_value, hash_type, name, metadata_value, existing["id"],
+                    ),
+                )
+                return existing["id"]
             cursor.execute("""
                 INSERT INTO credentials
-                (username, password, domain, dcip, dns, hash, hash_type, name, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (account_ref, username, password, scope, domain, local_host,
+                 dcip, dns, hash, hash_type, name, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                username, password, domain, dcip, dns, hash_value, hash_type, name,
+                account_ref, username, password, scope, domain, local_host,
+                dcip, dns, hash_value, hash_type, name,
                 json.dumps(metadata or {})
             ))
             return cursor.lastrowid
@@ -622,9 +730,23 @@ class Database:
             return cursor.rowcount > 0
 
     def remove_credential_record(self, username: str, domain: str = None,
-                                 name: str = None) -> bool:
+                                 name: str = None, account_ref: str = None,
+                                 scope: str = None, local_host: str = None) -> bool:
         """Remove one credential using its stable identity fields."""
         with self._get_cursor() as cursor:
+            if account_ref:
+                cursor.execute("DELETE FROM credentials WHERE account_ref = ?", (account_ref,))
+                return cursor.rowcount > 0
+            if scope is not None:
+                cursor.execute(
+                    """DELETE FROM credentials WHERE id = (
+                           SELECT id FROM credentials
+                           WHERE username IS ? AND scope IS ? AND domain IS ? AND local_host IS ?
+                           ORDER BY id LIMIT 1
+                       )""",
+                    (username, scope, domain, local_host),
+                )
+                return cursor.rowcount > 0
             cursor.execute(
                 """DELETE FROM credentials WHERE id = (
                        SELECT id FROM credentials

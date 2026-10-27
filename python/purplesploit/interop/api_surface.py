@@ -138,10 +138,10 @@ def _emit(result, kind, target, record_type, raw, **attributes):
     except ValueError:
         host, port = None, None
     attributes = {
-        "source_file": result.source, "source_schema": result.source_schema,
+        "source_file": result.source,
         "schema_version": result.schema_version, "import_id": result.import_id,
         "document_fingerprint": _digest(result.raw), "record_type": record_type,
-        "raw": deepcopy(raw), **attributes,
+        **attributes,
     }
     if host:
         attributes.setdefault("host", host)
@@ -150,6 +150,7 @@ def _emit(result, kind, target, record_type, raw, **attributes):
         result.observations.append(Observation(
             kind, target, port=port, protocol="tcp" if host else None,
             service=parts.scheme if host else None, attributes=attributes,
+            source_schema=result.source_schema, raw=deepcopy(raw),
             source_execution_id=f"import:{result.import_id}", module_path="interop/api_surface",
             operation_name=f"Import {result.protocol}", observed_at=None,
             confidence="inferred", observation_id=identifier,

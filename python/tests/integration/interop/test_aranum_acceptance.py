@@ -14,7 +14,9 @@ from typing import Any, Callable
 
 import pytest
 
-from purplesploit.core.execution import ExecutionRequest, Observation, normalize_observations
+from purplesploit.core.execution import (
+    AuthContext, ExecutionRequest, Observation, normalize_observations,
+)
 from purplesploit.interop.importers import REGISTRY, detect, parse
 from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
 
@@ -192,7 +194,7 @@ def test_ac_02_inventory_fidelity():
     source_records = _records(inventory, "hosts", "entries", "services")
     assert source_records, "FX-1 inventory contains no host or service records"
     imported = _import(bundle)
-    raw_records = [item.attributes.get("raw") for item in imported.observations]
+    raw_records = [item.raw for item in imported.observations]
     for record in source_records:
         assert record in raw_records, f"inventory record did not survive import: {record}"
     return f"all {len(source_records)} FX-1 inventory records survived import"
@@ -213,7 +215,7 @@ def test_ac_03_finding_fidelity():
         for item in source_findings
     }
     observation_ids = {
-        str(item.attributes.get("source_id"))
+        str(item.source_id)
         for item in imported.observations
         if item.kind == "finding"
     }
@@ -390,10 +392,6 @@ def test_ac_13_report_rendering():
     return f"golden Markdown/HTML contain required sections for {len(with_kb)} findings"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="PLAN-002 baseline: auth_context and credential identity fields do not exist",
-)
 @acceptance("AC-14")
 def test_ac_14_account_separation(tmp_path):
     import purplesploit.core.execution as execution
@@ -454,10 +452,6 @@ def test_ac_14_account_separation(tmp_path):
     return "same-named local accounts remain distinct in session, SQLite, and ORM stores"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="PLAN-002 baseline: execution records have no auth_context field",
-)
 @acceptance("AC-15")
 def test_ac_15_round_trip(tmp_path):
     import purplesploit.core.execution as execution
@@ -510,10 +504,6 @@ def test_ac_15_round_trip(tmp_path):
     return "auth_context survives direct, distributed, and assessment round trips"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="PLAN-002 baseline: auth_context does not exist for no-inference check",
-)
 @acceptance("AC-16")
 def test_ac_16_no_inference():
     import purplesploit.core.execution as execution
@@ -524,7 +514,19 @@ def test_ac_16_no_inference():
         {"observations": [{"kind": "identity", "target": "alice"}]}, request
     )
     assert observations, "normalizer subject is absent"
+    ctx = observations[0].auth_context
+    assert ctx is None or (ctx.scope is None and ctx.domain is None)
+
+    declared_ref = ExecutionRequest(
+        module_path="fixture", options={"DOMAIN": "example.test"},
+        auth_context=AuthContext(account_ref="r"),
+    )
+    observations = normalize_observations(
+        {"observations": [{"kind": "identity", "target": "alice"}]}, declared_ref
+    )
+    assert observations, "normalizer auth_context subject is absent"
     assert observations[0].auth_context.scope is None
+    assert observations[0].auth_context.domain is None
     return "DOMAIN without declared scope leaves auth_context.scope null"
 
 

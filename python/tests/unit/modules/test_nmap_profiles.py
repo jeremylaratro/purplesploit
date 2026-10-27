@@ -176,7 +176,7 @@ def test_xml_observation_golden():
     assert {(item.target, item.port, item.protocol) for item in endpoints} == {
         ("192.0.2.53", 53, "tcp"), ("192.0.2.53", 53, "udp"), ("2001:db8::443", 8443, "tcp")}
     assert len({item.observation_id for item in endpoints}) == 3
-    assert all(item.attributes["source_tool_version"] == "7.95" for item in endpoints)
+    assert all(item.source_tool_version == "7.95" for item in endpoints)
 
 
 def test_parser_and_scanner_share_importer(mock_framework):

@@ -79,11 +79,13 @@ class Agent:
         request = ExecutionRequest.from_dict(task["request"])
         if self._cancel.is_set():
             return ExecutionResult(request_id=request.request_id, module_path=request.module_path,
+                                   auth_context=request.auth_context,
                                    outcome=ExecutionOutcome.CANCELLED, cancelled=True, finished_at=utc_now())
         try:
             result = self.executor(request)
             if isinstance(result, dict):
                 result = ExecutionResult.from_dict(result)
+            result.auth_context = request.auth_context
             if result.outcome == ExecutionOutcome.RUNNING:
                 if result.handle is None:
                     raise ValueError("Running ExecutionResult has no local ExecutionHandle")
@@ -97,6 +99,7 @@ class Agent:
             return result
         except Exception as exc:
             return ExecutionResult(request_id=request.request_id, module_path=request.module_path,
+                                   auth_context=request.auth_context,
                                    outcome=ExecutionOutcome.ERROR, error=str(exc), finished_at=utc_now())
 
     def _complete(self):

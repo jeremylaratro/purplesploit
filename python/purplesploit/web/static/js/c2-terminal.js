@@ -700,7 +700,7 @@ async function loadCredentialsList() {
                 </div>
                 <div class="entity-actions">
                     <button class="use-credential" data-credential-name="${escapeHtml(cred.name)}">Use</button>
-                    <button class="delete delete-credential" data-credential-name="${escapeHtml(cred.name)}">Delete</button>
+                    <button class="delete delete-credential" data-account-ref="${escapeHtml(cred.account_ref)}" data-credential-name="${escapeHtml(cred.name)}">Delete</button>
                 </div>
             </div>
         `).join('');
@@ -708,7 +708,9 @@ async function loadCredentialsList() {
             button.addEventListener('click', () => useCredential(button.dataset.credentialName));
         });
         listContainer.querySelectorAll('.delete-credential').forEach(button => {
-            button.addEventListener('click', () => deleteCredential(button.dataset.credentialName));
+            button.addEventListener('click', () => deleteCredential(
+                button.dataset.accountRef, button.dataset.credentialName
+            ));
         });
     } catch (error) {
         listContainer.innerHTML = '<div class="empty">Failed to load credentials</div>';
@@ -754,11 +756,11 @@ async function useCredential(name) {
     updateContext();
 }
 
-async function deleteCredential(name) {
+async function deleteCredential(accountRef, name) {
     if (!confirm(`Delete credential ${name}?`)) return;
 
     try {
-        await fetch(`${API_BASE}/api/credentials/${encodeURIComponent(name)}`, { method: 'DELETE', headers: apiHeaders() });
+        await fetch(`${API_BASE}/api/credentials/${encodeURIComponent(accountRef)}`, { method: 'DELETE', headers: apiHeaders() });
         await loadCredentialsList();
         appendOutput('System', `Credential ${name} deleted`, 'success');
     } catch (error) {
