@@ -1,0 +1,1111 @@
+{
+  "findings": [
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "POSTURE|LIN-FAIL|FAIL|synthetic permission",
+      "discovered_at": "2026-10-26T12:01:00+00:00",
+      "duplicate_of": null,
+      "evidence": [
+        {
+          "captured_at": "2026-10-26T12:01:00+00:00",
+          "content": null,
+          "description": "Aranum source reference: evidence/linux.txt",
+          "evidence_type": "text",
+          "file_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt",
+          "file_type": "text",
+          "finding_id": "2209e01c-c082-518d-a0cb-a0682d48f944",
+          "id": "4d177c91-ed7a-58df-a06a-50376a206a48",
+          "metadata": {},
+          "tags": [],
+          "title": "evidence/linux.txt"
+        }
+      ],
+      "host": null,
+      "id": "2209e01c-c082-518d-a0cb-a0682d48f944",
+      "impact": "",
+      "metadata": {},
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/aranum",
+      "notes": [],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "{\"artifacts\": [{\"exists\": true, \"reference\": \"evidence/linux.txt\", \"resolved_path\": \"<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt\"}], \"bundle_fingerprint\": \"eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2\", \"categories\": null, \"extrainfo\": null, \"hostname\": null, \"lifecycle_status\": \"draft\", \"observed_at\": \"2026-10-26T12:01:00Z\", \"product\": null, \"raw\": {\"evidence_path\": \"evidence/linux.txt\", \"evidence_paths\": [\"evidence/linux.txt\"], \"finding_id\": \"AR-fixture-host\", \"host\": \"192.0.2.30\", \"line\": \"POSTURE|LIN-FAIL|FAIL|synthetic permission\", \"port\": \"\", \"posture_scope\": \"host\", \"protocol\": \"\", \"rule_id\": \"LIN-FAIL\", \"service\": \"posture\", \"severity\": \"medium\", \"tags\": [\"posture\"], \"title\": \"Fixture host posture\", \"triage_status\": \"new\"}, \"raw_service\": \"posture\", \"record_type\": \"canonical_finding\", \"run_id\": \"posture-fixture-run\", \"source_file\": \"findings.json\", \"source_id\": \"AR-fixture-host\", \"source_schema\": \"aranum/findings/2\", \"source_tool\": \"aranum\", \"source_tool_version\": null, \"source_triage_status\": \"new\", \"subject\": {\"host\": \"192.0.2.30\", \"hostname\": null, \"port\": null, \"service\": \"posture\", \"transport\": null, \"url\": null, \"version\": null}, \"tunnel\": null}",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": "posture",
+      "severity": "medium",
+      "status": "draft",
+      "tags": [
+        "posture"
+      ],
+      "target": "192.0.2.30",
+      "title": "Fixture host posture",
+      "url": null,
+      "verified_at": null
+    },
+    {
+      "assigned_to": null,
+      "attribution": {},
+      "confirmed_at": null,
+      "cve_ids": [],
+      "cvss_score": null,
+      "cvss_vector": null,
+      "cwe_ids": [],
+      "description": "POSTURE|AD-WARN|WARN|domain=example.test fixture",
+      "discovered_at": "2026-10-26T12:01:00+00:00",
+      "duplicate_of": null,
+      "evidence": [
+        {
+          "captured_at": "2026-10-26T12:01:00+00:00",
+          "content": null,
+          "description": "Aranum source reference: missing/domain.txt",
+          "evidence_type": "text",
+          "file_path": null,
+          "file_type": "text",
+          "finding_id": "f5b9dcd7-8639-57bb-a6e5-ad9b34f90d00",
+          "id": "e3e16f4d-9ac4-5660-85f4-067f7ab62868",
+          "metadata": {},
+          "tags": [],
+          "title": "missing/domain.txt"
+        }
+      ],
+      "host": null,
+      "id": "f5b9dcd7-8639-57bb-a6e5-ad9b34f90d00",
+      "impact": "",
+      "metadata": {},
+      "mitre_tactics": [],
+      "mitre_techniques": [],
+      "module_name": "interop/aranum",
+      "notes": [
+        "Source triage status 'reviewed' is unmapped; DRAFT is the projection default."
+      ],
+      "port": null,
+      "proof_of_concept": "",
+      "protocol": null,
+      "raw_output": "{\"artifacts\": [{\"exists\": false, \"reference\": \"missing/domain.txt\", \"resolved_path\": null}], \"bundle_fingerprint\": \"eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2\", \"categories\": null, \"extrainfo\": null, \"hostname\": null, \"lifecycle_status\": null, \"observed_at\": \"2026-10-26T12:01:00Z\", \"product\": null, \"raw\": {\"evidence_paths\": [\"missing/domain.txt\"], \"finding_id\": \"AR-fixture-domain\", \"host\": \"example.test\", \"line\": \"POSTURE|AD-WARN|WARN|domain=example.test fixture\", \"observed_from\": [{\"detail\": \"domain=example.test fixture\", \"host\": \"192.0.2.31\", \"status\": \"WARN\"}], \"port\": \"\", \"posture_scope\": \"domain\", \"protocol\": \"\", \"rule_id\": \"AD-WARN\", \"service\": \"posture\", \"severity\": \"low\", \"title\": \"Fixture domain posture\", \"triage_status\": \"reviewed\"}, \"raw_service\": \"posture\", \"record_type\": \"canonical_finding\", \"run_id\": \"posture-fixture-run\", \"source_file\": \"findings.json\", \"source_id\": \"AR-fixture-domain\", \"source_schema\": \"aranum/findings/2\", \"source_tool\": \"aranum\", \"source_tool_version\": null, \"source_triage_status\": \"reviewed\", \"subject\": {\"host\": \"example.test\", \"hostname\": null, \"port\": null, \"service\": \"posture\", \"transport\": null, \"url\": null, \"version\": null}, \"tunnel\": null}",
+      "references": [],
+      "remediated_at": null,
+      "remediation": "",
+      "remediation_metadata": {},
+      "reported_at": null,
+      "retest": {},
+      "review": {},
+      "risk_acceptance_reason": null,
+      "risk_accepted_at": null,
+      "risk_accepted_by": null,
+      "service": "posture",
+      "severity": "low",
+      "status": "draft",
+      "tags": [],
+      "target": "example.test",
+      "title": "Fixture domain posture",
+      "url": null,
+      "verified_at": null
+    }
+  ],
+  "fixture": "python/tests/fixtures/aranum/posture",
+  "importer": "interop.importers:aranum-bundle",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "missing/windows.txt",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "WIN-ERR",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "dependency unavailable",
+          "status": "ERR"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "ERR",
+        "subject": {
+          "host": "192.0.2.31",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "05675b2a-7db5-5274-aa26-71eefd7d7bec",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.31",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": "linux.example.test",
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "hostname": "linux.example.test",
+          "ip": "192.0.2.30",
+          "state": "up"
+        },
+        "raw_service": null,
+        "record_type": "inventory_host",
+        "run_id": "posture-fixture-run",
+        "source_file": "inventory.json",
+        "source_id": null,
+        "source_schema": "aranum/inventory-unversioned;adapter=1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": "linux.example.test",
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "08141dc5-af81-56e0-973b-1842077ccbfa",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "checks": {
+            "AD-WARN": {
+              "detail": "domain=example.test fixture",
+              "observed_from": [
+                {
+                  "detail": "domain=example.test fixture",
+                  "host": "192.0.2.31",
+                  "status": "WARN"
+                }
+              ],
+              "status": "WARN"
+            }
+          }
+        },
+        "raw_service": null,
+        "record_type": "posture_subject",
+        "run_id": "posture-fixture-run",
+        "scope": "domain",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "example.test",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "domain",
+      "module_path": "interop/aranum",
+      "observation_id": "0a73903f-c713-5a00-8c31-d2ca6c8e5b68",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "example.test",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "missing/windows.txt",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "AD-WARN",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "domain=example.test fixture",
+          "status": "WARN"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "domain",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "WARN",
+        "subject": {
+          "host": "192.0.2.31",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "1b5c3f4a-f57c-54cf-b09c-bac29942a18b",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.31",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": true,
+            "reference": "evidence/linux.txt",
+            "resolved_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt"
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "lifecycle_status": "draft",
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "evidence_path": "evidence/linux.txt",
+          "evidence_paths": [
+            "evidence/linux.txt"
+          ],
+          "finding_id": "AR-fixture-host",
+          "host": "192.0.2.30",
+          "line": "POSTURE|LIN-FAIL|FAIL|synthetic permission",
+          "port": "",
+          "posture_scope": "host",
+          "protocol": "",
+          "rule_id": "LIN-FAIL",
+          "service": "posture",
+          "severity": "medium",
+          "tags": [
+            "posture"
+          ],
+          "title": "Fixture host posture",
+          "triage_status": "new"
+        },
+        "raw_service": "posture",
+        "record_type": "canonical_finding",
+        "run_id": "posture-fixture-run",
+        "source_file": "findings.json",
+        "source_id": "AR-fixture-host",
+        "source_schema": "aranum/findings/2",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "source_triage_status": "new",
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": null,
+          "port": null,
+          "service": "posture",
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/aranum",
+      "observation_id": "2209e01c-c082-518d-a0cb-a0682d48f944",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": "posture",
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": true,
+            "reference": "evidence/linux.txt",
+            "resolved_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt"
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "LIN-INFO",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "fixture info",
+          "status": "INFO"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "INFO",
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "38786a90-cdf3-5c01-9bde-0d33254c18f0",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "generated_utc": "2026-10-26T12:01:00Z",
+          "kb": {
+            "checks": {
+              "LIN-FAIL": {
+                "remediation": {
+                  "steps": [
+                    "Review fixture configuration"
+                  ]
+                },
+                "title": "Fixture permission check"
+              }
+            }
+          },
+          "run_id": "posture-fixture-run",
+          "schema_version": "2"
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "posture-fixture-run",
+        "source_file": "findings.json",
+        "source_id": null,
+        "source_schema": "aranum/findings/2",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "3e8f15db-c81e-597d-82b4-adc24d887216",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": true,
+            "reference": "evidence/linux.txt",
+            "resolved_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt"
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "LIN-PASS",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "fixture pass",
+          "status": "PASS"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "PASS",
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "56607d55-afe3-5160-8f4e-b238dc6d68f0",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "missing/windows.txt",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "WIN-NA",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "not applicable",
+          "status": "NA"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "NA",
+        "subject": {
+          "host": "192.0.2.31",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "65022238-f984-5c4c-a020-fb43a437dd87",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.31",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": true,
+            "reference": "evidence/linux.txt",
+            "resolved_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt"
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "LIN-FAIL",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": null,
+        "product": null,
+        "raw": {
+          "detail": "synthetic permission",
+          "status": "FAIL"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "FAIL",
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "6e7d43af-c935-5bea-ab3d-d5dc36e1a314",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": "windows.example.test",
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "hostname": "windows.example.test",
+          "ip": "192.0.2.31",
+          "state": "up"
+        },
+        "raw_service": null,
+        "record_type": "inventory_host",
+        "run_id": "posture-fixture-run",
+        "source_file": "inventory.json",
+        "source_id": null,
+        "source_schema": "aranum/inventory-unversioned;adapter=1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "192.0.2.31",
+          "hostname": "windows.example.test",
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "83f0ddee-478b-58cc-917f-175d2154e4f0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.31",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "missing/windows.txt",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "checks": {
+            "WIN-ERR": {
+              "detail": "dependency unavailable",
+              "status": "ERR"
+            },
+            "WIN-NA": {
+              "detail": "not applicable",
+              "status": "NA"
+            }
+          },
+          "domain_observations": {
+            "AD-WARN": {
+              "detail": "domain=example.test fixture",
+              "status": "WARN"
+            }
+          },
+          "os": "windows",
+          "source": "missing/windows.txt"
+        },
+        "raw_service": null,
+        "record_type": "posture_subject",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "192.0.2.31",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "8c29e77c-73a6-5d0a-a030-a0c655057006",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.31",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": true,
+            "reference": "evidence/linux.txt",
+            "resolved_path": "<PYTHON_ROOT>/tests/fixtures/aranum/posture/evidence/linux.txt"
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "checks": {
+            "LIN-FAIL": {
+              "detail": "synthetic permission",
+              "status": "FAIL"
+            },
+            "LIN-INFO": {
+              "detail": "fixture info",
+              "status": "INFO"
+            },
+            "LIN-PASS": {
+              "detail": "fixture pass",
+              "status": "PASS"
+            }
+          },
+          "domain_observations": {},
+          "os": "linux",
+          "source": "evidence/linux.txt"
+        },
+        "raw_service": null,
+        "record_type": "posture_subject",
+        "run_id": "posture-fixture-run",
+        "scope": "host",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "192.0.2.30",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "interop/aranum",
+      "observation_id": "c12313b5-ece8-5bef-9119-8bbb317f4468",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "192.0.2.30",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "generated_utc": "2026-10-26T12:01:00Z",
+          "run_id": "posture-fixture-run",
+          "schema_version": "1"
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "posture-fixture-run",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "cd0ae3fa-5c91-56fa-a879-3e5b3012a664",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "check_id": "AD-WARN",
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "observed_from": [
+          {
+            "detail": "domain=example.test fixture",
+            "host": "192.0.2.31",
+            "status": "WARN"
+          }
+        ],
+        "product": null,
+        "raw": {
+          "detail": "domain=example.test fixture",
+          "observed_from": [
+            {
+              "detail": "domain=example.test fixture",
+              "host": "192.0.2.31",
+              "status": "WARN"
+            }
+          ],
+          "status": "WARN"
+        },
+        "raw_service": null,
+        "record_type": "posture_check",
+        "run_id": "posture-fixture-run",
+        "scope": "domain",
+        "source_file": "posture.json",
+        "source_id": null,
+        "source_schema": "aranum/posture/1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "status": "WARN",
+        "subject": {
+          "host": "example.test",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "policy",
+      "module_path": "interop/aranum",
+      "observation_id": "ee79ab5f-fb4e-5a33-b18a-de9728a2c4e1",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "example.test",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [
+          {
+            "exists": false,
+            "reference": "missing/domain.txt",
+            "resolved_path": null
+          }
+        ],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "lifecycle_status": null,
+        "observed_at": "2026-10-26T12:01:00Z",
+        "product": null,
+        "raw": {
+          "evidence_paths": [
+            "missing/domain.txt"
+          ],
+          "finding_id": "AR-fixture-domain",
+          "host": "example.test",
+          "line": "POSTURE|AD-WARN|WARN|domain=example.test fixture",
+          "observed_from": [
+            {
+              "detail": "domain=example.test fixture",
+              "host": "192.0.2.31",
+              "status": "WARN"
+            }
+          ],
+          "port": "",
+          "posture_scope": "domain",
+          "protocol": "",
+          "rule_id": "AD-WARN",
+          "service": "posture",
+          "severity": "low",
+          "title": "Fixture domain posture",
+          "triage_status": "reviewed"
+        },
+        "raw_service": "posture",
+        "record_type": "canonical_finding",
+        "run_id": "posture-fixture-run",
+        "source_file": "findings.json",
+        "source_id": "AR-fixture-domain",
+        "source_schema": "aranum/findings/2",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "source_triage_status": "reviewed",
+        "subject": {
+          "host": "example.test",
+          "hostname": null,
+          "port": null,
+          "service": "posture",
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "finding",
+      "module_path": "interop/aranum",
+      "observation_id": "f5b9dcd7-8639-57bb-a6e5-ad9b34f90d00",
+      "observed_at": "2026-10-26T12:01:00Z",
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": "posture",
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "example.test",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifacts": [],
+        "bundle_fingerprint": "eb45c1264f70ffeb63b30ff54f6aa0fbca31280a4c5be73d7b7763d5c845d5f2",
+        "categories": null,
+        "extrainfo": null,
+        "hostname": null,
+        "observed_at": null,
+        "product": null,
+        "raw": {
+          "summary": {
+            "hosts": 2
+          }
+        },
+        "raw_service": null,
+        "record_type": "snapshot_metadata",
+        "run_id": "posture-fixture-run",
+        "source_file": "inventory.json",
+        "source_id": null,
+        "source_schema": "aranum/inventory-unversioned;adapter=1",
+        "source_tool": "aranum",
+        "source_tool_version": null,
+        "subject": {
+          "host": "",
+          "hostname": null,
+          "port": null,
+          "service": null,
+          "transport": null,
+          "url": null,
+          "version": null
+        },
+        "tunnel": null
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "note",
+      "module_path": "interop/aranum",
+      "observation_id": "fe269eb8-65ae-56d2-9e7c-1b1e3020753b",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "aranum:posture-fixture-run",
+      "target": "",
+      "version": null
+    }
+  ]
+}

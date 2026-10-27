@@ -1,0 +1,305 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/cloud/entra.json",
+  "importer": "interop.importers:entra-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "assignment": true,
+        "identifier": "user-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "user-1",
+        "provider": "entra",
+        "raw": {
+          "id": "ra-1",
+          "principalId": "user-1",
+          "roleDefinitionId": "role-1"
+        },
+        "record_type": "role_assignment",
+        "relationships": [
+          {
+            "direction": "out",
+            "target": "role-1",
+            "target_kind": "role",
+            "type": "assumes"
+          }
+        ],
+        "run_id": null,
+        "source_id": "ra-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "368013e6-bb7f-5d43-bbbb-f7327b40c248",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "user-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "entra:tenant:tenant-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Example Directory",
+        "provider": "entra",
+        "raw": {
+          "displayName": "Example Directory",
+          "id": "tenant-1"
+        },
+        "record_type": "tenant",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "tenant-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "tenant",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "3c34b802-c18c-503f-85d7-e17349b2be18",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "entra:tenant:tenant-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "sp-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "sp-1",
+        "provider": "entra",
+        "raw": {
+          "clientId": "sp-1",
+          "id": "grant-1",
+          "resourceId": "graph",
+          "scope": "User.Read Directory.Read.All"
+        },
+        "record_type": "oauth2_permission_grant",
+        "relationships": [
+          {
+            "direction": "out",
+            "target": "graph",
+            "target_kind": "resource",
+            "type": "has_permission"
+          }
+        ],
+        "run_id": null,
+        "scopes": [
+          "User.Read",
+          "Directory.Read.All"
+        ],
+        "source_id": "grant-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "497e9d0e-1c54-5a51-b142-29ab93b254f1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "sp-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "app-object-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Portal",
+        "provider": "entra",
+        "raw": {
+          "appId": "app-1",
+          "displayName": "Portal",
+          "id": "app-object-1"
+        },
+        "record_type": "application",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "entra:tenant:tenant-1",
+            "target_kind": "tenant",
+            "type": "owns"
+          }
+        ],
+        "run_id": null,
+        "source_id": "app-object-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "5912a70a-40da-50a1-986b-ef1d69f3add8",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "app-object-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "sp-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Portal SP",
+        "provider": "entra",
+        "raw": {
+          "appId": "app-1",
+          "displayName": "Portal SP",
+          "id": "sp-1"
+        },
+        "record_type": "service_principal",
+        "relationships": [
+          {
+            "direction": "out",
+            "target": "app-1",
+            "target_kind": "resource",
+            "type": "identifies"
+          }
+        ],
+        "run_id": null,
+        "source_id": "sp-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "6c5c9e70-cbe6-5b4e-bc56-3561fc474b54",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "sp-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "user-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Alice",
+        "provider": "entra",
+        "raw": {
+          "displayName": "Alice",
+          "groups": [
+            {
+              "id": "group-1"
+            }
+          ],
+          "id": "user-1",
+          "userPrincipalName": "alice@example.test"
+        },
+        "record_type": "user",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "entra:tenant:tenant-1",
+            "target_kind": "tenant",
+            "type": "owns"
+          },
+          {
+            "direction": "out",
+            "target": "group-1",
+            "target_kind": "group",
+            "type": "member_of"
+          }
+        ],
+        "run_id": null,
+        "source_id": "user-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "71f12182-d35c-5c2e-849f-c35f7ef78b7a",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "user-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "group-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Operators",
+        "provider": "entra",
+        "raw": {
+          "displayName": "Operators",
+          "id": "group-1"
+        },
+        "record_type": "group",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "group-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "group",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "9863ec48-a6b6-5957-bd25-4e7cf681e486",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "group-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "role-1",
+        "import_id": "ad944e37-e401-542f-9be1-3fea131ae669",
+        "name": "Global Reader",
+        "provider": "entra",
+        "raw": {
+          "displayName": "Global Reader",
+          "id": "role-1"
+        },
+        "record_type": "directory_role",
+        "relationships": [],
+        "run_id": null,
+        "source_id": "role-1",
+        "source_schema": "purplesploit/cloud-inventory/1"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "role",
+      "module_path": "interop/cloud/entra",
+      "observation_id": "e8922ef6-18ff-518f-b711-242ab157ec1e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "cloud:entra:8909b94e6c3706e6aff0",
+      "target": "role-1",
+      "version": null
+    }
+  ]
+}

@@ -1,0 +1,684 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/containers/docker.json",
+  "importer": "interop.importers:podman-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "destination": "/data",
+        "identifier": "container:runtime/podman/unknown/container/container-1/mount/%2Fdata",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "container:runtime/podman/unknown/container/container-1/mount/%2Fdata",
+        "provider": "podman",
+        "raw": {
+          "Destination": "/data",
+          "Name": "db",
+          "RW": true,
+          "Source": "/var/lib/docker/volumes/db",
+          "Type": "volume"
+        },
+        "raw_redacted": true,
+        "read_only": false,
+        "record_type": "mount",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/mount/%2Fdata",
+        "source_path": "/var/lib/docker/volumes/db",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "0263e4ca-6493-5dc6-aa67-c299ea95c097",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/mount/%2Fdata",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:runtime/podman/unknown/container/container-1",
+        "image": "sha256:fixture",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "/web",
+        "provider": "podman",
+        "raw": {
+          "Config": {
+            "ExposedPorts": {
+              "53/tcp": {},
+              "53/udp": {},
+              "80/tcp": {}
+            },
+            "Image": "example.test/web:v1"
+          },
+          "Id": "container-1",
+          "Image": "sha256:fixture",
+          "Mounts": [
+            {
+              "Destination": "/app",
+              "RW": false,
+              "Source": "/srv/app",
+              "Type": "bind"
+            },
+            {
+              "Destination": "/data",
+              "Name": "db",
+              "RW": true,
+              "Source": "/var/lib/docker/volumes/db",
+              "Type": "volume"
+            }
+          ],
+          "Name": "/web",
+          "NetworkSettings": {
+            "Networks": {
+              "bridge": {
+                "IPAddress": "172.17.0.2",
+                "NetworkID": "network-1"
+              }
+            },
+            "Ports": {
+              "53/tcp": [
+                {
+                  "HostIp": "0.0.0.0",
+                  "HostPort": "1053"
+                }
+              ],
+              "53/udp": [
+                {
+                  "HostIp": "127.0.0.1",
+                  "HostPort": "1053"
+                }
+              ],
+              "80/tcp": null
+            }
+          },
+          "State": {
+            "Status": "running"
+          }
+        },
+        "raw_redacted": true,
+        "record_type": "container",
+        "reference_only": false,
+        "relationships": [
+          {
+            "address": "172.17.0.2",
+            "target": "container:runtime/podman/unknown/network/network-1",
+            "target_kind": "resource",
+            "type": "member_of"
+          },
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "target": "container:image/sha256%3Afixture",
+            "target_kind": "resource",
+            "type": "uses_image"
+          }
+        ],
+        "run_id": null,
+        "runtime": "unknown",
+        "runtime_provider": "podman",
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container-1",
+        "source_schema": "podman/json",
+        "state": {
+          "Status": "running"
+        }
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "06a2763e-5bcc-56f8-8351-075117af818c",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "0.0.0.0",
+        "identifier": "container:runtime/podman/unknown/container/container-1/published/0.0.0.0/port/1053/tcp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "1053/tcp",
+        "port": 1053,
+        "protocol": "tcp",
+        "provider": "podman",
+        "published": true,
+        "raw": {
+          "port": "1053",
+          "protocol": "tcp"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "has_service"
+          },
+          {
+            "exposure": "published",
+            "target": "0.0.0.0",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "target": "container:runtime/podman/unknown/container/container-1/port/53/tcp",
+            "target_kind": "service",
+            "type": "routes_to"
+          }
+        ],
+        "resource_owner": "container:runtime/podman/unknown/container/container-1",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/published/0.0.0.0/port/1053/tcp",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/podman",
+      "observation_id": "10f697ab-52b7-559e-8182-a5a228444ba5",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 1053,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/published/0.0.0.0/port/1053/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "identifier": "container:runtime/podman/unknown",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "unknown",
+        "provider": "podman",
+        "raw": {},
+        "raw_redacted": true,
+        "record_type": "runtime",
+        "reference_only": true,
+        "relationships": [],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "1660e2cb-7284-5353-bef7-8d9508c9c067",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "container:runtime/podman/unknown/container/container-1",
+        "identifier": "container:runtime/podman/unknown/container/container-1/port/53/tcp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "53/tcp",
+        "port": 53,
+        "protocol": "tcp",
+        "provider": "podman",
+        "published": false,
+        "raw": {
+          "port": "53",
+          "protocol": "tcp"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "container:runtime/podman/unknown/container/container-1",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/port/53/tcp",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/podman",
+      "observation_id": "4e652564-33c3-5a2c-9088-01e1facbc04e",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/port/53/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "digests": [
+          "example.test/web@sha256:fixture"
+        ],
+        "identifier": "container:image/sha256%3Afixture",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "sha256:fixture",
+        "provider": "podman",
+        "raw": {
+          "Id": "sha256:fixture",
+          "RepoDigests": [
+            "example.test/web@sha256:fixture"
+          ],
+          "RepoTags": [
+            "example.test/web:v1"
+          ],
+          "Size": 12000
+        },
+        "raw_redacted": true,
+        "record_type": "image",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "reference": "example.test/web:v1",
+            "target": "container:image/example.test%2Fweb%3Av1",
+            "target_kind": "resource",
+            "type": "identifies"
+          },
+          {
+            "direction": "in",
+            "reference": "example.test/web@sha256:fixture",
+            "target": "container:image/example.test%2Fweb%40sha256%3Afixture",
+            "target_kind": "resource",
+            "type": "identifies"
+          },
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "runtime": "unknown",
+        "runtime_provider": "podman",
+        "schema_version": "purplesploit/container-inventory/1",
+        "size": 12000,
+        "source": null,
+        "source_file": null,
+        "source_id": "sha256:fixture",
+        "source_records": [
+          {
+            "Id": "sha256:fixture",
+            "RepoDigests": [
+              "example.test/web@sha256:fixture"
+            ],
+            "RepoTags": [
+              "example.test/web:v1"
+            ],
+            "Size": 12000
+          },
+          {
+            "reference": "sha256:fixture"
+          }
+        ],
+        "source_schema": "podman/json",
+        "tags": [
+          "example.test/web:v1"
+        ]
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "a8a761f6-6e44-599d-95a9-23e622250969",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:image/sha256%3Afixture",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "container:runtime/podman/unknown/container/container-1",
+        "identifier": "container:runtime/podman/unknown/container/container-1/port/80/tcp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "80/tcp",
+        "port": 80,
+        "protocol": "tcp",
+        "provider": "podman",
+        "published": false,
+        "raw": {
+          "port": "80",
+          "protocol": "tcp"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "container:runtime/podman/unknown/container/container-1",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/port/80/tcp",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/podman",
+      "observation_id": "acb2f99d-4eea-51c2-ba51-f1e7f9565655",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 80,
+      "protocol": "tcp",
+      "service": "unknown",
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/port/80/tcp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "driver": "bridge",
+        "identifier": "container:runtime/podman/unknown/network/network-1",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "internal": false,
+        "ipam": {
+          "Config": [
+            {
+              "Subnet": "172.17.0.0/16"
+            }
+          ]
+        },
+        "name": "bridge",
+        "provider": "podman",
+        "raw": {
+          "Containers": {
+            "container-1": {
+              "IPv4Address": "172.17.0.2/16",
+              "Name": "web"
+            }
+          },
+          "Driver": "bridge",
+          "IPAM": {
+            "Config": [
+              {
+                "Subnet": "172.17.0.0/16"
+              }
+            ]
+          },
+          "Id": "network-1",
+          "Internal": false,
+          "Name": "bridge"
+        },
+        "raw_redacted": true,
+        "record_type": "network",
+        "reference_only": false,
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown",
+            "target_kind": "resource",
+            "type": "contains"
+          },
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "member_of"
+          }
+        ],
+        "run_id": null,
+        "runtime": "unknown",
+        "runtime_provider": "podman",
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/network/network-1",
+        "source_records": [
+          {
+            "Containers": {
+              "container-1": {
+                "IPv4Address": "172.17.0.2/16",
+                "Name": "web"
+              }
+            },
+            "Driver": "bridge",
+            "IPAM": {
+              "Config": [
+                {
+                  "Subnet": "172.17.0.0/16"
+                }
+              ]
+            },
+            "Id": "network-1",
+            "Internal": false,
+            "Name": "bridge"
+          },
+          {
+            "IPAddress": "172.17.0.2",
+            "NetworkID": "network-1"
+          }
+        ],
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "ad2c75f8-cc91-54f9-8c3b-0f4917a87bc1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/network/network-1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "container:runtime/podman/unknown/container/container-1",
+        "identifier": "container:runtime/podman/unknown/container/container-1/port/53/udp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "53/udp",
+        "port": 53,
+        "protocol": "udp",
+        "provider": "podman",
+        "published": false,
+        "raw": {
+          "port": "53",
+          "protocol": "udp"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "has_service"
+          }
+        ],
+        "resource_owner": "container:runtime/podman/unknown/container/container-1",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/port/53/udp",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/podman",
+      "observation_id": "d2f30ca6-7669-566a-a8ec-a38d496d978f",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "udp",
+      "service": "unknown",
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/port/53/udp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "host": "127.0.0.1",
+        "identifier": "container:runtime/podman/unknown/container/container-1/published/127.0.0.1/port/1053/udp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "1053/udp",
+        "port": 1053,
+        "protocol": "udp",
+        "provider": "podman",
+        "published": true,
+        "raw": {
+          "port": "1053",
+          "protocol": "udp"
+        },
+        "raw_redacted": true,
+        "record_type": "port",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "has_service"
+          },
+          {
+            "exposure": "published",
+            "target": "127.0.0.1",
+            "target_kind": "resource",
+            "type": "exposed_to"
+          },
+          {
+            "target": "container:runtime/podman/unknown/container/container-1/port/53/udp",
+            "target_kind": "service",
+            "type": "routes_to"
+          }
+        ],
+        "resource_owner": "container:runtime/podman/unknown/container/container-1",
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "service": "unknown",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/published/127.0.0.1/port/1053/udp",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "interop/containers/podman",
+      "observation_id": "fae346f5-ea17-5d79-bf7f-5edfc724ae42",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 1053,
+      "protocol": "udp",
+      "service": "unknown",
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/published/127.0.0.1/port/1053/udp",
+      "version": null
+    },
+    {
+      "attributes": {
+        "destination": "/app",
+        "identifier": "container:runtime/podman/unknown/container/container-1/mount/%2Fapp",
+        "import_id": "2d03f72d-5246-50f2-982b-743059ecbc81",
+        "name": "container:runtime/podman/unknown/container/container-1/mount/%2Fapp",
+        "provider": "podman",
+        "raw": {
+          "Destination": "/app",
+          "RW": false,
+          "Source": "/srv/app",
+          "Type": "bind"
+        },
+        "raw_redacted": true,
+        "read_only": true,
+        "record_type": "mount",
+        "relationships": [
+          {
+            "direction": "in",
+            "target": "container:runtime/podman/unknown/container/container-1",
+            "target_kind": "resource",
+            "type": "contains"
+          }
+        ],
+        "run_id": null,
+        "schema_version": "purplesploit/container-inventory/1",
+        "source": null,
+        "source_file": null,
+        "source_id": "container:runtime/podman/unknown/container/container-1/mount/%2Fapp",
+        "source_path": "/srv/app",
+        "source_schema": "podman/json"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "resource",
+      "module_path": "interop/containers/podman",
+      "observation_id": "fdb51abd-33b6-58b7-b30a-363419bcaf93",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:2d03f72d-5246-50f2-982b-743059ecbc81",
+      "target": "container:runtime/podman/unknown/container/container-1/mount/%2Fapp",
+      "version": null
+    }
+  ]
+}

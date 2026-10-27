@@ -1,0 +1,70 @@
+{
+  "findings": [
+    {
+      "description": "Legacy TLS",
+      "extensions": {
+        "defectdojo": {
+          "active": true,
+          "description": "Legacy TLS",
+          "endpoints": [
+            {
+              "host": "192.0.2.1",
+              "port": 443
+            }
+          ],
+          "mitigation": "Upgrade TLS",
+          "references": "https://example.test/tls",
+          "severity": "High",
+          "title": "TLS issue",
+          "unique_id_from_tool": "TLS-1",
+          "vendor_field": {
+            "keep": true
+          },
+          "verified": true,
+          "vuln_id_from_tool": "TLS"
+        }
+      },
+      "id": "TLS-1",
+      "port": 443,
+      "references": [
+        "https://example.test/tls"
+      ],
+      "remediation": "Upgrade TLS",
+      "severity": "high",
+      "source_id": "TLS-1",
+      "status": "confirmed",
+      "target": "192.0.2.1",
+      "title": "TLS issue"
+    },
+    {
+      "description": "Second occurrence",
+      "extensions": {
+        "defectdojo": {
+          "active": false,
+          "description": "Second occurrence",
+          "duplicate": true,
+          "endpoints": [
+            "192.0.2.2"
+          ],
+          "severity": "Medium",
+          "title": "TLS issue (second endpoint)",
+          "unique_id_from_tool": "TLS-1",
+          "verified": false
+        },
+        "duplicate_source_id": "TLS-1"
+      },
+      "id": "source-occurrence:38952c343253e52ce559b68b333852dd",
+      "references": [],
+      "remediation": "",
+      "severity": "medium",
+      "source_id": "TLS-1",
+      "status": "remediated",
+      "target": "192.0.2.2",
+      "title": "TLS issue (second endpoint)"
+    }
+  ],
+  "fixture": "python/tests/fixtures/canonical/defectdojo-generic.json",
+  "importer": "interop.canonical:import_defectdojo",
+  "normalizations": [],
+  "observations": []
+}

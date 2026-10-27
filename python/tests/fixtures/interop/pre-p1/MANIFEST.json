@@ -1,0 +1,191 @@
+{
+  "base_sha": "cc491ae",
+  "files": [
+    {
+      "importer": "interop.canonical:CanonicalDocument.from_json",
+      "path": "canonical-canonical-json.json",
+      "record_count": 1,
+      "sha256": "d89a85f07d5be04c6d382d02a8b36e4ea22ec6f15545c25e95676514334b8122"
+    },
+    {
+      "importer": "interop.canonical:import_defectdojo",
+      "path": "canonical-defectdojo.json",
+      "record_count": 2,
+      "sha256": "d87dff637f30b3cac2eef5ec84c7dc9de46f43da8b52fd1915df0ccdfec6c047"
+    },
+    {
+      "importer": "interop.canonical:import_sarif",
+      "path": "canonical-sarif.json",
+      "record_count": 1,
+      "sha256": "1d142dad900c9696437b0fbceef6fa6daaf792cf9c6344a632218fce7e4c71ad"
+    },
+    {
+      "importer": "interop.identity:import_jwks",
+      "path": "identity-jwks.json",
+      "record_count": 3,
+      "sha256": "4c45aefcea8146781014dcd0ff6b9ba1e1d12d4e0ec00e0b3f7159d8c4fb9d9e"
+    },
+    {
+      "importer": "interop.identity:import_oauth_client",
+      "path": "identity-oauth-client.json",
+      "record_count": 1,
+      "sha256": "9c1e025f625cbfd88d0efdad30980079f01c0b3dce90cabd1004dd818385587c"
+    },
+    {
+      "importer": "interop.identity:import_oauth_metadata",
+      "path": "identity-oauth-metadata.json",
+      "record_count": 1,
+      "sha256": "8c8ee3a452a641d0b6cba90c613e728e1a8c91703bbbebdfa9505587e0b16948"
+    },
+    {
+      "importer": "interop.identity:import_oidc_discovery",
+      "path": "identity-oidc.json",
+      "record_count": 1,
+      "sha256": "bb1bdd5b0da3ea99d320af0cbd5ec0588ea93952ffc3de2bca84e06e49da89d9"
+    },
+    {
+      "importer": "interop.identity:import_saml_assertion",
+      "path": "identity-saml-assertion.json",
+      "record_count": 1,
+      "sha256": "caf8f062c429cae28327ef98a308e96cb8444173b65bbda5ae5e5f1ee62a44ed"
+    },
+    {
+      "importer": "interop.identity:import_saml_assertion",
+      "path": "identity-saml-encrypted-assertion.json",
+      "record_count": 1,
+      "sha256": "3d63d9d038a99da3bb7a3927853c53e1c469dade60ea8deda94eb57850afd142"
+    },
+    {
+      "importer": "interop.identity:import_saml_metadata",
+      "path": "identity-saml-metadata.json",
+      "record_count": 2,
+      "sha256": "5502d16affab80953285578a95d47b69ee5b6630a88032807fbb4be84ed5884c"
+    },
+    {
+      "importer": "modules.recon.nmap_importer:parse_nmap_xml",
+      "path": "nmap-parser-canonical.json",
+      "record_count": 3,
+      "sha256": "e470ea2ad6d0f5deff09ac9edcb814d3724a3060835f5d1a4edb4fdb56a2cdfc"
+    },
+    {
+      "importer": "modules.recon.nmap_importer:parse_nmap_xml",
+      "path": "nmap-parser-cwp2.json",
+      "record_count": 6,
+      "sha256": "7781d0d60333cfddac68d2c6803ceed401796d6f955bc36f2797cc6d7a0fb5d3"
+    },
+    {
+      "importer": "interop.importers:aranum-bundle",
+      "path": "registry-aranum-network.json",
+      "record_count": 10,
+      "sha256": "0509d9dafe19945a7c771e9989e64bd5c71d7a25b2276b95b1912b819c0b358e"
+    },
+    {
+      "importer": "interop.importers:aranum-bundle",
+      "path": "registry-aranum-partial.json",
+      "record_count": 10,
+      "sha256": "d5f29c1f7627f12406ad277a99ccd71d87460d9a35feba25cc8d49999e0d7a00"
+    },
+    {
+      "importer": "interop.importers:aranum-bundle",
+      "path": "registry-aranum-posture.json",
+      "record_count": 19,
+      "sha256": "be37b308220e9be9fcc23e8491db9cbec6feb08d401b7eda1e61c1b9850c4b98"
+    },
+    {
+      "importer": "interop.importers:aws-json",
+      "path": "registry-aws.json",
+      "record_count": 6,
+      "sha256": "74800ca131d36bb9f1a6dd99cc0e1b287b569a32e81ab0e8a6c543611b8fbac5"
+    },
+    {
+      "importer": "interop.importers:azure-json",
+      "path": "registry-azure.json",
+      "record_count": 6,
+      "sha256": "70ba124c04364a7e48e27892d4a6519c16b01d8875d9095100045af086d30e71"
+    },
+    {
+      "importer": "interop.importers:bloodhound-json",
+      "path": "registry-bloodhound.json",
+      "record_count": 7,
+      "sha256": "d3e1988fd94ea7b3acc5e7ecbe9b3f69645c000ef2097fc9dddf2961cc45f37f"
+    },
+    {
+      "importer": "interop.importers:crictl-json",
+      "path": "registry-crictl.json",
+      "record_count": 4,
+      "sha256": "c339bd2b5f73e2f4af046b97961bcefe0c1a8eb02e079868c072bbb0368c91df"
+    },
+    {
+      "importer": "interop.importers:docker-json",
+      "path": "registry-docker.json",
+      "record_count": 11,
+      "sha256": "9c40a759bb5c0dc5783fb5ca0fe8f1dcadcc88c573cf9cb5b1a669e8200a7518"
+    },
+    {
+      "importer": "interop.importers:entra-json",
+      "path": "registry-entra.json",
+      "record_count": 8,
+      "sha256": "982be1b56eb8819b22f31b2fe5acb5953ba4134b52352d4e59529abafcf6a328"
+    },
+    {
+      "importer": "interop.importers:gcp-json",
+      "path": "registry-gcp.json",
+      "record_count": 5,
+      "sha256": "326bf1df387ec28f420955bda6a2ffdf506aed7f54404a9166f7649ea6e8ea24"
+    },
+    {
+      "importer": "interop.importers:grype-json",
+      "path": "registry-grype.json",
+      "record_count": 7,
+      "sha256": "5cc0bfc6c2e9342ef6318ea47453a76bca73dfe02338f11ef438dc145942ff0e"
+    },
+    {
+      "importer": "interop.importers:kubernetes-json",
+      "path": "registry-kubernetes.json",
+      "record_count": 55,
+      "sha256": "c2d6ad88c5285ad979de5fb34e425c6934a078b54c3c05bd8f8769c603b1ceac"
+    },
+    {
+      "importer": "interop.importers:netexec-log",
+      "path": "registry-netexec.json",
+      "record_count": 9,
+      "sha256": "d630d80e41417d3c8e4158c1099ee7ec827a453d92f772e2d3095338b869b13e"
+    },
+    {
+      "importer": "interop.importers:nmap-xml",
+      "path": "registry-nmap-canonical.json",
+      "record_count": 3,
+      "sha256": "4601f6d2550a6af5459987efd03112281b2969d74a09f56a049854611e78ce82"
+    },
+    {
+      "importer": "interop.importers:nmap-xml",
+      "path": "registry-nmap-cwp2.json",
+      "record_count": 6,
+      "sha256": "94adde243698dfab97f8b62c064f5032e87bb5dd064c2f47bac92067e832b782"
+    },
+    {
+      "importer": "interop.importers:nuclei-jsonl",
+      "path": "registry-nuclei.json",
+      "record_count": 4,
+      "sha256": "5e0eb25e744bf3d80c4f168fe1a1d936b1c308eb3023668452712537b7c4d713"
+    },
+    {
+      "importer": "interop.importers:podman-json",
+      "path": "registry-podman.json",
+      "record_count": 11,
+      "sha256": "726377a6a902836784288fc224078250071c71b555b933183c78755d738e8e4c"
+    },
+    {
+      "importer": "interop.importers:trivy-json",
+      "path": "registry-trivy.json",
+      "record_count": 9,
+      "sha256": "0645538fc5b8f984e32ac172a65b629dad2732d40ef463213367707b7b0a5cce"
+    }
+  ],
+  "generator": "python/scripts/generate_pre_p1_snapshot.py",
+  "normalizations": [
+    "absolute Python-root prefixes in non-identity path values become <PYTHON_ROOT>",
+    "dedicated Nmap parser observed_at is null because its default is wall clock and is excluded from observation identity"
+  ],
+  "uncovered_importers": {}
+}

@@ -1,0 +1,20 @@
+{
+  "users": {"meta": {"type": "users", "version": 5}, "data": [
+    {"ObjectIdentifier": "S-LAB-1001", "Properties": {"name": "ALICE@LAB.EXAMPLE", "domain": "LAB.EXAMPLE"}, "PrimaryGroupSID": "S-LAB-513"}
+  ]},
+  "groups": {"meta": {"type": "groups", "version": 5}, "data": [
+    {"ObjectIdentifier": "S-LAB-513", "Properties": {"name": "USERS@LAB.EXAMPLE"}, "Members": [{"ObjectIdentifier": "S-LAB-1001", "ObjectType": "User"}]},
+    {"ObjectIdentifier": "S-LAB-512", "Properties": {"name": "ADMINS@LAB.EXAMPLE"}, "Members": [{"ObjectIdentifier": "S-LAB-513", "ObjectType": "Group"}]}
+  ]},
+  "computers": {"meta": {"type": "computers", "version": 6}, "data": [
+    {"ObjectIdentifier": "S-LAB-2001", "Properties": {"name": "DC01.LAB.EXAMPLE"}, "Sessions": {"Collected": true, "Results": [{"ComputerSID": "S-LAB-2001", "UserSID": "S-LAB-1001"}]}, "LocalAdmins": {"Collected": true, "Results": [{"ObjectIdentifier": "S-LAB-512", "ObjectType": "Group"}]}},
+    {"ObjectIdentifier": "S-LAB-2002", "Properties": {"name": "WS01.LAB.EXAMPLE"}, "LocalGroups": [{"ObjectIdentifier": "S-LAB-2002-544", "Name": "Administrators", "Results": [{"ObjectIdentifier": "S-LAB-1001", "ObjectType": "User"}]}]}
+  ]},
+  "domains": {"meta": {"type": "domains", "version": 6}, "data": [
+    {"ObjectIdentifier": "S-LAB", "Properties": {"name": "LAB.EXAMPLE"}, "Trusts": [{"TargetDomainSid": "S-OTHER", "TargetDomainName": "OTHER.EXAMPLE", "TrustDirection": "Outbound", "TrustType": "External", "IsTransitive": false}]},
+    {"ObjectIdentifier": "S-OTHER", "Properties": {"name": "OTHER.EXAMPLE"}, "Trusts": []}
+  ]},
+  "unknown": {"meta": {"type": "future_type", "version": 6}, "data": [
+    {"ObjectIdentifier": "unknown", "Properties": {"name": "UNKNOWN"}}
+  ]}
+}

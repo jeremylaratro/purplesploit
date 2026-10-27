@@ -1,0 +1,120 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/canonical/nmap.xml",
+  "importer": "interop.importers:nmap-xml",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "artifact_sha256": "a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+        "hostname": "fixture.example.test",
+        "hostnames": [
+          {
+            "name": "fixture.example.test",
+            "type": "PTR"
+          }
+        ],
+        "os_matches": [],
+        "scripts": [],
+        "source_file": "tests/fixtures/canonical/nmap.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "up"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "host",
+      "module_path": "recon/nmap",
+      "observation_id": "3da496fb-9ece-5c10-8a73-b4feaa6b086d",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "nmap:a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+      "target": "192.0.2.1",
+      "version": null
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+        "hostname": "fixture.example.test",
+        "hostnames": [
+          {
+            "name": "fixture.example.test",
+            "type": "PTR"
+          }
+        ],
+        "name": "domain",
+        "os_matches": [],
+        "port": 53,
+        "product": "",
+        "protocol": "udp",
+        "raw_service": "domain",
+        "scripts": [],
+        "service": "domain",
+        "service_version": "",
+        "source_file": "tests/fixtures/canonical/nmap.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "open",
+        "version": ""
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "recon/nmap",
+      "observation_id": "b5d48e1f-66cc-570e-bf98-4fa1aa4367c1",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "udp",
+      "service": "dns",
+      "source_execution_id": "nmap:a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+      "target": "192.0.2.1",
+      "version": ""
+    },
+    {
+      "attributes": {
+        "artifact_sha256": "a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+        "hostname": "fixture.example.test",
+        "hostnames": [
+          {
+            "name": "fixture.example.test",
+            "type": "PTR"
+          }
+        ],
+        "name": "domain",
+        "os_matches": [],
+        "port": 53,
+        "product": "BIND",
+        "protocol": "tcp",
+        "raw_service": "domain",
+        "scripts": [],
+        "service": "domain",
+        "service_version": "9.fixture",
+        "source_file": "tests/fixtures/canonical/nmap.xml",
+        "source_schema": "nmap/xml",
+        "source_tool": "nmap",
+        "source_tool_version": "7.95",
+        "state": "open",
+        "version": "BIND 9.fixture"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "service",
+      "module_path": "recon/nmap",
+      "observation_id": "f7d29b87-1f81-59cc-bcc7-161d1b495caa",
+      "observed_at": null,
+      "operation_name": null,
+      "port": 53,
+      "protocol": "tcp",
+      "service": "dns",
+      "source_execution_id": "nmap:a70eb2227d2807ebecd1efffff99da3d761f8911c535858dd2d903974f9521f1",
+      "target": "192.0.2.1",
+      "version": "BIND 9.fixture"
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/oidc.json",
+  "importer": "interop.identity:import_oauth_metadata",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "0e0ae897a00e447715c55805417ba05ec3a0aabe7dd952e35b3284b8cd0e18a0",
+        "evidence_type": "document_claim",
+        "identifier": "oauth:issuer:https://id.example.test/tenant",
+        "import_id": "cc195aa3-8dd2-5db5-b0e5-3122b7d303ec",
+        "inventory": {
+          "capabilities": {
+            "claims_supported": [
+              "iss",
+              "sub",
+              "aud",
+              "exp",
+              "email"
+            ],
+            "code_challenge_methods_supported": [
+              "S256"
+            ],
+            "grant_types_supported": [
+              "authorization_code",
+              "refresh_token"
+            ],
+            "id_token_signing_alg_values_supported": [
+              "RS256"
+            ],
+            "response_types_supported": [
+              "code",
+              "id_token"
+            ],
+            "scopes_supported": [
+              "openid",
+              "profile",
+              "email"
+            ],
+            "subject_types_supported": [
+              "public",
+              "pairwise"
+            ],
+            "token_endpoint_auth_methods_supported": [
+              "private_key_jwt",
+              "client_secret_basic"
+            ]
+          },
+          "endpoints": {
+            "authorization_endpoint": "https://id.example.test/authorize",
+            "jwks_uri": "https://id.example.test/keys",
+            "token_endpoint": "https://id.example.test/token",
+            "userinfo_endpoint": "https://id.example.test/userinfo"
+          },
+          "flags": {
+            "request_parameter_supported": true
+          },
+          "issuer": "https://id.example.test/tenant"
+        },
+        "name": "oauth:issuer:https://id.example.test/tenant",
+        "record_type": "authorization_server",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/oidc.json",
+        "source_schema": "oauth-authorization-server/RFC8414",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "ae2cc5a5-af5a-5c60-be34-801ebbf2a3cc",
+      "observed_at": null,
+      "operation_name": "Import oauth",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:cc195aa3-8dd2-5db5-b0e5-3122b7d303ec",
+      "target": "https://id.example.test/tenant",
+      "version": null
+    }
+  ]
+}

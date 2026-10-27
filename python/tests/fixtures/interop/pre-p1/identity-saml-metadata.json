@@ -1,0 +1,145 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/identity/metadata.xml",
+  "importer": "interop.identity:import_saml_metadata",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "66e200ec87d87ad52e6fc8192252d5e31a9d33e0dbfa39a48266738e9eff3839",
+        "evidence_type": "document_claim",
+        "identifier": "saml:entity:https://app.example.test/saml",
+        "import_id": "74510052-a4ce-5f6a-b23f-077d6ef13755",
+        "inventory": {
+          "cache_duration": null,
+          "entity_id": "https://app.example.test/saml",
+          "roles": [
+            {
+              "attributes": {
+                "AuthnRequestsSigned": "true",
+                "WantAssertionsSigned": "true",
+                "protocolSupportEnumeration": "urn:oasis:names:tc:SAML:2.0:protocol"
+              },
+              "endpoints": [
+                {
+                  "Binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+                  "Location": "https://app.example.test/acs",
+                  "index": "0",
+                  "isDefault": "true",
+                  "type": "AssertionConsumerService"
+                }
+              ],
+              "keys": [],
+              "name_id_formats": [],
+              "requested_attributes": [
+                {
+                  "Name": "department",
+                  "isRequired": "true",
+                  "values": [
+                    "engineering"
+                  ]
+                }
+              ],
+              "type": "SPSSODescriptor"
+            }
+          ],
+          "signature_present": false,
+          "signature_verified": false,
+          "valid_until": null
+        },
+        "name": "saml:entity:https://app.example.test/saml",
+        "record_type": "saml_entity",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/metadata.xml",
+        "source_schema": "saml-metadata/2.0",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "6d05372e-f5c4-5bc7-9f13-dffde1fd07ef",
+      "observed_at": null,
+      "operation_name": "Import saml-metadata",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:74510052-a4ce-5f6a-b23f-077d6ef13755",
+      "target": "https://app.example.test/saml",
+      "version": null
+    },
+    {
+      "attributes": {
+        "authenticated": false,
+        "document_fingerprint": "66e200ec87d87ad52e6fc8192252d5e31a9d33e0dbfa39a48266738e9eff3839",
+        "evidence_type": "document_claim",
+        "identifier": "saml:entity:https://id.example.test/saml",
+        "import_id": "74510052-a4ce-5f6a-b23f-077d6ef13755",
+        "inventory": {
+          "cache_duration": null,
+          "entity_id": "https://id.example.test/saml",
+          "roles": [
+            {
+              "attributes": {
+                "WantAuthnRequestsSigned": "true",
+                "protocolSupportEnumeration": "urn:oasis:names:tc:SAML:2.0:protocol"
+              },
+              "endpoints": [
+                {
+                  "Binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+                  "Location": "https://id.example.test/sso",
+                  "type": "SingleSignOnService"
+                },
+                {
+                  "Binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+                  "Location": "https://id.example.test/logout",
+                  "type": "SingleLogoutService"
+                }
+              ],
+              "keys": [
+                {
+                  "certificate_count": 1,
+                  "certificate_fingerprints": [
+                    "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a"
+                  ],
+                  "key_info_present": true,
+                  "use": "signing"
+                }
+              ],
+              "name_id_formats": [
+                "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+              ],
+              "requested_attributes": [],
+              "type": "IDPSSODescriptor"
+            }
+          ],
+          "signature_present": false,
+          "signature_verified": false,
+          "valid_until": "2027-01-01T00:00:00Z"
+        },
+        "name": "saml:entity:https://id.example.test/saml",
+        "record_type": "saml_entity",
+        "run_id": null,
+        "schema_version": "purplesploit/identity/1",
+        "source_file": "tests/fixtures/identity/metadata.xml",
+        "source_schema": "saml-metadata/2.0",
+        "source_tool": "identity-import"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "identity",
+      "module_path": "interop/identity",
+      "observation_id": "ea1d8678-3cc5-556b-80a9-75041b507125",
+      "observed_at": null,
+      "operation_name": "Import saml-metadata",
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:74510052-a4ce-5f6a-b23f-077d6ef13755",
+      "target": "https://id.example.test/saml",
+      "version": null
+    }
+  ]
+}

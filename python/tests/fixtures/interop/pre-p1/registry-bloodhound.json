@@ -1,0 +1,359 @@
+{
+  "findings": [],
+  "fixture": "python/tests/fixtures/canonical/bloodhound_subset.json",
+  "importer": "interop.importers:bloodhound-json",
+  "normalizations": [],
+  "observations": [
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "group:1e81ca84f24f",
+          "label": "ADMINS@LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB-512",
+            "raw_source_type": "Group",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:69c6d42120aa70051f805feac60bc27e94844844c9c0467be0b29a2db882e64b",
+              "bloodhound:7a76d2adc63d0336d3d3b1c3b05a5aacbadc2e7cdbffb3608472d540f70f47d1"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB-512",
+                "type": "groups",
+                "version": 5
+              },
+              {
+                "id": "S-LAB-2001",
+                "type": "computers",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "name": "ADMINS@LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "group"
+        },
+        "raw_source_id": "S-LAB-512"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "group",
+      "module_path": "interop/bloodhound",
+      "observation_id": "25a73cd7-3908-5779-bfec-391da242b81c",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "ADMINS@LAB.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "user:6fcd68210a57",
+          "label": "ALICE@LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB-1001",
+            "raw_source_type": "User",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:008a487d1644d1f9ff20551a8fa8a9a59336632e9cf9e46470637f4b3ae5bc7f",
+              "bloodhound:ade310afc1e75e9beba23e015c3868bb3536e068bed99f856b36430455af2931",
+              "bloodhound:7a76d2adc63d0336d3d3b1c3b05a5aacbadc2e7cdbffb3608472d540f70f47d1",
+              "bloodhound:d6550ae6f87bf9d75c631fec9fb245483a1837effe210bae756fce640b8d003a"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB-1001",
+                "type": "users",
+                "version": 5
+              },
+              {
+                "id": "S-LAB-513",
+                "type": "groups",
+                "version": 5
+              },
+              {
+                "id": "S-LAB-2001",
+                "type": "computers",
+                "version": 6
+              },
+              {
+                "id": "S-LAB-2002",
+                "type": "computers",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "domain": "LAB.EXAMPLE",
+            "name": "ALICE@LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "user"
+        },
+        "raw_source_id": "S-LAB-1001"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "user",
+      "module_path": "interop/bloodhound",
+      "observation_id": "69edfac8-456e-5723-8bad-32141c6d7fa9",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "ALICE@LAB.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "group:27f048f4ba30",
+          "label": "USERS@LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB-513",
+            "raw_source_type": "Group",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:ade310afc1e75e9beba23e015c3868bb3536e068bed99f856b36430455af2931",
+              "bloodhound:008a487d1644d1f9ff20551a8fa8a9a59336632e9cf9e46470637f4b3ae5bc7f",
+              "bloodhound:69c6d42120aa70051f805feac60bc27e94844844c9c0467be0b29a2db882e64b"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB-513",
+                "type": "groups",
+                "version": 5
+              },
+              {
+                "id": "S-LAB-1001",
+                "type": "users",
+                "version": 5
+              },
+              {
+                "id": "S-LAB-512",
+                "type": "groups",
+                "version": 5
+              }
+            ]
+          },
+          "properties": {
+            "name": "USERS@LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "group"
+        },
+        "raw_source_id": "S-LAB-513"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "group",
+      "module_path": "interop/bloodhound",
+      "observation_id": "81449c02-f6a0-5a3d-a829-c98b62248b26",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "USERS@LAB.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "domain:e5fd3c1121b5",
+          "label": "OTHER.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-OTHER",
+            "raw_source_type": "Domain",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:2fb8e0db60dfbd1f5a72fb41c6579df5b87b15e555618a63c88ce49b1424f62c",
+              "bloodhound:d2d691afa259c46675e5a1abce69cceb9a4746064ff3c61e2a5ab94e3adddf1c"
+            ],
+            "source_records": [
+              {
+                "id": "S-OTHER",
+                "type": "domains",
+                "version": 6
+              },
+              {
+                "id": "S-LAB",
+                "type": "domains",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "name": "OTHER.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "domain"
+        },
+        "raw_source_id": "S-OTHER"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "domain",
+      "module_path": "interop/bloodhound",
+      "observation_id": "b600b29e-da10-5e5d-a20e-f722a29c4e90",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "OTHER.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "computer:06da68136e0c",
+          "label": "WS01.LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB-2002",
+            "raw_source_type": "Computer",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:d6550ae6f87bf9d75c631fec9fb245483a1837effe210bae756fce640b8d003a"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB-2002",
+                "type": "computers",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "name": "WS01.LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "computer"
+        },
+        "raw_source_id": "S-LAB-2002"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "computer",
+      "module_path": "interop/bloodhound",
+      "observation_id": "c3823e61-fab6-5379-9d46-e273c53feca0",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "WS01.LAB.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "domain:75795f9acd6f",
+          "label": "LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB",
+            "raw_source_type": "Domain",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:d2d691afa259c46675e5a1abce69cceb9a4746064ff3c61e2a5ab94e3adddf1c"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB",
+                "type": "domains",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "name": "LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "domain"
+        },
+        "raw_source_id": "S-LAB"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "domain",
+      "module_path": "interop/bloodhound",
+      "observation_id": "c9038466-ef98-57e7-b97e-0d94f7cf017d",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "LAB.EXAMPLE",
+      "version": null
+    },
+    {
+      "attributes": {
+        "graph_node": {
+          "discovered_at": null,
+          "id": "computer:6f34c45773ff",
+          "label": "DC01.LAB.EXAMPLE",
+          "metadata": {
+            "placeholder": false,
+            "raw_source_id": "S-LAB-2001",
+            "raw_source_type": "Computer",
+            "source_format": "bloodhound",
+            "source_observation_ids": [
+              "bloodhound:7a76d2adc63d0336d3d3b1c3b05a5aacbadc2e7cdbffb3608472d540f70f47d1"
+            ],
+            "source_records": [
+              {
+                "id": "S-LAB-2001",
+                "type": "computers",
+                "version": 6
+              }
+            ]
+          },
+          "properties": {
+            "name": "DC01.LAB.EXAMPLE"
+          },
+          "status": "discovered",
+          "type": "computer"
+        },
+        "raw_source_id": "S-LAB-2001"
+      },
+      "confidence": "observed",
+      "engagement_id": null,
+      "kind": "computer",
+      "module_path": "interop/bloodhound",
+      "observation_id": "d12b6453-d5a5-5375-b594-bdaffc64a0c9",
+      "observed_at": null,
+      "operation_name": null,
+      "port": null,
+      "protocol": null,
+      "service": null,
+      "source_execution_id": "import:57fa0d7e794451666c89bb6579be1db2",
+      "target": "DC01.LAB.EXAMPLE",
+      "version": null
+    }
+  ]
+}
