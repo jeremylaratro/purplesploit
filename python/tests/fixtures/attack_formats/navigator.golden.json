@@ -1,0 +1,70 @@
+{
+  "description": "Supplied technique mappings only; score counts evidence mappings/completed checks, not ATT&CK matrix coverage.",
+  "domain": "enterprise-attack",
+  "metadata": [
+    {
+      "name": "purplesploit:schema",
+      "value": "purplesploit/attack-formats/1"
+    },
+    {
+      "name": "purplesploit:scope",
+      "value": "supplied_mappings_only"
+    }
+  ],
+  "name": "PurpleSploit assessment",
+  "sorting": 0,
+  "techniques": [
+    {
+      "comment": "execution:run-b [failed]",
+      "enabled": true,
+      "metadata": [
+        {
+          "name": "purplesploit:records",
+          "value": "[{\"comment\":\"\",\"contributes_score\":false,\"id\":\"run-b\",\"kind\":\"execution\",\"status\":\"failed\"}]"
+        },
+        {
+          "name": "purplesploit:evidence_ids",
+          "value": "[]"
+        }
+      ],
+      "score": 0,
+      "techniqueID": "T1046"
+    },
+    {
+      "comment": "capability:op-a [mapped]; coverage:untested-b [not_tested]",
+      "enabled": true,
+      "metadata": [
+        {
+          "name": "purplesploit:records",
+          "value": "[{\"comment\":\"\",\"contributes_score\":false,\"id\":\"op-a\",\"kind\":\"capability\",\"status\":\"mapped\"},{\"comment\":\"\",\"contributes_score\":false,\"id\":\"untested-b\",\"kind\":\"coverage\",\"status\":\"not_tested\"}]"
+        },
+        {
+          "name": "purplesploit:evidence_ids",
+          "value": "[]"
+        }
+      ],
+      "score": 0,
+      "techniqueID": "T1059"
+    },
+    {
+      "comment": "execution:run-a [success]; coverage:tested-a [manual]; finding:finding-a [confirmed] Weak authentication",
+      "enabled": true,
+      "metadata": [
+        {
+          "name": "purplesploit:records",
+          "value": "[{\"comment\":\"\",\"contributes_score\":true,\"id\":\"run-a\",\"kind\":\"execution\",\"status\":\"success\"},{\"comment\":\"\",\"contributes_score\":true,\"id\":\"tested-a\",\"kind\":\"coverage\",\"status\":\"manual\"},{\"comment\":\"Weak authentication\",\"contributes_score\":true,\"id\":\"finding-a\",\"kind\":\"finding\",\"status\":\"confirmed\"}]"
+        },
+        {
+          "name": "purplesploit:evidence_ids",
+          "value": "[\"evidence-a\",\"obs-host\"]"
+        }
+      ],
+      "score": 3,
+      "techniqueID": "T1110.001"
+    }
+  ],
+  "versions": {
+    "layer": "4.5",
+    "navigator": "4.9.1"
+  }
+}

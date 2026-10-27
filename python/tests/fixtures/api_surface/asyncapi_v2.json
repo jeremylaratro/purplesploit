@@ -1,0 +1,6 @@
+{
+  "asyncapi": "2.6.0", "info": {"title": "Fixture socket", "version": "1"},
+  "servers": {"fixture": {"url": "socket.example.test/ws", "protocol": "wss", "security": [{"key": []}]}},
+  "channels": {"pets/{id}": {"parameters": {"id": {"schema": {"type": "string"}}}, "subscribe": {"operationId": "watchPet", "message": {"oneOf": [{"$ref": "#/components/messages/Pet"}, {"$ref": "#/components/messages/Pet"}]}}}},
+  "components": {"messages": {"Pet": {"name": "Pet", "headers": {"type": "object"}, "payload": {"type": "object", "properties": {"id": {"type": "string"}}}}}}
+}

@@ -158,6 +158,12 @@ class TestEvidence:
         assert evidence.evidence_type == "log"
         assert isinstance(evidence.captured_at, datetime)
 
+    def test_rfc3339_utc_timestamp_is_supported(self):
+        """RFC 3339 UTC timestamps deserialize on every supported Python version."""
+        evidence = Evidence.from_dict({"captured_at": "2026-01-02T03:04:05Z"})
+
+        assert evidence.captured_at.isoformat() == "2026-01-02T03:04:05+00:00"
+
 
 # =============================================================================
 # Finding Tests
@@ -165,6 +171,15 @@ class TestEvidence:
 
 class TestFinding:
     """Tests for Finding dataclass."""
+
+    def test_rfc3339_utc_timestamp_is_supported(self):
+        """Canonical finding timestamps accept RFC 3339 UTC on Python 3.10."""
+        finding = Finding.from_dict({
+            "title": "Imported finding",
+            "discovered_at": "2026-01-02T03:04:05Z",
+        })
+
+        assert finding.discovered_at.isoformat() == "2026-01-02T03:04:05+00:00"
 
     def test_finding_creation(self):
         """Test basic finding creation."""

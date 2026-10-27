@@ -11,12 +11,10 @@ Tests cover:
 """
 
 import pytest
-import tempfile
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from purplesploit.core.framework import Framework
-from purplesploit.core.module import BaseModule
 
 
 # =============================================================================
@@ -127,6 +125,12 @@ class TestModuleDiscovery:
         assert first_module.name is not None
         assert first_module.category is not None
         assert first_module.path is not None
+
+    def test_discovery_excludes_compatibility_only_modules(self, framework_with_modules):
+        """Compatibility shims remain importable but are not runnable modules."""
+        framework_with_modules.discover_modules()
+
+        assert "recon/auto_enum" not in framework_with_modules.modules
 
 
 # =============================================================================
@@ -386,7 +390,7 @@ class TestCredentialManagement:
     def test_add_credential_auto_name(self, framework):
         """Test credential gets auto-generated name."""
         with patch('purplesploit.models.database.db_manager'):
-            result = framework.add_credential(
+            framework.add_credential(
                 username="admin",
                 password="pass",
                 domain="DOMAIN"

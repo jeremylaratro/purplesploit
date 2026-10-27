@@ -14,6 +14,9 @@ import os
 
 from .display import Display
 from .commands import CommandHandler
+from purplesploit.ai import provider_from_environment
+from purplesploit.core.framework import Framework
+from purplesploit.services import PurpleSploitServices
 
 
 class Console:
@@ -33,7 +36,13 @@ class Console:
         """
         self.framework = framework
         self.display = Display()
-        self.command_handler = CommandHandler(framework)
+        self.services = None
+        if isinstance(framework, Framework):
+            self.services = PurpleSploitServices(
+                framework,
+                advisory_provider=provider_from_environment(),
+            )
+        self.command_handler = CommandHandler(framework, services=self.services)
         self.running = True
 
         # Setup history file

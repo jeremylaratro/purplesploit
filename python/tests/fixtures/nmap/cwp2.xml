@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" version="7.95" args="fixture only">
+  <host><status state="up"/><address addr="00:11:22:33:44:55" addrtype="mac"/>
+    <address addr="192.0.2.53" addrtype="ipv4"/>
+    <hostnames><hostname name="dns.example.test" type="PTR"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="53"><state state="open"/>
+        <service name="domain" product="BIND" version="9.18" hostname="ns.example.test"/>
+        <script id="dns-nsid" output="NSID: test"><table key="answers"><elem key="nsid">test</elem></table></script>
+      </port>
+      <port protocol="udp" portid="53"><state state="open"/><service name="domain" product="BIND" version="9.18"/></port>
+      <port protocol="tcp" portid="22"><state state="closed"/><service name="ssh"/></port>
+      <port protocol="udp" portid="123"><state state="open|filtered"/><service name="ntp"/></port>
+    </ports>
+    <hostscript><script id="clock-skew" output="mean: 0s"/></hostscript>
+    <os><osmatch name="Example OS" accuracy="98"/></os>
+  </host>
+  <host><status state="up"/><address addr="2001:db8::443" addrtype="ipv6"/>
+    <hostnames><hostname name="web.example.test" type="user"/></hostnames>
+    <ports><port protocol="tcp" portid="8443"><state state="open"/>
+      <service name="http" tunnel="ssl" product="nginx" version="1.26.2" extrainfo="fixture"/>
+      <script id="http-title" output="Example dashboard"/>
+    </port></ports>
+  </host>
+  <host><status state="up"/><address addr="192.0.2.99" addrtype="ipv4"/></host>
+  <host><status state="down"/><address addr="192.0.2.100" addrtype="ipv4"/></host>
+  <host><status state="up"/><address addr="192.0.2.0/24" addrtype="ipv4"/>
+    <ports><port protocol="tcp" portid="445"><state state="open"/><service name="microsoft-ds"/></port></ports>
+  </host>
+</nmaprun>

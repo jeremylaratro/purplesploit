@@ -1,0 +1,7 @@
+WINRM 192.0.2.40 5985 WS01 [*] Windows Server 2022 (name:WS01) (domain:CORP.TEST)
+WINRM 192.0.2.40 5985 WS01 [+] CORP.TEST\alice:fixture-only (Pwn3d!)
+WINRM 192.0.2.40 5985 WS01 [*] Executed command (net user)
+WINRM 192.0.2.40 5985 WS01 User accounts for \\WS01
+WINRM 192.0.2.40 5985 WS01 ----------------------------------------
+WINRM 192.0.2.40 5985 WS01 Administrator            alice                    Guest
+WINRM 192.0.2.40 5985 WS01 The command completed successfully.

@@ -7,6 +7,7 @@ Generates interactive HTML reports with filtering and search capabilities.
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+import os
 
 # Jinja2 is optional - use built-in string formatting as fallback
 try:
@@ -15,7 +16,8 @@ try:
 except ImportError:
     JINJA2_AVAILABLE = False
 
-from .models import ReportData, Severity
+from .models import ReportData, Severity, finding_record_json
+from purplesploit.core.output_security import safe_reference
 
 
 class HTMLReportGenerator:
@@ -50,6 +52,7 @@ class HTMLReportGenerator:
             self.env.filters['severity_color'] = self._severity_color
             self.env.filters['severity_badge'] = self._severity_badge
             self.env.filters['format_datetime'] = self._format_datetime
+            self.env.filters['safe_reference'] = safe_reference
 
     def _severity_color(self, severity: Severity) -> str:
         """Get color for severity level"""
@@ -126,6 +129,7 @@ class HTMLReportGenerator:
             "generated_at": datetime.now(),
             "standalone": standalone,
             "Severity": Severity,
+            "finding_record": lambda finding: finding_record_json(finding, report_data.config),
             **kwargs
         }
 
@@ -136,6 +140,7 @@ class HTMLReportGenerator:
         output_path = Path(output_path)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
+        os.chmod(output_path, 0o600)
 
         return str(output_path)
 
@@ -173,6 +178,7 @@ class HTMLReportGenerator:
                 </div>
                 {f'<div class="detail-section"><h4>Impact</h4><p>{self._escape_html(finding.impact)}</p></div>' if finding.impact else ''}
                 {f'<div class="detail-section"><h4>Remediation</h4><p>{self._escape_html(finding.remediation)}</p></div>' if finding.remediation else ''}
+                <details><summary>Finding record (schema v1)</summary><pre class="finding-record">{self._escape_html(finding_record_json(finding, config))}</pre></details>
             </div>
             '''
             findings_html.append(finding_html)
@@ -263,6 +269,7 @@ class HTMLReportGenerator:
         output_path = Path(output_path)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
+        os.chmod(output_path, 0o600)
 
         return str(output_path)
 
@@ -741,7 +748,8 @@ class HTMLReportGenerator:
                         <h4>References</h4>
                         <ul>
                         {% for ref in finding.references %}
-                            <li><a href="{{ ref }}" target="_blank">{{ ref }}</a></li>
+                            {% set safe_ref = ref|safe_reference %}
+                            <li>{% if safe_ref %}<a href="{{ safe_ref }}" target="_blank" rel="noopener noreferrer">{{ ref }}</a>{% else %}{{ ref }}{% endif %}</li>
                         {% endfor %}
                         </ul>
                     </div>
@@ -768,6 +776,9 @@ class HTMLReportGenerator:
                     {% endfor %}
                 </div>
                 {% endif %}
+                <details><summary>Finding record (schema v1)</summary>
+                    <pre class="finding-record">{{ finding_record(finding) }}</pre>
+                </details>
             </div>
             {% endfor %}
             </div>

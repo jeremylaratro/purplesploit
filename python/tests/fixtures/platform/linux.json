@@ -1,0 +1,11 @@
+{
+  "host": "linux01.example.test",
+  "os": "Ubuntu 24.04",
+  "kernel": "6.8.0",
+  "packages": [{"name": "openssl", "version": "3.0.13"}],
+  "services": [{"name": "sshd", "state": "running"}],
+  "cron": [{"name": "backup", "command": "/usr/local/bin/backup"}],
+  "timers": [{"unit": "apt-daily.timer", "next": "2026-10-27T06:00:00Z"}],
+  "permissions": [{"path": "/usr/local/bin/backup", "mode": "0777"}],
+  "credential_artifacts": [{"path": "/home/alice/.ssh/id_ed25519", "type": "private_key_reference"}]
+}

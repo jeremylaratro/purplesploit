@@ -14,8 +14,9 @@ Key Features:
 from .core.framework import Framework
 from .core.module import BaseModule, ExternalToolModule
 from .core.session import Session
+from ._version import VERSION
 
-__version__ = "6.9.1"
+__version__ = VERSION
 __author__ = "PurpleSploit Team"
 
 __all__ = [

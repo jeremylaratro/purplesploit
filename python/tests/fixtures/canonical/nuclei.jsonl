@@ -1,0 +1,2 @@
+{"template-id":"fixture-tls","info":{"name":"Legacy TLS","severity":"high","description":"Fixture only","classification":{"cve-id":["CVE-2026-0001"]}},"host":"https://example.test","matched-at":"https://example.test:443","timestamp":"2026-10-26T12:00:00+00:00","future":{"preserve":true}}
+{"template-id":"fixture-header","info":{"name":"Missing header","severity":"low"},"host":"https://example.test","matched-at":"https://example.test/path","matcher-name":"header"}

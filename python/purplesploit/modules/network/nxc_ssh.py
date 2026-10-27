@@ -6,9 +6,10 @@ SSH protocol operations using NetExec.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCSSHModule(ExternalToolModule):
+class NXCSSHModule(NXCModuleMixin, ExternalToolModule):
     """NetExec SSH module for SSH authentication and command execution."""
 
     def __init__(self, framework):
@@ -40,14 +41,14 @@ class NXCSSHModule(ExternalToolModule):
         })
 
     def get_operations(self) -> List[Dict[str, Any]]:
-        return [
+        return self._operation_manifest([
             {"name": "Test Authentication", "description": "Test SSH authentication", "handler": "op_test_auth"},
             {"name": "Execute Command", "description": "Execute remote command", "handler": "op_exec_cmd"},
             {"name": "Get System Info", "description": "Get uname and OS info", "handler": "op_sysinfo"},
             {"name": "List Users", "description": "List system users", "handler": "op_users"},
             {"name": "Check Sudo", "description": "Check sudo privileges", "handler": "op_sudo"},
             {"name": "Network Info", "description": "Get network configuration", "handler": "op_netinfo"},
-        ]
+        ], interactive={"op_exec_cmd"}, emits={"op_users": ["user"]})
 
     def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
@@ -61,20 +62,15 @@ class NXCSSHModule(ExternalToolModule):
             auth += " -p ''"
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
-        rhost = self.get_option("RHOST")
-        auth = self._build_auth()
-        cmd = f"nxc ssh {self.quote_arg(rhost)} {auth}"
-        if extra_args:
-            cmd += f" {extra_args}"
-        return self.execute_command(cmd, timeout=120)
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
+        return self._run_nxc("ssh", extra_args, timeout=120)
 
     def op_test_auth(self) -> Dict[str, Any]:
         return self._execute_nxc()
 
     def op_exec_cmd(self) -> Dict[str, Any]:
         cmd = input("Command: ")
-        return self._execute_nxc(f"-x '{cmd}'")
+        return self._execute_nxc(["-x", cmd])
 
     def op_sysinfo(self) -> Dict[str, Any]:
         return self._execute_nxc("-x 'uname -a'")

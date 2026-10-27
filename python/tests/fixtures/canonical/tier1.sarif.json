@@ -1,0 +1,8 @@
+{
+  "version": "2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "Example static analyzer", "version": "1.2", "rules": [{"id": "CWE-89", "shortDescription": {"text": "SQL injection"}, "properties": {"security-severity": "8.1", "vendor-field": true}}]}},
+    "automationDetails": {"id": "consumer/build"},
+    "results": [{"ruleIndex": 0, "level": "error", "message": {"text": "Untrusted query"}, "partialFingerprints": {"primaryLocationLineHash": "source-fingerprint"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "src/api.py"}, "region": {"startLine": 17}}}], "properties": {"custom-trace": ["input", "query"]}}]
+  }]
+}

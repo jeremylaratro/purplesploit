@@ -8,10 +8,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import json
-import hashlib
-import tempfile
 import shutil
 import logging
+from urllib.parse import urlsplit
 
 from .models import Plugin, PluginManifest, PluginVersion, PluginCategory, PluginStatus
 
@@ -84,9 +83,12 @@ class PluginRepository:
         import urllib.error
 
         index_url = f"{self.url}/index.json"
+        if urlsplit(index_url).scheme != "https":
+            raise ValueError("Remote plugin repositories must use HTTPS")
 
         try:
-            with urllib.request.urlopen(index_url, timeout=10) as response:
+            # Scheme is constrained to HTTPS immediately above.
+            with urllib.request.urlopen(index_url, timeout=10) as response:  # nosec B310
                 data = json.loads(response.read().decode())
         except urllib.error.URLError as e:
             logger.error(f"Failed to fetch repository index: {e}")
@@ -266,6 +268,8 @@ class PluginRepository:
         else:
             # Construct from repository URL
             download_url = f"{self.url}/plugins/{plugin.name}/{version_info.version}/{plugin.name}.tar.gz"
+        if urlsplit(download_url).scheme != "https":
+            raise ValueError("Remote plugin downloads must use HTTPS")
 
         # Download to cache
         dest_dir = dest_dir or self.cache_dir / "downloads"
@@ -273,7 +277,8 @@ class PluginRepository:
         dest_file = dest_dir / f"{plugin.name}-{version_info.version}.tar.gz"
 
         try:
-            with urllib.request.urlopen(download_url, timeout=60) as response:
+            # Scheme is constrained to HTTPS immediately above.
+            with urllib.request.urlopen(download_url, timeout=60) as response:  # nosec B310
                 content = response.read()
 
             # Verify checksum if available
@@ -335,7 +340,7 @@ class LocalPluginRepository(PluginRepository):
         super().__init__(
             name="local",
             url=None,
-            cache_dir=path / ".cache",
+            cache_dir=self.path / ".cache",
         )
 
     def _fetch_index(self) -> Dict[str, Any]:
@@ -388,17 +393,18 @@ class LocalPluginRepository(PluginRepository):
         source = self.path / "plugins" / plugin.name
         if not source.exists():
             raise ValueError(f"Plugin not found: {plugin.name}")
+        if version is not None and version != plugin.version:
+            raise ValueError(f"Version {version} not found for {plugin.name}")
 
         dest_dir = dest_dir or self.cache_dir / "downloads"
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         # Create tarball of plugin directory
-        dest_file = dest_dir / f"{plugin.name}-{plugin.version}.tar.gz"
-        shutil.make_archive(
-            str(dest_file.with_suffix("")),
+        archive = shutil.make_archive(
+            str(dest_dir / f"{plugin.name}-{plugin.version}"),
             "gztar",
             source.parent,
             source.name,
         )
 
-        return dest_file
+        return Path(archive)

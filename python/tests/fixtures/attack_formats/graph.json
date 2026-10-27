@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {"id":"host:a","type":"host","label":"192.0.2.10","status":"scanned","properties":{"ip":"192.0.2.10"},"metadata":{"source_observation_ids":["obs-host"]},"discovered_at":"2026-01-02T03:04:05+00:00"},
+    {"id":"resource:a","type":"resource","label":"bucket-a","status":"discovered","properties":{"provider":"fixture","labels":["a","b"]},"metadata":{"source_observation_ids":["obs-resource"]},"discovered_at":"2026-01-02T03:04:05+00:00"}
+  ],
+  "edges": [{"id":"edge:a","source":"host:a","target":"resource:a","type":"owns","label":"Fixture ownership","weight":2.5,"properties":{"source_observation_ids":["obs-host"],"source_execution_ids":["run-a"],"source_records":[{"id":"edge-source","evidence_id":"evidence-a"}]},"created_at":"2026-01-02T03:04:05+00:00"}],
+  "attack_paths": [{"id":"path:a","nodes":["host:a","resource:a"],"edges":["edge:a"],"risk_score":2.5,"description":"Fixture path","techniques":["T1110.001"]}],
+  "metadata":{"source":"golden","evidence_ids":["evidence-a"]}
+}

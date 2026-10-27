@@ -1,0 +1,9 @@
+{
+  "name": "hello-demo",
+  "version": "1.0.0",
+  "description": "Local plugin lifecycle example with a deterministic greeting operation.",
+  "author": "PurpleSploit",
+  "category": "utility",
+  "module_path": "hello",
+  "main_class": "HelloModule"
+}

@@ -6,8 +6,6 @@ Sends notifications to Microsoft Teams channels via webhooks.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
-import json
 import logging
 
 from .base import (
@@ -119,8 +117,6 @@ class TeamsIntegration(BaseIntegration, WebhookMixin):
 
     def _build_adaptive_card(self, payload: NotificationPayload) -> Dict[str, Any]:
         """Build Teams Adaptive Card payload."""
-        color = self._get_teams_color(payload.severity)
-
         # Build facts for the card
         facts = []
         if payload.target:

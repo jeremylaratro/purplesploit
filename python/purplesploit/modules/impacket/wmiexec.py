@@ -4,10 +4,10 @@ Impacket WMIExec Module
 Remote command execution via WMI.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from .common import ImpacketAdapter
 
 
-class ImpacketWMIExecModule(ExternalToolModule):
+class ImpacketWMIExecModule(ImpacketAdapter):
     """
     Impacket WMIExec - Semi-interactive shell via WMI.
 
@@ -83,42 +83,29 @@ class ImpacketWMIExecModule(ExternalToolModule):
             }
         })
 
-    def build_command(self) -> str:
+    emits = ("session",)
+    interactive = True
+
+    def build_argv(self) -> list[str]:
         """
         Build the impacket-wmiexec command.
 
         Returns:
             Command string to execute
         """
-        rhost = self.get_option("RHOST")
-        username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
-        hash_val = self.get_option("HASH")
         command = self.get_option("COMMAND")
         codec = self.get_option("CODEC")
 
         # Build target string
-        if hash_val:
-            # Hash authentication
-            target = f"{domain}/{username}@{rhost} -hashes {hash_val}"
-        elif password:
-            # Password authentication
-            target = f"{domain}/{username}:{password}@{rhost}"
-        else:
-            # No authentication
-            target = f"{domain}/{username}@{rhost}"
-
-        # Base command
-        cmd = f"impacket-wmiexec {target}"
+        cmd = self.authentication_argv()
 
         # Codec
         if codec:
-            cmd += f" -codec {codec}"
+            cmd += ["-codec", str(codec)]
 
         # Command execution
         if command:
-            cmd += f" '{command}'"
+            cmd.append(str(command))
 
         return cmd
 
@@ -147,4 +134,4 @@ class ImpacketWMIExecModule(ExternalToolModule):
             if line.strip() and not line.startswith('['):
                 results["command_output"].append(line)
 
-        return results
+        return self.execution_observations(results)

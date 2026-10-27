@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><base href="/account/"></head><body>
+<form id="login" action="session" method="post">
+  <input name="username" required>
+  <input type="password" name="password" required>
+  <input type="hidden" name="csrf" value="recorded-token">
+  <button name="submit" value="login">Sign in</button>
+</form>
+<form id="search" action="/search">
+  <input name="q" value="alpha &amp; beta">
+  <select name="category"><option value="all">All</option></select>
+</form>
+<input form="login" name="remember" type="checkbox" value="1">
+</body></html>

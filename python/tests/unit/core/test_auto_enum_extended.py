@@ -11,14 +11,11 @@ Comprehensive test coverage for:
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import MagicMock
 from datetime import datetime, timedelta
-import threading
-import time
 
 from purplesploit.core.auto_enum import (
     AutoEnumPipeline,
-    create_auto_enum,
     EnumPhase,
     EnumScope,
     ServiceRule,
@@ -57,10 +54,11 @@ class TestDiscoveryPhase:
         mock_module.options = {'RHOST': {}}
         mock_module.auto_set_from_context = MagicMock()
         mock_module.set_operation = MagicMock()
-        mock_module.get_operations = MagicMock(return_value=[])
+        default_operation = {'name': 'Default Scan', 'handler': 'op_default'}
+        mock_module.get_operations = MagicMock(return_value=[default_operation])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
-        mock_framework.run_module = MagicMock(return_value={
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
+        mock_framework.run_operation = MagicMock(return_value={
             'success': True,
             'output': 'Scan complete',
             'services': [
@@ -72,8 +70,8 @@ class TestDiscoveryPhase:
         pipeline._run_discovery_phase(['192.168.1.1'])
 
         # Verify module was used and run
-        mock_framework.use_module.assert_called_once_with('recon/nmap')
-        mock_framework.run_module.assert_called_once()
+        mock_framework.instantiate_module.assert_called_once_with('recon/nmap')
+        mock_framework.run_operation.assert_called_once_with(mock_module, default_operation)
 
     def test_run_discovery_phase_multiple_targets(self, pipeline, mock_framework):
         """Test discovery phase with multiple targets."""
@@ -81,19 +79,19 @@ class TestDiscoveryPhase:
         mock_module.set_option = MagicMock(return_value=True)
         mock_module.options = {'RHOST': {}}
         mock_module.auto_set_from_context = MagicMock()
-        mock_module.set_operation = MagicMock()
-        mock_module.get_operations = MagicMock(return_value=[])
+        default_operation = {'name': 'Default Scan', 'handler': 'op_default'}
+        mock_module.get_operations = MagicMock(return_value=[default_operation])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
-        mock_framework.run_module = MagicMock(return_value={
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
+        mock_framework.run_operation = MagicMock(return_value={
             'success': True,
             'services': []
         })
 
         pipeline._run_discovery_phase(['192.168.1.1', '192.168.1.2', '192.168.1.3'])
 
-        # Should have called use_module 3 times
-        assert mock_framework.use_module.call_count == 3
+        # Should have called instantiate_module 3 times
+        assert mock_framework.instantiate_module.call_count == 3
 
     def test_run_discovery_phase_stop_requested(self, pipeline, mock_framework):
         """Test discovery phase respects stop request."""
@@ -101,7 +99,9 @@ class TestDiscoveryPhase:
         mock_module.set_option = MagicMock(return_value=True)
         mock_module.options = {'RHOST': {}}
         mock_module.auto_set_from_context = MagicMock()
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        default_operation = {'name': 'Default Scan', 'handler': 'op_default'}
+        mock_module.get_operations = MagicMock(return_value=[default_operation])
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={'success': True, 'services': []})
 
         # Set stop flag
@@ -110,7 +110,7 @@ class TestDiscoveryPhase:
         pipeline._run_discovery_phase(['192.168.1.1', '192.168.1.2'])
 
         # Should not have called any modules
-        mock_framework.use_module.assert_not_called()
+        mock_framework.instantiate_module.assert_not_called()
 
     def test_run_discovery_phase_null_scope(self, mock_framework):
         """Test discovery with PASSIVE scope returns None for nmap operation."""
@@ -150,7 +150,7 @@ class TestEnumerationPhase:
         pipeline._run_enumeration_phase('192.168.1.1')
 
         # Should not have tried to run any modules
-        mock_framework.use_module.assert_not_called()
+        mock_framework.instantiate_module.assert_not_called()
 
     def test_run_enumeration_phase_with_services(self, pipeline, mock_framework):
         """Test enumeration runs appropriate modules for services."""
@@ -161,7 +161,7 @@ class TestEnumerationPhase:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'output': 'Complete',
@@ -174,7 +174,7 @@ class TestEnumerationPhase:
         pipeline._run_enumeration_phase('192.168.1.1')
 
         # Modules should have been loaded
-        assert mock_framework.use_module.call_count > 0
+        assert mock_framework.instantiate_module.call_count > 0
 
     def test_run_enumeration_phase_skips_auth_without_creds(self, pipeline, mock_framework):
         """Test enumeration skips auth-required modules when no creds."""
@@ -188,7 +188,7 @@ class TestEnumerationPhase:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -212,7 +212,7 @@ class TestEnumerationPhase:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         call_count = 0
 
         def run_side_effect(module):
@@ -278,7 +278,7 @@ class TestExploitationPhase:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -311,7 +311,7 @@ class TestExploitationPhase:
         pipeline._run_exploitation_phase(['192.168.1.1'])
 
         # Should not have tried to run modules
-        mock_framework.use_module.assert_not_called()
+        mock_framework.instantiate_module.assert_not_called()
 
 
 class TestParallelEnumeration:
@@ -341,7 +341,7 @@ class TestParallelEnumeration:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -364,7 +364,7 @@ class TestParallelEnumeration:
             '192.168.1.2': {'http'},
         }
 
-        mock_framework.use_module = MagicMock(side_effect=Exception("Module error"))
+        mock_framework.instantiate_module = MagicMock(side_effect=Exception("Module error"))
 
         # Should not raise exception
         pipeline._run_enumeration_parallel(['192.168.1.1', '192.168.1.2'], max_workers=2)
@@ -625,14 +625,16 @@ class TestErrorRecovery:
 
     def test_run_module_handles_module_not_found(self, pipeline, mock_framework):
         """Test handling of module not found error."""
-        mock_framework.use_module = MagicMock(return_value=None)
+        mock_framework.instantiate_module = MagicMock(return_value=None)
 
         result = pipeline._run_module(
             target='192.168.1.1',
             module_path='nonexistent/module',
         )
 
-        assert result is None
+        assert result.success is False
+        assert "Module not found" in result.error
+        assert pipeline.results == [result]
 
     def test_run_module_handles_execution_exception(self, pipeline, mock_framework):
         """Test handling of module execution exception."""
@@ -640,7 +642,7 @@ class TestErrorRecovery:
         mock_module.set_option = MagicMock(side_effect=Exception("Option error"))
         mock_module.options = {'RHOST': {}}
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
 
         result = pipeline._run_module(
             target='192.168.1.1',
@@ -659,7 +661,7 @@ class TestErrorRecovery:
         mock_module.auto_set_from_context = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(side_effect=Exception("Run failed"))
 
         result = pipeline._run_module(
@@ -677,7 +679,7 @@ class TestErrorRecovery:
 
         call_count = 0
 
-        def use_module_side_effect(path):
+        def instantiate_module_side_effect(path):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -689,7 +691,7 @@ class TestErrorRecovery:
             mock.get_operations = MagicMock(return_value=[])
             return mock
 
-        mock_framework.use_module = MagicMock(side_effect=use_module_side_effect)
+        mock_framework.instantiate_module = MagicMock(side_effect=instantiate_module_side_effect)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -701,7 +703,7 @@ class TestErrorRecovery:
         pipeline._run_enumeration_phase('192.168.1.1')
 
         # Should have tried multiple modules despite first failure
-        assert mock_framework.use_module.call_count > 1
+        assert mock_framework.instantiate_module.call_count > 1
 
     def test_process_enum_results_handles_empty_data(self, pipeline, mock_framework):
         """Test processing results with missing data fields."""
@@ -746,7 +748,7 @@ class TestFullPipelineRun:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'output': 'Complete',
@@ -780,7 +782,7 @@ class TestFullPipelineRun:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [{'service': 'smb', 'port': 445}],
@@ -802,10 +804,12 @@ class TestFullPipelineRun:
         mock_module.set_option = MagicMock(return_value=True)
         mock_module.options = {'RHOST': {}}
         mock_module.auto_set_from_context = MagicMock()
+        default_operation = {'name': 'Default Scan', 'handler': 'op_default'}
+        mock_module.get_operations = MagicMock(return_value=[default_operation])
 
         call_count = 0
 
-        def run_side_effect(module):
+        def run_side_effect(module, operation):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -818,10 +822,10 @@ class TestFullPipelineRun:
                 'findings': [],
             }
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
-        mock_framework.run_module = MagicMock(side_effect=run_side_effect)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
+        mock_framework.run_operation = MagicMock(side_effect=run_side_effect)
 
-        summary = pipeline.run(['192.168.1.1', '192.168.1.2', '192.168.1.3'])
+        pipeline.run(['192.168.1.1', '192.168.1.2', '192.168.1.3'])
 
         # Should have stopped early
         assert pipeline._stop_requested is True
@@ -837,7 +841,7 @@ class TestFullPipelineRun:
         mock_module.set_operation = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [{'service': 'http', 'port': 80}],
@@ -931,7 +935,7 @@ class TestProgressTracking:
         mock_module.auto_set_from_context = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -1015,7 +1019,7 @@ class TestModuleExecution:
         mock_module.auto_set_from_context = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -1040,7 +1044,7 @@ class TestModuleExecution:
         mock_module.auto_set_from_context = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -1070,7 +1074,7 @@ class TestModuleExecution:
         mock_module.auto_set_from_context = MagicMock()
         mock_module.get_operations = MagicMock(return_value=[])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -1108,7 +1112,7 @@ class TestModuleExecution:
             {'name': 'Enumerate Shares', 'handler': 'op_shares'},
         ])
 
-        mock_framework.use_module = MagicMock(return_value=mock_module)
+        mock_framework.instantiate_module = MagicMock(return_value=mock_module)
         mock_framework.run_module = MagicMock(return_value={
             'success': True,
             'services': [],
@@ -1212,12 +1216,12 @@ class TestSummaryBuilding:
             assert 'duration' in result
 
     def test_build_summary_success_with_failures(self, pipeline):
-        """Test success is True when at least one module succeeded."""
+        """Partial execution must not claim complete success."""
         start_time = datetime.now()
         summary = pipeline._build_summary(start_time)
 
-        # Has failures but also successes
-        assert summary['success'] is True
+        assert summary['success'] is False
+        assert summary['status'] == 'partial'
 
     def test_build_summary_success_all_failed(self, mock_framework):
         """Test success is False when all modules failed."""

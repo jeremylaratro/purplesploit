@@ -5,12 +5,27 @@ This module provides common fixtures used across unit and integration tests,
 including mock framework objects, test databases, and clean session instances.
 """
 
-import pytest
 import tempfile
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from typing import Dict, Any
+import pytest
+
+
+@pytest.fixture
+def secure_ssh_material(tmp_path, monkeypatch):
+    """Host-key, identity, and payload fixtures for hardened SSH adapters."""
+    known_hosts = tmp_path / "known_hosts"
+    known_hosts.write_text("fixture ssh-ed25519 AAAAC3NzaFixture\n")
+    known_hosts.chmod(0o600)
+    identity = tmp_path / "id_ed25519"
+    identity.write_text("fixture-private-key")
+    identity.chmod(0o600)
+    payload = tmp_path / "payload"
+    payload.write_text("fixture-payload")
+    monkeypatch.setenv("PURPLESPLOIT_KNOWN_HOSTS", str(known_hosts))
+    return {"known_hosts": known_hosts, "identity": identity, "payload": payload}
 
 
 # =============================================================================

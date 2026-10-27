@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 from datetime import datetime
+import csv
+import io
 import json
 import hashlib
 
@@ -24,6 +26,12 @@ class NodeType(Enum):
     GROUP = "group"
     DOMAIN = "domain"
     SESSION = "session"
+    COMPUTER = "computer"
+    IDENTITY = "identity"
+    ROLE = "role"
+    POLICY = "policy"
+    RESOURCE = "resource"
+    TENANT = "tenant"
 
 
 class EdgeType(Enum):
@@ -38,6 +46,22 @@ class EdgeType(Enum):
     CONTAINS = "contains"                # Domain → Host/User
     PIVOTS_TO = "pivots_to"              # Session → Host
     DISCOVERED_VIA = "discovered_via"    # Node → Node (discovery path)
+    HAS_SESSION = "has_session"          # Computer/host → User (BloodHound direction)
+    SESSION_ON = "session_on"            # Session → Computer/host
+    SESSION_USER = "session_user"        # Session → User
+    ADMIN_TO = "admin_to"                # Principal → Computer/host
+    TRUSTED_BY = "trusted_by"            # Trusted domain → Trusting domain
+    IDENTIFIES = "identifies"            # Credential/identity → User
+    ASSUMES = "assumes"                  # Identity → Role
+    HAS_PERMISSION = "has_permission"    # Identity/role → Policy/resource
+    EXPOSED_TO = "exposed_to"            # Resource → Network/principal
+    FEDERATES_WITH = "federates_with"    # Tenant/identity provider → peer
+    OWNS = "owns"                        # Tenant/account → resource
+    APPLIES_TO = "applies_to"            # Policy/role assignment → resource
+    REFERENCES = "references"            # Resource → referenced object
+    RUNS_ON = "runs_on"                  # Workload/container → node/runtime
+    USES_IMAGE = "uses_image"            # Workload/container → image
+    ROUTES_TO = "routes_to"              # Route/ingress → service/workload
 
 
 class NodeStatus(Enum):
@@ -48,6 +72,31 @@ class NodeStatus(Enum):
     PIVOT = "pivot"
     TARGET = "target"
     DOMAIN_ADMIN = "domain_admin"
+
+
+# TARGET is a discovery priority, below evidence of access or compromise.
+STATUS_ORDER = {
+    NodeStatus.DISCOVERED: 0, NodeStatus.TARGET: 1, NodeStatus.SCANNED: 2,
+    NodeStatus.COMPROMISED: 3, NodeStatus.PIVOT: 4, NodeStatus.DOMAIN_ADMIN: 5,
+}
+SEVERITY_ORDER = {"unknown": -1, "info": 0, "informational": 0,
+                  "low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _merge_properties(existing: dict, incoming: dict) -> None:
+    """Merge evidence without dropping provenance or lowering severity."""
+    for key, value in incoming.items():
+        if key in {"source_observation_ids", "source_execution_ids", "source_records"}:
+            values = list(existing.get(key, []))
+            for item in value:
+                if item not in values:
+                    values.append(item)
+            existing[key] = values
+        elif key == "severity" and key in existing:
+            if SEVERITY_ORDER.get(str(value).lower(), -1) > SEVERITY_ORDER.get(str(existing[key]).lower(), -1):
+                existing[key] = value
+        else:
+            existing[key] = value
 
 
 @dataclass
@@ -162,6 +211,7 @@ class AttackGraph:
         self.nodes: dict[str, GraphNode] = {}
         self.edges: dict[str, GraphEdge] = {}
         self.attack_paths: list[AttackPath] = []
+        self.metadata: dict = {}
 
         # Indexes for fast lookups
         self._nodes_by_type: dict[NodeType, set[str]] = {t: set() for t in NodeType}
@@ -220,10 +270,10 @@ class AttackGraph:
             # Update existing node if needed
             existing = self.nodes[node_id]
             if properties:
-                existing.properties.update(properties)
+                _merge_properties(existing.properties, properties)
             if metadata:
-                existing.metadata.update(metadata)
-            if status.value > existing.status.value:  # Upgrade status
+                _merge_properties(existing.metadata, metadata)
+            if STATUS_ORDER[status] > STATUS_ORDER[existing.status]:
                 existing.status = status
             if self.on_node_updated:
                 self.on_node_updated(existing)
@@ -275,7 +325,9 @@ class AttackGraph:
         edge_id = self._generate_edge_id(source_id, target_id, edge_type)
 
         if edge_id in self.edges:
-            return self.edges[edge_id]
+            existing = self.edges[edge_id]
+            _merge_properties(existing.properties, properties or {})
+            return existing
 
         edge = GraphEdge(
             id=edge_id,
@@ -304,6 +356,195 @@ class AttackGraph:
             self.on_edge_added(edge)
 
         return edge
+
+    def ingest_observation(self, observation: Any) -> GraphNode | None:
+        """Merge a typed Observation or its dictionary into the graph.
+
+        Supported kinds are host, computer, domain, user, group, service,
+        share, session, credential, identity, role, policy, resource and
+        tenant. Unsupported kinds return None.
+        ``attributes`` may contain ``identifier``, ``name``, ``host``/``ip``,
+        ``domain``, ``groups`` (principal memberships), ``members`` (group
+        members), ``user``/``username`` (session/credential identity), and
+        ``authenticated``/``admin`` (explicit credential access evidence).
+        Relationship endpoints can be strings or {identifier, name, kind} maps.
+        Node provenance lives in metadata; edge provenance lives in properties.
+        """
+        from purplesploit.core.execution import Observation
+
+        data = observation.to_dict() if hasattr(observation, "to_dict") else dict(observation)
+        types = {kind.value: kind for kind in NodeType}
+        types["finding"] = NodeType.VULNERABILITY
+        supported = {"host", "computer", "domain", "user", "group", "service",
+                     "share", "session", "credential", "identity", "role",
+                     "policy", "resource", "tenant", "finding"}
+        kind = data.get("kind")
+        if kind not in supported:
+            return None
+        if not data.get("observation_id"):
+            fields = Observation.__dataclass_fields__
+            data = Observation(**{key: value for key, value in data.items() if key in fields}).to_dict()
+        attrs = dict(data.get("attributes") or {})
+        target = str(data.get("target") or "")
+        provenance = {"source_observation_ids": [data["observation_id"]]}
+        if data.get("source_execution_id"):
+            provenance["source_execution_ids"] = [data["source_execution_id"]]
+        try:
+            status = NodeStatus(attrs.get("status", "discovered"))
+        except (TypeError, ValueError):
+            status = NodeStatus.DISCOVERED
+
+        def node(node_kind, identifier, properties=None, label=None):
+            return self.add_node(types[node_kind], label or str(identifier), str(identifier),
+                                 status=status if node_kind == kind else NodeStatus.DISCOVERED,
+                                 properties=properties, metadata=provenance.copy())
+
+        def edge(source, destination, relationship):
+            return self.add_edge(source.id, destination.id, relationship, properties=provenance.copy())
+
+        def principal(value, default_kind="user"):
+            if isinstance(value, dict):
+                value_kind = str(value.get("kind") or value.get("type") or default_kind).lower()
+                value_id = value.get("identifier") or value.get("id") or value.get("name")
+                if value_kind not in supported or not value_id:
+                    return None
+                return node(value_kind, value_id, value)
+            if value and domain_name and default_kind in {"user", "group"} and not any(
+                token in str(value) for token in ("\\", "@")
+            ):
+                value = f"{domain_name}\\{value}"
+            return node(default_kind, value) if value else None
+
+        domain_name = attrs.get("domain")
+        name = (attrs.get("name") or attrs.get("title") or attrs.get("username") or attrs.get("user")
+                or attrs.get("share") or attrs.get("group") or attrs.get("hostname")
+                or (domain_name if kind == "domain" else None) or target)
+        host_name = attrs.get("host") or attrs.get("ip")
+        if kind in {"service", "share", "session"}:
+            host_name = host_name or target
+        if kind == "service" and attrs.get("resource_owner"):
+            # Logical platform services (for example Kubernetes Services) are
+            # owned by resources, not synthetic host nodes named after a UID.
+            # Their explicit HAS_SERVICE relationship is projected below.
+            host_name = None
+        host = node("host", host_name, {"ip": host_name}) if host_name else None
+        properties = dict(attrs)
+        for key in ("port", "protocol", "service", "version"):
+            if data.get(key) is not None:
+                properties[key] = data[key]
+        identifier = attrs.get("identifier")
+        if not identifier:
+            if kind in {"host", "computer"}:
+                identifier = host_name or target
+            elif kind == "service":
+                port = properties.get("port")
+                if port is None or host is None:
+                    return None
+                # Keep existing TCP add_service IDs; distinguish other transports.
+                protocol = properties.get("protocol", "tcp")
+                identifier = f"{host_name}:{port}" + (f"/{protocol}" if protocol != "tcp" else "")
+                name = f"{properties.get('service', 'unknown')}:{port}"
+            elif kind == "share":
+                identifier = f"{host_name}:{name}"
+            elif kind == "session":
+                identifier = f"{host_name}:{name}:{attrs.get('session_id', '')}"
+            else:
+                identifier = f"{domain_name}\\{name}" if domain_name and kind != "domain" else name
+        if not identifier:
+            return None
+        result = node(kind, identifier, properties, str(name))
+        if host and kind == "computer":
+            edge(result, host, EdgeType.IDENTIFIES)
+        if host and kind in {"service", "share"}:
+            edge(host, result, EdgeType.HAS_SERVICE if kind == "service" else EdgeType.CONTAINS)
+        if domain_name and kind != "domain":
+            edge(node("domain", domain_name), result, EdgeType.CONTAINS)
+        groups = attrs.get("groups", [])
+        for value in groups if isinstance(groups, list) else [groups]:
+            group = principal(value, "group")
+            if group:
+                edge(result, group, EdgeType.MEMBER_OF)
+        if kind == "group":
+            for value in attrs.get("members", []):
+                member = principal(value)
+                if member:
+                    edge(member, result, EdgeType.MEMBER_OF)
+        if kind in {"session", "credential", "identity"}:
+            user_name = attrs.get("username") or attrs.get("user")
+            user = principal(user_name) if user_name else None
+            if user and kind == "session":
+                edge(result, user, EdgeType.SESSION_USER)
+                if host:
+                    edge(host, user, EdgeType.HAS_SESSION)
+            elif user:
+                edge(result, user, EdgeType.IDENTIFIES)
+            if host and kind == "session":
+                edge(result, host, EdgeType.SESSION_ON)
+            if host and kind == "credential" and attrs.get("authenticated") is True:
+                edge(result, host, EdgeType.AUTHENTICATES_TO)
+            if host and attrs.get("admin") is True:
+                edge(user or result, host, EdgeType.ADMIN_TO)
+        relationship_types = {
+            relationship.value: relationship for relationship in EdgeType
+        }
+        relationships = attrs.get("relationships", [])
+        if isinstance(relationships, dict):
+            relationships = [relationships]
+        for relationship in relationships:
+            if not isinstance(relationship, dict):
+                continue
+            relationship_type = relationship_types.get(
+                str(relationship.get("type", "")).lower()
+            )
+            target_kind = str(
+                relationship.get("target_kind")
+                or relationship.get("kind")
+                or "resource"
+            ).lower()
+            target_identifier = (
+                relationship.get("target")
+                or relationship.get("target_id")
+                or relationship.get("identifier")
+            )
+            if (
+                relationship_type is None
+                or target_kind not in supported
+                or not target_identifier
+            ):
+                continue
+            destination = node(
+                target_kind,
+                target_identifier,
+                relationship.get("properties"),
+                relationship.get("label"),
+            )
+            source, target_node = result, destination
+            if relationship.get("direction") == "in":
+                source, target_node = destination, result
+            relationship_edge = edge(source, target_node, relationship_type)
+            if relationship_edge is not None:
+                _merge_properties(
+                    relationship_edge.properties,
+                    {
+                        key: value
+                        for key, value in relationship.items()
+                        if key
+                        not in {
+                            "type",
+                            "target",
+                            "target_id",
+                            "identifier",
+                            "target_kind",
+                            "kind",
+                            "direction",
+                        }
+                    },
+                )
+        return result
+
+    def ingest_observations(self, observations) -> list[GraphNode]:
+        """Ingest supported observations, returning one node per supported item."""
+        return [node for item in observations if (node := self.ingest_observation(item)) is not None]
 
     def add_host(
         self,
@@ -440,7 +681,9 @@ class AttackGraph:
     def mark_compromised(self, node_id: str) -> bool:
         """Mark a node as compromised."""
         if node_id in self.nodes:
-            self.nodes[node_id].status = NodeStatus.COMPROMISED
+            node = self.nodes[node_id]
+            if STATUS_ORDER[node.status] < STATUS_ORDER[NodeStatus.COMPROMISED]:
+                node.status = NodeStatus.COMPROMISED
             if self.on_node_updated:
                 self.on_node_updated(self.nodes[node_id])
             return True
@@ -465,6 +708,10 @@ class AttackGraph:
         edge_ids = self._edges_by_target.get(node_id, set())
         return [self.edges[eid] for eid in edge_ids]
 
+    def get_edges_by_type(self, edge_type: EdgeType) -> list[GraphEdge]:
+        """Get all edges with a specific relationship type."""
+        return [self.edges[eid] for eid in self._edges_by_type.get(edge_type, set())]
+
     def get_neighbors(self, node_id: str) -> list[GraphNode]:
         """Get all nodes connected to a given node."""
         neighbors = set()
@@ -487,6 +734,8 @@ class AttackGraph:
 
         Uses DFS to find all paths, tracking edges used.
         """
+        if start_node_id not in self.nodes or target_node_id not in self.nodes:
+            return []
         paths = []
 
         def dfs(current: str, target: str, visited: set, path_nodes: list, path_edges: list, depth: int):
@@ -495,7 +744,7 @@ class AttackGraph:
 
             if current == target:
                 digest = hashlib.md5(
-                    ':'.join(path_nodes).encode(), usedforsecurity=False,
+                    ':'.join(path_nodes + path_edges).encode(), usedforsecurity=False,
                 ).hexdigest()[:12]
                 path_id = f"path:{digest}"
                 paths.append(AttackPath(
@@ -503,10 +752,11 @@ class AttackGraph:
                     nodes=path_nodes.copy(),
                     edges=path_edges.copy(),
                     risk_score=self._calculate_path_risk(path_nodes),
+                    description="Directed relationship path; traversability is not proof of exploitation",
                 ))
                 return
 
-            for edge in self.get_edges_from(current):
+            for edge in sorted(self.get_edges_from(current), key=lambda item: item.id):
                 if edge.target_id not in visited:
                     visited.add(edge.target_id)
                     path_nodes.append(edge.target_id)
@@ -523,8 +773,35 @@ class AttackGraph:
 
         # Sort by risk score (highest first)
         paths.sort(key=lambda p: p.risk_score, reverse=True)
-
+        self._store_paths(paths)
         return paths
+
+    def _store_paths(self, paths: list[AttackPath]) -> None:
+        """Retain derived paths for statistics, callbacks and serialization."""
+        existing = {path.id: path for path in self.attack_paths}
+        for path in paths:
+            is_new = path.id not in existing
+            existing[path.id] = path
+            if is_new and self.on_path_found:
+                self.on_path_found(path)
+        self.attack_paths = sorted(existing.values(), key=lambda path: (-path.risk_score, path.id))
+
+    def derive_attack_paths(self, max_depth: int = 10) -> list[AttackPath]:
+        """Refresh directed routes from compromised principals to marked targets.
+
+        Routes describe graph connectivity, not a claim that each relationship is
+        exploitable. Explicit find_attack_paths calls can use any endpoint pair.
+        """
+        self.attack_paths = []
+        starts = [node.id for node in self.nodes.values()
+                  if node.status in {NodeStatus.COMPROMISED, NodeStatus.PIVOT, NodeStatus.DOMAIN_ADMIN}]
+        targets = [node.id for node in self.nodes.values()
+                   if node.status in {NodeStatus.TARGET, NodeStatus.DOMAIN_ADMIN}]
+        for start in sorted(starts):
+            for target in sorted(targets):
+                if start != target:
+                    self.find_attack_paths(start, target, max_depth)
+        return self.attack_paths
 
     def _calculate_path_risk(self, node_ids: list[str]) -> float:
         """Calculate risk score for a path."""
@@ -566,13 +843,14 @@ class AttackGraph:
                         if target_host != start_host_id:
                             path_id = f"lateral:{start_host_id}-{target_host}"
                             paths.append(AttackPath(
-                                id=path_id,
+                                id=f"{path_id}-{cred_node.id}",
                                 nodes=[start_host_id, cred_node.id, target_host],
                                 edges=[edge.id, cred_edge.id],
                                 risk_score=5.0,
-                                description=f"Lateral move via {cred_node.label}",
+                                description=f"Candidate credential reuse via {cred_node.label}; possession on source host is unproven",
                             ))
 
+        self._store_paths(paths)
         return paths
 
     def get_statistics(self) -> dict:
@@ -600,12 +878,14 @@ class AttackGraph:
             "edges": [e.to_dict() for e in self.edges.values()],
             "attack_paths": [p.to_dict() for p in self.attack_paths],
             "statistics": self.get_statistics(),
+            "metadata": self.metadata,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "AttackGraph":
         """Import graph from dictionary."""
         graph = cls()
+        graph.metadata = data.get("metadata", {})
 
         for node_data in data.get("nodes", []):
             node = GraphNode.from_dict(node_data)
@@ -626,6 +906,9 @@ class AttackGraph:
 
             graph._edges_by_type[edge.edge_type].add(edge.id)
 
+        graph.attack_paths = [AttackPath(**path) for path in data.get("attack_paths", [])
+                              if all(node in graph.nodes for node in path.get("nodes", []))
+                              and all(edge in graph.edges for edge in path.get("edges", []))]
         return graph
 
     def to_json(self, indent: int | None = 2) -> str:
@@ -636,6 +919,34 @@ class AttackGraph:
     def from_json(cls, json_str: str) -> "AttackGraph":
         """Import graph from JSON string."""
         return cls.from_dict(json.loads(json_str))
+
+    def to_csv(self) -> dict[str, str]:
+        """Return generic ``nodes`` and ``edges`` CSV texts.
+
+        Nested properties/metadata are JSON cells, retaining evidence references.
+        This is a generic interchange export, not a BloodHound upload format.
+        """
+        result = {}
+        for name, fields, records in (
+            ("nodes", ["id", "type", "label", "status", "properties", "metadata", "discovered_at"],
+             [node.to_dict() for node in sorted(self.nodes.values(), key=lambda node: node.id)]),
+            ("edges", ["id", "source", "target", "type", "label", "weight", "properties", "created_at"],
+             [edge.to_dict() for edge in sorted(self.edges.values(), key=lambda edge: edge.id)]),
+        ):
+            output = io.StringIO(newline="")
+            writer = csv.DictWriter(output, fieldnames=fields)
+            writer.writeheader()
+            for record in records:
+                writer.writerow({key: json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else value
+                                 for key, value in record.items()})
+            result[name] = output.getvalue()
+        return result
+
+    def to_bloodhound(self, version: int = 5) -> dict[str, dict]:
+        """Export the supported AD collector subset (see interop.bloodhound)."""
+        from purplesploit.interop.bloodhound import export_bloodhound
+
+        return export_bloodhound(self, version=version)
 
     def to_cytoscape(self) -> dict:
         """
@@ -746,6 +1057,7 @@ class AttackGraph:
         self.nodes.clear()
         self.edges.clear()
         self.attack_paths.clear()
+        self.metadata.clear()
 
         for type_set in self._nodes_by_type.values():
             type_set.clear()

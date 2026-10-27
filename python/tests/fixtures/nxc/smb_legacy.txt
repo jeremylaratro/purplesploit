@@ -1,0 +1,26 @@
+SMB 192.0.2.10 445 DC01 [*] Windows Server 2019 x64 (name:DC01) (domain:CORP.TEST) (signing:False) (SMBv1:False)
+SMB 192.0.2.10 445 DC01 [+] CORP.TEST\alice:fixture-only (Pwn3d!)
+SMB 192.0.2.10 445 DC01 [*] Enumerated users
+SMB 192.0.2.10 445 DC01 UserName                      Last PW Set         BadPW  Description
+SMB 192.0.2.10 445 DC01 CORP\alice                    2024-01-02 12:30:00  0      Test user
+SMB 192.0.2.10 445 DC01 CORP\svc_backup               <never>              0      Backup service
+SMB 192.0.2.10 445 DC01 [+] Enumerated domain group(s)
+SMB 192.0.2.10 445 DC01 Domain Admins                            membercount: 2
+SMB 192.0.2.10 445 DC01 [*] Enumerated shares
+SMB 192.0.2.10 445 DC01 Share           Permissions     Remark
+SMB 192.0.2.10 445 DC01 -----           -----------     ------
+SMB 192.0.2.10 445 DC01 C$              READ,WRITE      Default share
+SMB 192.0.2.10 445 DC01 Public          READ            Public files
+SMB 192.0.2.10 445 DC01 Restricted                      Restricted files
+SMB 192.0.2.10 445 DC01 [*] Enumerated sessions
+SMB 192.0.2.10 445 DC01 \\192.0.2.20                 User:alice
+SMB 192.0.2.10 445 DC01 [+] Enumerated logged_on users
+SMB 192.0.2.10 445 DC01 CORP\bob                     logon_server: DC01
+SMB 192.0.2.10 445 DC01 [*] Dumping password policy
+SMB 192.0.2.10 445 DC01 Minimum password length: 12
+SMB 192.0.2.10 445 DC01 Password history length: 24
+SMB 192.0.2.10 445 DC01 Account Lockout Threshold: 5
+SMB 192.0.2.10 445 DC01 Maximum password age: 42 days
+SMB 192.0.2.10 445 DC01 1101: CORP\alice (SidTypeUser)
+SMB 192.0.2.11 445 FILE01 [*] Windows Server 2022 (name:FILE01) (domain:CORP.TEST) (signing:True) (SMBv1:False)
+SMB 192.0.2.11 445 FILE01 [-] CORP.TEST\alice:fixture-only STATUS_LOGON_FAILURE

@@ -2,8 +2,7 @@
 Tests for purplesploit.core.auto_enum module.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 from datetime import datetime
 
 from purplesploit.core.auto_enum import (
@@ -237,9 +236,9 @@ class TestAutoEnumPipelineHelpers:
         mock_framework = Mock()
 
         scopes_operations = {
-            EnumScope.LIGHT: "Quick Scan",
-            EnumScope.NORMAL: "Service Version",
-            EnumScope.AGGRESSIVE: "Full Scan",
+            EnumScope.LIGHT: "Fast Scan",
+            EnumScope.NORMAL: "Default Scan",
+            EnumScope.AGGRESSIVE: "Aggressive Scan",
             EnumScope.STEALTH: "Stealth Scan",
         }
 

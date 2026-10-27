@@ -8,7 +8,7 @@ current context, and penetration testing best practices.
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Set
 from enum import Enum
-from datetime import datetime
+from .inventory import module_manifest, resolve_operation
 
 
 class Priority(Enum):
@@ -332,6 +332,7 @@ class ModuleRecommender:
         findings: Optional[List[Dict]] = None,
         completed: Optional[List[str]] = None,
         max_results: int = 10,
+        observations: Optional[List] = None,
     ) -> List[Recommendation]:
         """
         Get module recommendations based on current context.
@@ -347,11 +348,16 @@ class ModuleRecommender:
             List of prioritized recommendations
         """
         recommendations = []
+        if observations is not None:
+            values = [item.to_dict() if hasattr(item, "to_dict") else item for item in observations]
+            services = [item for item in values if item.get("kind") in {"service", "http_endpoint"}]
+            credentials = [item for item in values if item.get("kind") == "credential"]
+            findings = [item for item in values if item.get("kind") == "finding"]
 
         # Load context from framework if available
-        if self.framework and not services:
+        if self.framework and services is None:
             services = self._get_services_from_framework()
-        if self.framework and not credentials:
+        if self.framework and credentials is None:
             credentials = self._get_credentials_from_framework()
 
         services = services or []
@@ -375,6 +381,12 @@ class ModuleRecommender:
 
             for mod_config in modules:
                 module_path = mod_config["path"]
+                manifest = module_manifest(self.framework, module_path)
+                if manifest is None:
+                    continue
+                operation = resolve_operation(manifest, mod_config.get("operation"))
+                if manifest["operations"] and operation is None:
+                    continue
 
                 # Skip if already completed
                 if module_path in completed:
@@ -392,7 +404,7 @@ class ModuleRecommender:
                 # Create recommendation
                 rec = Recommendation(
                     module_path=module_path,
-                    operation=mod_config.get("operation"),
+                    operation=operation["id"] if operation else None,
                     priority=mod_config.get("priority", Priority.MEDIUM),
                     reason=mod_config.get("reason", ""),
                     prerequisites=prereqs,
@@ -434,31 +446,10 @@ class ModuleRecommender:
         Returns:
             List of quick win recommendations
         """
-        quick_wins = []
-
-        if self.framework and not services:
-            services = self._get_services_from_framework()
-
-        services = services or []
-
-        for svc in services:
-            service_name = self._normalize_service(svc)
-            if not service_name:
-                continue
-
-            service_config = SERVICE_MODULE_MAP.get(service_name, {})
-            wins = service_config.get("quick_wins", [])
-
-            for win in wins:
-                rec = Recommendation(
-                    module_path=f"quick_win/{win}",
-                    priority=Priority.HIGH,
-                    reason=f"Quick win check: {win.replace('_', ' ')}",
-                    tags=["quick-win", service_name],
-                    confidence=0.9,
-                )
-                quick_wins.append(rec)
-
+        quick_wins = self.get_recommendations(services=services)
+        for rec in quick_wins:
+            rec.priority = Priority.HIGH
+            rec.tags.append("quick-win")
         return quick_wins
 
     def get_recommendations_for_service(
@@ -478,31 +469,10 @@ class ModuleRecommender:
         Returns:
             List of recommendations for the service
         """
-        service = service.lower()
-        service_config = SERVICE_MODULE_MAP.get(service, {})
-        modules = service_config.get("modules", [])
-
-        recommendations = []
-        for mod_config in modules:
-            prereqs = mod_config.get("prereqs", [])
-            prereqs_met = self._check_prerequisites(
-                prereqs, has_creds, has_admin, False
-            )
-
-            if not prereqs_met:
-                continue
-
-            rec = Recommendation(
-                module_path=mod_config["path"],
-                operation=mod_config.get("operation"),
-                priority=mod_config.get("priority", Priority.MEDIUM),
-                reason=mod_config.get("reason", ""),
-                prerequisites=prereqs,
-                tags=mod_config.get("tags", []),
-            )
-            recommendations.append(rec)
-
-        return recommendations
+        return self.get_recommendations(
+            services=[{"service": service.lower()}],
+            credentials=[{"is_admin": has_admin}] if has_creds or has_admin else [],
+        )
 
     def suggest_next_module(
         self,
@@ -528,12 +498,14 @@ class ModuleRecommender:
             return svc.lower()
 
         # Try service name first
-        service = svc.get("service", "").lower()
+        service = (svc.get("service") or "").lower()
         if service in SERVICE_MODULE_MAP:
             return service
 
         # Try port mapping
         port = svc.get("port")
+        if isinstance(port, str) and port.isdigit():
+            port = int(port)
         if port and port in PORT_SERVICE:
             return PORT_SERVICE[port]
 
@@ -617,6 +589,16 @@ class ModuleRecommender:
             return []
 
         try:
+            observations = getattr(self.framework.session, "module_history", [])
+            if not isinstance(observations, list):
+                observations = []
+            canonical = []
+            for record in observations:
+                for observation in (record.get("execution") or {}).get("observations", []):
+                    if observation.get("kind") in {"service", "http_endpoint"}:
+                        canonical.append(observation)
+            if canonical:
+                return canonical
             services = self.framework.database.get_all_services()
             return [s.to_dict() for s in services]
         except Exception:

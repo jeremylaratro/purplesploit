@@ -1,0 +1,3 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2019 (name:DC01) (domain:CORP.TEST)
+ENUM_TRUSTS 192.0.2.10 389 DC01 [+] Found the following trust relationships:
+ENUM_TRUSTS 192.0.2.10 389 DC01 partner.test -> Bidirectional -> Forest Transitive, Within Forest

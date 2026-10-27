@@ -1,0 +1,1 @@
+{"schema_version": "1", "redacted": true, "hosts": {"host-redacted": {"os": "unknown", "source": "<redacted>/posture.log", "checks": {"UNKNOWN-ERR": {"status": "ERR", "detail": "missing dependency"}}, "domain_observations": {}}}, "domains": {}}

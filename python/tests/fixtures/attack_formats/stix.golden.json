@@ -1,0 +1,211 @@
+{
+  "type": "bundle",
+  "id": "bundle--8689a8aa-07a6-5bea-9ee4-8f5f44cddbdc",
+  "objects": [
+    {
+      "type": "attack-pattern",
+      "spec_version": "2.1",
+      "id": "attack-pattern--e8c611b9-0246-58cb-895a-eb411a4959a3",
+      "created": "1970-01-01T00:00:00.000Z",
+      "modified": "1970-01-01T00:00:00.000Z",
+      "name": "T1110.001",
+      "external_references": [
+        {
+          "source_name": "mitre-attack",
+          "external_id": "T1110.001"
+        }
+      ]
+    },
+    {
+      "type": "grouping",
+      "spec_version": "2.1",
+      "id": "grouping--4b94f9f5-af33-5107-a525-fce03625ef8f",
+      "created": "2026-01-02T03:04:05.000Z",
+      "modified": "2026-01-02T03:04:05.000Z",
+      "name": "bucket-a",
+      "context": "unspecified",
+      "object_refs": [
+        "identity--8c95915d-d0b2-5708-8d98-ee9e3f9e881e"
+      ],
+      "x_purplesploit": {
+        "schema_version": "purplesploit/attack-formats/1",
+        "kind": "resource",
+        "source_record": {
+          "kind": "resource",
+          "target": "bucket-a",
+          "observation_id": "obs-resource",
+          "source_execution_id": "run-a",
+          "observed_at": "2026-01-02T03:04:05Z",
+          "confidence": "observed",
+          "attributes": {
+            "identifier": "bucket-a",
+            "provider": "fixture",
+            "unknown_provider_field": {
+              "retained": true
+            }
+          }
+        },
+        "time_unknown": false
+      }
+    },
+    {
+      "type": "identity",
+      "spec_version": "2.1",
+      "id": "identity--8c95915d-d0b2-5708-8d98-ee9e3f9e881e",
+      "created": "1970-01-01T00:00:00.000Z",
+      "modified": "1970-01-01T00:00:00.000Z",
+      "name": "PurpleSploit",
+      "identity_class": "organization"
+    },
+    {
+      "type": "ipv4-addr",
+      "value": "192.0.2.10",
+      "spec_version": "2.1",
+      "id": "ipv4-addr--c9cf36ad-c90a-57b3-b5f3-f3d5b45279ea",
+      "x_purplesploit": {
+        "schema_version": "purplesploit/attack-formats/1",
+        "kind": "host",
+        "source_record": {
+          "kind": "host",
+          "target": "192.0.2.10",
+          "observation_id": "obs-host",
+          "source_execution_id": "run-a",
+          "observed_at": "2026-01-02T03:04:05Z",
+          "confidence": "observed",
+          "attributes": {
+            "identifier": "host-a",
+            "relationships": [
+              {
+                "type": "owns",
+                "target": "bucket-a",
+                "target_kind": "resource",
+                "evidence_ids": [
+                  "evidence-a"
+                ],
+                "source_records": [
+                  {
+                    "id": "edge-source"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "time_unknown": false
+      }
+    },
+    {
+      "type": "note",
+      "spec_version": "2.1",
+      "id": "note--55857af2-8cbb-5e0b-902b-2c9a88021999",
+      "created": "2026-01-02T03:04:05.000Z",
+      "modified": "2026-01-02T03:04:05.000Z",
+      "abstract": "Weak authentication",
+      "content": "Observed authentication weakness",
+      "object_refs": [
+        "attack-pattern--e8c611b9-0246-58cb-895a-eb411a4959a3",
+        "ipv4-addr--c9cf36ad-c90a-57b3-b5f3-f3d5b45279ea"
+      ],
+      "x_purplesploit": {
+        "schema_version": "purplesploit/attack-formats/1",
+        "kind": "finding",
+        "source_record": {
+          "id": "finding-a",
+          "title": "Weak authentication",
+          "description": "Observed authentication weakness",
+          "target": "192.0.2.10",
+          "severity": "high",
+          "status": "confirmed",
+          "discovered_at": "2026-01-02T03:04:05Z",
+          "mitre_techniques": [
+            "T1110.001"
+          ],
+          "evidence": [
+            {
+              "id": "evidence-a",
+              "title": "Login transcript",
+              "captured_at": "2026-01-02T03:04:05Z",
+              "metadata": {
+                "source_observation_id": "obs-host"
+              }
+            }
+          ],
+          "metadata": {
+            "custom": "retained"
+          }
+        }
+      }
+    },
+    {
+      "type": "observed-data",
+      "spec_version": "2.1",
+      "id": "observed-data--e79ab25e-6626-596c-82f4-d8464e1a88d3",
+      "created": "2026-01-02T03:04:05.000Z",
+      "modified": "2026-01-02T03:04:05.000Z",
+      "first_observed": "2026-01-02T03:04:05.000Z",
+      "last_observed": "2026-01-02T03:04:05.000Z",
+      "number_observed": 1,
+      "object_refs": [
+        "ipv4-addr--c9cf36ad-c90a-57b3-b5f3-f3d5b45279ea"
+      ],
+      "x_purplesploit": {
+        "schema_version": "purplesploit/attack-formats/1",
+        "kind": "host",
+        "source_record": {
+          "kind": "host",
+          "target": "192.0.2.10",
+          "observation_id": "obs-host",
+          "source_execution_id": "run-a",
+          "observed_at": "2026-01-02T03:04:05Z",
+          "confidence": "observed",
+          "attributes": {
+            "identifier": "host-a",
+            "relationships": [
+              {
+                "type": "owns",
+                "target": "bucket-a",
+                "target_kind": "resource",
+                "evidence_ids": [
+                  "evidence-a"
+                ],
+                "source_records": [
+                  {
+                    "id": "edge-source"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "time_unknown": false
+      }
+    },
+    {
+      "type": "relationship",
+      "spec_version": "2.1",
+      "id": "relationship--c1dd18dd-da1e-5e3a-8cef-d0777caef723",
+      "created": "1970-01-01T00:00:00.000Z",
+      "modified": "1970-01-01T00:00:00.000Z",
+      "relationship_type": "related-to",
+      "source_ref": "ipv4-addr--c9cf36ad-c90a-57b3-b5f3-f3d5b45279ea",
+      "target_ref": "grouping--4b94f9f5-af33-5107-a525-fce03625ef8f",
+      "x_purplesploit": {
+        "schema_version": "purplesploit/attack-formats/1",
+        "edge_type": "owns",
+        "source_record": {
+          "type": "owns",
+          "target": "bucket-a",
+          "target_kind": "resource",
+          "evidence_ids": [
+            "evidence-a"
+          ],
+          "source_records": [
+            {
+              "id": "edge-source"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

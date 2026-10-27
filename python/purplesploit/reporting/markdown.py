@@ -5,10 +5,11 @@ Generates Markdown reports suitable for GitHub, wikis, and documentation.
 """
 
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
+import os
 
-from .models import ReportData, Finding, Severity
+from .models import ReportData, Finding, Severity, finding_record_json
+from purplesploit.core.output_security import safe_reference
 
 
 class MarkdownReportGenerator:
@@ -202,6 +203,7 @@ class MarkdownReportGenerator:
         output_path = Path(output_path)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
+        os.chmod(output_path, 0o600)
 
         return str(output_path)
 
@@ -232,7 +234,6 @@ class MarkdownReportGenerator:
         lines = []
 
         # Title with anchor
-        anchor = finding.title.lower().replace(" ", "-").replace(".", "")
         lines.append(f"#### {finding.title}")
         lines.append("")
 
@@ -308,7 +309,8 @@ class MarkdownReportGenerator:
             lines.append("**References:**")
             lines.append("")
             for ref in finding.references:
-                lines.append(f"- <{ref}>")
+                safe = safe_reference(ref)
+                lines.append(f"- <{safe}>" if safe else f"- {ref}")
             lines.append("")
 
         # Raw output
@@ -337,6 +339,11 @@ class MarkdownReportGenerator:
                 if evidence.file_path:
                     lines.append(f"File: `{evidence.file_path}`")
                 lines.append("")
+
+        lines.extend([
+            "<details>", "<summary>Finding record (schema v1)</summary>", "",
+            "```json", finding_record_json(finding, config), "```", "", "</details>", "",
+        ])
 
         lines.append("---")
 

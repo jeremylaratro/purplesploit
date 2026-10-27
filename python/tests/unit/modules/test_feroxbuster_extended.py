@@ -9,9 +9,9 @@ Tests cover:
 """
 
 import pytest
-import os
+import shlex
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 from purplesploit.modules.web.feroxbuster import FeroxbusterModule
 
 
@@ -84,7 +84,7 @@ class TestExecuteFeroxbuster:
         with patch.object(feroxbuster_with_url, 'execute_command', return_value={"success": True, "output": "test"}):
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=False):
-                    result = feroxbuster_with_url._execute_feroxbuster()
+                    feroxbuster_with_url._execute_feroxbuster()
                     # Should call execute_command
                     feroxbuster_with_url.execute_command.assert_called_once()
 
@@ -102,7 +102,8 @@ class TestExecuteFeroxbuster:
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=False):
                     feroxbuster_with_url._execute_feroxbuster()
-                    call_args = mock_exec.call_args[0][0]
+                    raw_args = mock_exec.call_args[0][0]
+                    call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                     assert "--thorough" in call_args
 
     def test_execute_feroxbuster_includes_methods(self, feroxbuster_with_url):
@@ -111,8 +112,9 @@ class TestExecuteFeroxbuster:
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=False):
                     feroxbuster_with_url._execute_feroxbuster()
-                    call_args = mock_exec.call_args[0][0]
-                    assert "--methods GET,POST" in call_args
+                    raw_args = mock_exec.call_args[0][0]
+                    call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
+                    assert "--methods GET POST" in call_args
 
     def test_execute_feroxbuster_with_extra_args(self, feroxbuster_with_url):
         """Test _execute_feroxbuster with extra arguments."""
@@ -120,7 +122,8 @@ class TestExecuteFeroxbuster:
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=False):
                     feroxbuster_with_url._execute_feroxbuster("-x php,html")
-                    call_args = mock_exec.call_args[0][0]
+                    raw_args = mock_exec.call_args[0][0]
+                    call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                     assert "-x php,html" in call_args
 
     def test_execute_feroxbuster_background_mode(self, feroxbuster_with_url):
@@ -131,7 +134,7 @@ class TestExecuteFeroxbuster:
         with patch.object(feroxbuster_with_url, 'execute_command', return_value={"success": True, "pid": 12345}) as mock_exec:
             with patch.object(Path, 'mkdir'):
                 with patch.object(Path, 'exists', return_value=False):
-                    result = feroxbuster_with_url._execute_feroxbuster(run_background=True)
+                    feroxbuster_with_url._execute_feroxbuster(run_background=True)
 
                     # Should call with background=True
                     call_kwargs = mock_exec.call_args[1]
@@ -211,7 +214,7 @@ class TestBasicScanOperation:
     def test_op_basic_scan_calls_execute(self, feroxbuster_with_url):
         """Test basic scan calls _execute_feroxbuster."""
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
-            result = feroxbuster_with_url.op_basic_scan()
+            feroxbuster_with_url.op_basic_scan()
             mock_exec.assert_called_once_with()
 
     def test_op_basic_scan_logs_info(self, feroxbuster_with_url):
@@ -239,7 +242,8 @@ class TestDeepScanOperation:
         """Test deep scan uses extensions."""
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_deep_scan()
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "-x" in call_args
 
     def test_op_deep_scan_uses_custom_extensions(self, feroxbuster_with_url):
@@ -248,7 +252,8 @@ class TestDeepScanOperation:
 
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_deep_scan()
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "asp,aspx" in call_args
 
     def test_op_deep_scan_uses_threads_option(self, feroxbuster_with_url):
@@ -257,8 +262,9 @@ class TestDeepScanOperation:
 
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_deep_scan()
-            call_args = mock_exec.call_args[0][0]
-            assert "-t 100" in call_args
+            raw_args = mock_exec.call_args[0][0]
+            shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
+            assert "-t 100" in shlex.join(feroxbuster_with_url.build_argv())
 
 
 class TestCustomWordlistOperation:
@@ -269,11 +275,12 @@ class TestCustomWordlistOperation:
         with patch('builtins.input', return_value=''):
             result = feroxbuster_with_url.op_custom_wordlist()
             assert result["success"] is False
-            assert "Wordlist path required" in result["error"]
+            assert "WORDLIST required" in result["error"]
 
     def test_op_custom_wordlist_validates_file_exists(self, feroxbuster_with_url):
         """Test custom wordlist validates file exists."""
-        with patch('builtins.input', return_value='/nonexistent/wordlist.txt'):
+        feroxbuster_with_url.set_option('WORDLIST', '/nonexistent/wordlist.txt')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             result = feroxbuster_with_url.op_custom_wordlist()
             assert result["success"] is False
             assert "not found" in result["error"]
@@ -287,8 +294,9 @@ class TestCustomWordlistOperation:
 
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             result = feroxbuster_with_url.op_custom_wordlist()
-            call_args = mock_exec.call_args[0][0]
-            assert str(wordlist) in call_args
+            mock_exec.assert_called_once_with()
+            assert result["success"]
+            assert str(wordlist) in feroxbuster_with_url.build_argv()
 
 
 class TestBurpScanOperation:
@@ -299,15 +307,18 @@ class TestBurpScanOperation:
         with patch('builtins.input', return_value=''):
             with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
                 feroxbuster_with_url.op_burp_scan()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "http://127.0.0.1:8080" in call_args
 
     def test_op_burp_scan_uses_custom_proxy(self, feroxbuster_with_url):
         """Test Burp scan uses custom proxy."""
-        with patch('builtins.input', return_value='http://127.0.0.1:9090'):
+        feroxbuster_with_url.set_option('PROXY', 'http://127.0.0.1:9090')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
                 feroxbuster_with_url.op_burp_scan()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "http://127.0.0.1:9090" in call_args
 
 
@@ -318,14 +329,16 @@ class TestApiDiscoveryOperation:
         """Test API discovery uses appropriate HTTP methods."""
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_api_discovery()
-            call_args = mock_exec.call_args[0][0]
-            assert "GET,POST,PUT,DELETE,PATCH" in call_args
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
+            assert "--methods GET POST PUT DELETE PATCH" in call_args
 
     def test_op_api_discovery_uses_json_xml_extensions(self, feroxbuster_with_url):
         """Test API discovery uses json/xml extensions."""
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_api_discovery()
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "json,xml" in call_args
 
 
@@ -336,7 +349,8 @@ class TestBackupDiscoveryOperation:
         """Test backup discovery uses backup extensions."""
         with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
             feroxbuster_with_url.op_backup_discovery()
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "bak" in call_args
             assert "old" in call_args
             assert "backup" in call_args
@@ -350,14 +364,16 @@ class TestCustomScanOperation:
         with patch('builtins.input', return_value=''):
             result = feroxbuster_with_url.op_custom_scan()
             assert result["success"] is False
-            assert "No flags provided" in result["error"]
+            assert "CUSTOM_FLAGS required" in result["error"]
 
     def test_op_custom_scan_with_flags(self, feroxbuster_with_url):
         """Test custom scan with flags."""
-        with patch('builtins.input', return_value='-t 100 --depth 5'):
+        feroxbuster_with_url.set_option('CUSTOM_FLAGS', '-t 100 --depth 5')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(feroxbuster_with_url, '_execute_feroxbuster', return_value={"success": True}) as mock_exec:
                 feroxbuster_with_url.op_custom_scan()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "-t 100 --depth 5" in call_args
 
 
@@ -410,7 +426,7 @@ class TestFeroxbusterEdgeCases:
 
     def test_execute_feroxbuster_logs_to_correct_directory(self, feroxbuster_with_url):
         """Test execute feroxbuster logs to correct directory."""
-        with patch.object(feroxbuster_with_url, 'execute_command', return_value={"success": True}) as mock_exec:
+        with patch.object(feroxbuster_with_url, 'execute_command', return_value={"success": True}):
             with patch.object(Path, 'mkdir') as mock_mkdir:
                 with patch.object(Path, 'exists', return_value=False):
                     feroxbuster_with_url._execute_feroxbuster()

@@ -12,7 +12,6 @@ from purplesploit.core.parameters import (
     get_parameter_registry,
     get_profile_registry,
     Parameter,
-    ParameterProfile
 )
 
 
@@ -35,6 +34,11 @@ class BaseModule(ABC):
     abstract methods.
     """
 
+    # Compatibility modules can remain importable without being exposed as
+    # runnable framework capabilities. Discovery only registers classes that
+    # leave this flag enabled.
+    discoverable = True
+
     def __init__(self, framework):
         """
         Initialize the module.
@@ -44,6 +48,9 @@ class BaseModule(ABC):
         """
         self.framework = framework
         self.options = {}
+        self.options_locked: set[str] = set()
+        self.execution_request = None
+        self.execution_records = []
         self.parameters: Dict[str, Parameter] = {}
         self._parameter_registry = get_parameter_registry()
         self._profile_registry = get_profile_registry()
@@ -236,6 +243,8 @@ class BaseModule(ABC):
             True if successful, False otherwise
         """
         key = key.upper()
+        if getattr(self, '_populating_context', False) and key in self.options_locked:
+            return True
         if key not in self.options:
             self.log(f"Unknown option: {key}", "error")
             return False
@@ -398,6 +407,13 @@ class BaseModule(ABC):
         Automatically set options from current context.
         Called before running to populate options from persistent context.
         """
+        self._populating_context = True
+        try:
+            self._populate_context_options()
+        finally:
+            self._populating_context = False
+
+    def _populate_context_options(self):
         context = self.get_context()
 
         # Auto-set target if available
@@ -458,6 +474,11 @@ class BaseModule(ABC):
     def has_operations(self) -> bool:
         """Check if module has granular operations/submenu."""
         return len(self.get_operations()) > 0
+
+    def get_operation_manifest(self) -> List[Dict[str, Any]]:
+        """Return normalized catalog metadata for legacy and current operations."""
+        from .execution import normalize_operation
+        return [normalize_operation(operation, self) for operation in self.get_operations()]
 
     def get_subcategories(self) -> List[str]:
         """
@@ -541,7 +562,7 @@ class ExternalToolModule(BaseModule):
         import shlex
         return shlex.quote(str(value))
 
-    def execute_command(self, command: str, timeout: Optional[int] = None, background: bool = False) -> Dict[str, Any]:
+    def execute_command(self, command: Union[str, List[str]], timeout: Optional[int] = None, background: bool = False) -> Dict[str, Any]:
         """
         Execute an external command.
 
@@ -555,17 +576,62 @@ class ExternalToolModule(BaseModule):
         """
         import shlex
         import subprocess
+        import os
+        from pathlib import Path
+        from .execution import ExecutionRequest, ExecutionResult, ExecutionOutcome, utc_now
+
+        request = self.execution_request or getattr(self, '_execution_context_request', None) or ExecutionRequest(
+            module_path=getattr(self, 'module_path', self.__class__.__module__),
+            timeout_s=timeout, background=background,
+        )
+        if self.execution_request is not None:
+            timeout = request.timeout_s if request.timeout_s is not None else timeout
+            background = request.background
+        record = ExecutionResult(
+            request_id=request.request_id, module_path=request.module_path,
+            operation_name=request.operation_name, correlation_id=request.correlation_id,
+            engagement_id=request.engagement_id, job_id=request.job_id, tool=self.tool_name,
+        )
+
+        def finish(results):
+            record.finished_at = None if results.get('background') else utc_now()
+            record.exit_code = results.get('returncode')
+            record.timed_out = bool(results.get('timed_out', False))
+            record.cancelled = bool(results.get('cancelled', False))
+            record.success = record.exit_code == 0 and not record.timed_out and not record.cancelled and bool(results.get('success'))
+            if results.get('background'):
+                record.outcome = ExecutionOutcome.RUNNING
+            elif record.cancelled:
+                record.outcome = ExecutionOutcome.CANCELLED
+            elif record.timed_out:
+                record.outcome = ExecutionOutcome.TIMED_OUT
+            else:
+                record.outcome = ExecutionOutcome.SUCCESS if record.success else ExecutionOutcome.FAILED
+            record.error = results.get('error')
+            if request.run_dir and not results.get('background'):
+                run_path = Path(request.run_dir)
+                run_path.mkdir(parents=True, exist_ok=True)
+                suffix = str(len(self.execution_records))
+                for stream in ('stdout', 'stderr'):
+                    artifact = run_path / f'{request.request_id}-{suffix}.{stream}'
+                    artifact.write_text(str(results.get(stream, '')), encoding='utf-8')
+                    setattr(record, f'{stream}_ref', str(artifact))
+                    record.artifacts.append(str(artifact))
+            results['execution'] = record.to_dict()
+            self.execution_records.append(results['execution'])
+            return results
 
         # Append custom switches if provided
         try:
-            argv = shlex.split(command)
+            argv = list(command) if isinstance(command, (list, tuple)) else shlex.split(command)
             switches = self.get_option("SWITCHES")
             if switches:
                 argv.extend(shlex.split(str(switches)))
         except ValueError as e:
-            return {"success": False, "error": f"Unable to parse command: {e}"}
+            return finish({"success": False, "error": f"Unable to parse command: {e}"})
         if not argv:
-            return {"success": False, "error": "Command cannot be empty"}
+            return finish({"success": False, "error": "Command cannot be empty"})
+        request.argv = list(argv)
 
         sensitive_flags = {
             "-p", "--password", "-H", "--hash", "--api-token", "--token",
@@ -576,28 +642,52 @@ class ExternalToolModule(BaseModule):
             if value in sensitive_flags:
                 display_argv[index + 1] = "[redacted]"
         display_command = shlex.join(display_argv)
+        record.argv_display = display_argv
+        process_options = {}
+        if request.cwd or request.run_dir:
+            process_options['cwd'] = request.cwd or request.run_dir
+        if request.run_dir:
+            Path(request.run_dir).mkdir(parents=True, exist_ok=True)
+        if request.env:
+            process_options['env'] = {**os.environ, **request.env}
+        if self.execution_request is not None and request.stdin == 'none':
+            process_options['stdin'] = subprocess.DEVNULL
 
         try:
             self.log(f"Executing: {display_command}", "info")
 
             if background:
-                process = subprocess.Popen(
-                    argv,
-                    shell=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True
-                )
+                streams = []
+                try:
+                    if request.run_dir:
+                        for stream in ('stdout', 'stderr'):
+                            artifact = Path(request.run_dir) / f'{request.request_id}-{len(self.execution_records)}.{stream}'
+                            streams.append(artifact.open('w', encoding='utf-8'))
+                            setattr(record, f'{stream}_ref', str(artifact))
+                            record.artifacts.append(str(artifact))
+                    process = subprocess.Popen(
+                        argv,
+                        shell=False,
+                        stdout=streams[0] if streams else subprocess.DEVNULL,
+                        stderr=streams[1] if streams else subprocess.DEVNULL,
+                        start_new_session=True,
+                        **process_options,
+                    )
+                finally:
+                    for stream in streams:
+                        stream.close()
+                self.background_process = process
+                record.pid = process.pid
 
                 self.log(f"Started in background (PID: {process.pid})", "success")
 
-                return {
-                    "success": True,
+                return finish({
+                    "success": False,
                     "background": True,
                     "pid": process.pid,
                     "message": f"Command running in background (PID: {process.pid})",
                     "command": display_command
-                }
+                })
             else:
                 # Run synchronously (original behavior)
                 result = subprocess.run(
@@ -605,28 +695,32 @@ class ExternalToolModule(BaseModule):
                     shell=False,
                     capture_output=True,
                     text=True,
-                    timeout=timeout
+                    timeout=timeout,
+                    **process_options,
                 )
 
-                return {
+                return finish({
                     "success": result.returncode == 0,
                     "returncode": result.returncode,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "command": display_command
-                }
-        except subprocess.TimeoutExpired:
-            return {
+                })
+        except subprocess.TimeoutExpired as exc:
+            return finish({
                 "success": False,
+                "timed_out": True,
+                "stdout": exc.stdout.decode(errors='replace') if isinstance(exc.stdout, bytes) else exc.stdout or '',
+                "stderr": exc.stderr.decode(errors='replace') if isinstance(exc.stderr, bytes) else exc.stderr or '',
                 "error": f"Command timed out after {timeout} seconds",
                 "command": display_command
-            }
+            })
         except Exception as e:
-            return {
+            return finish({
                 "success": False,
                 "error": str(e),
                 "command": display_command
-            }
+            })
 
     def get_default_command(self) -> str:
         """

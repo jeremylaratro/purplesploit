@@ -1,0 +1,8 @@
+{
+  "source": {"type": "image", "target": {"userInput": "example.test/web:v1", "imageID": "sha256:fixture"}},
+  "descriptor": {"name": "grype", "version": "0.100.0"},
+  "matches": [{"artifact": {"id": "openssl-id", "name": "openssl", "version": "3.0.0", "type": "deb", "purl": "pkg:deb/debian/openssl@3.0.0"},
+    "vulnerability": {"id": "GHSA-fixture-test", "severity": "High", "description": "Fixture only", "dataSource": "https://example.test/advisory", "fix": {"versions": ["3.0.1"], "state": "fixed"}, "urls": ["https://example.test/GHSA-fixture-test"], "cvss": [{"version": "3.1", "metrics": {"baseScore": 8.1}}]},
+    "relatedVulnerabilities": [{"id": "CVE-2026-12345", "severity": "Critical"}], "matchDetails": [{"type": "exact-direct-match", "matcher": "dpkg-matcher"}]
+  }, {"artifact": {"id": "libc-id", "name": "libc", "version": "2.36", "type": "deb"}, "vulnerability": {"id": "CVE-2026-54321", "severity": "Negligible", "fix": {"versions": [], "state": "not-fixed"}}}]
+}

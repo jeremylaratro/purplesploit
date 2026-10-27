@@ -5,12 +5,14 @@ Parses nmap XML output and populates the service database with detected services
 Also runs searchsploit on discovered service versions to find potential exploits.
 """
 
-import defusedxml.ElementTree as ET  # XXE-safe XML parsing
 import subprocess
 import re
 from typing import Dict, Any, List, Tuple
 from purplesploit.core.module import BaseModule
 from purplesploit.models.database import db_manager
+from purplesploit.modules.recon.nmap_importer import (
+    SERVICE_ALIASES, import_discovered_hosts, parse_nmap_xml,
+)
 
 
 class NmapParser(BaseModule):
@@ -118,183 +120,52 @@ class NmapParser(BaseModule):
             return []
 
     def run(self) -> Dict[str, Any]:
-        """
-        Parse the nmap XML file and extract service information.
-
-        Returns:
-            Dictionary with parsed results
-        """
-        xml_file = self.get_option("XML_FILE")
-        auto_add = self.option_enabled("AUTO_ADD_TARGETS")
-        run_searchsploit = self.option_enabled("RUN_SEARCHSPLOIT")
-
+        """Import completed XML through the scanner's shared offline importer."""
+        checked = self.check()
+        if not checked["success"]:
+            return checked
         try:
-            # Parse XML file
-            tree = ET.parse(xml_file)
-            root = tree.getroot()
-
-            hosts_processed = 0
-            services_found = 0
-            targets_added = 0
+            request = self.execution_request or getattr(self, "_execution_context_request", None)
+            parsed = parse_nmap_xml(
+                self.get_option("XML_FILE"),
+                source_execution_id=request.request_id if request else "",
+                module_path=request.module_path if request else "recon/nmap_parser",
+            )
+            counts = import_discovered_hosts(
+                self.framework, parsed, models_db=db_manager, log=self.log,
+                auto_add=self.option_enabled("AUTO_ADD_TARGETS"),
+            )
             exploits_found = 0
-
-            # Process each host
-            for host in root.findall('.//host'):
-                # Get host status
-                status = host.find('status')
-                if status is None or status.get('state') != 'up':
-                    continue
-
-                # Prefer routable IP addresses; the first address is often a MAC.
-                address = host.find('address[@addrtype="ipv4"]')
-                if address is None:
-                    address = host.find('address[@addrtype="ipv6"]')
-                if address is None:
-                    continue
-
-                ip_addr = address.get('addr')
-                if not ip_addr:
-                    continue
-
-                hosts_processed += 1
-
-                # Add to targets if enabled
-                if auto_add:
-                    if self.framework.add_target('network', ip_addr):
-                        targets_added += 1
-
-                # Get hostname if available
-                hostname = None
-                hostnames = host.find('hostnames')
-                if hostnames is not None:
-                    hostname_elem = hostnames.find('hostname')
-                    if hostname_elem is not None:
-                        hostname = hostname_elem.get('name')
-
-                # Process ports
-                ports = host.find('ports')
-                if ports is not None:
-                    for port in ports.findall('port'):
-                        port_state = port.find('state')
-                        if port_state is None or port_state.get('state') != 'open':
+            if self.option_enabled("RUN_SEARCHSPLOIT"):
+                for host in parsed["discovered_hosts"]:
+                    for service in host["services"].values():
+                        version = service.get("service_version", "")
+                        if not version:
                             continue
-
-                        port_id = int(port.get('portid'))
-                        protocol = port.get('protocol')
-
-                        # Get service information
-                        service_elem = port.find('service')
-                        if service_elem is not None:
-                            service_name = service_elem.get('name', 'unknown')
-                            service_version = service_elem.get('version', '')
-                            product = service_elem.get('product', '')
-
-                            # Build version string
-                            version_str = f"{product} {service_version}".strip() if product or service_version else None
-
-                            # Map common service names
-                            service_mapping = {
-                                'microsoft-ds': 'smb',
-                                'netbios-ssn': 'smb',
-                                'ms-wbt-server': 'rdp',
-                                'ldap': 'ldap',
-                                'ms-sql-s': 'mssql',
-                                'mysql': 'mysql',
-                                'postgresql': 'postgresql',
-                                'winrm': 'winrm',
-                                'http': 'http',
-                                'https': 'https',
-                                'ssh': 'ssh',
-                                'ftp': 'ftp',
-                                'telnet': 'telnet',
-                                'smtp': 'smtp',
-                                'pop3': 'pop3',
-                                'imap': 'imap',
-                                'domain': 'dns'
-                            }
-
-                            mapped_service = service_mapping.get(service_name, service_name)
-
-                            # Add to service database (session - in-memory)
-                            self.framework.session.services.add_service(
-                                target=ip_addr,
-                                service=mapped_service,
-                                port=port_id
-                            )
-
-                            # Add to persistent core database
-                            self.framework.database.add_service(
-                                target=ip_addr,
-                                service=mapped_service,
-                                port=port_id,
-                                version=version_str
-                            )
-
-                            # Also sync to models database for web dashboard
+                        product = service.get("product") or service["service"]
+                        for title, path, edb_id in self._run_searchsploit(product, version):
                             try:
-                                db_manager.add_service(
-                                    target=ip_addr,
-                                    service=mapped_service,
-                                    port=port_id,
-                                    version=version_str
+                                db_manager.add_exploit(
+                                    target=host["ip"],
+                                    service=SERVICE_ALIASES.get(service["service"], service["service"]),
+                                    port=service["port"], version=service["version"],
+                                    exploit_title=title, exploit_path=path, edb_id=edb_id,
                                 )
-                            except Exception as e:
-                                self.log(f"Warning: Failed to sync service to models DB: {str(e)}", "warning")
-
-                            services_found += 1
-
-                            # Run searchsploit if enabled and version is available
-                            if run_searchsploit and version_str:
-                                self.log(f"Running searchsploit for {product} {service_version}...", "info")
-                                exploits = self._run_searchsploit(product or service_name, service_version)
-
-                                # Store exploit results
-                                for exploit_title, exploit_path, edb_id in exploits:
-                                    try:
-                                        # Use db_manager to store exploits in the models database
-                                        db_manager.add_exploit(
-                                            target=ip_addr,
-                                            service=mapped_service,
-                                            port=port_id,
-                                            version=version_str,
-                                            exploit_title=exploit_title,
-                                            exploit_path=exploit_path,
-                                            edb_id=edb_id
-                                        )
-                                        exploits_found += 1
-                                    except Exception as e:
-                                        self.log(f"Error storing exploit: {str(e)}", "error")
-
-                                if exploits:
-                                    self.log(f"Found {len(exploits)} potential exploits for {product} {service_version}", "success")
-
+                                exploits_found += 1
+                            except Exception as exc:
+                                self.log(f"Error storing exploit: {exc}", "error")
+            counts["exploits_found"] = exploits_found
             return {
-                "success": True,
-                "output": f"Parsed nmap results successfully",
-                "data": {
-                    "hosts_processed": hosts_processed,
-                    "services_found": services_found,
-                    "targets_added": targets_added,
-                    "exploits_found": exploits_found
-                },
-                "message": f"Processed {hosts_processed} hosts, found {services_found} services, discovered {exploits_found} potential exploits"
+                "success": True, "output": "Parsed nmap results successfully", "data": counts,
+                "hosts": parsed["hosts"], "observations": parsed["observations"],
+                "message": (f"Processed {counts['hosts_processed']} hosts, found "
+                            f"{counts['services_found']} services, discovered "
+                            f"{exploits_found} potential exploits"),
             }
-
-        except ET.ParseError as e:
-            return {
-                "success": False,
-                "error": f"Failed to parse XML file: {str(e)}"
-            }
-        except FileNotFoundError:
-            return {
-                "success": False,
-                "error": f"File not found: {xml_file}"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error parsing nmap XML: {str(e)}"
-            }
+        except (OSError, ValueError) as exc:
+            return {"success": False, "error": f"Error parsing nmap XML: {exc}", "observations": []}
+        except Exception as exc:
+            return {"success": False, "error": f"Error importing nmap XML: {exc}", "observations": []}
 
     def check(self) -> Dict[str, Any]:
         """Check if the XML file exists."""

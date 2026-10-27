@@ -1,0 +1,12 @@
+{
+  "client_id": "offline-client",
+  "client_name": "Example application",
+  "redirect_uris": ["https://app.example.test/callback", "com.example.app:/callback"],
+  "post_logout_redirect_uris": ["https://app.example.test/logout"],
+  "application_type": "web",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "scope": "openid profile email",
+  "token_endpoint_auth_method": "private_key_jwt",
+  "jwks_uri": "https://app.example.test/keys"
+}

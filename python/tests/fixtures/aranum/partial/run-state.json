@@ -1,0 +1,1 @@
+{"schema_version": 1, "run_id": "partial-fixture-run", "queue_authoritative": true, "services": [{"service": "smb", "status": "failed", "rc": 4, "reason": "missing dependency"}, {"service": "http", "status": "skipped", "rc": 0, "reason": "not selected"}]}

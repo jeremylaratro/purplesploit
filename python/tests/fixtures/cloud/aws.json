@@ -1,0 +1,23 @@
+{
+  "account": {"Account": "111122223333", "Arn": "arn:aws:iam::111122223333:root"},
+  "users": [{
+    "UserName": "alice",
+    "Arn": "arn:aws:iam::111122223333:user/alice",
+    "AttachedManagedPolicies": [{"PolicyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"}],
+    "Groups": [{"GroupName": "auditors"}]
+  }],
+  "groups": [{"GroupName": "auditors", "Arn": "arn:aws:iam::111122223333:group/auditors"}],
+  "roles": [{
+    "RoleName": "WebRole",
+    "Arn": "arn:aws:iam::111122223333:role/WebRole",
+    "AttachedManagedPolicies": [{"PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"}]
+  }],
+  "policies": [{"PolicyName": "ReadOnlyAccess", "Arn": "arn:aws:iam::aws:policy/ReadOnlyAccess"}],
+  "resources": [{
+    "Arn": "arn:aws:s3:::public-example",
+    "Name": "public-example",
+    "resource_type": "s3_bucket",
+    "public": true,
+    "roleArn": "arn:aws:iam::111122223333:role/WebRole"
+  }]
+}

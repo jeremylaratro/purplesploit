@@ -25,16 +25,12 @@ class PDFReportGenerator:
         """Check if WeasyPrint is available"""
         try:
             import weasyprint
+
             return True
         except ImportError:
             return False
 
-    def generate(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def generate(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """
         Generate PDF report.
 
@@ -51,51 +47,35 @@ class PDFReportGenerator:
         """
         if not self._weasyprint_available:
             raise ImportError(
-                "WeasyPrint is required for PDF generation. "
-                "Install with: pip install weasyprint"
+                "WeasyPrint is required for PDF generation. Install with: pip install weasyprint"
             )
 
         import weasyprint
 
         # Generate HTML first
         with tempfile.NamedTemporaryFile(
-            mode='w',
-            suffix='.html',
-            delete=False,
-            encoding='utf-8'
+            mode="w", suffix=".html", delete=False, encoding="utf-8"
         ) as tmp_file:
             html_path = tmp_file.name
 
-        # Generate HTML with print-optimized styles
-        self.html_generator.generate(
-            report_data,
-            html_path,
-            standalone=True,
-            pdf_mode=True,
-            **kwargs
-        )
-
-        # Convert to PDF
         output_path = Path(output_path)
-
-        # Add PDF-specific CSS
-        pdf_css = weasyprint.CSS(string=self._get_pdf_css())
-
-        # Generate PDF
-        html_doc = weasyprint.HTML(filename=html_path)
-        html_doc.write_pdf(
-            output_path,
-            stylesheets=[pdf_css]
-        )
-
-        # Clean up temp file
-        Path(html_path).unlink(missing_ok=True)
+        try:
+            self.html_generator.generate(
+                report_data, html_path, standalone=True, pdf_mode=True, **kwargs
+            )
+            pdf_css = weasyprint.CSS(string=self._get_pdf_css())
+            html_doc = weasyprint.HTML(filename=html_path)
+            html_doc.write_pdf(output_path, stylesheets=[pdf_css])
+            if output_path.exists():
+                output_path.chmod(0o600)
+        finally:
+            Path(html_path).unlink(missing_ok=True)
 
         return str(output_path)
 
     def _get_pdf_css(self) -> str:
         """Get PDF-specific CSS overrides"""
-        return '''
+        return """
         @page {
             size: A4;
             margin: 2cm;
@@ -217,7 +197,7 @@ class PDFReportGenerator:
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-        '''
+        """
 
 
 def check_pdf_dependencies() -> dict:
@@ -227,19 +207,16 @@ def check_pdf_dependencies() -> dict:
     Returns:
         Dict with dependency status
     """
-    result = {
-        "weasyprint": False,
-        "cairo": False,
-        "pango": False,
-        "message": ""
-    }
+    result = {"weasyprint": False, "cairo": False, "pango": False, "message": ""}
 
     try:
         import weasyprint
+
         result["weasyprint"] = True
 
         # Try to create a simple PDF to verify cairo/pango
         from io import BytesIO
+
         html = weasyprint.HTML(string="<html><body>Test</body></html>")
         html.write_pdf(BytesIO())
         result["cairo"] = True
@@ -251,9 +228,13 @@ def check_pdf_dependencies() -> dict:
     except Exception as e:
         error_str = str(e).lower()
         if "cairo" in error_str:
-            result["message"] = "Cairo library not found. Install with: sudo dnf install cairo-devel"
+            result["message"] = (
+                "Cairo library not found. Install with: sudo dnf install cairo-devel"
+            )
         elif "pango" in error_str:
-            result["message"] = "Pango library not found. Install with: sudo dnf install pango-devel"
+            result["message"] = (
+                "Pango library not found. Install with: sudo dnf install pango-devel"
+            )
         else:
             result["message"] = f"PDF generation error: {e}"
 

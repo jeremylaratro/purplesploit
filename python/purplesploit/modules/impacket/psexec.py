@@ -4,10 +4,10 @@ Impacket PSExec Module
 Remote command execution via PSExec.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from .common import ImpacketAdapter
 
 
-class ImpacketPSExecModule(ExternalToolModule):
+class ImpacketPSExecModule(ImpacketAdapter):
     """
     Impacket PSExec - Remote command execution.
 
@@ -83,42 +83,29 @@ class ImpacketPSExecModule(ExternalToolModule):
             }
         })
 
-    def build_command(self) -> str:
+    emits = ("session",)
+    interactive = True
+
+    def build_argv(self) -> list[str]:
         """
         Build the impacket-psexec command.
 
         Returns:
             Command string to execute
         """
-        rhost = self.get_option("RHOST")
-        username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
-        hash_val = self.get_option("HASH")
         command = self.get_option("COMMAND")
         share = self.get_option("SHARE")
 
         # Build target string
-        if hash_val:
-            # Hash authentication
-            target = f"{domain}/{username}@{rhost} -hashes {hash_val}"
-        elif password:
-            # Password authentication
-            target = f"{domain}/{username}:{password}@{rhost}"
-        else:
-            # No authentication (will fail)
-            target = f"{domain}/{username}@{rhost}"
-
-        # Base command
-        cmd = f"impacket-psexec {target}"
+        cmd = self.authentication_argv()
 
         # Share
         if share:
-            cmd += f" -share {share}"
+            cmd += ["-share", str(share)]
 
         # Command execution
         if command:
-            cmd += f" '{command}'"
+            cmd.append(str(command))
 
         return cmd
 
@@ -147,4 +134,4 @@ class ImpacketPSExecModule(ExternalToolModule):
             if line.strip() and not line.startswith('['):
                 results["command_output"].append(line)
 
-        return results
+        return self.execution_observations(results)

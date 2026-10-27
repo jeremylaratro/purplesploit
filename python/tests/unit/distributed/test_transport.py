@@ -643,7 +643,11 @@ class TestWebSocketTransportSend:
 
         # Simply verify that run_until_complete is called when send is invoked
         # The actual async behavior is complex to mock, so we verify the attempt
-        mock_loop.run_until_complete.return_value = {"id": "test", "success": True}
+        def complete(coroutine):
+            coroutine.close()
+            return {"id": "test", "success": True}
+
+        mock_loop.run_until_complete.side_effect = complete
 
         result = ws_transport.send("register", {"agent": "test"})
 
@@ -663,7 +667,11 @@ class TestWebSocketTransportReceive:
         """Test receive handles exceptions."""
         mock_ws = MagicMock()
         mock_loop = MagicMock()
-        mock_loop.run_until_complete.side_effect = Exception("Receive error")
+        def fail(coroutine):
+            coroutine.close()
+            raise Exception("Receive error")
+
+        mock_loop.run_until_complete.side_effect = fail
         ws_transport._ws = mock_ws
         ws_transport._loop = mock_loop
 

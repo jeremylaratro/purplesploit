@@ -528,17 +528,20 @@ Features: routing, port forwarding, health monitoring
 
 ## Security Considerations
 
+The CWP1–CWP9 build is a capability/lab implementation. The controls below are
+S19–S23 targets, not claims about the current runtime.
+
 ### Credential Handling
 
-- Credentials stored in SQLite (local only)
-- No plaintext transmission over network
-- Session isolation per engagement
+- Current local/session stores may contain credential values.
+- Integration and distributed transports are not yet secret-safe or mutually authenticated.
+- Secret references, engagement isolation, and protected transport are scheduled for S19–S22.
 
 ### Tool Execution
 
-- Subprocess calls with timeout
-- Input validation before shell execution
-- Sandboxed output parsing
+- Capability adapters use structured argv and support execution deadlines.
+- Complete target/input containment and consistent deadlines remain S21 work.
+- Parsers currently run in-process; plugin and parser containment remain S22 work.
 
 ---
 

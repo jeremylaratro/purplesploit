@@ -1,0 +1,2 @@
+RDP 2001:db8::10 3389 DC01 [*] Windows Server 2022 (name:DC01) (domain:CORP.TEST) (nla:True)
+RDP 2001:db8::10 3389 DC01 [+] CORP.TEST\alice:fixture-only (Pwn3d!)

@@ -1,0 +1,17 @@
+{
+  "id": "nist-sp800-115",
+  "name": "NIST SP 800-115",
+  "version": "2008-09",
+  "profile_version": "1.0.0",
+  "source": "https://csrc.nist.gov/pubs/sp/800/115/final",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "Publication section numbers; checklist prompts are PurpleSploit paraphrases",
+  "description": "Selected technical assessment activities, not the full publication or a compliance determination.",
+  "checks": [
+    {"id": "3.2", "title": "Inspect relevant system and application logs"},
+    {"id": "4.1", "title": "Discover in-scope network hosts"},
+    {"id": "4.3", "title": "Identify candidate vulnerabilities for validation"},
+    {"id": "5.2", "title": "Validate selected attack paths through testing"}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema_version": "1", "generated_utc": "2026-10-26T12:01:00Z", "run_id": "posture-fixture-run",
+  "hosts": {
+    "192.0.2.30": {"os": "linux", "source": "evidence/linux.txt", "checks": {"LIN-FAIL": {"status": "FAIL", "detail": "synthetic permission"}, "LIN-PASS": {"status": "PASS", "detail": "fixture pass"}, "LIN-INFO": {"status": "INFO", "detail": "fixture info"}}, "domain_observations": {}},
+    "192.0.2.31": {"os": "windows", "source": "missing/windows.txt", "checks": {"WIN-NA": {"status": "NA", "detail": "not applicable"}, "WIN-ERR": {"status": "ERR", "detail": "dependency unavailable"}}, "domain_observations": {"AD-WARN": {"status": "WARN", "detail": "domain=example.test fixture"}}}
+  },
+  "domains": {"example.test": {"checks": {"AD-WARN": {"status": "WARN", "detail": "domain=example.test fixture", "observed_from": [{"host": "192.0.2.31", "status": "WARN", "detail": "domain=example.test fixture"}]}}}}
+}

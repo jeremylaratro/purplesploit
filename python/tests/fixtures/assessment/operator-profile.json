@@ -1,0 +1,40 @@
+{
+  "id": "operator-api-review",
+  "name": "Operator API review",
+  "version": "2.1.0",
+  "schema_version": 1,
+  "plans": [
+    {
+      "id": "api-plan",
+      "name": "API role comparison",
+      "version": "2",
+      "methodology_versions": {"owasp-api-top10": "2023"},
+      "cases": [
+        {
+          "id": "api-object-access",
+          "title": "Compare object access between test identities",
+          "description": "Record a request and response for each role.",
+          "target": "https://api.example.test",
+          "methodology_id": "owasp-api-top10",
+          "control_id": "API1:2023",
+          "workflow_refs": ["api-inventory"],
+          "metadata": {"roles": ["reader", "editor"]}
+        }
+      ]
+    }
+  ],
+  "workflow_refs": ["api-inventory"],
+  "workflow_templates": [
+    {
+      "id": "api-inventory",
+      "name": "API inventory",
+      "description": "Reusable operator workflow reference fixture",
+      "steps": [
+        {"id": "step_1", "name": "Probe target", "module": "web/httpx", "options": {"BACKGROUND": "false"}}
+      ],
+      "created_at": "2026-10-26T00:00:00",
+      "variables": {"target": "https://api.example.test"}
+    }
+  ],
+  "metadata": {"operator_defined": true}
+}

@@ -5,10 +5,14 @@ Web application fuzzer for discovering hidden resources and parameters.
 """
 
 from typing import Dict, Any, List
-from purplesploit.core.module import ExternalToolModule
+import re
+import shlex
+import ipaddress
+from urllib.parse import urlsplit
+from purplesploit.web_observations import WebToolModule, observation, strip_ansi
 
 
-class WfuzzModule(ExternalToolModule):
+class WfuzzModule(WebToolModule):
     """
     Wfuzz - Web application fuzzer.
 
@@ -18,6 +22,9 @@ class WfuzzModule(ExternalToolModule):
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "wfuzz"
+
+    emits = ["path", "parameter", "http_endpoint"]
+    supported_tool_versions = ["wfuzz 3.x console response format"]
 
     @property
     def name(self) -> str:
@@ -40,9 +47,11 @@ class WfuzzModule(ExternalToolModule):
         super()._init_options()
 
         self.options.update({
+            **{name: {"value": value, "default": value, "required": False, "description": name}
+               for name, value in (("BASENAME", "index"), ("DOMAIN", None), ("PARAMETER", None), ("CUSTOM_FLAGS", ""))},
             "TARGET": {
                 "value": None,
-                "required": True,
+                "required": False,
                 "description": "Target domain or IP (e.g., target.com or 192.168.1.10)",
                 "default": None
             },
@@ -109,7 +118,7 @@ class WfuzzModule(ExternalToolModule):
             "SMART_FILTER": {
                 "value": "true",
                 "required": False,
-                "description": "Enable smart response filtering (auto-detect common responses)",
+                "description": "Report response statistics; set HIDE_* options to apply filters",
                 "default": "true"
             }
         })
@@ -148,99 +157,63 @@ class WfuzzModule(ExternalToolModule):
             {"name": "Custom Fuzzing", "description": "Custom wfuzz command", "handler": "op_custom_fuzz", "subcategory": "advanced"},
         ]
 
-    def build_command(self) -> str:
-        """
-        Build the wfuzz command.
-
-        Returns:
-            Command string to execute
-        """
-        url = self.get_option("URL")
-        wordlist = self.get_option("WORDLIST")
-        hide_code = self.get_option("HIDE_CODE")
-        hide_words = self.get_option("HIDE_WORDS")
-        hide_chars = self.get_option("HIDE_CHARS")
-        threads = self.get_option("THREADS")
-        method = self.get_option("METHOD")
-        data = self.get_option("DATA")
-        headers = self.get_option("HEADERS")
-        follow = self.get_option("FOLLOW")
-
-        # Base command
-        cmd = f"wfuzz -w {self.quote_arg(wordlist)}"
-
-        # Threads
-        if threads:
-            cmd += f" -t {self.quote_arg(threads)}"
-
-        # Hide responses
-        if hide_code:
-            cmd += f" --hc {self.quote_arg(hide_code)}"
-        if hide_words:
-            cmd += f" --hw {self.quote_arg(hide_words)}"
-        if hide_chars:
-            cmd += f" --hh {self.quote_arg(hide_chars)}"
-
-        # HTTP method
-        if method and method.upper() != "GET":
-            cmd += f" -X {self.quote_arg(method.upper())}"
-
-        # POST data
-        if data:
-            cmd += f" -d {self.quote_arg(data)}"
-
-        # Headers
-        if headers:
-            cmd += f" -H {self.quote_arg(headers)}"
-
-        # Follow redirects
+    def build_argv(self):
+        url = self.get_option("URL") or self._build_url("/")
+        if not url:
+            return []
+        if "FUZZ" not in url and "FUZZ" not in str(self.get_option("DATA") or "") and "FUZZ" not in str(self.get_option("HEADERS") or ""):
+            url = url.rstrip("/") + "/FUZZ"
+        argv = ["wfuzz", "-w", str(self.get_option("WORDLIST"))]
+        for key, flag in (("THREADS", "-t"), ("HIDE_CODE", "--hc"), ("HIDE_WORDS", "--hw"),
+                          ("HIDE_CHARS", "--hh"), ("DATA", "-d"), ("HEADERS", "-H")):
+            value = self.get_option(key)
+            if value is not None and value != "":
+                argv += [flag, str(value)]
+        method = str(self.get_option("METHOD") or "GET").upper()
+        if method != "GET":
+            argv += ["-X", method]
         if self.option_enabled("FOLLOW"):
-            cmd += " -L"
+            argv.append("-L")
+        argv.append(url)
+        return argv
 
-        # URL (must be last)
-        cmd += f" {self.quote_arg(url)}"
+    def build_command(self):
+        return shlex.join(self.build_argv())
 
-        return cmd
-
-    def parse_output(self, output: str) -> dict:
-        """
-        Parse wfuzz output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "found_paths": [],
-            "status_codes": {},
-        }
-
-        # Parse output
-        for line in output.split('\n'):
-            # Wfuzz output format: ID Response Lines Word Chars Request
-            if line.strip() and not line.startswith('=') and not line.startswith('*'):
-                parts = line.split()
-                if len(parts) >= 4 and parts[1].isdigit():
-                    status_code = parts[1]
-                    path = parts[-1] if parts else ""
-
-                    results["found_paths"].append({
-                        "status": status_code,
-                        "path": path,
-                        "line": line.strip()
-                    })
-
-                    if status_code not in results["status_codes"]:
-                        results["status_codes"][status_code] = 0
-                    results["status_codes"][status_code] += 1
-
+    def parse_output(self, output):
+        results = {"found_paths": [], "responses": [], "status_codes": {}, "observations": []}
+        url_template = getattr(self, "_fuzz_url", None) or self.get_option("URL") or self._build_url("/") or ""
+        data_template = getattr(self, "_fuzz_data", None) or self.get_option("DATA") or ""
+        if not getattr(self, "_fuzz_url", None) and "FUZZ" not in url_template and "FUZZ" not in data_template:
+            url_template = url_template.rstrip("/") + "/FUZZ"
+        for line in strip_ansi(output).splitlines():
+            match = re.search(r"""^\s*(\d+):?\s+(\d{3})\s+(\d+)\s+L\s+(\d+)\s+W\s+(\d+)\s+Ch\s+["']?(.*?)["']?\s*$""", line)
+            if not match:
+                continue
+            identity, status, lines, words, chars, payload = match.groups()
+            payload = payload.strip('"\'')
+            values = payload.split(" - ")
+            url = url_template.replace("FUZZ", values[0])
+            for index, value in enumerate(values[1:], 2):
+                url = url.replace(f"FUZ{index}Z", value)
+            item = {"id": identity, "status": status, "path": payload, "payload": payload,
+                    "url": url, "lines": int(lines), "words": int(words), "chars": int(chars),
+                    "line": line.strip(), "method": getattr(self, "_fuzz_method", None) or self.get_option("METHOD") or "GET"}
+            results["found_paths"].append(item)
+            results["responses"].append(item)
+            results["status_codes"][status] = results["status_codes"].get(status, 0) + 1
+            kind = "parameter" if "FUZZ" in data_template or "FUZZ" in urlsplit(url_template).query else "path"
+            attrs = {k: v for k, v in item.items() if k != "url"}
+            if kind == "parameter":
+                template = data_template if "FUZZ" in data_template else urlsplit(url_template).query
+                parameter = next((part for part in template.split("&") if "FUZZ" in part), "")
+                name, _, value = parameter.partition("=")
+                attrs.update(name=name.replace("FUZZ", payload),
+                             value=value.replace("FUZZ", payload),
+                             location="body" if "FUZZ" in data_template else "query")
+            results["observations"].append(observation(kind, url, **attrs))
+            results["observations"].append(observation("http_endpoint", url, **attrs))
         return results
-
-    # ========================================================================
-    # Helper Methods
-    # ========================================================================
 
     def _parse_wfuzz_responses(self, output: str) -> Dict[str, Any]:
         """
@@ -310,548 +283,137 @@ class WfuzzModule(ExternalToolModule):
 
         return result
 
-    def _smart_filter_prompt(self, stats: Dict[str, Any], original_cmd: str) -> Dict[str, Any]:
-        """
-        Analyze wfuzz results and prompt to re-run with smart filters.
+    def _smart_filter_prompt(self, stats, original_cmd):
+        """Retained analysis hook. Filters are selected explicitly using HIDE_* options."""
+        return None
 
-        Args:
-            stats: Response statistics from _parse_wfuzz_responses
-            original_cmd: Original wfuzz command
-
-        Returns:
-            Re-run results or original results
-        """
-        if stats['total_responses'] == 0:
-            self.log("No responses parsed - smart filtering unavailable", "warning")
-            self.log("(This might be due to no results or parsing issues)", "debug")
-            return None
-
-        # Calculate what percentage of responses are the most common
-        total = stats['total_responses']
-        common_lines_pct = (stats['most_common_lines_count'] / total * 100) if total > 0 else 0
-        common_words_pct = (stats['most_common_words_count'] / total * 100) if total > 0 else 0
-        common_chars_pct = (stats['most_common_chars_count'] / total * 100) if total > 0 else 0
-
-        # Show analysis
-        self.log("\n" + "="*70, "info")
-        self.log("SMART FILTER ANALYSIS", "info")
-        self.log("="*70, "info")
-        self.log(f"Total responses: {total}", "info")
-
-        if stats['most_common_lines']:
-            self.log(f"\nMost common LINES: {stats['most_common_lines']} ({stats['most_common_lines_count']} responses = {common_lines_pct:.1f}%)", "info")
-
-        if stats['most_common_words']:
-            self.log(f"Most common WORDS: {stats['most_common_words']} ({stats['most_common_words_count']} responses = {common_words_pct:.1f}%)", "info")
-
-        if stats['most_common_chars']:
-            self.log(f"Most common CHARS: {stats['most_common_chars']} ({stats['most_common_chars_count']} responses = {common_chars_pct:.1f}%)", "info")
-
-        # Show unique response sizes if not too many
-        unique_sizes = len(stats['lines_distribution'])
-        if unique_sizes <= 5:
-            self.log(f"\nUnique response sizes found: {unique_sizes}", "info")
-            for lines, count in sorted(stats['lines_distribution'].items()):
-                words = [w for r in stats['responses'] if r['lines'] == lines for w in [r['words']]][0]
-                chars = [c for r in stats['responses'] if r['lines'] == lines for c in [r['chars']]][0]
-                self.log(f"  {lines}L / {words}W / {chars}Ch: {count} responses", "info")
-
-        # Determine if filtering would be beneficial (if most common response is >50% of results)
-        should_filter = max(common_lines_pct, common_words_pct, common_chars_pct) > 50
-
-        if should_filter:
-            self.log("\n🎯 A dominant response pattern detected! Filtering recommended.", "success")
-            self.log("="*70 + "\n", "info")
-
-            # Ask user which filter to use
-            filter_choice = input("Re-run with filter? (L=lines, W=words, C=chars, N=no) [L]: ").strip().upper() or "L"
-
-            if filter_choice == "N":
-                self.log("Keeping original results (no filter applied)", "info")
-                return None
-
-            # Build filter command
-            filter_arg = ""
-            if filter_choice == "L" and stats['most_common_lines']:
-                filter_arg = f"--hl {stats['most_common_lines']}"
-                self.log(f"Re-running with filter: hiding {stats['most_common_lines']} lines...", "info")
-            elif filter_choice == "W" and stats['most_common_words']:
-                filter_arg = f"--hw {stats['most_common_words']}"
-                self.log(f"Re-running with filter: hiding {stats['most_common_words']} words...", "info")
-            elif filter_choice == "C" and stats['most_common_chars']:
-                filter_arg = f"--hh {stats['most_common_chars']}"
-                self.log(f"Re-running with filter: hiding {stats['most_common_chars']} chars...", "info")
-            else:
-                self.log("Invalid choice, keeping original results", "warning")
-                return None
-
-            # Re-run with filter
-            filtered_cmd = f"{original_cmd} {filter_arg}"
-            return self.execute_command(filtered_cmd)
-        else:
-            self.log("\n✓ Good result diversity - no filtering needed", "success")
-            self.log("="*70 + "\n", "info")
-            return None
-
-    def _is_smart_filter_enabled(self) -> bool:
-        """Check if smart filtering is enabled."""
-        smart_filter = self.get_option("SMART_FILTER")
+    def _is_smart_filter_enabled(self):
         return self.option_enabled("SMART_FILTER")
 
-    def _get_target(self) -> str:
-        """
-        Get target from TARGET or URL option.
+    def _get_target(self):
+        return self.get_option("URL") or self.get_option("TARGET")
 
-        Returns:
-            Target domain/IP or None
-        """
-        # URL takes precedence if set
-        url = self.get_option("URL")
-        if url:
-            return url
-
-        return self.get_option("TARGET")
-
-    def _build_url(self, path: str = "/", scheme: str = "http") -> str:
-        """
-        Build full URL from TARGET.
-
-        Args:
-            path: Path to append (default: /)
-            scheme: http or https (default: http)
-
-        Returns:
-            Full URL
-        """
+    def _build_url(self, path="/", scheme="http"):
         target = self._get_target()
         if not target:
             return None
+        base = str(target) if str(target).startswith(("http://", "https://")) else f"{scheme}://{target}"
+        return base if not path or path == "/" else f"{base.rstrip('/')}/{path.lstrip('/')}"
 
-        # If target already has a scheme, use it as-is
-        if target.startswith("http://") or target.startswith("https://"):
-            return target if not path or path == "/" else f"{target.rstrip('/')}{path}"
-
-        # Otherwise build URL
-        return f"{scheme}://{target}{path}"
-
-    # ========================================================================
-    # Operation Handlers
-    # ========================================================================
-
-    def _execute_wfuzz(self, custom_args: str = "", enable_smart_filter: bool = None) -> Dict[str, Any]:
-        """
-        Execute wfuzz with custom arguments and optional smart filtering.
-
-        Args:
-            custom_args: Additional arguments to pass to wfuzz
-            enable_smart_filter: Enable smart response analysis and filtering (None = use SMART_FILTER option)
-
-        Returns:
-            Execution results
-        """
-        import subprocess
-        import time
-        import signal
-
-        threads = self.get_option("THREADS") or "50"
-        hide_code = self.get_option("HIDE_CODE") or "404"
-
-        # Build base command
+    def _execute_wfuzz(self, custom_args="", enable_smart_filter=None):
         if custom_args:
-            cmd = f"wfuzz -t {threads} --hc {hide_code} {custom_args}"
+            extra = shlex.split(custom_args) if isinstance(custom_args, str) else list(custom_args)
+            argv = ["wfuzz", "-t", str(self.get_option("THREADS") or "50"), "--hc",
+                    str(self.get_option("HIDE_CODE") or "404"), *extra]
+            for key, flag in (("HIDE_WORDS", "--hw"), ("HIDE_CHARS", "--hh")):
+                if self.get_option(key) and flag not in argv:
+                    argv[1:1] = [flag, str(self.get_option(key))]
+            if self.option_enabled("FOLLOW") and "-L" not in argv:
+                argv.insert(1, "-L")
         else:
-            cmd = self.build_command()
-
-        # Check if smart filtering is enabled
-        if enable_smart_filter is None:
-            enable_smart_filter = self._is_smart_filter_enabled()
-
-        # If smart filtering enabled, do sample run first
-        if enable_smart_filter:
-            print("\n" + "="*70)
-            print("🚀 SMART FILTERING V3.0 - WITH CHAR FILTER FIX")
-            print("="*70 + "\n")
-            print(f"[*] Starting wfuzz sample...")
-            print(f"[*] Command: {cmd[:100]}...")
-
-            try:
-                import shlex
-                # Run wfuzz for 5 seconds to sample responses
-                print("[*] Launching process...")
-                process = subprocess.Popen(
-                    shlex.split(cmd),
-                    shell=False,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1
-                )
-
-                # Wait 5 seconds with progress
-                print("[*] Sampling for 5 seconds", end='', flush=True)
-                for i in range(5):
-                    time.sleep(1)
-                    print(".", end='', flush=True)
-                print()
-
-                # Kill the process
-                print("[*] Stopping sample...")
-                process.send_signal(signal.SIGTERM)
-                time.sleep(0.5)
-
-                # Get partial output
-                print("[*] Collecting output...")
-                try:
-                    stdout, stderr = process.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-
-                output = stdout + stderr
-                print(f"[*] Captured {len(output)} chars of output")
-
-                # Parse sample responses
-                print("[*] Parsing responses...")
-                stats = self._parse_wfuzz_responses(output)
-                print(f"[*] Found {stats['total_responses']} responses in sample")
-
-                if stats['total_responses'] > 5:  # Need at least 5 samples
-                    # Show analysis with print() for immediate output
-                    print("\n" + "="*70)
-                    print("SMART FILTER ANALYSIS (based on sample)")
-                    print("="*70)
-                    print(f"Sampled responses: {stats['total_responses']}")
-
-                    if stats['most_common_lines']:
-                        total = stats['total_responses']
-                        common_lines_pct = (stats['most_common_lines_count'] / total * 100)
-                        print(f"\nMost common LINES: {stats['most_common_lines']} ({stats['most_common_lines_count']} responses = {common_lines_pct:.1f}%)")
-
-                    if stats['most_common_words']:
-                        common_words_pct = (stats['most_common_words_count'] / total * 100)
-                        print(f"Most common WORDS: {stats['most_common_words']} ({stats['most_common_words_count']} responses = {common_words_pct:.1f}%)")
-
-                    if stats['most_common_chars']:
-                        common_chars_pct = (stats['most_common_chars_count'] / total * 100)
-                        print(f"Most common CHARS: {stats['most_common_chars']} ({stats['most_common_chars_count']} responses = {common_chars_pct:.1f}%)")
-
-                    # Show unique response sizes if not too many
-                    unique_sizes = len(stats['lines_distribution'])
-                    if unique_sizes <= 5:
-                        print(f"\nUnique response sizes found: {unique_sizes}")
-                        for lines, count in sorted(stats['lines_distribution'].items()):
-                            words = [w for r in stats['responses'] if r['lines'] == lines for w in [r['words']]][0]
-                            chars = [c for r in stats['responses'] if r['lines'] == lines for c in [r['chars']]][0]
-                            print(f"  {lines}L / {words}W / {chars}Ch: {count} responses")
-
-                    # Check if filtering would help
-                    max_pct = max(common_lines_pct, common_words_pct, common_chars_pct)
-                    if max_pct > 50:
-                        print("\n🎯 Dominant pattern detected! Filtering recommended.")
-                        print("="*70)
-                        print(f"💡 Recommended: Hide {stats['most_common_chars']}Ch responses")
-                        print("   (NOTE: wfuzz --hl/lines has a bug, use chars instead)")
-                        print()
-
-                        # Ask user which filter to use (default to C since --hl is buggy in wfuzz)
-                        filter_choice = input("Apply filter? (L=lines, W=words, C=chars, N=no) [C]: ").strip().upper() or "C"
-
-                        if filter_choice != "N":
-                            # Build filter
-                            filter_arg = ""
-                            if filter_choice == "L" and stats['most_common_lines']:
-                                filter_arg = f"--hl {stats['most_common_lines']}"
-                                self.log(f"Applying filter: hiding {stats['most_common_lines']} lines", "info")
-                            elif filter_choice == "W" and stats['most_common_words']:
-                                filter_arg = f"--hw {stats['most_common_words']}"
-                                self.log(f"Applying filter: hiding {stats['most_common_words']} words", "info")
-                            elif filter_choice == "C" and stats['most_common_chars']:
-                                filter_arg = f"--hh {stats['most_common_chars']}"
-                                self.log(f"Applying filter: hiding {stats['most_common_chars']} chars", "info")
-
-                            # Add filter to command (must go before URL, after --hc)
-                            if filter_arg:
-                                # Insert filter after --hc XXX and before the rest
-                                cmd = cmd.replace(f"--hc {hide_code}", f"--hc {hide_code} {filter_arg}")
-                                self.log(f"\n▶ Running full scan with filter...\n", "info")
-                    else:
-                        self.log("\n✓ Good diversity - running full scan without filter", "success")
-                        self.log("="*70 + "\n", "info")
-                else:
-                    print(f"[!] Only {stats['total_responses']} responses sampled - running full scan without filter")
-
-            except Exception as e:
-                print(f"[!] Sample run failed: {e}")
-                print(f"[!] Running full scan without filtering...")
-                import traceback
-                traceback.print_exc()
-
-        # Execute full command
-        print(f"\n[*] Running full wfuzz scan...")
-        print(f"[*] Command to execute: {cmd}")
-        print(f"[*] Command length: {len(cmd)} chars")
-
-        # Double-check the command has the filter
-        if '--hl ' in cmd:
-            print(f"[*] ✓ Command contains --hl filter")
-        elif '--hw ' in cmd:
-            print(f"[*] ✓ Command contains --hw filter")
-        elif '--hh ' in cmd:
-            print(f"[*] ✓ Command contains --hh filter")
-        else:
-            print(f"[!] WARNING: No filter detected in command!")
-
-        result = self.execute_command(cmd)
+            argv = self.build_argv()
+        if not argv:
+            return {"success": False, "error": "TARGET or URL required"}
+        self._fuzz_url = argv[-1]
+        self._fuzz_data = argv[argv.index("-d") + 1] if "-d" in argv else ""
+        self._fuzz_method = argv[argv.index("-X") + 1] if "-X" in argv else "GET"
+        result = self.execute_command(argv)
+        if self._is_smart_filter_enabled():
+            result["response_statistics"] = self._parse_wfuzz_responses(result.get("stdout", ""))
         return result
 
-    # === Discovery Operations ===
-
-    def op_dir_fuzz(self) -> Dict[str, Any]:
-        """Fuzz directories and files."""
+    def _discovery_url(self):
         url = self._build_url("/")
+        return url.rstrip("/") + "/" if url else None
+
+    def op_dir_fuzz(self):
+        url = self._discovery_url()
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
-
-        wordlist = self.get_option("WORDLIST") or "/usr/share/wordlists/dirb/common.txt"
-
-        # Build URL with FUZZ
-        fuzz_url = f"{url}FUZZ"
-
-        self.log(f"Fuzzing directories at: {url}", "info")
+            return {"success": False, "error": "TARGET or URL required"}
+        self.log(f"Fuzzing directories at {url}", "info")
         if self._is_smart_filter_enabled():
-            self.log("Smart filtering enabled - will analyze responses and offer to filter common patterns", "info")
+            self.log("Smart filtering enabled: reporting response statistics; filters use HIDE_* options", "info")
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), url + "FUZZ"])
 
-        return self._execute_wfuzz(f"-w '{wordlist}' '{fuzz_url}'")
+    def op_ext_fuzz(self):
+        url = self._discovery_url()
+        if not url:
+            return {"success": False, "error": "TARGET or URL required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")),
+                                   url + str(self.get_option("BASENAME") or "index") + ".FUZZ"])
 
-    def op_ext_fuzz(self) -> Dict[str, Any]:
-        """Fuzz file extensions."""
+    def op_backup_fuzz(self):
+        url = self._discovery_url()
+        if not url:
+            return {"success": False, "error": "TARGET or URL required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-z", "list,.bak-.old-.backup-.copy-.tmp-~",
+                                   url + "FUZZFUZ2Z"])
+
+    def _domain(self):
+        if self.get_option("DOMAIN"):
+            return self.get_option("DOMAIN")
+        domain = urlsplit(self._build_url("/") or "").hostname
+        try:
+            ipaddress.ip_address(domain)
+            return None
+        except ValueError:
+            return domain
+
+    def op_vhost_fuzz(self):
+        url = self._discovery_url()
+        if not url:
+            return {"success": False, "error": "TARGET or URL required"}
+        if not self._domain():
+            return {"success": False, "error": "DOMAIN required when TARGET is an IP"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-H", f"Host: FUZZ.{self._domain()}", url])
+
+    def op_subdomain_fuzz(self):
+        if not self._domain():
+            return {"success": False, "error": "TARGET or DOMAIN required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), f"http://FUZZ.{self._domain()}/"])
+
+    def op_param_get_fuzz(self):
         url = self._build_url("/")
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
+            return {"success": False, "error": "TARGET or URL required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), url + ("&" if "?" in url else "?") + "FUZZ=test"])
 
-        # Ask for base filename
-        basename = input("Base filename (e.g., index, admin, config): ").strip()
-        if not basename:
-            basename = "index"
-
-        # Extension wordlist
-        ext_wordlist = input("Extension wordlist [/usr/share/seclists/Discovery/Web-Content/web-extensions.txt]: ").strip()
-        if not ext_wordlist:
-            ext_wordlist = "/usr/share/seclists/Discovery/Web-Content/web-extensions.txt"
-
-        # Build URL with FUZZ for extension
-        fuzz_url = f"{url}{basename}FUZ2Z"
-
-        self.log(f"Fuzzing extensions for: {basename}", "info")
-        return self._execute_wfuzz(f"-w '{ext_wordlist}' -z list,.FUZZ '{fuzz_url}'")
-
-    def op_backup_fuzz(self) -> Dict[str, Any]:
-        """Search for backup files."""
+    def op_param_post_fuzz(self):
         url = self._build_url("/")
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
+            return {"success": False, "error": "TARGET or URL required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-X", "POST", "-d",
+                                   str(self.get_option("DATA") or "FUZZ=test"), url])
 
-        # Common backup extensions
-        backup_exts = ".bak-.old-.backup-.copy-.tmp-~"
-        wordlist = self.get_option("WORDLIST") or "/usr/share/wordlists/dirb/common.txt"
-
-        fuzz_url = f"{url}FUZZFUZ2Z"
-
-        self.log(f"Searching for backup files at: {url}", "info")
-        return self._execute_wfuzz(f"-w '{wordlist}' -z list,{backup_exts} '{fuzz_url}'")
-
-    # === VHOST Operations ===
-
-    def op_vhost_fuzz(self) -> Dict[str, Any]:
-        """Fuzz virtual hosts using Host header."""
-        # Get target from options
-        target = self._get_target()
-        if not target:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
-
-        # Ask for domain if target is an IP, otherwise use target as domain
-        # Check if target looks like an IP
-        import re
-        ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
-
-        if re.match(ip_pattern, target):
-            # Target is IP, need domain
-            ip = target
-            domain = input("Base domain (e.g., target.com): ").strip()
-            if not domain:
-                return {"success": False, "error": "Domain required when TARGET is an IP"}
-        else:
-            # Target is domain
-            domain = target.replace("http://", "").replace("https://", "").split('/')[0]
-            # Ask for IP if needed, or use domain for DNS resolution
-            ip_input = input(f"Target IP [press Enter to use {domain}]: ").strip()
-            ip = ip_input if ip_input else domain
-
-        wordlist = input("Wordlist [/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
-
-        url = f"http://{ip}/"
-
-        self.log(f"VHOST fuzzing: {domain} -> {ip}", "info")
-        if self._is_smart_filter_enabled():
-            self.log("Smart filtering enabled - will analyze responses and offer to filter common patterns", "info")
-
-        return self._execute_wfuzz(f"-w '{wordlist}' -H 'Host: FUZZ.{domain}' '{url}'")
-
-    def op_subdomain_fuzz(self) -> Dict[str, Any]:
-        """Fuzz subdomains."""
-        # Get target from options
-        target = self._get_target()
-        if not target:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
-
-        # If target is IP, ask for domain, otherwise use target as domain
-        import re
-        ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
-
-        if re.match(ip_pattern, target):
-            domain = input("Base domain (e.g., target.com): ").strip()
-            if not domain:
-                return {"success": False, "error": "Domain required when TARGET is an IP"}
-        else:
-            domain = target.replace("http://", "").replace("https://", "").split('/')[0]
-
-        wordlist = input("Wordlist [/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
-
-        url = f"http://FUZZ.{domain}/"
-
-        self.log(f"Subdomain fuzzing for: {domain}", "info")
-        if self._is_smart_filter_enabled():
-            self.log("Smart filtering enabled - will analyze responses and offer to filter common patterns", "info")
-
-        return self._execute_wfuzz(f"-w '{wordlist}' '{url}'")
-
-    # === Parameter Operations ===
-
-    def op_param_get_fuzz(self) -> Dict[str, Any]:
-        """Fuzz GET parameters."""
+    def op_param_value_fuzz(self):
         url = self._build_url("/")
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
+            return {"success": False, "error": "TARGET or URL required"}
+        name = self.get_option("PARAMETER")
+        if not name:
+            return {"success": False, "error": "PARAMETER required"}
+        if str(self.get_option("METHOD") or "GET").upper() == "POST":
+            return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-X", "POST", "-d", f"{name}=FUZZ", url])
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), url + ("&" if "?" in url else "?") + f"{name}=FUZZ"])
 
-        # Allow user to specify a specific page
-        page = input(f"Specific page to test [press Enter to use {url}]: ").strip()
-        if page:
-            url = page if page.startswith("http") else f"{url.rstrip('/')}/{page.lstrip('/')}"
-
-        wordlist = input("Parameter wordlist [/usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt"
-
-        # Build URL with GET parameter
-        if '?' in url:
-            fuzz_url = f"{url}&FUZZ=test"
-        else:
-            fuzz_url = f"{url}?FUZZ=test"
-
-        self.log(f"GET parameter fuzzing: {url}", "info")
-        return self._execute_wfuzz(f"-w '{wordlist}' '{fuzz_url}'")
-
-    def op_param_post_fuzz(self) -> Dict[str, Any]:
-        """Fuzz POST parameters."""
+    def op_header_fuzz(self):
         url = self._build_url("/")
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
+            return {"success": False, "error": "TARGET or URL required"}
+        header = self.get_option("HEADERS")
+        if not header:
+            return {"success": False, "error": "HEADERS required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-H", str(header), url])
 
-        # Allow user to specify a specific page
-        page = input(f"Specific page to test [press Enter to use {url}]: ").strip()
-        if page:
-            url = page if page.startswith("http") else f"{url.rstrip('/')}/{page.lstrip('/')}"
-
-        wordlist = input("Parameter wordlist [/usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt"
-
-        known_params = input("Known POST parameters (e.g., 'username=admin&password=test', optional): ").strip()
-
-        # Build POST data
-        if known_params:
-            post_data = f"{known_params}&FUZZ=test"
-        else:
-            post_data = "FUZZ=test"
-
-        self.log(f"POST parameter fuzzing: {url}", "info")
-        return self._execute_wfuzz(f"-w '{wordlist}' -d '{post_data}' '{url}'")
-
-    def op_param_value_fuzz(self) -> Dict[str, Any]:
-        """Fuzz parameter values."""
+    def op_useragent_fuzz(self):
         url = self._build_url("/")
         if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
+            return {"success": False, "error": "TARGET or URL required"}
+        return self._execute_wfuzz(["-w", str(self.get_option("WORDLIST")), "-H", "User-Agent: FUZZ", url])
 
-        # Allow user to specify a specific page
-        page = input(f"Specific page to test [press Enter to use {url}]: ").strip()
-        if page:
-            url = page if page.startswith("http") else f"{url.rstrip('/')}/{page.lstrip('/')}"
+    def op_custom_fuzz(self):
+        flags = self.get_option("CUSTOM_FLAGS")
+        return self._execute_wfuzz(flags) if flags else {"success": False, "error": "CUSTOM_FLAGS required"}
 
-        param_name = input("Parameter name to fuzz: ").strip()
-        if not param_name:
-            return {"success": False, "error": "Parameter name required"}
-
-        method = input("Method (GET/POST) [GET]: ").strip().upper() or "GET"
-
-        wordlist = input("Value wordlist [/usr/share/seclists/Fuzzing/SQLi/Generic-SQLi.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Fuzzing/SQLi/Generic-SQLi.txt"
-
-        if method == "POST":
-            post_data = f"{param_name}=FUZZ"
-            self.log(f"POST parameter value fuzzing: {param_name}", "info")
-            return self._execute_wfuzz(f"-w '{wordlist}' -d '{post_data}' '{url}'")
-        else:
-            if '?' in url:
-                fuzz_url = f"{url}&{param_name}=FUZZ"
-            else:
-                fuzz_url = f"{url}?{param_name}=FUZZ"
-
-            self.log(f"GET parameter value fuzzing: {param_name}", "info")
-            return self._execute_wfuzz(f"-w '{wordlist}' '{fuzz_url}'")
-
-    # === Advanced Operations ===
-
-    def op_header_fuzz(self) -> Dict[str, Any]:
-        """Fuzz HTTP headers."""
-        url = self._build_url("/")
-        if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
-
-        header_name = input("Header name to fuzz (e.g., X-Forwarded-For): ").strip()
-        if not header_name:
-            return {"success": False, "error": "Header name required"}
-
-        wordlist = input("Value wordlist [/usr/share/seclists/Fuzzing/special-chars.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Fuzzing/special-chars.txt"
-
-        self.log(f"Header fuzzing: {header_name}", "info")
-        return self._execute_wfuzz(f"-w '{wordlist}' -H '{header_name}: FUZZ' '{url}'")
-
-    def op_useragent_fuzz(self) -> Dict[str, Any]:
-        """Fuzz User-Agent header."""
-        url = self._build_url("/")
-        if not url:
-            return {"success": False, "error": "TARGET option not set. Use 'set TARGET <domain_or_ip>'"}
-
-        wordlist = input("User-Agent wordlist [/usr/share/seclists/Fuzzing/User-Agents/UserAgents.txt]: ").strip()
-        if not wordlist:
-            wordlist = "/usr/share/seclists/Fuzzing/User-Agents/UserAgents.txt"
-
-        self.log(f"User-Agent fuzzing: {url}", "info")
-        return self._execute_wfuzz(f"-w '{wordlist}' -H 'User-Agent: FUZZ' '{url}'")
-
-    def op_custom_fuzz(self) -> Dict[str, Any]:
-        """Custom wfuzz command."""
-        custom_cmd = input("Enter custom wfuzz arguments (without 'wfuzz'): ").strip()
-        if not custom_cmd:
-            return {"success": False, "error": "Custom command required"}
-
-        self.log("Executing custom wfuzz command", "info")
-        return self._execute_wfuzz(custom_cmd)
+    def run(self):
+        return self._execute_wfuzz()

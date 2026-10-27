@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purplesploit.local/schemas/canonical-v1.schema.json",
+  "title": "PurpleSploit canonical interchange v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "engagement", "assessment", "assets", "services", "identities", "resources", "executions", "observations", "findings", "evidence", "graph", "extensions"],
+  "properties": {
+    "schema_version": {"const": "purplesploit/canonical/1"},
+    "engagement": {"anyOf": [{"$ref": "#/$defs/engagement"}, {"type": "null"}]},
+    "assessment": {"anyOf": [{"$ref": "#/$defs/assessment"}, {"type": "null"}]},
+    "assets": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "services": {"type": "array", "items": {"$ref": "#/$defs/endpoint"}},
+    "identities": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "resources": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "executions": {"type": "array", "items": {"type": "object", "required": ["request_id"], "properties": {"request_id": {"type": "string", "minLength": 1}, "outcome": {"enum": ["success", "failed", "timed_out", "cancelled", "running", "rejected", "error"]}, "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}}, "extensions": {"type": "object"}}}},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "graph": {"type": "object", "required": ["nodes", "edges"], "properties": {"nodes": {"type": "array", "items": {"$ref": "#/$defs/entity"}}, "edges": {"type": "array", "items": {"type": "object", "required": ["id", "source", "target", "type"], "properties": {"id": {"type": "string", "minLength": 1}, "source": {"type": "string", "minLength": 1}, "target": {"type": "string", "minLength": 1}, "type": {"type": "string", "minLength": 1}}}}, "extensions": {"type": "object"}}},
+    "extensions": {"type": "object"}
+  },
+  "$defs": {
+    "nullable_string": {"type": ["string", "null"]},
+    "finding": {
+      "type": "object", "required": ["id", "title", "severity"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["critical", "high", "medium", "low", "info"]},
+        "status": {"enum": ["draft", "confirmed", "reported", "remediated", "verified", "false_positive", "accepted_risk"]},
+        "description": {"type": "string"}, "target": {"type": "string"}, "impact": {"type": "string"},
+        "remediation": {"type": "string"}, "proof_of_concept": {"type": "string"}, "raw_output": {"type": "string"},
+        "port": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535},
+        "cvss_score": {"type": ["number", "null"], "minimum": 0, "maximum": 10},
+        "service": {"$ref": "#/$defs/nullable_string"}, "protocol": {"$ref": "#/$defs/nullable_string"},
+        "url": {"$ref": "#/$defs/nullable_string"}, "cvss_vector": {"$ref": "#/$defs/nullable_string"},
+        "module_name": {"$ref": "#/$defs/nullable_string"}, "host": {"$ref": "#/$defs/nullable_string"},
+        "assigned_to": {"$ref": "#/$defs/nullable_string"}, "duplicate_of": {"$ref": "#/$defs/nullable_string"},
+        "risk_accepted_by": {"$ref": "#/$defs/nullable_string"}, "risk_acceptance_reason": {"$ref": "#/$defs/nullable_string"},
+        "discovered_at": {"$ref": "#/$defs/nullable_string"}, "confirmed_at": {"$ref": "#/$defs/nullable_string"},
+        "reported_at": {"$ref": "#/$defs/nullable_string"}, "remediated_at": {"$ref": "#/$defs/nullable_string"},
+        "verified_at": {"$ref": "#/$defs/nullable_string"}, "risk_accepted_at": {"$ref": "#/$defs/nullable_string"},
+        "cve_ids": {"$ref": "#/$defs/strings"}, "cwe_ids": {"$ref": "#/$defs/strings"}, "references": {"$ref": "#/$defs/strings"},
+        "mitre_tactics": {"$ref": "#/$defs/strings"}, "mitre_techniques": {"$ref": "#/$defs/strings"},
+        "notes": {"$ref": "#/$defs/strings"}, "tags": {"$ref": "#/$defs/strings"},
+        "attribution": {"type": "object"}, "review": {"type": "object"}, "remediation_metadata": {"type": "object"},
+        "retest": {"type": "object"}, "metadata": {"type": "object"}, "fingerprints": {"type": "object"},
+        "locations": {"type": "array", "items": {"type": "object"}},
+        "evidence": {"type": "array", "items": {"type": "object"}}, "extensions": {"type": "object"}
+      }
+    },
+    "strings": {"type": "array", "items": {"type": "string"}},
+    "engagement": {"type": "object", "properties": {"id": {"type": "string", "minLength": 1}, "name": {"type": "string", "minLength": 1}, "created_at": {"type": "string"}, "targets": {"$ref": "#/$defs/strings"}, "phases": {"$ref": "#/$defs/strings"}, "metadata": {"type": "object"}, "extensions": {"type": "object"}}},
+    "assessment": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "name": {"type": "string", "minLength": 1},
+        "schema_version": {"const": 1}, "created_at": {"type": "string"}, "targets": {"$ref": "#/$defs/strings"},
+        "phases": {"$ref": "#/$defs/strings"}, "metadata": {"type": "object"}, "extensions": {"type": "object"},
+        "plans": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"type": "string", "minLength": 1}, "name": {"type": "string"}, "version": {"type": "string"}, "methodology_versions": {"type": "object"}, "cases": {"type": "array", "items": {"type": "object", "required": ["id", "title"], "properties": {"id": {"type": "string", "minLength": 1}, "title": {"type": "string"}, "workflow_refs": {"$ref": "#/$defs/strings"}, "metadata": {"type": "object"}}}}}}},
+        "checks": {"type": "array", "items": {"type": "object", "required": ["id", "case_id", "state"], "properties": {"id": {"type": "string", "minLength": 1}, "case_id": {"type": "string", "minLength": 1}, "state": {"enum": ["tested", "not_tested", "not_applicable", "automated", "manual", "imported"]}, "observation_ids": {"$ref": "#/$defs/strings"}, "evidence_refs": {"$ref": "#/$defs/strings"}}}},
+        "evidence": {"type": "array", "items": {"type": "object", "required": ["id", "ref"], "properties": {"id": {"type": "string", "minLength": 1}, "ref": {"type": "string", "minLength": 1}, "metadata": {"type": "object"}}}},
+        "manual_entries": {"type": "array", "items": {"type": "object", "required": ["id", "observation"], "properties": {"id": {"type": "string", "minLength": 1}, "observation": {"type": "object"}, "entry_type": {"enum": ["observation", "note"]}, "evidence_refs": {"$ref": "#/$defs/strings"}}}},
+        "hypotheses": {"type": "array", "items": {"type": "object", "required": ["id", "text"], "properties": {"id": {"type": "string", "minLength": 1}, "text": {"type": "string", "minLength": 1}, "status": {"enum": ["open", "supported", "rejected", "inconclusive"]}, "evidence_refs": {"$ref": "#/$defs/strings"}}}},
+        "reviews": {"type": "array", "items": {"type": "object", "required": ["id", "subject_type", "subject_id", "reviewer", "state", "disposition"], "properties": {"id": {"type": "string", "minLength": 1}, "subject_type": {"type": "string"}, "subject_id": {"type": "string", "minLength": 1}, "reviewer": {"type": "string", "minLength": 1}, "state": {"enum": ["requested", "in_review", "approved", "changes_requested"]}, "disposition": {"enum": ["open", "confirmed", "false_positive", "accepted_risk", "duplicate"]}}}},
+        "findings": {"type": "array", "items": {"type": "object", "required": ["id", "snapshot"], "properties": {"id": {"type": "string", "minLength": 1}, "snapshot": {"type": "object"}, "case_ids": {"$ref": "#/$defs/strings"}, "evidence_refs": {"$ref": "#/$defs/strings"}}}},
+        "remediations": {"type": "array", "items": {"type": "object", "required": ["id", "finding_id", "owner", "status"], "properties": {"id": {"type": "string", "minLength": 1}, "finding_id": {"type": "string", "minLength": 1}, "owner": {"type": "string", "minLength": 1}, "status": {"enum": ["open", "in_progress", "resolved", "deferred", "wont_fix"]}}}},
+        "retests": {"type": "array", "items": {"type": "object", "required": ["id", "outcome"], "properties": {"id": {"type": "string", "minLength": 1}, "outcome": {"enum": ["fixed", "persists", "partial", "inconclusive", "not_tested"]}, "evidence_refs": {"$ref": "#/$defs/strings"}}}},
+        "executions": {"type": "array", "items": {"type": "object"}}, "profiles": {"type": "array", "items": {"type": "object"}}, "baselines": {"type": "object"}
+      }
+    },
+    "entity": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}, "extensions": {"type": "object"}}},
+    "endpoint": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}, "port": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535}, "extensions": {"type": "object"}}},
+    "observation": {"type": "object", "required": ["observation_id", "kind", "target"], "properties": {"observation_id": {"type": "string", "minLength": 1}, "kind": {"type": "string", "minLength": 1}, "target": {"type": "string"}, "port": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535}, "attributes": {"type": "object"}, "confidence": {"enum": ["observed", "inferred"]}, "extensions": {"type": "object"}}}
+  }
+}

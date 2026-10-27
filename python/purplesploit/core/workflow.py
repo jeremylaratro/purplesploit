@@ -6,12 +6,18 @@ parallel execution, and progress tracking.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Callable, Set
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 from enum import Enum
 import json
-from pathlib import Path
+import copy
+import ipaddress
+import os
+import tempfile
 import time
+import fcntl
+from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class StepStatus(Enum):
@@ -51,6 +57,7 @@ class WorkflowStep:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
+    attempts: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -69,10 +76,12 @@ class WorkflowStep:
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error": self.error,
+            "attempts": self.attempts,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkflowStep":
+        data = copy.deepcopy(data)
         if isinstance(data.get("status"), str):
             data["status"] = StepStatus(data["status"])
         for dt_field in ["started_at", "completed_at"]:
@@ -139,6 +148,7 @@ class Workflow:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Workflow":
+        data = copy.deepcopy(data)
         if isinstance(data.get("status"), str):
             data["status"] = WorkflowStatus(data["status"])
         if data.get("steps"):
@@ -159,12 +169,12 @@ WORKFLOW_TEMPLATES = {
             {
                 "name": "Network Discovery",
                 "module": "recon/nmap_fast",
-                "options": {},
+                "options": {"BACKGROUND": "false"},
             },
             {
                 "name": "Comprehensive Port Scan",
                 "module": "recon/nmap_comprehensive",
-                "options": {},
+                "options": {"BACKGROUND": "false"},
                 "conditions": [{"type": "step_success", "step": "step_1"}],
             },
             {
@@ -176,7 +186,7 @@ WORKFLOW_TEMPLATES = {
             {
                 "name": "SMB Share Spider",
                 "module": "network/nxc_smb",
-                "operation": "spider",
+                "operation": "Spider Configured (No Download)",
                 "options": {},
                 "conditions": [{"type": "step_success", "step": "step_3"}],
             },
@@ -205,6 +215,16 @@ WORKFLOW_TEMPLATES = {
                 "conditions": [{"type": "step_success", "step": "step_1"}],
             },
             {
+                "name": "Recorded Form Import",
+                "module": "web/forms",
+                "operation": "Import Forms",
+                "options": {"HTML_FILE": "$html_file"},
+                "conditions": [
+                    {"type": "step_success", "step": "step_1"},
+                    {"type": "variable_set", "variable": "html_file"},
+                ],
+            },
+            {
                 "name": "Vulnerability Scan",
                 "module": "recon/nuclei",
                 "operation": "Critical/High Only",
@@ -227,6 +247,7 @@ WORKFLOW_TEMPLATES = {
             {
                 "name": "LDAP Enumeration",
                 "module": "network/nxc_ldap",
+                "operation": "Enumerate Users",
                 "options": {},
             },
             {
@@ -258,7 +279,7 @@ WORKFLOW_TEMPLATES = {
             {
                 "name": "Fast Port Scan",
                 "module": "recon/nmap_fast",
-                "options": {},
+                "options": {"BACKGROUND": "false"},
             },
             {
                 "name": "HTTP Probe",
@@ -302,15 +323,22 @@ WORKFLOW_TEMPLATES = {
     },
     "credential_harvest": {
         "name": "Credential Harvesting",
-        "description": "Credential gathering: SMB spider → Kerberoast → AS-REP",
+        "description": "Credential gathering: SMB spider → LDAP users → AS-REP → Kerberoast",
         "tags": ["credentials", "harvest"],
         "steps": [
             {
                 "name": "SMB Share Spider",
                 "module": "network/nxc_smb",
-                "operation": "spider",
+                "operation": "Spider Configured (No Download)",
                 "options": {},
                 "conditions": [{"type": "service_found", "service": "smb"}],
+            },
+            {
+                "name": "LDAP User Enumeration",
+                "module": "network/nxc_ldap",
+                "operation": "Enumerate Users",
+                "options": {},
+                "conditions": [{"type": "has_valid_creds"}],
             },
             {
                 "name": "AS-REP Roasting",
@@ -341,10 +369,10 @@ class WorkflowEngine:
     - Pause/resume support
     """
 
-    def __init__(self, framework=None):
+    def __init__(self, framework=None, storage_path=None):
         self.framework = framework
         self.workflows: Dict[str, Workflow] = {}
-        self.storage_path = Path.home() / ".purplesploit" / "workflows"
+        self.storage_path = Path(storage_path) if storage_path else Path.home() / ".purplesploit" / "workflows"
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
         # Callbacks
@@ -363,7 +391,7 @@ class WorkflowEngine:
         workflow_id = str(uuid.uuid4())[:8]
 
         if from_template and from_template in WORKFLOW_TEMPLATES:
-            template = WORKFLOW_TEMPLATES[from_template]
+            template = copy.deepcopy(WORKFLOW_TEMPLATES[from_template])
             workflow = Workflow(
                 id=workflow_id,
                 name=template["name"],
@@ -372,14 +400,7 @@ class WorkflowEngine:
             )
 
             for i, step_config in enumerate(template["steps"], 1):
-                step = WorkflowStep(
-                    id=f"step_{i}",
-                    name=step_config["name"],
-                    module=step_config["module"],
-                    operation=step_config.get("operation"),
-                    options=step_config.get("options", {}),
-                    conditions=step_config.get("conditions", []),
-                )
+                step = WorkflowStep(id=f"step_{i}", **step_config)
                 workflow.steps.append(step)
         else:
             workflow = Workflow(
@@ -389,14 +410,21 @@ class WorkflowEngine:
             )
 
         self.workflows[workflow_id] = workflow
+        self._save_workflow(workflow)
         return workflow
 
     def get_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """Get a workflow by ID."""
-        return self.workflows.get(workflow_id)
+        return self.workflows.get(workflow_id) or self.load_workflow(workflow_id)
 
     def list_workflows(self) -> List[Workflow]:
         """List all workflows."""
+        for path in sorted(self.storage_path.glob("*.json")):
+            if path.stem not in self.workflows:
+                try:
+                    self.load_workflow(path.stem)
+                except (ValueError, TypeError, OSError):
+                    continue
         return list(self.workflows.values())
 
     def list_templates(self) -> List[Dict[str, Any]]:
@@ -418,6 +446,29 @@ class WorkflowEngine:
         variables: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
     ) -> Dict[str, Any]:
+        """Run under a process lock so recovery cannot mistake a live run for a crash."""
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        # Recover an orphaned checkpoint before acquiring our own runner lock.
+        workflow = self.get_workflow(workflow_id)
+        if workflow is None:
+            return {"success": False, "error": "Workflow not found"}
+        lock_path = self._workflow_file(workflow_id).with_suffix(".lock")
+        with open(lock_path, "a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return {"success": False, "error": "Workflow is already running"}
+            try:
+                return self._run_workflow(workflow_id, variables, dry_run)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _run_workflow(
+        self,
+        workflow_id: str,
+        variables: Optional[Dict[str, Any]] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
         """
         Run a workflow.
 
@@ -429,9 +480,12 @@ class WorkflowEngine:
         Returns:
             Execution results
         """
-        workflow = self.workflows.get(workflow_id)
+        workflow = self.get_workflow(workflow_id)
         if not workflow:
             return {"success": False, "error": "Workflow not found"}
+
+        if workflow.status == WorkflowStatus.RUNNING:
+            return {"success": False, "error": "Workflow is already running"}
 
         if variables:
             workflow.variables.update(variables)
@@ -449,57 +503,92 @@ class WorkflowEngine:
                 "validation": validation,
             }
 
-        # Start execution
+        # Start or continue execution. A resumed workflow retains its original
+        # start time and terminal step states.
         workflow.status = WorkflowStatus.RUNNING
-        workflow.started_at = datetime.utcnow()
+        if workflow.started_at is None:
+            workflow.started_at = datetime.utcnow()
+        workflow.completed_at = None
+        workflow.current_step_id = None
+        self._save_workflow(workflow)
 
         results = {
-            "success": True,
+            "success": False,
             "workflow_id": workflow_id,
             "steps_completed": 0,
             "steps_failed": 0,
             "steps_skipped": 0,
+            "steps_pending": 0,
             "step_results": [],
+            "status": workflow.status.value,
         }
 
         try:
             for step in workflow.steps:
+                # A pause requested while a step is executing takes effect at
+                # the next safe boundary, before another step starts.
+                if workflow.status == WorkflowStatus.PAUSED:
+                    workflow.current_step_id = None
+                    break
+
+                # Success, failure, and condition skips are persisted work.
+                # Resume must continue from pending work rather than replay it.
+                if step.status != StepStatus.PENDING:
+                    continue
+
                 workflow.current_step_id = step.id
 
                 # Check conditions
-                if not self._check_conditions(step, workflow):
+                if not self._branch_selected(step, workflow) or not self._check_conditions(step, workflow):
                     step.status = StepStatus.SKIPPED
-                    results["steps_skipped"] += 1
-                    results["step_results"].append({
-                        "step_id": step.id,
-                        "status": "skipped",
-                        "reason": "Conditions not met",
-                    })
+                    step.completed_at = datetime.utcnow()
+                    workflow.current_step_id = None
+                    self._save_workflow(workflow)
                     continue
 
                 # Execute step
                 step_result = self._execute_step(step, workflow)
-                results["step_results"].append(step_result)
+                workflow.current_step_id = None
+                self._save_workflow(workflow)
 
-                if step_result["success"]:
-                    results["steps_completed"] += 1
-                else:
-                    results["steps_failed"] += 1
+                # Check if we should continue after a failure. The result
+                # summary is rebuilt from all persisted steps below.
+                if not step_result["success"] and not step.on_failure:
+                    break
 
-                    # Check if we should continue
-                    if not step.on_failure:
-                        break
-
-            workflow.status = WorkflowStatus.COMPLETED
-            workflow.completed_at = datetime.utcnow()
+            if workflow.status == WorkflowStatus.PAUSED:
+                workflow.completed_at = None
+            elif any(step.status == StepStatus.FAILED for step in workflow.steps):
+                workflow.status = WorkflowStatus.FAILED
+                workflow.completed_at = datetime.utcnow()
+            elif any(
+                step.status in {StepStatus.PENDING, StepStatus.RUNNING}
+                for step in workflow.steps
+            ):
+                workflow.status = WorkflowStatus.FAILED
+                workflow.completed_at = datetime.utcnow()
+                results["error"] = "Workflow stopped with incomplete steps"
+            else:
+                workflow.status = WorkflowStatus.COMPLETED
+                workflow.completed_at = datetime.utcnow()
 
         except Exception as e:
             workflow.status = WorkflowStatus.FAILED
-            results["success"] = False
+            workflow.completed_at = datetime.utcnow()
+            workflow.current_step_id = None
             results["error"] = str(e)
 
-        # Callback
-        if self.on_workflow_complete:
+        self._update_result_summary(workflow, results)
+
+        # A paused workflow is not complete; defer its completion callback
+        # until it reaches a terminal state after resume.
+        if (
+            self.on_workflow_complete
+            and workflow.status in {
+                WorkflowStatus.COMPLETED,
+                WorkflowStatus.FAILED,
+            }
+        ):
             self.on_workflow_complete(workflow, results)
 
         self._save_workflow(workflow)
@@ -507,46 +596,135 @@ class WorkflowEngine:
 
     def pause_workflow(self, workflow_id: str) -> bool:
         """Pause a running workflow."""
-        workflow = self.workflows.get(workflow_id)
+        workflow = self.get_workflow(workflow_id)
         if workflow and workflow.status == WorkflowStatus.RUNNING:
             workflow.status = WorkflowStatus.PAUSED
+            workflow.completed_at = None
             self._save_workflow(workflow)
             return True
         return False
 
     def resume_workflow(self, workflow_id: str) -> Dict[str, Any]:
         """Resume a paused workflow."""
-        workflow = self.workflows.get(workflow_id)
+        workflow = self.get_workflow(workflow_id)
         if not workflow:
             return {"success": False, "error": "Workflow not found"}
 
         if workflow.status != WorkflowStatus.PAUSED:
             return {"success": False, "error": "Workflow is not paused"}
+        if any(step.status == StepStatus.RUNNING for step in workflow.steps):
+            return {"success": False, "error": "Workflow has an unresolved running step; reconcile its result before resuming"}
 
-        # Find where we left off
-        start_step = None
-        for step in workflow.steps:
-            if step.status == StepStatus.PENDING:
-                start_step = step
-                break
-
-        if not start_step:
-            return {"success": False, "error": "No pending steps to resume"}
-
-        # Continue execution from the current step
+        # run_workflow preserves terminal steps and either continues pending
+        # work or finalizes a workflow paused after its last step.
         return self.run_workflow(workflow_id)
+
+    @staticmethod
+    def _update_result_summary(
+        workflow: Workflow,
+        results: Dict[str, Any],
+    ) -> None:
+        """Rebuild an execution summary from the complete persisted workflow."""
+        results["steps_completed"] = sum(
+            step.status == StepStatus.SUCCESS for step in workflow.steps
+        )
+        results["steps_failed"] = sum(
+            step.status == StepStatus.FAILED for step in workflow.steps
+        )
+        results["steps_skipped"] = sum(
+            step.status == StepStatus.SKIPPED for step in workflow.steps
+        )
+        results["steps_pending"] = sum(
+            step.status in {StepStatus.PENDING, StepStatus.RUNNING}
+            for step in workflow.steps
+        )
+        results["status"] = workflow.status.value
+        results["success"] = workflow.status == WorkflowStatus.COMPLETED
+
+        step_results = []
+        for step in workflow.steps:
+            if step.status == StepStatus.SUCCESS:
+                step_results.append({
+                    "step_id": step.id,
+                    "step_name": step.name,
+                    "module": step.module,
+                    "success": True,
+                    "status": step.status.value,
+                    "result": step.result,
+                })
+            elif step.status == StepStatus.FAILED:
+                step_results.append({
+                    "step_id": step.id,
+                    "step_name": step.name,
+                    "module": step.module,
+                    "success": False,
+                    "status": step.status.value,
+                    "result": step.result,
+                    "error": step.error or "Unknown error",
+                })
+            elif step.status == StepStatus.SKIPPED:
+                step_results.append({
+                    "step_id": step.id,
+                    "status": step.status.value,
+                    "reason": "Conditions not met",
+                })
+        results["step_results"] = step_results
+
+        if workflow.status == WorkflowStatus.FAILED and "error" not in results:
+            failed_step = next(
+                (
+                    step for step in workflow.steps
+                    if step.status == StepStatus.FAILED
+                ),
+                None,
+            )
+            results["error"] = (
+                failed_step.error
+                if failed_step and failed_step.error
+                else "One or more workflow steps failed"
+            )
 
     def _validate_workflow(self, workflow: Workflow) -> Dict[str, Any]:
         """Validate a workflow before execution."""
         if not workflow.steps:
             return {"valid": False, "error": "Workflow has no steps"}
 
+        positions = {step.id: index for index, step in enumerate(workflow.steps)}
+        if len(positions) != len(workflow.steps):
+            return {"valid": False, "error": "Duplicate workflow step IDs"}
+        for step in workflow.steps:
+            if step.timeout <= 0 or step.retry_count < 0:
+                return {"valid": False, "error": "Timeout must be positive and retry_count nonnegative"}
+            for destination in step.on_success + step.on_failure:
+                if destination not in positions or positions[destination] <= positions[step.id]:
+                    return {"valid": False, "error": f"Branch must reference a later step: {destination}"}
+            background = step.options.get("BACKGROUND", False)
+            if str(background).lower() in {"true", "1", "yes"}:
+                return {"valid": False, "error": "Background execution is unsupported in deterministic workflows"}
+
+        # Completed and skipped steps are immutable on resume, so only pending
+        # work must still satisfy execution prerequisites.
+        pending_steps = [
+            step for step in workflow.steps
+            if step.status == StepStatus.PENDING
+        ]
+
+        if pending_steps and self.framework is None:
+            return {"valid": False, "error": "No framework available"}
+
         # Check required variables
         required_vars = set()
-        for step in workflow.steps:
+        for step in pending_steps:
+            guarded_variables = {
+                condition.get("variable")
+                for condition in step.conditions
+                if condition.get("type") == "variable_set"
+            }
             for opt_name, opt_value in step.options.items():
                 if isinstance(opt_value, str) and opt_value.startswith("$"):
-                    required_vars.add(opt_value[1:])
+                    variable = opt_value[1:]
+                    if variable not in guarded_variables:
+                        required_vars.add(variable)
 
         missing_vars = required_vars - set(workflow.variables.keys())
         if missing_vars:
@@ -555,13 +733,87 @@ class WorkflowEngine:
                 "error": f"Missing variables: {', '.join(missing_vars)}",
             }
 
-        # Check module existence
-        for step in workflow.steps:
-            if self.framework:
-                # Module validation could go here
-                pass
+        # Inspection creates a detached instance and never activates a module.
+        for step in pending_steps:
+            try:
+                metadata = self.framework.get_module(step.module)
+            except Exception as exc:
+                return {
+                    "valid": False,
+                    "error": f"Unable to inspect module {step.module}: {exc}",
+                }
+            if metadata is None:
+                return {
+                    "valid": False,
+                    "error": f"Module not found: {step.module}",
+                }
+
+            if step.operation:
+                try:
+                    instantiate = getattr(type(self.framework), "instantiate_module", None)
+                    if callable(instantiate):
+                        module_instance = self.framework.instantiate_module(step.module)
+                    else:
+                        module_instance = metadata.instance(self.framework)
+                except Exception as exc:
+                    return {
+                        "valid": False,
+                        "error": f"Unable to load module {step.module}: {exc}",
+                    }
+                if module_instance is None:
+                    return {
+                        "valid": False,
+                        "error": f"Unable to load module: {step.module}",
+                    }
+
+                operation = self._find_operation(module_instance, step.operation)
+                if operation is None:
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Operation not found for {step.module}: "
+                            f"{step.operation}"
+                        ),
+                    }
+                if operation.get("interactive") is True or operation.get("background") is True:
+                    return {"valid": False, "error": f"Operation requires interactive or background execution: {step.operation}"}
+
+        supported_conditions = {
+            "step_success",
+            "step_failed",
+            "service_found",
+            "has_valid_creds",
+            "has_admin_creds",
+            "has_user_list",
+            "forms_found",
+            "variable_set",
+            "variable_equals",
+        }
+        for step in pending_steps:
+            for condition in step.conditions:
+                condition_type = condition.get("type")
+                if condition_type not in supported_conditions:
+                    return {
+                        "valid": False,
+                        "error": f"Unsupported condition type: {condition_type!r}",
+                    }
 
         return {"valid": True}
+
+    @staticmethod
+    def _branch_selected(step: WorkflowStep, workflow: Workflow) -> bool:
+        """Branch destinations execute only after a matching incoming outcome.
+
+        Non-destinations retain ordinary sequential execution. Multiple incoming
+        branches are alternatives; conditions on the destination remain ANDed.
+        Forward edges make the sequence deterministic and resumable.
+        """
+        incoming = [source for source in workflow.steps if step.id in source.on_success + source.on_failure]
+        return not incoming or any(
+            (source.status == StepStatus.SUCCESS and step.id in source.on_success)
+            or (source.status == StepStatus.FAILED and step.id in source.on_failure)
+            for source in incoming
+        )
 
     def _check_conditions(self, step: WorkflowStep, workflow: Workflow) -> bool:
         """Check if step conditions are met."""
@@ -588,16 +840,20 @@ class WorkflowEngine:
                     return False
 
             elif cond_type == "has_valid_creds":
-                if not workflow.variables.get("credentials"):
+                if not self._scoped_values(workflow.variables.get("credentials", []), workflow):
                     return False
 
             elif cond_type == "has_admin_creds":
-                creds = workflow.variables.get("credentials", [])
+                creds = self._scoped_values(workflow.variables.get("credentials", []), workflow)
                 if not any(c.get("is_admin") for c in creds if isinstance(c, dict)):
                     return False
 
             elif cond_type == "has_user_list":
-                if not workflow.variables.get("user_list"):
+                if not self._scoped_values(workflow.variables.get("user_list", []), workflow):
+                    return False
+
+            elif cond_type == "forms_found":
+                if not self._scoped_values(workflow.variables.get("forms", []), workflow):
                     return False
 
             elif cond_type == "variable_set":
@@ -611,12 +867,21 @@ class WorkflowEngine:
                 if workflow.variables.get(var_name) != expected:
                     return False
 
+            else:
+                # Conditions control whether active assessment steps execute.
+                # Unknown condition types must never be treated as permission
+                # to continue.
+                return False
+
         return True
 
     def _service_exists(self, service: str, workflow: Workflow) -> bool:
         """Check if a service was discovered."""
+        if not isinstance(service, str) or not service:
+            return False
+
         # Check workflow variables
-        services = workflow.variables.get("services", [])
+        services = self._scoped_values(workflow.variables.get("services", []), workflow)
         for svc in services:
             if isinstance(svc, dict):
                 if service.lower() in svc.get("service", "").lower():
@@ -626,18 +891,90 @@ class WorkflowEngine:
                     return True
 
         # Check framework database
-        if self.framework:
+        target = workflow.variables.get("target")
+        if self.framework and target:
             try:
-                db_services = self.framework.database.get_all_services()
+                session_services = self.framework.session.services.services
+                if isinstance(session_services, dict):
+                    for host, names in session_services.items():
+                        if self._target_matches({"target": host}, target) and any(service.lower() in name.lower() for name in names):
+                            return True
+                # CIDR workflows may include several hosts; filter every row
+                # explicitly instead of trusting an unscoped database match.
+                db_services = self.framework.database.get_services()
                 for svc in db_services:
-                    if service.lower() in svc.service.lower():
+                    if not self._target_matches(svc, target, allow_unscoped=False):
+                        continue
+                    if isinstance(svc, dict):
+                        service_name = svc.get("service", "")
+                    else:
+                        service_name = getattr(svc, "service", "")
+                    if service.lower() in str(service_name).lower():
                         return True
             except Exception:
                 pass
 
         return False
 
+    @staticmethod
+    def _target_matches(value, target, allow_unscoped=True):
+        if not isinstance(value, dict):
+            return allow_unscoped
+        source = value.get("target") or value.get("host") or value.get("ip") or value.get("url")
+        if not source:
+            return allow_unscoped
+        if not target:
+            return False
+
+        def host(text):
+            text = str(text)
+            return (urlsplit(text).hostname if "://" in text else text).rstrip(".").lower()
+
+        source, target = host(source), host(target)
+        try:
+            return ipaddress.ip_address(source) in ipaddress.ip_network(target, strict=False)
+        except ValueError:
+            return source == target
+
+    def _scoped_values(self, values, workflow):
+        return [value for value in values if self._target_matches(value, workflow.variables.get("target"))]
+
     def _execute_step(
+        self,
+        step: WorkflowStep,
+        workflow: Workflow,
+    ) -> Dict[str, Any]:
+        """Retry completed failed attempts, checkpointing before each launch.
+
+        Process deadlines are passed to the execution adapter. Python handlers
+        cannot be forcibly stopped; an elapsed deadline is reported after they
+        return. Unknown background completion never triggers a retry.
+        """
+        result = {}
+        for _ in range(step.retry_count + 1):
+            step.attempts += 1
+            step.status = StepStatus.RUNNING
+            step.error = None
+            step.completed_at = None
+            step.started_at = datetime.utcnow()
+            self._save_workflow(workflow)
+            started = time.monotonic()
+            result = self._execute_attempt(step, workflow)
+            if time.monotonic() - started > step.timeout and step.status == StepStatus.SUCCESS:
+                step.status = StepStatus.FAILED
+                step.error = f"Step exceeded timeout of {step.timeout} seconds"
+                step.result = {**(step.result or {}), "success": False, "outcome": "timed_out", "timed_out": True, "error": step.error}
+                result.update(success=False, error=step.error, result=step.result)
+            if step.status == StepStatus.SUCCESS:
+                self._extract_workflow_data(step.result or {}, workflow)
+            self._save_workflow(workflow)
+            if self.on_step_complete and step.status != StepStatus.RUNNING:
+                self.on_step_complete(workflow, step, result)
+            if step.status != StepStatus.FAILED or workflow.status == WorkflowStatus.PAUSED:
+                break
+        return result
+
+    def _execute_attempt(
         self,
         step: WorkflowStep,
         workflow: Workflow,
@@ -664,58 +1001,113 @@ class WorkflowEngine:
                 step.error = result["error"]
                 return result
 
-            # Get module
-            module_instance = self.framework.get_module(step.module)
+            # Inspect/configure a detached instance. The execution request
+            # creates its own instance, so a workflow must not replace the
+            # operator's currently selected interactive module.
+            instantiate = getattr(type(self.framework), "instantiate_module", None)
+            if callable(instantiate):
+                module_instance = self.framework.instantiate_module(step.module)
+            else:
+                # Compatibility for lightweight framework doubles and older
+                # embedders that do not expose the detached-instance seam.
+                module_instance = self.framework.use_module(step.module)
             if not module_instance:
                 result["error"] = f"Module not found: {step.module}"
                 step.status = StepStatus.FAILED
                 step.error = result["error"]
-                return result
+                raise RuntimeError(result["error"])
 
             # Set options (with variable substitution)
             resolved_options = self._resolve_variables(step.options, workflow.variables)
             for opt_name, opt_value in resolved_options.items():
-                module_instance.set_option(opt_name, opt_value)
+                if not module_instance.set_option(opt_name, opt_value):
+                    raise ValueError(
+                        f"Unknown option for {step.module}: {opt_name}"
+                    )
 
             # Set target from workflow variables
             if workflow.variables.get("target"):
                 target = workflow.variables["target"]
-                if "RHOST" in module_instance.options:
+                if "RHOST" in module_instance.options and "RHOST" not in resolved_options:
                     module_instance.set_option("RHOST", target)
-                if "TARGET" in module_instance.options:
+                if "TARGET" in module_instance.options and "TARGET" not in resolved_options:
                     module_instance.set_option("TARGET", target)
-                if "URL" in module_instance.options and "://" in str(target):
+                if "URL" in module_instance.options and "URL" not in resolved_options and "://" in str(target):
                     module_instance.set_option("URL", target)
 
-            # Execute
-            if step.operation and hasattr(module_instance, f"op_{step.operation.lower().replace(' ', '_')}"):
-                handler = getattr(module_instance, f"op_{step.operation.lower().replace(' ', '_')}")
-                module_result = handler()
-            elif step.operation and module_instance.has_operations():
-                ops = module_instance.get_operations()
-                for op in ops:
-                    if op.get("name") == step.operation:
-                        handler = op.get("handler")
-                        if callable(handler):
-                            module_result = handler()
-                        elif isinstance(handler, str) and hasattr(module_instance, handler):
-                            module_result = getattr(module_instance, handler)()
-                        break
-                else:
-                    module_result = module_instance.run()
+            # Bind data produced by earlier steps before the request snapshot is
+            # made.  Remote and local executors then receive the same explicit,
+            # deterministic values instead of depending on mutable session state.
+            bound_options = self._bind_workflow_context(
+                module_instance, step, workflow, set(resolved_options)
+            )
+            module_instance.options_locked.update(
+                set(resolved_options)
+                | bound_options
+                | {
+                    key
+                    for key in ("RHOST", "TARGET", "URL")
+                    if key in module_instance.options
+                }
+            )
+            # Fill any remaining unset options from the operator's selected
+            # session context. Explicit and workflow-bound values stay locked.
+            module_instance.auto_set_from_context()
+
+            # Execute through Framework so workflow runs get the same option
+            # validation, result recording, redaction, and audit behavior as
+            # interactive module execution.
+            from purplesploit.core.execution import ExecutionRequest
+            request = ExecutionRequest(
+                module_path=step.module,
+                operation_name=step.operation,
+                options={key: module_instance.get_option(key) for key in module_instance.options},
+                options_locked=set(module_instance.options_locked),
+                timeout_s=step.timeout,
+                background=False,
+                stdin="none",
+            )
+            module_instance.execution_request = request
+            execute_request = getattr(type(self.framework), "execute_request", None)
+            if callable(execute_request):
+                execution = self.framework.execute_request(request)
+                module_result = dict(execution.raw_result)
+                module_result.update(success=execution.success, outcome=execution.outcome.value,
+                                     timed_out=execution.timed_out, error=execution.error,
+                                     observations=[item.to_dict() for item in execution.observations])
+            elif step.operation:
+                operation = self._find_operation(module_instance, step.operation)
+                if operation is None:
+                    raise ValueError(
+                        f"Operation not found for {step.module}: {step.operation}"
+                    )
+                module_result = self.framework.run_operation(
+                    module_instance,
+                    operation,
+                )
             else:
-                module_result = module_instance.run()
+                module_result = self.framework.run_module(module_instance)
+
+            if not isinstance(module_result, dict):
+                module_result = {
+                    "success": False,
+                    "error": "Framework returned an invalid module result",
+                }
 
             # Process result
             step.result = module_result
             result["result"] = module_result
 
+            if module_result.get("background") or module_result.get("outcome") == "running" or module_result.get("job_id") and not module_result.get("finished_at"):
+                step.status = StepStatus.RUNNING
+                step.error = "Background completion is unknown; workflow paused for reconciliation"
+                workflow.status = WorkflowStatus.PAUSED
+                result["error"] = step.error
+                return result
+
             if module_result.get("success"):
                 step.status = StepStatus.SUCCESS
                 result["success"] = True
-
-                # Extract and store relevant data
-                self._extract_workflow_data(module_result, workflow)
             else:
                 step.status = StepStatus.FAILED
                 step.error = module_result.get("error", "Unknown error")
@@ -728,11 +1120,116 @@ class WorkflowEngine:
 
         step.completed_at = datetime.utcnow()
 
-        # Callback
-        if self.on_step_complete:
-            self.on_step_complete(workflow, step, result)
-
         return result
+
+    def _bind_workflow_context(
+        self,
+        module_instance: Any,
+        step: WorkflowStep,
+        workflow: Workflow,
+        explicit_options: set[str],
+    ) -> set[str]:
+        """Bind scoped credentials, identities, and domains into one step.
+
+        Workflow observations are the durable hand-off between modules. Values
+        supplied directly on the step always win, followed by scoped workflow
+        observations and finally the interactive session context.
+        """
+        explicit = {name.upper() for name in explicit_options}
+        bound: set[str] = set()
+
+        def set_if_empty(option: str, value: Any) -> None:
+            if (
+                option in module_instance.options
+                and option not in explicit
+                and value not in (None, "")
+                and module_instance.get_option(option) in (None, "")
+            ):
+                module_instance.set_option(option, value)
+                bound.add(option)
+
+        credentials = self._scoped_values(
+            workflow.variables.get("credentials", []), workflow
+        )
+        if any(
+            condition.get("type") == "has_admin_creds"
+            for condition in step.conditions
+        ):
+            credentials = [
+                credential
+                for credential in credentials
+                if isinstance(credential, dict) and credential.get("is_admin")
+            ]
+        credential = next(
+            (value for value in credentials if isinstance(value, dict)), None
+        )
+        if credential:
+            mappings = {
+                "USERNAME": ("username", "user", "name"),
+                "PASSWORD": ("password", "secret"),
+                "HASH": ("hash", "ntlm", "nthash"),
+                "DOMAIN": ("domain", "realm"),
+                "DCIP": ("dcip", "dc_ip"),
+                "DC_IP": ("dc_ip", "dcip"),
+                "DNS": ("dns",),
+            }
+            for option, keys in mappings.items():
+                set_if_empty(
+                    option,
+                    next(
+                        (credential.get(key) for key in keys if credential.get(key) not in (None, "")),
+                        None,
+                    ),
+                )
+
+        users = self._scoped_values(workflow.variables.get("user_list", []), workflow)
+        usernames = []
+        domains = []
+        for value in users:
+            if isinstance(value, dict):
+                username = value.get("username") or value.get("user") or value.get("name")
+                domain = value.get("domain") or value.get("realm")
+            else:
+                username, domain = value, None
+            if username and str(username) not in usernames:
+                usernames.append(str(username))
+            if domain and str(domain) not in domains:
+                domains.append(str(domain))
+        if usernames:
+            set_if_empty("USERNAME", usernames[0])
+            for option in ("USERLIST", "USERFILE"):
+                if option not in module_instance.options or option in explicit:
+                    continue
+                step_name = "".join(
+                    character if character.isalnum() or character in "-_" else "_"
+                    for character in step.id
+                )
+                artifact_dir = self.storage_path / "artifacts" / workflow.id / step_name
+                artifact_dir.mkdir(parents=True, exist_ok=True)
+                user_file = artifact_dir / "users.txt"
+                user_file.write_text("".join(f"{username}\n" for username in usernames), encoding="utf-8")
+                set_if_empty(option, str(user_file))
+        if domains:
+            set_if_empty("DOMAIN", domains[0])
+
+        return bound
+
+    @staticmethod
+    def _find_operation(
+        module_instance: Any,
+        operation_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Return an exact named operation from a live module instance."""
+        finder = getattr(type(module_instance.framework), "find_operation", None)
+        if callable(finder):
+            return module_instance.framework.find_operation(module_instance, operation_name)
+        if not module_instance.has_operations():
+            return None
+
+        for operation in module_instance.get_operations():
+            if operation.get("name") == operation_name:
+                return operation
+        return None
 
     def _resolve_variables(
         self,
@@ -755,47 +1252,113 @@ class WorkflowEngine:
         workflow: Workflow,
     ) -> None:
         """Extract relevant data from step result to workflow variables."""
+        typed_destinations = set()
+        for observation in result.get("observations", []):
+            kind = observation.get("kind")
+            destination = {"service": "services", "credential": "credentials", "form": "forms", "user": "user_list", "finding": "findings"}.get(kind)
+            if destination:
+                typed_destinations.add(destination)
+                value = {**observation.get("attributes", {}), **observation}
+                if value not in workflow.variables.setdefault(destination, []):
+                    workflow.variables[destination].append(value)
         # Extract credentials
-        if result.get("credentials"):
+        if result.get("credentials") and "credentials" not in typed_destinations:
             if "credentials" not in workflow.variables:
                 workflow.variables["credentials"] = []
             workflow.variables["credentials"].extend(result["credentials"])
 
         # Extract users
-        if result.get("users") or result.get("user_list"):
+        if (result.get("users") or result.get("user_list")) and "user_list" not in typed_destinations:
             users = result.get("users") or result.get("user_list", [])
             if "user_list" not in workflow.variables:
                 workflow.variables["user_list"] = []
             workflow.variables["user_list"].extend(users)
 
         # Extract services
-        if result.get("services"):
+        if result.get("services") and "services" not in typed_destinations:
             if "services" not in workflow.variables:
                 workflow.variables["services"] = []
             workflow.variables["services"].extend(result["services"])
 
         # Extract findings
-        if result.get("findings"):
+        if result.get("findings") and "findings" not in typed_destinations:
             if "findings" not in workflow.variables:
                 workflow.variables["findings"] = []
             workflow.variables["findings"].extend(result["findings"])
 
+        # Preserve discovered web forms for the built-in forms_found
+        # condition used by web assessment workflows.
+        if result.get("forms") and "forms" not in typed_destinations:
+            if "forms" not in workflow.variables:
+                workflow.variables["forms"] = []
+            workflow.variables["forms"].extend(result["forms"])
+
     def _save_workflow(self, workflow: Workflow) -> None:
-        """Save workflow to storage."""
-        workflow_file = self.storage_path / f"{workflow.id}.json"
-        with open(workflow_file, 'w') as f:
-            json.dump(workflow.to_dict(), f, indent=2, default=str)
+        """Atomically checkpoint a workflow, including before external work."""
+        workflow_file = self._workflow_file(workflow.id)
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", dir=self.storage_path, prefix=".workflow-", delete=False) as handle:
+                temporary = handle.name
+                json.dump(workflow.to_dict(), handle, indent=2, default=str)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, workflow_file)
+            directory = os.open(self.storage_path, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def _workflow_file(self, workflow_id: str) -> Path:
+        if not workflow_id or Path(workflow_id).name != workflow_id or workflow_id in {".", ".."}:
+            raise ValueError("Invalid workflow ID")
+        return self.storage_path / f"{workflow_id}.json"
+
+    def save_workflow(self, workflow_id: str) -> bool:
+        """Persist edits made to a workflow definition or its variables."""
+        workflow = self.workflows.get(workflow_id)
+        if workflow is None:
+            return False
+        self._save_workflow(workflow)
+        return True
 
     def load_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """Load a workflow from storage."""
-        workflow_file = self.storage_path / f"{workflow_id}.json"
+        workflow_file = self._workflow_file(workflow_id)
         if workflow_file.exists():
             with open(workflow_file, 'r') as f:
                 data = json.load(f)
                 workflow = Workflow.from_dict(data)
+                if workflow.id != workflow_id:
+                    raise ValueError("Stored workflow ID does not match filename")
+                if (workflow.status == WorkflowStatus.RUNNING or any(step.status == StepStatus.RUNNING for step in workflow.steps)) and not self._has_active_runner(workflow_id):
+                    workflow.status = WorkflowStatus.PAUSED
+                    workflow.current_step_id = None
+                    workflow.completed_at = None
+                    for step in workflow.steps:
+                        if step.status == StepStatus.RUNNING:
+                            step.status = StepStatus.FAILED
+                            step.error = "Execution interrupted; external outcome unknown, not automatically replayed"
+                            step.result = {"success": False, "outcome": "unknown", "error": step.error}
+                            step.completed_at = datetime.utcnow()
+                    self._save_workflow(workflow)
                 self.workflows[workflow_id] = workflow
                 return workflow
         return None
+
+    def _has_active_runner(self, workflow_id: str) -> bool:
+        with open(self._workflow_file(workflow_id).with_suffix(".lock"), "a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            fcntl.flock(lock, fcntl.LOCK_UN)
+        return False
 
     def export_workflow(self, workflow_id: str, output_path: str) -> bool:
         """Export a workflow to a file."""
@@ -813,4 +1376,5 @@ class WorkflowEngine:
             data = json.load(f)
             workflow = Workflow.from_dict(data)
             self.workflows[workflow.id] = workflow
+            self._save_workflow(workflow)
             return workflow

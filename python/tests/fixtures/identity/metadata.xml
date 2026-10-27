@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+                       xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+                       xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+  <ds:Signature/>
+  <md:EntityDescriptor entityID="https://id.example.test/saml" validUntil="2027-01-01T00:00:00Z">
+    <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" WantAuthnRequestsSigned="true">
+      <md:KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>AQID BA==</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>
+      <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://id.example.test/sso"/>
+      <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://id.example.test/logout"/>
+      <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+    </md:IDPSSODescriptor>
+  </md:EntityDescriptor>
+  <md:EntityDescriptor entityID="https://app.example.test/saml">
+    <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="true" WantAssertionsSigned="true">
+      <md:AssertionConsumerService index="0" isDefault="true" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://app.example.test/acs"/>
+      <md:AttributeConsumingService index="0"><md:ServiceName xml:lang="en">Example</md:ServiceName><md:RequestedAttribute Name="department" isRequired="true"><saml:AttributeValue>engineering</saml:AttributeValue></md:RequestedAttribute></md:AttributeConsumingService>
+    </md:SPSSODescriptor>
+  </md:EntityDescriptor>
+</md:EntitiesDescriptor>

@@ -183,8 +183,8 @@ class TestExecuteNxc:
 
             mock_exec.assert_called_once()
             call_args = mock_exec.call_args[0][0]
-            assert "nxc smb 192.168.1.100" in call_args
-            assert shlex.split(call_args)[3:7] == ["-u", "admin", "-p", "password123"]
+            assert call_args[:3] == ["nxc", "smb", "192.168.1.100"]
+            assert call_args[3:7] == ["-u", "admin", "-p", "password123"]
 
     def test_execute_nxc_with_domain(self, configured_smb_module):
         """Test NXC execution with domain."""
@@ -196,7 +196,7 @@ class TestExecuteNxc:
             configured_smb_module._execute_nxc()
 
             call_args = mock_exec.call_args[0][0]
-            assert "-d TESTDOMAIN" in call_args
+            assert call_args[call_args.index("-d") + 1] == "TESTDOMAIN"
 
     def test_execute_nxc_with_extra_args(self, configured_smb_module):
         """Test NXC execution with extra arguments."""
@@ -238,7 +238,7 @@ class TestOpBrowseDownload:
 
                 call_args = mock_exec.call_args[0][0]
                 assert "spider_plus" in call_args
-                assert "SYSVOL" in call_args
+                assert "SHARE=SYSVOL" in call_args
 
     def test_browse_download_with_pattern(self, configured_smb_module):
         """Test browse download with file pattern."""
@@ -249,7 +249,7 @@ class TestOpBrowseDownload:
                 result = configured_smb_module.op_browse_download()
 
                 call_args = mock_exec.call_args[0][0]
-                assert "*.xlsx" in call_args
+                assert "PATTERN=*.xlsx" in call_args
 
     def test_browse_download_default(self, configured_smb_module):
         """Test browse download with defaults."""
@@ -307,7 +307,7 @@ class TestOpDownloadPattern:
                 result = configured_smb_module.op_download_pattern()
 
                 call_args = mock_exec.call_args[0][0]
-                assert "PATTERN='*.xlsx'" in call_args
+                assert "PATTERN=*.xlsx" in call_args
 
     def test_download_pattern_empty(self, configured_smb_module):
         """Test download with empty pattern."""
@@ -345,7 +345,7 @@ class TestOpSpiderOnly:
                 result = configured_smb_module.op_spider_only()
 
                 call_args = mock_exec.call_args[0][0]
-                assert "SHARE='SYSVOL'" in call_args
+                assert "SHARE=SYSVOL" in call_args
 
 
 # =============================================================================
@@ -364,7 +364,7 @@ class TestOpSpiderShare:
                 result = configured_smb_module.op_spider_share()
 
                 call_args = mock_exec.call_args[0][0]
-                assert "SHARE='NETLOGON'" in call_args
+                assert "SHARE=NETLOGON" in call_args
                 assert "DOWNLOAD_FLAG" not in call_args
 
     def test_spider_share_with_download(self, configured_smb_module):

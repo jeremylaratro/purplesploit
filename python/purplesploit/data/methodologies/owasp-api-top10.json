@@ -1,0 +1,17 @@
+{
+  "id": "owasp-api-top10",
+  "name": "OWASP API Security Top 10",
+  "version": "2023",
+  "profile_version": "1.0.0",
+  "source": "https://owasp.org/API-Security/editions/2023/en/0x11-t10/",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "OWASP API 2023 risk identifiers; these risks are not a complete test methodology",
+  "description": "Representative risk-driven checklist prompts, not full Top 10 coverage or certification.",
+  "checks": [
+    {"id": "API1:2023", "title": "Test object access across separate identities"},
+    {"id": "API2:2023", "title": "Validate API authentication behavior"},
+    {"id": "API5:2023", "title": "Compare function access across roles"},
+    {"id": "API9:2023", "title": "Compare observed endpoints with the API inventory"}
+  ]
+}

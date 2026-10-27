@@ -1,0 +1,7 @@
+{
+  "asyncapi": "3.0.0", "info": {"title": "Fixture socket", "version": "1"},
+  "servers": {"fixture": {"host": "socket.example.test", "pathname": "/ws", "protocol": "wss"}},
+  "channels": {"pets": {"address": "pets/{id}", "servers": [{"$ref": "#/servers/fixture"}], "messages": {"pet": {"$ref": "#/components/messages/Pet"}}}},
+  "operations": {"watch": {"action": "receive", "channel": {"$ref": "#/channels/pets"}, "messages": [{"$ref": "#/channels/pets/messages/pet"}]}},
+  "components": {"messages": {"Pet": {"name": "Pet", "payload": {"type": "object"}}}}
+}

@@ -331,9 +331,9 @@ class TestModuleRecommenderQuickWins:
         quick_wins = recommender.get_quick_wins(services=services)
 
         assert len(quick_wins) > 0
-        # Should include anonymous shares check
-        reasons = [qw.reason for qw in quick_wins]
-        assert any("anonymous" in r.lower() for r in reasons)
+        # Quick wins must identify real runnable capabilities, not synthetic paths.
+        from purplesploit.ai.inventory import module_manifest
+        assert all(module_manifest(None, item.module_path) is not None for item in quick_wins)
 
     def test_get_quick_wins_http(self):
         """Test quick wins for HTTP service."""

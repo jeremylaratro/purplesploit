@@ -1,0 +1,3 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2019 (name:DC01) (domain:CORP.TEST)
+LDAP-CHECKER 192.0.2.10 389 DC01 LDAP signing NOT enforced
+LDAP-CHECKER 192.0.2.10 389 DC01 LDAPS channel binding is set to: Required

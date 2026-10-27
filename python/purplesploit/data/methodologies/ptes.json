@@ -1,0 +1,17 @@
+{
+  "id": "ptes",
+  "name": "Penetration Testing Execution Standard",
+  "version": "1.0",
+  "profile_version": "1.0.0",
+  "source": "http://www.pentest-standard.org/index.php/Main_Page",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "PurpleSploit PTES phase aliases; PTES does not assign these check IDs",
+  "description": "Selected PTES phase prompts only; not a full PTES assessment or certification.",
+  "checks": [
+    {"id": "PTES-IG", "title": "Collect information about selected targets"},
+    {"id": "PTES-TM", "title": "Document plausible threats and attack paths"},
+    {"id": "PTES-VA", "title": "Analyze candidate technical weaknesses"},
+    {"id": "PTES-RP", "title": "Prepare evidence-linked assessment results"}
+  ]
+}

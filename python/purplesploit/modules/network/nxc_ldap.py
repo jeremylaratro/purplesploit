@@ -6,9 +6,10 @@ LDAP protocol operations using NetExec.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCLDAPModule(ExternalToolModule):
+class NXCLDAPModule(NXCModuleMixin, ExternalToolModule):
     """
     NetExec LDAP module for LDAP/Active Directory enumeration.
 
@@ -75,7 +76,7 @@ class NXCLDAPModule(ExternalToolModule):
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """Get list of LDAP operations."""
-        return [
+        return self._operation_manifest([
             # Enumeration
             {"name": "Enumerate Users", "description": "List domain users", "handler": "op_enum_users"},
             {"name": "Enumerate Groups", "description": "List domain groups", "handler": "op_enum_groups"},
@@ -92,7 +93,12 @@ class NXCLDAPModule(ExternalToolModule):
             {"name": "BloodHound - Trusts", "description": "Collect trust relationships", "handler": "op_bloodhound_trusts"},
             {"name": "BloodHound - ACL", "description": "Collect ACL data", "handler": "op_bloodhound_acl"},
             {"name": "BloodHound - Groups", "description": "Collect group memberships", "handler": "op_bloodhound_groups"},
-        ]
+        ], emits={
+            "op_enum_users": ["user"], "op_enum_groups": ["group"],
+            "op_user_desc": ["user"], "op_enum_computers": ["computer"],
+            "op_enum_trusts": ["domain"], "op_adcs": ["resource"],
+            "op_ldap_signing": ["policy"], "op_all_attributes": ["user"],
+        })
 
     def _build_auth(self) -> str:
         """Build authentication string for nxc."""
@@ -114,21 +120,9 @@ class NXCLDAPModule(ExternalToolModule):
 
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
         """Execute nxc ldap command with extra arguments."""
-        rhost = self.get_option("RHOST")
-        domain = self.get_option("DOMAIN")
-        auth = self._build_auth()
-
-        cmd = f"nxc ldap {self.quote_arg(rhost)} {auth}"
-
-        if domain and domain != "WORKGROUP":
-            cmd += f" -d {self.quote_arg(domain)}"
-
-        if extra_args:
-            cmd += f" {extra_args}"
-
-        return self.execute_command(cmd, timeout=300)
+        return self._run_nxc("ldap", extra_args, timeout=300)
 
     # ========================================================================
     # Enumeration Operations
@@ -148,11 +142,11 @@ class NXCLDAPModule(ExternalToolModule):
 
     def op_enum_computers(self) -> Dict[str, Any]:
         """Enumerate domain computers."""
-        return self._execute_nxc("-M machines")
+        return self._execute_nxc(["--query", "(objectClass=computer)", "sAMAccountName"])
 
     def op_enum_trusts(self) -> Dict[str, Any]:
         """Enumerate domain trust relationships."""
-        return self._execute_nxc("-M enum_trusts")
+        return self._execute_nxc(["--query", "(objectClass=trustedDomain)", "trustPartner trustDirection trustAttributes"])
 
     def op_adcs(self) -> Dict[str, Any]:
         """Enumerate Active Directory Certificate Services."""

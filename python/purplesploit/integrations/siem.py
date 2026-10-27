@@ -7,7 +7,6 @@ Sends security events to SIEM platforms (Splunk, Elastic, generic webhooks).
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
-from abc import abstractmethod
 import json
 import logging
 
@@ -16,7 +15,6 @@ from .base import (
     IntegrationConfig,
     IntegrationStatus,
     NotificationPayload,
-    NotificationPriority,
     WebhookMixin,
 )
 
@@ -438,7 +436,8 @@ class SplunkIntegration(SIEMWebhook):
                 }
                 batch_data += json.dumps(splunk_event) + "\n"
 
-            response = requests.post(
+            # Bandit does not recognize a timeout multiplication expression.
+            response = requests.post(  # nosec B113
                 self._endpoint,
                 headers=self._get_headers(),
                 data=batch_data,
@@ -616,7 +615,8 @@ class ElasticIntegration(SIEMWebhook):
                 doc["@timestamp"] = payload.timestamp.isoformat()
                 bulk_data += json.dumps(doc) + "\n"
 
-            response = requests.post(
+            # Bandit does not recognize a timeout multiplication expression.
+            response = requests.post(  # nosec B113
                 f"{self._base_url}/_bulk",
                 headers={**self._get_headers(), "Content-Type": "application/x-ndjson"},
                 data=bulk_data,

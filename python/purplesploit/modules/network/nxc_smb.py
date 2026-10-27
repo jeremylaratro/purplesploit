@@ -7,9 +7,10 @@ Comprehensive SMB testing with 40+ granular operations across 6 categories.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCSMBModule(ExternalToolModule):
+class NXCSMBModule(NXCModuleMixin, ExternalToolModule):
     """
     NetExec SMB module for SMB protocol testing and exploitation.
 
@@ -52,6 +53,10 @@ class NXCSMBModule(ExternalToolModule):
         """
         return ["smb_auth", "smb_shares", "smb_execution"]
 
+    @property
+    def custom_parameters(self) -> List[str]:
+        return ["HASH"]
+
     def _init_parameters(self):
         """Set RHOST as required parameter and add AUTH_TYPE option."""
         super()._init_parameters()
@@ -67,6 +72,10 @@ class NXCSMBModule(ExternalToolModule):
             "description": "Authentication type: domain, local, kerberos",
             "default": "domain"
         }
+        for name, description in (("SPIDER_SHARE", "Optional share for configured spider"),
+                                  ("SPIDER_PATTERN", "Optional file pattern for configured spider")):
+            self.options[name] = {"value": None, "required": False,
+                                  "description": description, "default": None}
 
     def get_operations(self) -> List[Dict[str, Any]]:
         """
@@ -83,11 +92,12 @@ class NXCSMBModule(ExternalToolModule):
         Returns:
             List of operation dictionaries with subcategory tags
         """
-        return [
+        return self._operation_manifest([
             # === Authentication Operations ===
             {"name": "Test Authentication", "description": "Test basic SMB authentication", "handler": "op_test_auth", "subcategory": "authentication"},
             {"name": "Test with Domain", "description": "Test authentication with domain", "handler": "op_test_domain", "subcategory": "authentication"},
             {"name": "Pass-the-Hash", "description": "Authenticate using NTLM hash", "handler": "op_pass_the_hash", "subcategory": "authentication"},
+            {"name": "Pass-the-Hash Configured", "description": "Authenticate using configured USERNAME and HASH without prompting", "handler": "op_pass_the_hash_configured", "subcategory": "authentication"},
             {"name": "Local Authentication", "description": "Test local authentication (--local-auth)", "handler": "op_local_auth", "subcategory": "authentication"},
 
             # === Enumeration Operations ===
@@ -107,6 +117,7 @@ class NXCSMBModule(ExternalToolModule):
             {"name": "Download All Files", "description": "Recursively download all files from shares", "handler": "op_download_all", "subcategory": "shares"},
             {"name": "Download by Pattern", "description": "Download files matching pattern (e.g., *.xlsx)", "handler": "op_download_pattern", "subcategory": "shares"},
             {"name": "Spider Only (No Download)", "description": "List files without downloading", "handler": "op_spider_only", "subcategory": "shares"},
+            {"name": "Spider Configured (No Download)", "description": "List files using configured share/pattern options", "handler": "op_spider_configured", "subcategory": "shares", "interactive": False},
             {"name": "Spider Specific Share", "description": "Spider a specific share name", "handler": "op_spider_share", "subcategory": "shares"},
             {"name": "Download Specific File", "description": "Download file from manual path", "handler": "op_download_file", "subcategory": "shares"},
             {"name": "Upload File", "description": "Upload file to target", "handler": "op_upload_file", "subcategory": "shares"},
@@ -137,7 +148,17 @@ class NXCSMBModule(ExternalToolModule):
             {"name": "SMBGhost (CVE-2020-0796)", "description": "Check for SMBGhost vulnerability", "handler": "op_smbghost", "subcategory": "vulnerability"},
             {"name": "PrintNightmare", "description": "Check for PrintNightmare vulnerability", "handler": "op_printnightmare", "subcategory": "vulnerability"},
             {"name": "All Vulnerability Checks", "description": "Run all vulnerability checks", "handler": "op_all_vulns", "subcategory": "vulnerability"},
-        ]
+        ], interactive={
+            "op_test_domain", "op_pass_the_hash", "op_browse_download", "op_download_all",
+            "op_download_pattern", "op_spider_only", "op_spider_share", "op_download_file",
+            "op_upload_file", "op_exec_cmd", "op_exec_ps",
+        }, emits={
+            "op_list_shares": ["share"], "op_enum_users": ["user"],
+            "op_enum_local_users": ["user"], "op_enum_groups": ["group"],
+            "op_password_policy": ["policy"], "op_active_sessions": ["session"],
+            "op_loggedon_users": ["session"], "op_rid_brute": ["user", "group"],
+            "op_full_enum": ["user", "group", "share", "session", "policy"],
+        })
 
     def _build_auth(self) -> str:
         """Build authentication string for nxc."""
@@ -159,28 +180,9 @@ class NXCSMBModule(ExternalToolModule):
 
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
         """Execute nxc smb command with extra arguments."""
-        rhost = self.get_option("RHOST")
-        domain = self.get_option("DOMAIN")
-        auth_type = self.get_option("AUTH_TYPE") or "domain"
-        auth = self._build_auth()
-
-        cmd = f"nxc smb {self.quote_arg(rhost)} {auth}"
-
-        if domain and domain != "WORKGROUP":
-            cmd += f" -d {self.quote_arg(domain)}"
-
-        # Add authentication type flags
-        if auth_type == "local":
-            cmd += " --local-auth"
-        elif auth_type == "kerberos":
-            cmd += " --kerberos"
-
-        if extra_args:
-            cmd += f" {extra_args}"
-
-        return self.execute_command(cmd, timeout=300)
+        return self._run_nxc("smb", extra_args, timeout=300)
 
     # ========================================================================
     # Authentication Operations
@@ -212,6 +214,14 @@ class NXCSMBModule(ExternalToolModule):
     def op_local_auth(self) -> Dict[str, Any]:
         """Test local authentication."""
         return self._execute_nxc("--local-auth")
+
+    def op_pass_the_hash_configured(self) -> Dict[str, Any]:
+        """Authenticate with explicitly configured credentials without prompting."""
+        if not self.get_option("HASH"):
+            return {"success": False, "error": "Hash required", "observations": []}
+        if not self.get_option("USERNAME"):
+            return {"success": False, "error": "Username required", "observations": []}
+        return self._execute_nxc()
 
     # ========================================================================
     # Enumeration Operations
@@ -266,14 +276,14 @@ class NXCSMBModule(ExternalToolModule):
         share = input("Share name (leave empty for all): ")
         pattern = input("File pattern (e.g., *.xlsx, or empty for all): ")
 
-        module_opts = "DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000"
+        module_opts = ["DOWNLOAD_FLAG=True", "MAX_FILE_SIZE=512000"]
         if share:
-            module_opts += f" SHARE='{share}'"
+            module_opts.append(f"SHARE={share}")
         if pattern:
-            module_opts += f" PATTERN='{pattern}'"
+            module_opts.append(f"PATTERN={pattern}")
 
         self.log("Files will be downloaded to: ~/.nxc/modules/nxc_spider_plus/", "info")
-        return self._execute_nxc(f"-M spider_plus -o {module_opts}")
+        return self._execute_nxc(["-M", "spider_plus", "-o", *module_opts])
 
     def op_download_all(self) -> Dict[str, Any]:
         """Download all files recursively."""
@@ -292,22 +302,31 @@ class NXCSMBModule(ExternalToolModule):
 
         self.log(f"Downloading files matching: {pattern}", "info")
         self.log("Files will be saved to: ~/.nxc/modules/nxc_spider_plus/", "info")
-        return self._execute_nxc(f"-M spider_plus -o DOWNLOAD_FLAG=True PATTERN='{pattern}' MAX_FILE_SIZE=512000")
+        return self._execute_nxc(["-M", "spider_plus", "-o", "DOWNLOAD_FLAG=True", f"PATTERN={pattern}", "MAX_FILE_SIZE=512000"])
+
+    def op_spider_configured(self) -> Dict[str, Any]:
+        """Spider shares without prompting or downloading files."""
+        arguments = ["DOWNLOAD_FLAG=False"]
+        for option, argument in (("SPIDER_SHARE", "SHARE"), ("SPIDER_PATTERN", "PATTERN")):
+            value = self.get_option(option)
+            if value:
+                arguments.append(f"{argument}={value}")
+        return self._execute_nxc(["-M", "spider_plus", "-o", *arguments])
 
     def op_spider_only(self) -> Dict[str, Any]:
         """List files without downloading."""
         share = input("Share name (leave empty for all): ")
         pattern = input("File pattern (leave empty for all): ")
 
-        module_opts = ""
+        module_opts = []
         if share:
-            module_opts += f"SHARE='{share}'"
+            module_opts.append(f"SHARE={share}")
         if pattern:
-            module_opts += f" PATTERN='{pattern}'"
+            module_opts.append(f"PATTERN={pattern}")
 
-        cmd = f"-M spider_plus"
+        cmd = ["-M", "spider_plus"]
         if module_opts:
-            cmd += f" -o {module_opts}"
+            cmd.extend(["-o", *module_opts])
 
         self.log("File list will be saved to: ~/.nxc/modules/nxc_spider_plus/", "info")
         return self._execute_nxc(cmd)
@@ -320,9 +339,9 @@ class NXCSMBModule(ExternalToolModule):
 
         download = input("Download files? (y/n) [default: n]: ")
         if download.lower() == 'y':
-            return self._execute_nxc(f"-M spider_plus -o SHARE='{share}' DOWNLOAD_FLAG=True MAX_FILE_SIZE=512000")
+            return self._execute_nxc(["-M", "spider_plus", "-o", f"SHARE={share}", "DOWNLOAD_FLAG=True", "MAX_FILE_SIZE=512000"])
         else:
-            return self._execute_nxc(f"-M spider_plus -o SHARE='{share}'")
+            return self._execute_nxc(["-M", "spider_plus", "-o", f"SHARE={share}"])
 
     def op_download_file(self) -> Dict[str, Any]:
         """Download specific file from manual path."""
@@ -335,7 +354,7 @@ class NXCSMBModule(ExternalToolModule):
         if not remote_path or not local_path:
             return {"success": False, "error": "Both paths required"}
 
-        return self._execute_nxc(f"--get-file '{remote_path}' '{local_path}'")
+        return self._execute_nxc(["--get-file", remote_path, local_path])
 
     def op_upload_file(self) -> Dict[str, Any]:
         """Upload file to target."""
@@ -349,7 +368,7 @@ class NXCSMBModule(ExternalToolModule):
         if not remote_path or not local_path:
             return {"success": False, "error": "Both paths required"}
 
-        return self._execute_nxc(f"--put-file '{local_path}' '{remote_path}'")
+        return self._execute_nxc(["--put-file", local_path, remote_path])
 
     # ========================================================================
     # Execution Operations
@@ -361,7 +380,7 @@ class NXCSMBModule(ExternalToolModule):
         if not cmd:
             return {"success": False, "error": "Command required"}
 
-        return self._execute_nxc(f"-x '{cmd}'")
+        return self._execute_nxc(["-x", cmd])
 
     def op_exec_ps(self) -> Dict[str, Any]:
         """Execute PowerShell command."""
@@ -369,7 +388,7 @@ class NXCSMBModule(ExternalToolModule):
         if not ps_cmd:
             return {"success": False, "error": "Command required"}
 
-        return self._execute_nxc(f"-X '{ps_cmd}'")
+        return self._execute_nxc(["-X", ps_cmd])
 
     def op_system_info(self) -> Dict[str, Any]:
         """Get system information."""
@@ -433,8 +452,7 @@ class NXCSMBModule(ExternalToolModule):
         """Check for MS17-010 (EternalBlue)."""
         self.log("Checking for MS17-010 (EternalBlue) vulnerability", "info")
         # MS17-010 doesn't require auth
-        rhost = self.get_option("RHOST")
-        return self.execute_command(f"nxc smb {rhost} -M ms17-010")
+        return self._run_nxc("smb", ["-M", "ms17-010"], authenticate=False)
 
     def op_zerologon(self) -> Dict[str, Any]:
         """Check for Zerologon vulnerability."""
@@ -452,8 +470,7 @@ class NXCSMBModule(ExternalToolModule):
     def op_smbghost(self) -> Dict[str, Any]:
         """Check for SMBGhost vulnerability."""
         self.log("Checking for SMBGhost (CVE-2020-0796)", "info")
-        rhost = self.get_option("RHOST")
-        return self.execute_command(f"nxc smb {rhost} -M smbghost")
+        return self._run_nxc("smb", ["-M", "smbghost"], authenticate=False)
 
     def op_printnightmare(self) -> Dict[str, Any]:
         """Check for PrintNightmare vulnerability."""
@@ -462,8 +479,7 @@ class NXCSMBModule(ExternalToolModule):
     def op_all_vulns(self) -> Dict[str, Any]:
         """Run all vulnerability checks."""
         self.log("Running all vulnerability checks...", "info")
-        rhost = self.get_option("RHOST")
-        auth = self._build_auth()
+        auth = self._auth_argv()
 
         results = []
         vulns = ["ms17-010", "smbghost"]  # No auth required
@@ -472,20 +488,22 @@ class NXCSMBModule(ExternalToolModule):
         # Run non-auth checks
         for vuln in vulns:
             self.log(f"Checking {vuln}...", "info")
-            result = self.execute_command(f"nxc smb {rhost} -M {vuln}")
+            result = self._run_nxc("smb", ["-M", vuln], authenticate=False)
             results.append({vuln: result})
 
         # Run auth-required checks
         if auth:
             for vuln in auth_vulns:
                 self.log(f"Checking {vuln}...", "info")
-                result = self.execute_command(f"nxc smb {rhost} {auth} -M {vuln}")
+                result = self._execute_nxc(["-M", vuln])
                 results.append({vuln: result})
 
         return {
             "success": True,
             "output": "Vulnerability scan complete",
-            "results": results
+            "results": results,
+            "observations": [observation for group in results for result in group.values()
+                             for observation in result.get("observations", [])],
         }
 
     def run(self) -> Dict[str, Any]:

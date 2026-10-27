@@ -5,10 +5,10 @@ Analyzes discovered services and findings to suggest attack chains
 and prioritize exploitation paths.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Any, List, Optional, Set
 from enum import Enum
-import json
+from .inventory import module_manifest, resolve_operation
 
 
 class AttackCategory(Enum):
@@ -25,7 +25,7 @@ class AttackCategory(Enum):
 class AttackStep:
     """A single step in an attack path."""
     name: str
-    module: str
+    module: Optional[str]
     operation: Optional[str] = None
     description: str = ""
     requirements: List[str] = field(default_factory=list)
@@ -33,6 +33,7 @@ class AttackStep:
     mitre_technique: Optional[str] = None
     risk_level: str = "medium"
     success_probability: float = 0.5
+    available: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -45,6 +46,7 @@ class AttackStep:
             "mitre_technique": self.mitre_technique,
             "risk_level": self.risk_level,
             "success_probability": self.success_probability,
+            "available": self.available,
         }
 
 
@@ -343,7 +345,7 @@ class AttackPathAnalyzer:
         for template_name, template in ATTACK_PATH_TEMPLATES.items():
             path = self._evaluate_template(template)
             if path:
-                viable_paths.append(path)
+                viable_paths.append(self._ground_path(path))
 
         # Sort by probability (descending)
         viable_paths.sort(key=lambda p: p.total_probability, reverse=True)
@@ -368,7 +370,20 @@ class AttackPathAnalyzer:
             ],
         )
         path.calculate_probability()
-        return path
+        return self._ground_path(path)
+
+    def _ground_step(self, step):
+        manifest = module_manifest(self.framework, step.module) if step.module else None
+        if manifest is None:
+            return replace(step, module=None, operation=None, available=False)
+        operation = resolve_operation(manifest, step.operation)
+        if manifest["operations"] and operation is None:
+            return replace(step, module=None, operation=None, available=False)
+        return replace(step, operation=operation["id"] if operation else None, available=True)
+
+    def _ground_path(self, path):
+        # Preserve conceptual/manual stages, but never advertise absent modules.
+        return replace(path, steps=[self._ground_step(step) for step in path.steps])
 
     def suggest_next_step(
         self,
@@ -389,6 +404,9 @@ class AttackPathAnalyzer:
         for template in ATTACK_PATH_TEMPLATES.values():
             for step_config in template["steps"]:
                 step = AttackStep(**step_config) if isinstance(step_config, dict) else step_config
+                step = self._ground_step(step)
+                if not step.available:
+                    continue
 
                 # Check if requirements are met
                 requirements = set(step.requirements)
@@ -477,7 +495,7 @@ class AttackPathAnalyzer:
             lines.append(f"    Complexity: {path.complexity}")
             lines.append(f"    Stealth: {path.stealth_level}")
             lines.append("")
-            lines.append(f"    Steps:")
+            lines.append("    Steps:")
             for j, step in enumerate(path.steps, 1):
                 lines.append(f"      {j}. {step.name}")
                 lines.append(f"         Module: {step.module}")

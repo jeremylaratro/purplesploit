@@ -11,7 +11,7 @@ Tests cover:
 import shlex
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from purplesploit.modules.network.nxc_smb import NXCSMBModule
 
 
@@ -161,16 +161,14 @@ class TestBuildAuth:
     def test_build_auth_with_hash(self, nxc_with_target):
         """Test _build_auth with NTLM hash."""
         nxc_with_target.set_option("USERNAME", "admin")
-        # Ensure HASH option exists in the options dict
-        nxc_with_target.options["HASH"] = {"value": "aad3b435b51404ee:8846f7eaee8fb117", "required": False}
+        assert nxc_with_target.set_option("HASH", "aad3b435b51404ee:8846f7eaee8fb117")
         auth = nxc_with_target._build_auth()
         assert shlex.split(auth) == ["-u", "admin", "-H", "aad3b435b51404ee:8846f7eaee8fb117"]
         assert "-p" not in auth
 
     def test_build_auth_hash_takes_precedence(self, nxc_with_creds):
         """Test hash takes precedence over password."""
-        # Ensure HASH option exists in the options dict
-        nxc_with_creds.options["HASH"] = {"value": "somehash", "required": False}
+        assert nxc_with_creds.set_option("HASH", "somehash")
         auth = nxc_with_creds._build_auth()
         assert shlex.split(auth) == ["-u", "admin", "-H", "somehash"]
         assert "-p" not in auth
@@ -189,7 +187,7 @@ class TestExecuteNxc:
             nxc_with_creds._execute_nxc()
             mock_exec.assert_called_once()
             call_args = mock_exec.call_args[0][0]
-            assert "nxc smb" in call_args
+            assert call_args[:2] == ["nxc", "smb"]
             assert "192.168.1.100" in call_args
 
     def test_execute_nxc_includes_domain(self, nxc_with_creds):
@@ -197,7 +195,7 @@ class TestExecuteNxc:
         with patch.object(nxc_with_creds, 'execute_command', return_value={"success": True}) as mock_exec:
             nxc_with_creds._execute_nxc()
             call_args = mock_exec.call_args[0][0]
-            assert "-d TESTDOMAIN" in call_args
+            assert call_args[call_args.index("-d") + 1] == "TESTDOMAIN"
 
     def test_execute_nxc_no_domain_for_workgroup(self, nxc_with_target):
         """Test nxc doesn't include domain for WORKGROUP."""
@@ -248,7 +246,7 @@ class TestAuthenticationOperations:
     def test_op_test_auth(self, nxc_with_creds):
         """Test basic authentication operation."""
         with patch.object(nxc_with_creds, '_execute_nxc', return_value={"success": True}) as mock_exec:
-            result = nxc_with_creds.op_test_auth()
+            assert nxc_with_creds.op_test_auth()["success"]
             mock_exec.assert_called_once_with()
 
     def test_op_test_domain(self, nxc_with_creds):
@@ -267,8 +265,6 @@ class TestAuthenticationOperations:
 
     def test_op_pass_the_hash_with_hash(self, nxc_with_target):
         """Test PTH with hash input."""
-        # Ensure HASH option exists
-        nxc_with_target.options["HASH"] = {"value": None, "required": False}
         with patch('builtins.input', side_effect=['aad3b435:8846f7ea', 'admin']):
             with patch.object(nxc_with_target, '_execute_nxc', return_value={"success": True}):
                 nxc_with_target.op_pass_the_hash()
@@ -398,7 +394,7 @@ class TestShareOperations:
             with patch.object(nxc_with_creds, '_execute_nxc', return_value={"success": True}) as mock_exec:
                 nxc_with_creds.op_download_pattern()
                 call_args = mock_exec.call_args[0][0]
-                assert "PATTERN='*.xlsx'" in call_args
+                assert "PATTERN=*.xlsx" in call_args
 
 
 # =============================================================================
@@ -419,7 +415,6 @@ class TestExecutionOperations:
         """Test list processes command."""
         with patch.object(nxc_with_creds, '_execute_nxc', return_value={"success": True}) as mock_exec:
             nxc_with_creds.op_list_processes()
-            call_args = mock_exec.call_args[0][0]
             # Should use tasklist or similar
             mock_exec.assert_called()
 
@@ -499,7 +494,7 @@ class TestVulnerabilityOperations:
         with patch.object(nxc_with_creds, 'execute_command', return_value={"success": True}) as mock_exec:
             nxc_with_creds.op_ms17_010()
             call_args = mock_exec.call_args[0][0]
-            assert "ms17-010" in call_args.lower() or "eternal" in call_args.lower()
+            assert "ms17-010" in call_args
 
     def test_op_zerologon(self, nxc_with_creds):
         """Test Zerologon check."""

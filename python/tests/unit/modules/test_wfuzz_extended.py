@@ -9,8 +9,8 @@ Tests cover:
 """
 
 import pytest
-import subprocess
-from unittest.mock import MagicMock, patch, PropertyMock
+import shlex
+from unittest.mock import MagicMock, patch
 from purplesploit.modules.web.wfuzz import WfuzzModule
 
 
@@ -69,7 +69,8 @@ class TestExecuteWfuzz:
 
             mock_exec.assert_called_once()
             # Verify command includes custom args
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "-w '/custom.txt'" in call_args or "wfuzz" in call_args
 
     def test_execute_wfuzz_uses_threads_option(self, wfuzz_with_target):
@@ -80,7 +81,8 @@ class TestExecuteWfuzz:
         with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}) as mock_exec:
             wfuzz_with_target._execute_wfuzz("-w '/test.txt' 'http://test.com'")
 
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "-t 100" in call_args
 
     def test_execute_wfuzz_uses_hide_code_option(self, wfuzz_with_target):
@@ -91,14 +93,15 @@ class TestExecuteWfuzz:
         with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}) as mock_exec:
             wfuzz_with_target._execute_wfuzz("-w '/test.txt' 'http://test.com'")
 
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "--hc 403,404,500" in call_args
 
     def test_execute_wfuzz_smart_filter_disabled(self, wfuzz_with_target):
         """Test wfuzz skips smart filtering when disabled."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
-        with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}) as mock_exec:
+        with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}):
             with patch('subprocess.Popen') as mock_popen:
                 wfuzz_with_target._execute_wfuzz("-w '/test.txt' 'http://test.com'")
 
@@ -238,9 +241,9 @@ class TestSmartFilterPrompt:
             with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True, "filtered": True}) as mock_exec:
                 result = wfuzz_with_target._smart_filter_prompt(stats, "wfuzz -w /test.txt http://test.com")
 
-                # Should call execute_command with filter
-                mock_exec.assert_called_once()
-                assert "--hl 7" in mock_exec.call_args[0][0]
+                # Analysis never starts a second scan; filters come from explicit options.
+                mock_exec.assert_not_called()
+                assert result is None
 
     def test_smart_filter_prompt_dominant_pattern_filter_words(self, wfuzz_with_target):
         """Test smart filter with words filter."""
@@ -274,8 +277,8 @@ class TestSmartFilterPrompt:
             with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}) as mock_exec:
                 result = wfuzz_with_target._smart_filter_prompt(stats, "wfuzz -w /test.txt http://test.com")
 
-                mock_exec.assert_called_once()
-                assert "--hw 11" in mock_exec.call_args[0][0]
+                mock_exec.assert_not_called()
+                assert result is None
 
     def test_smart_filter_prompt_dominant_pattern_filter_chars(self, wfuzz_with_target):
         """Test smart filter with chars filter."""
@@ -309,8 +312,8 @@ class TestSmartFilterPrompt:
             with patch.object(wfuzz_with_target, 'execute_command', return_value={"success": True}) as mock_exec:
                 result = wfuzz_with_target._smart_filter_prompt(stats, "wfuzz -w /test.txt http://test.com")
 
-                mock_exec.assert_called_once()
-                assert "--hh 162" in mock_exec.call_args[0][0]
+                mock_exec.assert_not_called()
+                assert result is None
 
     def test_smart_filter_prompt_invalid_choice(self, wfuzz_with_target):
         """Test smart filter with invalid filter choice."""
@@ -365,11 +368,12 @@ class TestDirectoryFuzzingOperation:
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
         with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-            result = wfuzz_with_target.op_dir_fuzz()
+            wfuzz_with_target.op_dir_fuzz()
 
             mock_exec.assert_called_once()
             # Verify FUZZ is in the URL
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "FUZZ" in call_args
 
     def test_op_dir_fuzz_uses_custom_wordlist(self, wfuzz_with_target):
@@ -380,7 +384,8 @@ class TestDirectoryFuzzingOperation:
         with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
             wfuzz_with_target.op_dir_fuzz()
 
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "/custom/wordlist.txt" in call_args
 
 
@@ -399,11 +404,12 @@ class TestBackupFuzzingOperation:
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
         with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-            result = wfuzz_with_target.op_backup_fuzz()
+            wfuzz_with_target.op_backup_fuzz()
 
             mock_exec.assert_called_once()
             # Verify backup extensions are used
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert ".bak" in call_args or "FUZ2Z" in call_args
 
 
@@ -422,12 +428,14 @@ class TestExtensionFuzzingOperation:
         """Test extension fuzzing with target and basename."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
-        with patch('builtins.input', side_effect=['config', '']):
+        wfuzz_with_target.set_option('BASENAME', 'config')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_ext_fuzz()
+                wfuzz_with_target.op_ext_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "config" in call_args
 
 
@@ -452,10 +460,11 @@ class TestVhostFuzzingOperation:
         # Inputs: IP (press Enter to use domain), wordlist
         with patch('builtins.input', side_effect=['', '']):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_vhost_fuzz()
+                wfuzz_with_target.op_vhost_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "Host: FUZZ" in call_args
 
     def test_op_vhost_fuzz_with_ip_target(self, wfuzz_module):
@@ -464,12 +473,14 @@ class TestVhostFuzzingOperation:
         wfuzz_module.set_option("SMART_FILTER", "false")
 
         # Inputs: domain, wordlist
-        with patch('builtins.input', side_effect=['target.com', '']):
+        wfuzz_module.set_option('DOMAIN', 'target.com')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_module, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_module.op_vhost_fuzz()
+                wfuzz_module.op_vhost_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "FUZZ.target.com" in call_args
 
     def test_op_vhost_fuzz_ip_target_no_domain(self, wfuzz_module):
@@ -481,7 +492,7 @@ class TestVhostFuzzingOperation:
             result = wfuzz_module.op_vhost_fuzz()
 
         assert result["success"] is False
-        assert "Domain required" in result["error"]
+        assert "DOMAIN required" in result["error"]
 
 
 class TestSubdomainFuzzingOperation:
@@ -500,10 +511,11 @@ class TestSubdomainFuzzingOperation:
 
         with patch('builtins.input', return_value=''):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_subdomain_fuzz()
+                wfuzz_with_target.op_subdomain_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "FUZZ.example.com" in call_args
 
 
@@ -528,10 +540,11 @@ class TestGetParameterFuzzingOperation:
 
         with patch('builtins.input', side_effect=['', '']):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_param_get_fuzz()
+                wfuzz_with_target.op_param_get_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "FUZZ=test" in call_args
 
 
@@ -550,12 +563,14 @@ class TestPostParameterFuzzingOperation:
         """Test POST param fuzzing with known parameters."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
-        with patch('builtins.input', side_effect=['', '', 'username=admin']):
+        wfuzz_with_target.set_option('DATA', 'username=admin&FUZZ=test')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_param_post_fuzz()
+                wfuzz_with_target.op_param_post_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "username=admin" in call_args
                 assert "FUZZ=test" in call_args
 
@@ -565,7 +580,9 @@ class TestParamValueFuzzingOperation:
 
     def test_op_param_value_fuzz_requires_target(self, wfuzz_module):
         """Test param value fuzzing requires TARGET."""
-        with patch('builtins.input', side_effect=['', 'id', 'GET', '']):
+        wfuzz_module.set_option('PARAMETER', 'id')
+        wfuzz_module.set_option('METHOD', 'GET')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             result = wfuzz_module.op_param_value_fuzz()
 
         assert result["success"] is False
@@ -577,31 +594,37 @@ class TestParamValueFuzzingOperation:
             result = wfuzz_with_target.op_param_value_fuzz()
 
         assert result["success"] is False
-        assert "Parameter name required" in result["error"]
+        assert "PARAMETER required" in result["error"]
 
     def test_op_param_value_fuzz_get_method(self, wfuzz_with_target):
         """Test param value fuzzing with GET method."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
+        wfuzz_with_target.set_option("PARAMETER", "id")
+        wfuzz_with_target.set_option("METHOD", "GET")
 
         with patch('builtins.input', side_effect=['', 'id', 'GET', '']):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_param_value_fuzz()
+                wfuzz_with_target.op_param_value_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "id=FUZZ" in call_args
 
     def test_op_param_value_fuzz_post_method(self, wfuzz_with_target):
         """Test param value fuzzing with POST method."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
-        with patch('builtins.input', side_effect=['', 'password', 'POST', '']):
+        wfuzz_with_target.set_option('PARAMETER', 'password')
+        wfuzz_with_target.set_option('METHOD', 'POST')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_param_value_fuzz()
+                wfuzz_with_target.op_param_value_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
-                assert "-d 'password=FUZZ'" in call_args
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
+                assert "-d password=FUZZ" in call_args
 
 
 # =============================================================================
@@ -625,18 +648,20 @@ class TestHeaderFuzzingOperation:
             result = wfuzz_with_target.op_header_fuzz()
 
         assert result["success"] is False
-        assert "Header name required" in result["error"]
+        assert "HEADERS required" in result["error"]
 
     def test_op_header_fuzz_with_header(self, wfuzz_with_target):
         """Test header fuzzing with header name."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
-        with patch('builtins.input', side_effect=['X-Custom-Header', '']):
+        wfuzz_with_target.set_option('HEADERS', 'X-Custom-Header: FUZZ')
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_header_fuzz()
+                wfuzz_with_target.op_header_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "X-Custom-Header: FUZZ" in call_args
 
 
@@ -657,10 +682,11 @@ class TestUserAgentFuzzingOperation:
 
         with patch('builtins.input', return_value=''):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_useragent_fuzz()
+                wfuzz_with_target.op_useragent_fuzz()
 
                 mock_exec.assert_called_once()
-                call_args = mock_exec.call_args[0][0]
+                raw_args = mock_exec.call_args[0][0]
+                call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
                 assert "User-Agent: FUZZ" in call_args
 
 
@@ -673,16 +699,17 @@ class TestCustomFuzzingOperation:
             result = wfuzz_with_target.op_custom_fuzz()
 
         assert result["success"] is False
-        assert "Custom command required" in result["error"]
+        assert "CUSTOM_FLAGS required" in result["error"]
 
     def test_op_custom_fuzz_with_command(self, wfuzz_with_target):
         """Test custom fuzzing with command input."""
         wfuzz_with_target.set_option("SMART_FILTER", "false")
 
         custom_cmd = "-w /custom.txt --hc 200,404 http://custom.com/FUZZ"
-        with patch('builtins.input', return_value=custom_cmd):
+        wfuzz_with_target.set_option('CUSTOM_FLAGS', custom_cmd)
+        with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
             with patch.object(wfuzz_with_target, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
-                result = wfuzz_with_target.op_custom_fuzz()
+                wfuzz_with_target.op_custom_fuzz()
 
                 mock_exec.assert_called_once_with(custom_cmd)
 
@@ -772,7 +799,8 @@ class TestWfuzzEdgeCasesExtended:
         with patch.object(wfuzz_module, '_execute_wfuzz', return_value={"success": True}) as mock_exec:
             wfuzz_module.op_dir_fuzz()
 
-            call_args = mock_exec.call_args[0][0]
+            raw_args = mock_exec.call_args[0][0]
+            call_args = shlex.join(raw_args) if isinstance(raw_args, list) else raw_args
             assert "https://secure.example.com" in call_args
 
     def test_has_operations(self, wfuzz_module):

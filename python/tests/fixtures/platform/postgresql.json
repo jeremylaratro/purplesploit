@@ -1,0 +1,8 @@
+{
+  "host": "db01.example.test",
+  "port": 5432,
+  "version": "16.4",
+  "roles": [{"name": "reporting"}],
+  "users": [{"name": "alice", "roles": ["reporting"]}],
+  "databases": [{"name": "app", "schemas": [{"name": "public"}], "tables": [{"name": "customers"}]}]
+}

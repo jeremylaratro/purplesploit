@@ -1,0 +1,9 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2022 (name:DC01) (domain:CORP.TEST)
+LDAP 192.0.2.10 389 DC01 [+] Response for object: CN=partner.test,CN=System,DC=corp,DC=test
+LDAP 192.0.2.10 389 DC01 trustPartner         partner.test
+LDAP 192.0.2.10 389 DC01 trustDirection       3
+LDAP 192.0.2.10 389 DC01 trustAttributes      32
+LDAP 192.0.2.10 389 DC01 [+] Response for object: CN=legacy.test,CN=System,DC=corp,DC=test
+LDAP 192.0.2.10 389 DC01 trustPartner:        legacy.test
+LDAP 192.0.2.10 389 DC01 trustDirection:      1
+LDAP 192.0.2.10 389 DC01 trustAttributes:     1

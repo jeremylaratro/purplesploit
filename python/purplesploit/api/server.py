@@ -34,6 +34,10 @@ from purplesploit.models.database import (
     ServiceResponse
 )
 from purplesploit.core.framework import Framework
+from purplesploit.services import PurpleSploitServices
+from purplesploit.ai import provider_from_environment
+from purplesploit.services.api import create_router
+from purplesploit.distributed.api import create_distributed_router
 from purplesploit.ui.banner import show_banner
 from purplesploit import __version__
 
@@ -156,6 +160,17 @@ else:
 framework = Framework(db_path=db_path)
 module_count = framework.discover_modules()
 print(f"[INFO] Discovered {module_count} modules")
+
+# Shared application API; the existing browser and compatibility routes use
+# this same framework rather than starting a second browser backend.
+services = PurpleSploitServices(
+    framework,
+    advisory_provider=provider_from_environment(),
+)
+app.state.services = services
+app.state.coordinator = services.coordinator
+app.include_router(create_router(services))
+app.include_router(create_distributed_router(services.coordinator))
 
 # Session storage for command history
 sessions: Dict[str, Dict] = {}
