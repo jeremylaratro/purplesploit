@@ -47,6 +47,8 @@ ehthumbs.db
 # PurpleSploit Runtime Files
 # User workspace and data directories
 .purplesploit/
+/interop-channel
+/delete_small_files.sh
 *.db
 .pentest-credentials.db
 .pentest-targets.db
