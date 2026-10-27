@@ -1,0 +1,7 @@
+{
+  "host": "cache01.example.test",
+  "version": "7.2.5",
+  "users": [{"name": "default", "roles": ["readwrite"]}],
+  "roles": [{"name": "readwrite"}],
+  "databases": [{"name": "0", "keys": [{"name": "session:*", "count": 42}]}]
+}

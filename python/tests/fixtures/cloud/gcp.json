@@ -1,0 +1,6 @@
+{
+  "project": {"projectId": "project-one", "name": "Project One"},
+  "serviceAccounts": [{"uniqueId": "10001", "email": "runner@project-one.iam.gserviceaccount.com", "name": "runner"}],
+  "iamPolicy": {"version": 1, "bindings": [{"role": "roles/viewer", "members": ["serviceAccount:runner@project-one.iam.gserviceaccount.com"]}]},
+  "resources": [{"id": "//compute.googleapis.com/projects/project-one/zones/us-east1-b/instances/vm1", "name": "vm1", "resource_type": "compute_instance", "internet_exposed": true}]
+}

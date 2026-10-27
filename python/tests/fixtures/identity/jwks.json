@@ -1,0 +1,7 @@
+{
+  "keys": [
+    {"kty": "RSA", "kid": "rsa-example", "use": "sig", "alg": "RS256", "n": "AQIDBA", "e": "AQAB", "key_ops": ["verify"]},
+    {"kty": "EC", "kid": "ec-example", "crv": "P-256", "x": "AQID", "y": "BAUG", "use": "sig", "alg": "ES256"},
+    {"kty": "OKP", "kid": "ed-example", "crv": "Ed25519", "x": "AQIDBAUG", "alg": "EdDSA"}
+  ]
+}

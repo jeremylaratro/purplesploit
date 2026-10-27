@@ -1,0 +1,9 @@
+{
+  "asrep": {"stdout": "$krb5asrep$23$alice@CORP.LOCAL:abcd$012345\n", "stderr": "", "returncode": 0, "kinds": ["user", "credential", "resource"]},
+  "tgs": {"stdout": "ServicePrincipalName Name MemberOf\nHTTP/web.corp.local svc_web Users\n$krb5tgs$23$*svc_web$CORP.LOCAL$HTTP/web.corp.local*$abcd$012345\n", "stderr": "", "returncode": 0, "kinds": ["user", "credential", "resource"]},
+  "secrets": {"stdout": "[*] Dumping SAM hashes\nAdministrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::\n[*] Dumping LSA Secrets\nCORP\\svc_lsa:Password:with:colons\nCORP\\DC$:aes256-cts-hmac-sha1-96:0123456789abcdef\n[*] Dumping Domain Credentials (domain\\uid:rid:lmhash:nthash)\nCORP\\alice:1101:aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c:::\n[*] Cleaning up...\n", "stderr": "", "returncode": 0, "kinds": ["credential"]},
+  "shares": {"stdout": "Impacket v0.13.0\n# shares\nADMIN$\nC$\nPublic\n", "stderr": "", "returncode": 0, "kinds": ["share"]},
+  "psexec": {"stdout": "Impacket v0.13.0\n[*] Starting service...\nnt authority\\system\n", "stderr": "", "returncode": 0, "kinds": ["session"]},
+  "wmiexec": {"stdout": "Impacket v0.13.0\ncorp\\alice\n", "stderr": "", "returncode": 0, "kinds": ["session"]},
+  "spray": {"stdout": "2026/10/26 10:00:00 [+] VALID LOGIN: alice@CORP.LOCAL:Password:with spaces;$(id)\n2026/10/26 10:00:01 [!] bob@CORP.LOCAL - USER LOCKED OUT\n", "stderr": "", "returncode": 0, "kinds": ["credential", "user"]}
+}

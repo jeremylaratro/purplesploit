@@ -5,8 +5,9 @@ Processes natural language questions about the pentest context
 and provides intelligent responses.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple
 import re
+from .inventory import module_manifest, resolve_operation
 
 
 class NLPQueryHandler:
@@ -118,9 +119,30 @@ class NLPQueryHandler:
         # Generate response
         handler = self.response_templates.get(intent)
         if handler:
-            return handler(query, context, extracted)
+            return self._ground_response(handler(query, context, extracted))
 
         return {"success": False, "message": "No handler for detected intent"}
+
+    def _ground_response(self, value):
+        """Keep conceptual advice while resolving executable references live."""
+        if isinstance(value, list):
+            return [self._ground_response(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        result = {key: self._ground_response(item) for key, item in value.items()}
+        if isinstance(result.get("module"), str):
+            manifest = module_manifest(self.framework, result["module"])
+            operation = resolve_operation(manifest, result.get("operation")) if manifest else None
+            if manifest is None or (manifest["operations"] and operation is None):
+                result.update(module=None, available=False)
+                result.pop("operation", None)
+            else:
+                result["available"] = True
+                result["operation"] = operation["id"] if operation else None
+        if isinstance(result.get("modules"), list):
+            result["modules"] = [path for path in result["modules"]
+                                 if isinstance(path, str) and module_manifest(self.framework, path) is not None]
+        return result
 
     def _detect_intent(
         self,

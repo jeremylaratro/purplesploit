@@ -500,6 +500,7 @@ class TestXLSXReportGeneratorLongContent:
 # Mocked Tests (run regardless of openpyxl availability)
 # =============================================================================
 
+
 class TestXLSXReportGeneratorMocked:
     """Tests for XLSXReportGenerator using mocked openpyxl."""
 
@@ -507,7 +508,7 @@ class TestXLSXReportGeneratorMocked:
         """Test _check_openpyxl returns True when import succeeds."""
         gen = XLSXReportGenerator()
 
-        with patch.dict('sys.modules', {'openpyxl': MagicMock()}):
+        with patch.dict("sys.modules", {"openpyxl": MagicMock()}):
             result = gen._check_openpyxl()
 
         # Should return True (openpyxl mock is in sys.modules)
@@ -519,7 +520,7 @@ class TestXLSXReportGeneratorMocked:
         gen._openpyxl_available = False
 
         # Force ImportError
-        with patch('builtins.__import__', side_effect=ImportError("No module")):
+        with patch("builtins.__import__", side_effect=ImportError("No module")):
             result = gen._check_openpyxl()
 
         assert result is False
@@ -530,7 +531,7 @@ class TestXLSXReportGeneratorMocked:
         mock_openpyxl = MagicMock()
         mock_wb = MagicMock()
         mock_openpyxl.Workbook.return_value = mock_wb
-        mock_wb.sheetnames = ['Sheet']
+        mock_wb.sheetnames = ["Sheet"]
 
         # Mock the workbook's create_sheet method
         mock_sheets = {}
@@ -542,7 +543,7 @@ class TestXLSXReportGeneratorMocked:
 
         mock_wb.create_sheet = create_sheet
         mock_wb.__getitem__ = lambda self, key: mock_sheets.get(key, MagicMock())
-        mock_wb.__contains__ = lambda self, key: key in mock_sheets or key == 'Sheet'
+        mock_wb.__contains__ = lambda self, key: key in mock_sheets or key == "Sheet"
         mock_wb.__delitem__ = MagicMock()
 
         # Set up all required mocks
@@ -558,12 +559,15 @@ class TestXLSXReportGeneratorMocked:
         mock_openpyxl.chart.PieChart = MagicMock(return_value=MagicMock())
         mock_openpyxl.chart.Reference = MagicMock(return_value=MagicMock())
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-            'openpyxl.chart': mock_openpyxl.chart,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+                "openpyxl.chart": mock_openpyxl.chart,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
 
@@ -573,15 +577,19 @@ class TestXLSXReportGeneratorMocked:
             # Should return the output path
             assert result == str(output_path)
 
-            # Workbook should be saved
-            mock_wb.save.assert_called_once_with(output_path)
+            # Workbook is written to a private temporary path and published atomically.
+            mock_wb.save.assert_called_once()
+            saved_path = Path(mock_wb.save.call_args.args[0])
+            assert saved_path.parent == output_path.parent
+            assert saved_path.name.startswith(f".{output_path.name}.")
+            assert output_path.exists()
 
     def test_generate_creates_all_sheets(self, sample_report_data, tmp_path):
         """Test that generate() creates all expected worksheets."""
         mock_openpyxl = MagicMock()
         mock_wb = MagicMock()
         mock_openpyxl.Workbook.return_value = mock_wb
-        mock_wb.sheetnames = ['Sheet']
+        mock_wb.sheetnames = ["Sheet"]
 
         created_sheets = []
 
@@ -590,7 +598,7 @@ class TestXLSXReportGeneratorMocked:
             return MagicMock()
 
         mock_wb.create_sheet = track_create_sheet
-        mock_wb.__contains__ = lambda self, key: key == 'Sheet'
+        mock_wb.__contains__ = lambda self, key: key == "Sheet"
         mock_wb.__delitem__ = MagicMock()
 
         # Setup styles and utils mocks
@@ -606,12 +614,15 @@ class TestXLSXReportGeneratorMocked:
         mock_openpyxl.chart.PieChart = MagicMock(return_value=MagicMock())
         mock_openpyxl.chart.Reference = MagicMock(return_value=MagicMock())
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-            'openpyxl.chart': mock_openpyxl.chart,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+                "openpyxl.chart": mock_openpyxl.chart,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
 
@@ -629,11 +640,11 @@ class TestXLSXReportGeneratorMocked:
         mock_openpyxl = MagicMock()
         mock_wb = MagicMock()
         mock_openpyxl.Workbook.return_value = mock_wb
-        mock_wb.sheetnames = ['Sheet']
+        mock_wb.sheetnames = ["Sheet"]
         mock_wb.create_sheet = MagicMock(return_value=MagicMock())
 
         deleted_sheets = []
-        mock_wb.__contains__ = lambda self, key: key == 'Sheet'
+        mock_wb.__contains__ = lambda self, key: key == "Sheet"
         mock_wb.__delitem__ = lambda self, key: deleted_sheets.append(key)
 
         mock_openpyxl.styles = MagicMock()
@@ -648,12 +659,15 @@ class TestXLSXReportGeneratorMocked:
         mock_openpyxl.chart.PieChart = MagicMock(return_value=MagicMock())
         mock_openpyxl.chart.Reference = MagicMock(return_value=MagicMock())
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-            'openpyxl.chart': mock_openpyxl.chart,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+                "openpyxl.chart": mock_openpyxl.chart,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
 
@@ -661,7 +675,7 @@ class TestXLSXReportGeneratorMocked:
             gen.generate(sample_report_data, output_path)
 
             # Default sheet should be deleted
-            assert 'Sheet' in deleted_sheets
+            assert "Sheet" in deleted_sheets
 
 
 class TestXLSXCreateSummarySheetMocked:
@@ -684,7 +698,9 @@ class TestXLSXCreateSummarySheetMocked:
             return cells[key]
 
         mock_ws.cell = cell
-        mock_ws.__setitem__ = lambda self, key, val: setattr(cells.setdefault(key, MagicMock()), 'value', val)
+        mock_ws.__setitem__ = lambda self, key, val: setattr(
+            cells.setdefault(key, MagicMock()), "value", val
+        )
         mock_ws.__getitem__ = lambda self, key: cells.setdefault(key, MagicMock())
 
         mock_openpyxl.styles = MagicMock()
@@ -701,19 +717,22 @@ class TestXLSXCreateSummarySheetMocked:
 
         mock_wb.create_sheet = MagicMock(return_value=mock_ws)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-            'openpyxl.chart': mock_openpyxl.chart,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+                "openpyxl.chart": mock_openpyxl.chart,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_summary_sheet(mock_wb, sample_report_data)
 
             # Title should be set in A1
-            assert cells.get('A1') is not None
-            assert cells['A1'].value == sample_report_data.config.title
+            assert cells.get("A1") is not None
+            assert cells["A1"].value == sample_report_data.config.title
 
 
 class TestXLSXCreateFindingsSheetMocked:
@@ -750,11 +769,14 @@ class TestXLSXCreateFindingsSheetMocked:
 
         mock_wb.create_sheet = MagicMock(return_value=mock_ws)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_findings_sheet(mock_wb, sample_report_data)
@@ -794,11 +816,14 @@ class TestXLSXCreateFindingsSheetMocked:
 
         mock_wb.create_sheet = MagicMock(return_value=mock_ws)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_findings_sheet(mock_wb, sample_report_data)
@@ -839,11 +864,14 @@ class TestXLSXCreateTargetsSheetMocked:
 
         mock_wb.create_sheet = MagicMock(return_value=mock_ws)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_targets_sheet(mock_wb, sample_report_data)
@@ -888,11 +916,14 @@ class TestXLSXCreateServicesSheetMocked:
 
         mock_wb.create_sheet = MagicMock(return_value=mock_ws)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_services_sheet(mock_wb, sample_report_data)
@@ -938,11 +969,14 @@ class TestXLSXCreateServicesSheetMocked:
         config = ReportConfig(title="No Services")
         empty_report = ReportData(config=config, findings=[], services=[])
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
             gen._create_services_sheet(mock_wb, empty_report)
@@ -961,10 +995,13 @@ class TestGetColumnLetterFunction:
         mock_openpyxl.utils = MagicMock()
         mock_openpyxl.utils.get_column_letter = lambda x: chr(64 + x)
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.utils': mock_openpyxl.utils,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.utils": mock_openpyxl.utils,
+            },
+        ):
             from purplesploit.reporting.xlsx import get_column_letter
 
             assert get_column_letter(1) == "A"
@@ -988,10 +1025,13 @@ class TestXLSXSeverityFillMocked:
 
         mock_openpyxl.styles.PatternFill = capture_pattern_fill
 
-        with patch.dict('sys.modules', {
-            'openpyxl': mock_openpyxl,
-            'openpyxl.styles': mock_openpyxl.styles,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "openpyxl": mock_openpyxl,
+                "openpyxl.styles": mock_openpyxl.styles,
+            },
+        ):
             gen = XLSXReportGenerator()
             gen._openpyxl_available = True
 

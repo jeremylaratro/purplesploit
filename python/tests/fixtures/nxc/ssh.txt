@@ -1,0 +1,5 @@
+SSH 192.0.2.30 22 ubuntu [*] SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13
+SSH 192.0.2.30 22 ubuntu [+] alice:fixture-only (Pwn3d!) (shell access!)
+SSH 192.0.2.30 22 ubuntu [*] Executed command
+SSH 192.0.2.30 22 ubuntu root:x:0:0:root:/root:/bin/bash
+SSH 192.0.2.30 22 ubuntu alice:x:1000:1000:Alice:/home/alice:/bin/bash

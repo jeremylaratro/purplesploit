@@ -4,15 +4,16 @@ WPScan Module
 WordPress security scanner for vulnerability detection and enumeration.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from purplesploit.web_observations import WebToolModule, observation
 from typing import List, Dict, Any
 import json
 import re
 import os
 import tempfile
+import shlex
 
 
-class WPScanModule(ExternalToolModule):
+class WPScanModule(WebToolModule):
     """
     WPScan - WordPress Security Scanner.
 
@@ -23,6 +24,9 @@ class WPScanModule(ExternalToolModule):
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "wpscan"
+
+    emits = ["user", "technology", "finding"]
+    supported_tool_versions = ["WPScan 3.x JSON collections"]
 
     @property
     def name(self) -> str:
@@ -175,6 +179,9 @@ class WPScanModule(ExternalToolModule):
         """Build the wpscan command."""
         return self._build_full_scan_command()
 
+    def build_argv(self):
+        return shlex.split(self.build_command())
+
     def _build_base_command(self) -> str:
         """Build base command with common options."""
         url = self.get_option("URL")
@@ -182,8 +189,6 @@ class WPScanModule(ExternalToolModule):
         threads = self.get_option("THREADS")
         user_agent = self.get_option("USER_AGENT")
         proxy = self.get_option("PROXY")
-        random_ua = self.get_option("RANDOM_USER_AGENT")
-        force = self.get_option("FORCE")
 
         cmd = f"wpscan --url {self.quote_arg(url)}"
 
@@ -210,7 +215,7 @@ class WPScanModule(ExternalToolModule):
             cmd += " --force"
 
         # JSON output for parsing
-        cmd += " --format json"
+        cmd += " --format json --no-banner --no-update"
 
         return cmd
 
@@ -278,9 +283,9 @@ class WPScanModule(ExternalToolModule):
         if passlist:
             cmd += f" -P {self.quote_arg(passlist)}"
         elif password:
-            return "echo 'Error: PASSWORD must be materialized by op_password_attack'"
+            raise ValueError("PASSWORD must be materialized by op_password_attack")
         else:
-            return "echo 'Error: PASSLIST or PASSWORD required for password attack'"
+            raise ValueError("PASSLIST or PASSWORD required for password attack")
 
         return cmd
 
@@ -374,6 +379,8 @@ class WPScanModule(ExternalToolModule):
 
     def op_password_attack(self) -> Dict[str, Any]:
         """Brute force WordPress login."""
+        if not self.get_option("PASSLIST") and not self.get_option("PASSWORD"):
+            return {"success": False, "error": "PASSLIST or PASSWORD required"}
         temporary_passlist = None
         original_passlist = self.get_option("PASSLIST")
         password = self.get_option("PASSWORD")
@@ -427,12 +434,40 @@ class WPScanModule(ExternalToolModule):
             json_start = output.find('{')
             if json_start != -1:
                 json_str = output[json_start:]
-                return self._normalize_json(json.loads(json_str))
+                return self._with_observations(self._normalize_json(json.loads(json_str)))
         except json.JSONDecodeError:
             pass
 
         # Fall back to text parsing
-        return self._parse_text_output(output)
+        return self._with_observations(self._parse_text_output(output))
+
+    def _with_observations(self, data):
+        url = data.get("target_url") or self.get_option("URL") or ""
+        records = []
+        for user in data.get("users", []):
+            records.append(observation("user", url, **user, source="wpscan"))
+        components = []
+        version = data.get("version") or data.get("wordpress")
+        if version:
+            components.append({"name": "WordPress", "component_type": "wordpress", "details": version})
+        for key in ("plugins", "themes"):
+            for item in data.get(key, []):
+                components.append({**item, "component_type": key.rstrip("s")})
+        if isinstance(data.get("main_theme"), dict):
+            components.append({**data["main_theme"], "component_type": "theme"})
+        for component in components:
+            records.append(observation("technology", url, **component))
+            for vuln in component.get("vulnerabilities", []):
+                records.append(observation("finding", url, **vuln, component=component.get("name", component.get("slug")),
+                                           component_type=component["component_type"], source="wpscan"))
+            if component.get("component_type") == "wordpress" and isinstance(version, dict):
+                for vuln in version.get("vulnerabilities", []):
+                    records.append(observation("finding", url, **vuln, component="WordPress", source="wpscan"))
+        for vuln in data.get("vulnerabilities", []):
+            attrs = vuln if isinstance(vuln, dict) else {"title": str(vuln)}
+            records.append(observation("finding", url, **attrs))
+        data["observations"] = records
+        return data
 
     @staticmethod
     def _normalize_json(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -548,44 +583,22 @@ class WPScanModule(ExternalToolModule):
             except Exception:
                 pass
 
-    def _add_vulnerabilities(self, parsed: Dict[str, Any]):
-        """Add discovered vulnerabilities to session."""
-        if not self.framework or not hasattr(self.framework, 'session'):
+    def _add_vulnerabilities(self, parsed):
+        """Findings are emitted as observations and optionally use a lifecycle manager."""
+        manager = getattr(self.framework, "findings", None)
+        if manager is None or not callable(getattr(manager, "create", None)):
             return
-
-        url = self.get_option("URL")
-
-        # Add plugin vulnerabilities
-        for plugin in parsed.get("plugins", []):
-            for vuln in plugin.get("vulnerabilities", []):
-                try:
-                    self.framework.session.add_finding({
-                        'type': 'vulnerability',
-                        'title': vuln.get("title", "WordPress Plugin Vulnerability"),
-                        'target': url,
-                        'component': plugin.get("name"),
-                        'severity': vuln.get("severity", "unknown"),
-                        'cve': vuln.get("cve"),
-                        'source': 'wpscan'
-                    })
-                except Exception:
-                    pass
-
-        # Add theme vulnerabilities
-        for theme in parsed.get("themes", []):
-            for vuln in theme.get("vulnerabilities", []):
-                try:
-                    self.framework.session.add_finding({
-                        'type': 'vulnerability',
-                        'title': vuln.get("title", "WordPress Theme Vulnerability"),
-                        'target': url,
-                        'component': theme.get("name"),
-                        'severity': vuln.get("severity", "unknown"),
-                        'cve': vuln.get("cve"),
-                        'source': 'wpscan'
-                    })
-                except Exception:
-                    pass
+        for item in parsed.get("observations", []):
+            if item["kind"] != "finding":
+                continue
+            attrs = item["attributes"]
+            severity = str(attrs.get("severity", "info")).lower()
+            if severity not in {"critical", "high", "medium", "low", "info"}:
+                severity = "info"
+            manager.create(title=attrs.get("title", "WordPress vulnerability"),
+                           severity=severity, description=attrs.get("description", ""),
+                           target=item["target"], url=item["target"], module_name="wpscan",
+                           raw_output=json.dumps(attrs))
 
     def parse_output(self, output: str) -> dict:
         """Parse wpscan output."""

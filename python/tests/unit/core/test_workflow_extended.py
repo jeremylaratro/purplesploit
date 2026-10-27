@@ -12,13 +12,11 @@ Comprehensive test coverage for:
 
 import pytest
 import json
-import tempfile
-from pathlib import Path
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, call
-import threading
-import time
+from datetime import datetime
+from unittest.mock import MagicMock
 
+from purplesploit.core.framework import Framework
+from purplesploit.core.module import BaseModule, ModuleMetadata
 from purplesploit.core.workflow import (
     StepStatus,
     WorkflowStatus,
@@ -27,6 +25,169 @@ from purplesploit.core.workflow import (
     WorkflowEngine,
     WORKFLOW_TEMPLATES,
 )
+
+
+class ContractWorkflowModule(BaseModule):
+    """Small real module whose execution stops at an injected fake boundary."""
+
+    @property
+    def name(self):
+        return "Workflow Contract Module"
+
+    @property
+    def description(self):
+        return "Exercises the real Framework workflow contracts"
+
+    @property
+    def author(self):
+        return "Tests"
+
+    @property
+    def category(self):
+        return "test"
+
+    def get_operations(self):
+        return [
+            {
+                "name": "Probe",
+                "description": "Execute through a fake process boundary",
+                "handler": "op_probe",
+            }
+        ]
+
+    def op_probe(self):
+        return self.framework.workflow_test_boundary(
+            "probe",
+            self.get_option("RHOST"),
+        )
+
+    def run(self):
+        return self.framework.workflow_test_boundary(
+            "default",
+            self.get_option("RHOST"),
+        )
+
+
+def configure_framework_contract(mock_framework, mock_module, services=None):
+    """Configure a mock with the same metadata/instance contracts as Framework."""
+    metadata = ModuleMetadata(path="test/module", name="Test", category="test",
+                              description="Test", author="Tests",
+                              instance=lambda framework: mock_module)
+    mock_framework.database = MagicMock()
+    mock_framework.database.get_services = MagicMock(return_value=services or [])
+    mock_framework.get_module = MagicMock(return_value=metadata)
+    mock_framework.use_module = MagicMock(return_value=mock_module)
+    mock_framework.run_module = MagicMock(side_effect=lambda module: module.run())
+
+    def run_operation(module, operation):
+        handler = operation.get("handler")
+        if isinstance(handler, str):
+            handler = getattr(module, handler)
+        return handler()
+
+    mock_framework.run_operation = MagicMock(side_effect=run_operation)
+    return mock_framework
+
+
+class TestRealFrameworkContract:
+    """Regression coverage for the metadata/instance bug found in workflows."""
+
+    @pytest.fixture
+    def engine(self, tmp_path):
+        framework = Framework(db_path=":memory:")
+        framework.workflow_test_boundary = MagicMock(
+            return_value={"success": True, "output": "fake process complete"}
+        )
+        framework.modules["test/contract"] = ModuleMetadata(
+            path="test/contract",
+            name="Workflow Contract Module",
+            category="test",
+            description="Exercises the real Framework workflow contracts",
+            author="Tests",
+            instance=ContractWorkflowModule,
+        )
+
+        engine = WorkflowEngine(framework=framework)
+        engine.storage_path = tmp_path / "workflows"
+        engine.storage_path.mkdir(parents=True, exist_ok=True)
+        yield engine
+        framework.database.close()
+
+    def test_selected_operation_uses_live_instance_and_framework_pipeline(self, engine):
+        workflow = engine.create_workflow(name="Real contract")
+        workflow.add_step(
+            name="Probe target",
+            module="test/contract",
+            operation="Probe",
+        )
+
+        result = engine.run_workflow(
+            workflow.id,
+            variables={"target": "192.0.2.10"},
+        )
+
+        assert result["success"] is True
+        assert result["steps_completed"] == 1
+        assert workflow.status is WorkflowStatus.COMPLETED
+        assert isinstance(engine.framework.get_module("test/contract"), ModuleMetadata)
+        assert engine.framework.session.current_module is None
+        engine.framework.workflow_test_boundary.assert_called_once_with(
+            "probe",
+            "192.0.2.10",
+        )
+
+    def test_unknown_operation_is_rejected_before_boundary_execution(self, engine):
+        workflow = engine.create_workflow(name="Invalid operation")
+        workflow.add_step(
+            name="Bad selection",
+            module="test/contract",
+            operation="Missing Operation",
+        )
+
+        result = engine.run_workflow(workflow.id)
+
+        assert result["success"] is False
+        assert "operation not found" in result["error"].lower()
+        engine.framework.workflow_test_boundary.assert_not_called()
+
+    def test_builtin_template_operation_names_match_module_catalogs(self):
+        from purplesploit.modules.ad.kerbrute import KerbruteModule
+        from purplesploit.modules.network.nxc_ldap import NXCLDAPModule
+        from purplesploit.modules.network.nxc_smb import NXCSMBModule
+        from purplesploit.modules.osint.crtsh import CrtshModule
+        from purplesploit.modules.osint.dnsdumpster import DNSDumpsterModule
+        from purplesploit.modules.osint.shodan import ShodanModule
+        from purplesploit.modules.recon.nuclei import NucleiModule
+        from purplesploit.modules.web.forms import HTMLFormsModule
+
+        framework = Framework(db_path=":memory:")
+        try:
+            operation_modules = {
+                "ad/kerbrute": KerbruteModule,
+                "network/nxc_ldap": NXCLDAPModule,
+                "network/nxc_smb": NXCSMBModule,
+                "osint/crtsh": CrtshModule,
+                "osint/dnsdumpster": DNSDumpsterModule,
+                "osint/shodan": ShodanModule,
+                "recon/nuclei": NucleiModule,
+                "web/forms": HTMLFormsModule,
+            }
+
+            for template_name, template in WORKFLOW_TEMPLATES.items():
+                for step in template["steps"]:
+                    operation_name = step.get("operation")
+                    if not operation_name:
+                        continue
+                    module_class = operation_modules[step["module"]]
+                    module = module_class(framework)
+                    available = {
+                        operation["name"] for operation in module.get_operations()
+                    }
+                    assert operation_name in available, (
+                        f"{template_name}/{step['name']}: {operation_name}"
+                    )
+        finally:
+            framework.database.close()
 
 
 # =============================================================================
@@ -41,8 +202,6 @@ class TestFullWorkflowExecution:
         """Create engine with comprehensive mock framework."""
         mock_framework = MagicMock()
         mock_framework.session = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services = MagicMock(return_value=[])
 
         # Mock module
         mock_module = MagicMock()
@@ -55,7 +214,7 @@ class TestFullWorkflowExecution:
         mock_module.has_operations = MagicMock(return_value=False)
         mock_module.run = MagicMock(return_value={'success': True, 'output': 'Complete'})
 
-        mock_framework.get_module = MagicMock(return_value=mock_module)
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -70,7 +229,7 @@ class TestFullWorkflowExecution:
         workflow.variables = {"target": "192.168.1.1"}
 
         # Setup module return value
-        engine.framework.get_module().run.return_value = {
+        engine.framework.use_module().run.return_value = {
             'success': True,
             'output': 'Scan complete',
             'services': [{'service': 'ssh', 'port': 22}],
@@ -89,7 +248,7 @@ class TestFullWorkflowExecution:
         workflow.add_step(name="Step 2", module="module2")
         workflow.add_step(name="Step 3", module="module3")
 
-        engine.framework.get_module().run.return_value = {'success': True}
+        engine.framework.use_module().run.return_value = {'success': True}
 
         result = engine.run_workflow(workflow.id)
 
@@ -98,9 +257,9 @@ class TestFullWorkflowExecution:
     def test_execute_workflow_with_failed_step(self, engine):
         """Test workflow handles step failure."""
         workflow = engine.create_workflow(name="Failure Test")
-        step1 = workflow.add_step(name="Succeed", module="module1")
-        step2 = workflow.add_step(name="Fail", module="module2")
-        step3 = workflow.add_step(name="Never Runs", module="module3")
+        workflow.add_step(name="Succeed", module="module1")
+        workflow.add_step(name="Fail", module="module2")
+        workflow.add_step(name="Never Runs", module="module3")
 
         call_count = 0
 
@@ -111,12 +270,15 @@ class TestFullWorkflowExecution:
                 return {'success': False, 'error': 'Module failed'}
             return {'success': True}
 
-        engine.framework.get_module().run = MagicMock(side_effect=run_side_effect)
+        engine.framework.use_module().run = MagicMock(side_effect=run_side_effect)
 
         result = engine.run_workflow(workflow.id)
 
         assert result["steps_completed"] == 1
         assert result["steps_failed"] == 1
+        assert result["success"] is False
+        assert result["error"] == "Module failed"
+        assert workflow.status == WorkflowStatus.FAILED
         # Step 3 should not run due to failure
 
     def test_execute_workflow_tracks_status(self, engine):
@@ -124,9 +286,9 @@ class TestFullWorkflowExecution:
         workflow = engine.create_workflow(name="Status Test")
         workflow.add_step(name="Step", module="test")
 
-        engine.framework.get_module().run.return_value = {'success': True}
+        engine.framework.use_module().run.return_value = {'success': True}
 
-        result = engine.run_workflow(workflow.id)
+        engine.run_workflow(workflow.id)
 
         assert workflow.status == WorkflowStatus.COMPLETED
         assert workflow.started_at is not None
@@ -137,7 +299,7 @@ class TestFullWorkflowExecution:
         workflow = engine.create_workflow(name="Step Status Test")
         step = workflow.add_step(name="Test Step", module="test")
 
-        engine.framework.get_module().run.return_value = {'success': True}
+        engine.framework.use_module().run.return_value = {'success': True}
 
         engine.run_workflow(workflow.id)
 
@@ -151,7 +313,7 @@ class TestFullWorkflowExecution:
         step = workflow.add_step(name="Test Step", module="test")
 
         expected_result = {'success': True, 'data': {'key': 'value'}}
-        engine.framework.get_module().run.return_value = expected_result
+        engine.framework.use_module().run.return_value = expected_result
 
         engine.run_workflow(workflow.id)
 
@@ -169,14 +331,13 @@ class TestConditionalBranching:
     def engine(self, tmp_path):
         """Create engine for conditional testing."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services = MagicMock(return_value=[])
-        mock_framework.get_module = MagicMock(return_value=MagicMock(
+        mock_module = MagicMock(
             set_option=MagicMock(return_value=True),
             options={'RHOST': {}},
             has_operations=MagicMock(return_value=False),
             run=MagicMock(return_value={'success': True}),
-        ))
+        )
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -251,11 +412,14 @@ class TestConditionalBranching:
     def test_service_found_condition_with_database(self, engine):
         """Test service_found condition checks database."""
         workflow = Workflow(id="wf", name="Service Check")
+        workflow.variables["target"] = "192.0.2.10"
 
         # Mock database services
         mock_service = MagicMock()
         mock_service.service = "smb"
-        engine.framework.database.get_all_services.return_value = [mock_service]
+        engine.framework.database.get_services.return_value = [
+            {"service": mock_service.service, "target": "192.0.2.10"}
+        ]
 
         step = WorkflowStep(
             id="step_1",
@@ -270,9 +434,6 @@ class TestConditionalBranching:
     def test_forms_found_condition(self, engine):
         """Test custom forms_found condition type."""
         workflow = Workflow(id="wf", name="Forms Test")
-        # This is a custom condition that may not be implemented yet
-        # The engine should handle unknown conditions gracefully
-
         step = WorkflowStep(
             id="step_1",
             name="Form Step",
@@ -280,23 +441,23 @@ class TestConditionalBranching:
             conditions=[{"type": "forms_found"}]
         )
 
-        # Unknown condition types should return True (permissive)
-        # or be specifically handled
-        result = engine._check_conditions(step, workflow)
-        # Behavior depends on implementation
+        assert engine._check_conditions(step, workflow) is False
+
+        workflow.variables["forms"] = [{"action": "/login"}]
+        assert engine._check_conditions(step, workflow) is True
 
     def test_conditional_execution_in_workflow(self, engine):
         """Test conditional execution during full workflow run."""
         workflow = engine.create_workflow(name="Full Conditional")
-        step1 = workflow.add_step(name="Discovery", module="nmap")
-        step2 = workflow.add_step(
+        workflow.add_step(name="Discovery", module="nmap")
+        workflow.add_step(
             name="SMB Enum",
             module="smb",
             conditions=[{"type": "step_success", "step": "step_1"}]
         )
 
         # Make first step succeed
-        engine.framework.get_module().run.return_value = {'success': True}
+        engine.framework.use_module().run.return_value = {'success': True}
 
         result = engine.run_workflow(workflow.id)
 
@@ -307,15 +468,15 @@ class TestConditionalBranching:
     def test_conditional_skip_in_workflow(self, engine):
         """Test steps are skipped in workflow when conditions fail."""
         workflow = engine.create_workflow(name="Skip Test")
-        step1 = workflow.add_step(name="Discovery", module="nmap")
-        step2 = workflow.add_step(
+        workflow.add_step(name="Discovery", module="nmap")
+        workflow.add_step(
             name="SMB Enum",
             module="smb",
             conditions=[{"type": "step_success", "step": "step_1"}]
         )
 
         # Make first step fail
-        engine.framework.get_module().run.return_value = {
+        engine.framework.use_module().run.return_value = {
             'success': False,
             'error': 'Scan failed'
         }
@@ -337,14 +498,13 @@ class TestPauseResume:
     def engine(self, tmp_path):
         """Create engine for pause/resume testing."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services.return_value = []
-        mock_framework.get_module = MagicMock(return_value=MagicMock(
+        mock_module = MagicMock(
             set_option=MagicMock(return_value=True),
             options={'RHOST': {}},
             has_operations=MagicMock(return_value=False),
             run=MagicMock(return_value={'success': True}),
-        ))
+        )
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -367,39 +527,171 @@ class TestPauseResume:
         workflow = engine.create_workflow(name="Save Test")
         workflow.add_step(name="Step", module="test")
         workflow.status = WorkflowStatus.RUNNING
+        workflow.completed_at = datetime.utcnow()
 
         engine.pause_workflow(workflow.id)
 
         # Verify file was saved
         workflow_file = engine.storage_path / f"{workflow.id}.json"
         assert workflow_file.exists()
+        with workflow_file.open() as workflow_handle:
+            persisted = json.load(workflow_handle)
+        assert persisted["status"] == "paused"
+        assert persisted["completed_at"] is None
 
-    def test_resume_paused_workflow(self, engine):
-        """Test resuming a paused workflow."""
+    def test_resume_preserves_terminal_steps_and_summarizes_full_workflow(
+        self,
+        engine,
+    ):
+        """Resume executes only pending work and reports persisted outcomes."""
         workflow = engine.create_workflow(name="Resume Test")
         step1 = workflow.add_step(name="Step 1", module="test1")
         step1.status = StepStatus.SUCCESS
+        step1.result = {"success": True, "output": "already complete"}
+        step1.started_at = datetime(2024, 1, 1, 12, 0, 0)
+        step1.completed_at = datetime(2024, 1, 1, 12, 1, 0)
+
         step2 = workflow.add_step(name="Step 2", module="test2")
-        # step2 still pending
+        step2.status = StepStatus.SKIPPED
+        step2.completed_at = datetime(2024, 1, 1, 12, 2, 0)
+
+        step3 = workflow.add_step(
+            name="Step 3",
+            module="test3",
+            on_failure=["step_4"],
+        )
+        step3.status = StepStatus.FAILED
+        step3.error = "persisted failure"
+        step3.result = {"success": False, "error": "persisted failure"}
+        step3.started_at = datetime(2024, 1, 1, 12, 3, 0)
+        step3.completed_at = datetime(2024, 1, 1, 12, 4, 0)
+
+        step4 = workflow.add_step(name="Step 4", module="test4")
 
         workflow.status = WorkflowStatus.PAUSED
+        workflow.started_at = datetime(2024, 1, 1, 12, 0, 0)
+        original_started_at = workflow.started_at
 
         result = engine.resume_workflow(workflow.id)
 
-        # Resume triggers run_workflow which will execute pending steps
+        assert engine.framework.run_module.call_count == 1
+        assert engine.framework.use_module.call_count == 1
+        assert step1.status == StepStatus.SUCCESS
+        assert step2.status == StepStatus.SKIPPED
+        assert step3.status == StepStatus.FAILED
+        assert step4.status == StepStatus.SUCCESS
+        assert workflow.started_at == original_started_at
+        assert workflow.status == WorkflowStatus.FAILED
+        assert workflow.completed_at is not None
+        assert result == {
+            "success": False,
+            "workflow_id": workflow.id,
+            "steps_completed": 2,
+            "steps_failed": 1,
+            "steps_skipped": 1,
+            "steps_pending": 0,
+            "step_results": result["step_results"],
+            "status": "failed",
+            "error": "persisted failure",
+        }
+        assert [item["step_id"] for item in result["step_results"]] == [
+            "step_1",
+            "step_2",
+            "step_3",
+            "step_4",
+        ]
 
-    def test_resume_no_pending_steps(self, engine):
-        """Test resume fails when no pending steps."""
+        reloaded_engine = WorkflowEngine(framework=engine.framework)
+        reloaded_engine.storage_path = engine.storage_path
+        reloaded = reloaded_engine.load_workflow(workflow.id)
+        assert reloaded is not None
+        assert reloaded.status == WorkflowStatus.FAILED
+        assert reloaded.started_at == original_started_at
+        assert reloaded.completed_at == workflow.completed_at
+        assert [step.status for step in reloaded.steps] == [
+            StepStatus.SUCCESS,
+            StepStatus.SKIPPED,
+            StepStatus.FAILED,
+            StepStatus.SUCCESS,
+        ]
+
+    def test_resume_no_pending_steps_finalizes_without_reexecution(self, engine):
+        """A last-step pause can be finalized without replaying any step."""
         workflow = engine.create_workflow(name="No Pending Test")
         step1 = workflow.add_step(name="Step 1", module="test1")
         step1.status = StepStatus.SUCCESS
+        step1.result = {"success": True}
+        step1.completed_at = datetime(2024, 1, 1, 12, 1, 0)
+        step2 = workflow.add_step(name="Step 2", module="test2")
+        step2.status = StepStatus.SKIPPED
+        step2.completed_at = datetime(2024, 1, 1, 12, 2, 0)
 
         workflow.status = WorkflowStatus.PAUSED
+        workflow.started_at = datetime(2024, 1, 1, 12, 0, 0)
 
         result = engine.resume_workflow(workflow.id)
 
-        assert result["success"] is False
-        assert "no pending steps" in result["error"].lower()
+        assert result["success"] is True
+        assert result["status"] == "completed"
+        assert result["steps_completed"] == 1
+        assert result["steps_skipped"] == 1
+        assert result["steps_pending"] == 0
+        assert workflow.status == WorkflowStatus.COMPLETED
+        assert workflow.completed_at is not None
+        engine.framework.get_module.assert_not_called()
+        engine.framework.use_module.assert_not_called()
+        engine.framework.run_module.assert_not_called()
+
+    def test_run_stops_between_steps_when_pause_is_requested(self, engine):
+        """A pause during step completion is persisted before the next step."""
+        workflow = engine.create_workflow(name="Concurrent Pause Test")
+        workflow.add_step(name="Step 1", module="test1")
+        workflow.add_step(name="Step 2", module="test2")
+        workflow.add_step(name="Step 3", module="test3")
+        workflow_complete = MagicMock()
+        engine.on_workflow_complete = workflow_complete
+
+        def pause_after_first_step(completed_workflow, step, _result):
+            if step.id == "step_1":
+                assert engine.pause_workflow(completed_workflow.id) is True
+
+        engine.on_step_complete = pause_after_first_step
+
+        paused_result = engine.run_workflow(workflow.id)
+
+        assert paused_result["success"] is False
+        assert paused_result["status"] == "paused"
+        assert paused_result["steps_completed"] == 1
+        assert paused_result["steps_pending"] == 2
+        assert workflow.status == WorkflowStatus.PAUSED
+        assert workflow.completed_at is None
+        assert workflow.current_step_id is None
+        assert engine.framework.run_module.call_count == 1
+        workflow_complete.assert_not_called()
+
+        workflow_file = engine.storage_path / f"{workflow.id}.json"
+        with workflow_file.open() as workflow_handle:
+            persisted = json.load(workflow_handle)
+        assert persisted["status"] == "paused"
+        assert persisted["completed_at"] is None
+        assert [step["status"] for step in persisted["steps"]] == [
+            "success",
+            "pending",
+            "pending",
+        ]
+
+        original_started_at = workflow.started_at
+        engine.on_step_complete = None
+        resumed_result = engine.resume_workflow(workflow.id)
+
+        assert resumed_result["success"] is True
+        assert resumed_result["status"] == "completed"
+        assert resumed_result["steps_completed"] == 3
+        assert resumed_result["steps_pending"] == 0
+        assert workflow.started_at == original_started_at
+        assert workflow.completed_at is not None
+        assert engine.framework.run_module.call_count == 3
+        workflow_complete.assert_called_once_with(workflow, resumed_result)
 
     def test_pause_nonexistent_workflow(self, engine):
         """Test pausing non-existent workflow."""
@@ -463,6 +755,16 @@ class TestTemplateInstantiation:
             assert step.module == template_step["module"]
             assert step.operation == template_step.get("operation")
             assert step.conditions == template_step.get("conditions", [])
+
+    def test_web_template_imports_recorded_forms_when_supplied(self, engine):
+        template = WORKFLOW_TEMPLATES["web_application_test"]
+        form_step = next(step for step in template["steps"] if step["module"] == "web/forms")
+        assert form_step["operation"] == "Import Forms"
+        assert form_step["options"] == {"HTML_FILE": "$html_file"}
+        assert {condition["type"] for condition in form_step["conditions"]} == {
+            "step_success",
+            "variable_set",
+        }
 
     def test_create_from_each_template(self, engine):
         """Test each template can be instantiated."""
@@ -531,8 +833,6 @@ class TestStepExecutionWithOperations:
     def engine(self, tmp_path):
         """Create engine with operation-capable modules."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services.return_value = []
 
         mock_module = MagicMock()
         mock_module.set_option = MagicMock(return_value=True)
@@ -542,9 +842,11 @@ class TestStepExecutionWithOperations:
             {'name': 'Quick Scan', 'handler': 'op_quick_scan'},
             {'name': 'Full Scan', 'handler': 'op_full_scan'},
         ])
+        mock_module.op_quick_scan = MagicMock(return_value={'success': True})
+        mock_module.op_full_scan = MagicMock(return_value={'success': True})
         mock_module.run = MagicMock(return_value={'success': True})
 
-        mock_framework.get_module = MagicMock(return_value=mock_module)
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -554,17 +856,16 @@ class TestStepExecutionWithOperations:
     def test_execute_step_with_operation_by_name(self, engine):
         """Test executing step that specifies an operation."""
         workflow = engine.create_workflow(name="Operation Test")
-        step = workflow.add_step(
+        workflow.add_step(
             name="Scan",
             module="recon/nmap",
             operation="Quick Scan"
         )
 
-        engine.framework.get_module().run.return_value = {'success': True}
-
         result = engine.run_workflow(workflow.id)
 
-        # The operation should have been looked up
+        assert result["success"] is True
+        engine.framework.run_operation.assert_called_once()
 
     def test_execute_step_with_operation_handler(self, engine):
         """Test operation handler is called for matching operation."""
@@ -577,7 +878,7 @@ class TestStepExecutionWithOperations:
         )
         workflow.steps.append(step)
 
-        mock_module = engine.framework.get_module()
+        mock_module = engine.framework.use_module()
 
         # Setup operation handler
         mock_handler = MagicMock(return_value={'success': True, 'data': 'result'})
@@ -589,8 +890,8 @@ class TestStepExecutionWithOperations:
         engine.workflows[workflow.id] = workflow
         result = engine._execute_step(step, workflow)
 
-        # Step should complete successfully (handler or run was called)
-        assert result is not None
+        assert result["success"] is True
+        mock_handler.assert_called_once()
 
     def test_execute_step_with_string_handler(self, engine):
         """Test operation with string handler name."""
@@ -603,19 +904,19 @@ class TestStepExecutionWithOperations:
         )
         workflow.steps.append(step)
 
-        mock_module = engine.framework.get_module()
+        mock_module = engine.framework.use_module()
         mock_module.op_quick_scan = MagicMock(return_value={'success': True})
         mock_module.get_operations.return_value = [
             {'name': 'Quick Scan', 'handler': 'op_quick_scan'}
         ]
 
         engine.workflows[workflow.id] = workflow
-        result = engine._execute_step(step, workflow)
+        engine._execute_step(step, workflow)
 
         mock_module.op_quick_scan.assert_called_once()
 
-    def test_execute_step_fallback_to_run(self, engine):
-        """Test step falls back to run() when no operation match."""
+    def test_execute_step_rejects_unknown_operation(self, engine):
+        """An unknown selected operation must not fall back to module.run()."""
         workflow = Workflow(id="wf", name="Fallback Test")
         step = WorkflowStep(
             id="step_1",
@@ -625,7 +926,7 @@ class TestStepExecutionWithOperations:
         )
         workflow.steps.append(step)
 
-        mock_module = engine.framework.get_module()
+        mock_module = engine.framework.use_module()
         mock_module.has_operations = MagicMock(return_value=True)
         mock_module.get_operations.return_value = []  # No matching operations
         mock_module.run = MagicMock(return_value={'success': True})
@@ -633,9 +934,9 @@ class TestStepExecutionWithOperations:
         engine.workflows[workflow.id] = workflow
         result = engine._execute_step(step, workflow)
 
-        # Step should still return a result regardless of how it was executed
-        assert result is not None
-        assert "step_id" in result
+        assert result["success"] is False
+        assert "operation not found" in result["error"].lower()
+        mock_module.run.assert_not_called()
 
 
 # =============================================================================
@@ -649,8 +950,6 @@ class TestModuleTargetSetting:
     def engine(self, tmp_path):
         """Create engine with mock framework."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services.return_value = []
 
         mock_module = MagicMock()
         mock_module.set_option = MagicMock(return_value=True)
@@ -662,7 +961,7 @@ class TestModuleTargetSetting:
         mock_module.has_operations = MagicMock(return_value=False)
         mock_module.run = MagicMock(return_value={'success': True})
 
-        mock_framework.get_module = MagicMock(return_value=mock_module)
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -677,7 +976,7 @@ class TestModuleTargetSetting:
 
         engine.run_workflow(workflow.id)
 
-        engine.framework.get_module().set_option.assert_any_call('RHOST', '192.168.1.1')
+        engine.framework.use_module().set_option.assert_any_call('RHOST', '192.168.1.1')
 
     def test_target_set_on_target_option(self, engine):
         """Test target is set on TARGET option."""
@@ -687,7 +986,7 @@ class TestModuleTargetSetting:
 
         engine.run_workflow(workflow.id)
 
-        engine.framework.get_module().set_option.assert_any_call('TARGET', '192.168.1.1')
+        engine.framework.use_module().set_option.assert_any_call('TARGET', '192.168.1.1')
 
     def test_url_target_set_on_url_option(self, engine):
         """Test URL target is set on URL option."""
@@ -697,7 +996,7 @@ class TestModuleTargetSetting:
 
         engine.run_workflow(workflow.id)
 
-        engine.framework.get_module().set_option.assert_any_call('URL', 'https://example.com')
+        engine.framework.use_module().set_option.assert_any_call('URL', 'https://example.com')
 
 
 # =============================================================================
@@ -732,6 +1031,38 @@ class TestWorkflowValidation:
         result = engine._validate_workflow(workflow)
 
         assert result["valid"] is True
+
+    def test_validate_rejects_missing_module(self, engine):
+        workflow = Workflow(id="wf", name="Missing module")
+        workflow.steps.append(
+            WorkflowStep(
+                id="step_1",
+                name="Missing",
+                module="missing/module",
+            )
+        )
+        engine.framework.get_module.return_value = None
+
+        result = engine._validate_workflow(workflow)
+
+        assert result["valid"] is False
+        assert "module not found" in result["error"].lower()
+
+    def test_validate_rejects_unknown_condition(self, engine):
+        workflow = Workflow(id="wf", name="Unknown condition")
+        workflow.steps.append(
+            WorkflowStep(
+                id="step_1",
+                name="Conditional",
+                module="test",
+                conditions=[{"type": "not_implemented"}],
+            )
+        )
+
+        result = engine._validate_workflow(workflow)
+
+        assert result["valid"] is False
+        assert "unsupported condition" in result["error"].lower()
 
     def test_validate_missing_variable(self, engine):
         """Test validation detects missing variables."""
@@ -809,10 +1140,13 @@ class TestServiceExistsCheck:
     def test_service_exists_from_database(self, engine):
         """Test service found in database."""
         workflow = Workflow(id="wf", name="Test")
+        workflow.variables["target"] = "192.0.2.10"
 
         mock_service = MagicMock()
         mock_service.service = "microsoft-ds"  # SMB service name
-        engine.framework.database.get_all_services.return_value = [mock_service]
+        engine.framework.database.get_services.return_value = [
+            {"service": mock_service.service, "target": "192.0.2.10"}
+        ]
 
         assert engine._service_exists("microsoft", workflow) is True
 
@@ -837,14 +1171,13 @@ class TestCallbackIntegration:
     def engine(self, tmp_path):
         """Create engine with mock framework."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services.return_value = []
-        mock_framework.get_module = MagicMock(return_value=MagicMock(
+        mock_module = MagicMock(
             set_option=MagicMock(return_value=True),
             options={'RHOST': {}},
             has_operations=MagicMock(return_value=False),
             run=MagicMock(return_value={'success': True}),
-        ))
+        )
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -1023,8 +1356,13 @@ class TestErrorHandling:
     def engine(self, tmp_path):
         """Create engine with mock framework."""
         mock_framework = MagicMock()
-        mock_framework.database = MagicMock()
-        mock_framework.database.get_all_services.return_value = []
+        mock_module = MagicMock(
+            set_option=MagicMock(return_value=True),
+            options={"RHOST": {}},
+            has_operations=MagicMock(return_value=False),
+            run=MagicMock(return_value={"success": True}),
+        )
+        configure_framework_contract(mock_framework, mock_module)
 
         engine = WorkflowEngine(framework=mock_framework)
         engine.storage_path = tmp_path / "workflows"
@@ -1036,7 +1374,7 @@ class TestErrorHandling:
         workflow = engine.create_workflow(name="Exception Test")
         step = workflow.add_step(name="Fail", module="test")
 
-        engine.framework.get_module = MagicMock(side_effect=Exception("Module error"))
+        engine.framework.use_module = MagicMock(side_effect=Exception("Module error"))
 
         result = engine._execute_step(step, workflow)
 
@@ -1053,7 +1391,8 @@ class TestErrorHandling:
 
         result = engine.run_workflow(workflow.id)
 
-        assert result["steps_failed"] >= 1
+        assert result["success"] is False
+        assert "crash" in result["error"].lower()
 
     def test_module_not_found_handling(self, engine):
         """Test handling when module is not found."""
@@ -1061,7 +1400,7 @@ class TestErrorHandling:
         step = WorkflowStep(id="step_1", name="Missing", module="nonexistent/module")
         workflow.steps.append(step)
 
-        engine.framework.get_module = MagicMock(return_value=None)
+        engine.framework.use_module = MagicMock(return_value=None)
 
         engine.workflows[workflow.id] = workflow
         result = engine._execute_step(step, workflow)

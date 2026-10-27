@@ -5,7 +5,6 @@ Tests the SQLMap SQL injection module properties, command building, and output p
 """
 
 import pytest
-from unittest.mock import MagicMock
 
 
 class TestSQLMapModuleProperties:
@@ -73,7 +72,8 @@ class TestSQLMapCommandBuilding:
         sqlmap_module.set_option("URL", "http://target.com/page.php?id=1")
         sqlmap_module.set_option("COOKIE", "session=abc123")
         cmd = sqlmap_module.build_command()
-        assert "--cookie='session=abc123'" in cmd
+        import shlex
+        assert "--cookie=session=abc123" in shlex.split(cmd)
 
     def test_build_command_with_level(self, sqlmap_module):
         """Test building command with level."""

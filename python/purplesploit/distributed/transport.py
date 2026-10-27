@@ -5,16 +5,18 @@ Handles communication between agents and coordinator.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, Callable, List
-from datetime import datetime
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, Callable
+from datetime import datetime, timezone
 import json
 import logging
 import asyncio
 import ssl
 import hashlib
 import hmac
+import inspect
 import time
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,8 @@ class HTTPTransport(Transport):
             "task_request": "/api/v1/tasks/request",
             "task_result": "/api/v1/tasks/result",
             "findings_sync": "/api/v1/findings/sync",
+            "task_submit": "/api/v1/tasks/submit",
+            "artifact_upload": "/api/v1/artifacts/upload",
         }
 
         endpoint = endpoint_map.get(message_type)
@@ -175,16 +179,17 @@ class HTTPTransport(Transport):
 
         try:
             # Add signature
-            payload = {
-                "type": message_type,
-                "timestamp": datetime.utcnow().isoformat(),
-                "data": data,
-            }
-            if self.config.shared_secret:
-                payload["signature"] = self._sign_message(payload)
-
             for attempt in range(self.config.retry_count):
                 try:
+                    payload = {
+                        "protocol_version": 1,
+                        "id": str(uuid4()),
+                        "type": message_type,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "data": data,
+                    }
+                    if self.config.shared_secret:
+                        payload["signature"] = self._sign_message(payload)
                     response = self._session.post(
                         f"{self.config.server_url}{endpoint}",
                         json=payload,
@@ -200,7 +205,11 @@ class HTTPTransport(Transport):
                         if attempt < self.config.retry_count - 1:
                             time.sleep(self.config.retry_delay * (attempt + 1))
                             continue
-                    return {"success": False, "error": f"HTTP {response.status_code}"}
+                    try:
+                        detail = response.json().get("detail", f"HTTP {response.status_code}")
+                    except (ValueError, AttributeError):
+                        detail = f"HTTP {response.status_code}"
+                    return {"success": False, "status_code": response.status_code, "error": detail}
 
                 except requests.exceptions.Timeout:
                     if attempt < self.config.retry_count - 1:
@@ -258,21 +267,36 @@ class WebSocketTransport(Transport):
             if self.config.api_key:
                 extra_headers["Authorization"] = f"Bearer {self.config.api_key}"
 
-            self._ws = self._loop.run_until_complete(
-                websockets.connect(
+            # websockets 14+ uses additional_headers; older releases use
+            # extra_headers. Inspect the installed callable, not a guessed
+            # version range (both implementations may be installed).
+            parameters = inspect.signature(websockets.connect).parameters
+            header_key = "additional_headers" if "additional_headers" in parameters else "extra_headers"
+
+            def connection():
+                return websockets.connect(
                     ws_url,
                     ssl=ssl_context,
-                    extra_headers=extra_headers,
                     ping_interval=30,
                     ping_timeout=10,
+                    **{header_key: extra_headers},
                 )
-            )
+
+            async def open_connection():
+                return await connection()
+
+            # Modern websockets requires a running loop when connect() is
+            # constructed. The legacy implementation also accepts construction
+            # before the loop starts.
+            awaitable = open_connection() if header_key == "additional_headers" else connection()
+            self._ws = self._loop.run_until_complete(awaitable)
 
             self.is_connected = True
             return True
 
         except Exception as e:
             self._last_error = str(e)
+            self.disconnect()
             return False
 
     def disconnect(self) -> bool:
@@ -297,13 +321,13 @@ class WebSocketTransport(Transport):
             return {"success": False, "error": "Not connected"}
 
         try:
-            import uuid
-            message_id = str(uuid.uuid4())[:8]
+            message_id = str(uuid4())
 
             payload = {
+                "protocol_version": 1,
                 "id": message_id,
                 "type": message_type,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
             }
             if self.config.shared_secret:

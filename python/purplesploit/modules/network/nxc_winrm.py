@@ -6,9 +6,10 @@ WinRM protocol operations using NetExec.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCWinRMModule(ExternalToolModule):
+class NXCWinRMModule(NXCModuleMixin, ExternalToolModule):
     """NetExec WinRM module for Windows Remote Management operations."""
 
     def __init__(self, framework):
@@ -42,7 +43,7 @@ class NXCWinRMModule(ExternalToolModule):
         })
 
     def get_operations(self) -> List[Dict[str, Any]]:
-        return [
+        return self._operation_manifest([
             {"name": "Test Authentication", "description": "Test WinRM authentication", "handler": "op_test_auth"},
             {"name": "Execute Command", "description": "Execute Windows command", "handler": "op_exec_cmd"},
             {"name": "Execute PowerShell", "description": "Execute PowerShell command", "handler": "op_exec_ps"},
@@ -50,7 +51,7 @@ class NXCWinRMModule(ExternalToolModule):
             {"name": "Check Privileges", "description": "Check user privileges", "handler": "op_privs"},
             {"name": "List Local Users", "description": "List local users", "handler": "op_users"},
             {"name": "Network Configuration", "description": "Get ipconfig", "handler": "op_ipconfig"},
-        ]
+        ], interactive={"op_exec_cmd", "op_exec_ps"}, emits={"op_users": ["user"]})
 
     def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
@@ -67,24 +68,19 @@ class NXCWinRMModule(ExternalToolModule):
             auth += " -p ''"
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
-        rhost = self.get_option("RHOST")
-        auth = self._build_auth()
-        cmd = f"nxc winrm {self.quote_arg(rhost)} {auth}"
-        if extra_args:
-            cmd += f" {extra_args}"
-        return self.execute_command(cmd, timeout=180)
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
+        return self._run_nxc("winrm", extra_args, timeout=180)
 
     def op_test_auth(self) -> Dict[str, Any]:
         return self._execute_nxc()
 
     def op_exec_cmd(self) -> Dict[str, Any]:
         cmd = input("Command: ")
-        return self._execute_nxc(f"-x '{cmd}'")
+        return self._execute_nxc(["-x", cmd])
 
     def op_exec_ps(self) -> Dict[str, Any]:
         ps = input("PowerShell command: ")
-        return self._execute_nxc(f"-X '{ps}'")
+        return self._execute_nxc(["-X", ps])
 
     def op_sysinfo(self) -> Dict[str, Any]:
         return self._execute_nxc("-x 'systeminfo'")

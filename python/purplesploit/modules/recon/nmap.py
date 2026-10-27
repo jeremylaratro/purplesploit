@@ -1,23 +1,74 @@
-"""
-Nmap Scan Module
+"""Canonical Nmap profiles, argv construction and completed-result import.
 
-Network scanning and service detection using Nmap.
+Legacy scan modules select a profile here; XML supplies concrete host identities.
 """
 
-import defusedxml.ElementTree as ET  # XXE-safe XML parsing
-import os
+from dataclasses import dataclass
+import ipaddress
 from pathlib import Path
-from typing import List, Dict, Any
+import re
+import shlex
+
 from purplesploit.core.module import ExternalToolModule
 from purplesploit.models.database import db_manager
+from purplesploit.modules.recon.nmap_importer import (
+    import_discovered_hosts, observations_for_hosts, parse_nmap_xml,
+)
+
+
+@dataclass(frozen=True)
+class NmapProfile:
+    """One profile definition shared by operations and legacy module aliases."""
+
+    name: str
+    title: str
+    description: str
+    subcategory: str = "standard"
+    scan_type: str = "sCV"
+    ports: str = "-"
+    top_ports: str = ""
+    timing: str = "4"
+    min_rate: str = "3900"
+    max_rtt_timeout: str = "4.5"
+    max_retries: str = ""
+    version_intensity: str = ""
+    os_detection: bool = False
+    skip_discovery: bool = False
+    traceroute: bool = False
+
+    def options(self) -> dict:
+        values = {key.upper(): getattr(self, key) for key in (
+            "scan_type", "ports", "top_ports", "timing", "min_rate",
+            "max_rtt_timeout", "max_retries", "version_intensity",
+            "os_detection", "skip_discovery", "traceroute",
+        )}
+        return {key: str(value).lower() if isinstance(value, bool) else value
+                for key, value in values.items()}
+
+
+NMAP_PROFILES = {
+    "default": NmapProfile("default", "Default Scan", "All TCP ports + version/script detection (-p- -sCV)"),
+    "fast": NmapProfile("fast", "Fast Scan", "Top 100 TCP ports + quick version detection", scan_type="sV",
+                        ports="", top_ports="100", min_rate="5000", max_rtt_timeout="2",
+                        max_retries="1", version_intensity="2"),
+    "comprehensive": NmapProfile("comprehensive", "Comprehensive Scan", "All TCP ports + maximum version intensity",
+                                 version_intensity="9"),
+    "aggressive": NmapProfile("aggressive", "Aggressive Scan", "Version/scripts + OS detection + traceroute",
+                              "advanced", version_intensity="9", os_detection=True, traceroute=True),
+    "stealth": NmapProfile("stealth", "Stealth Scan", "SYN scan with slow timing (requires privileges)",
+                           "advanced", scan_type="sS", timing="2", min_rate="100", max_rtt_timeout="10"),
+    "udp": NmapProfile("udp", "UDP Scan", "Top 100 UDP ports", "specialized", scan_type="sU",
+                       ports="", top_ports="100", min_rate="1000"),
+    "udp_full": NmapProfile("udp_full", "UDP Full Scan", "All UDP ports", "specialized", scan_type="sU",
+                            min_rate="1000"),
+    "no_ping": NmapProfile("no_ping", "No Ping Scan", "All TCP ports + version/scripts, skip host discovery",
+                           "specialized", skip_discovery=True),
+}
+PROFILE_ALIASES = {"tcp_full": "default", "tcp_top": "fast", "udp_top": "udp"}
 
 
 class NmapModule(ExternalToolModule):
-    """
-    Nmap - Network scanning and service detection.
-
-    Comprehensive network scanning tool for port discovery and service identification.
-    """
+    profile_name = "default"
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -29,7 +80,7 @@ class NmapModule(ExternalToolModule):
 
     @property
     def description(self) -> str:
-        return "All ports + version/script detection (-p- -sCV)"
+        return NMAP_PROFILES[self.profile_name].description
 
     @property
     def author(self) -> str:
@@ -40,642 +91,277 @@ class NmapModule(ExternalToolModule):
         return "recon"
 
     def _init_options(self):
-        """Initialize module-specific options."""
         super()._init_options()
+        definitions = {
+            "RHOST": (None, "Target host, network, or whitespace-separated targets"),
+            "TARGETS": (None, "Additional target list (list or whitespace-separated string)"),
+            "TARGET_FILE": (None, "Nmap target input file (-iL), one segment per run"),
+            "IPV6": ("false", "Use IPv6 (-6); literal IPv6 targets are detected automatically"),
+            "PROFILE": (self.profile_name, "Canonical scan profile"),
+            "PORTS": ("-", "Port specification; empty selects TOP_PORTS"),
+            "SCAN_TYPE": ("sCV", "Scan switches without leading dash (e.g. sCV, sU, sS -sU)"),
+            "TOP_PORTS": ("", "Top N ports; PORTS must be empty"),
+            "SCRIPT": (None, "NSE script expression"),
+            "OUTPUT_FORMAT": ("all", "normal, xml, grepable, all"),
+            "OUTPUT_FILE": (None, "Output path; all uses a basename, xml uses the exact filename"),
+            "RUN_DIR": (None, "Directory for relative Nmap output paths"),
+            "TIMING": ("4", "Timing template (0-5)"),
+            "OS_DETECTION": ("false", "Enable OS detection (-O)"),
+            "VERSION_INTENSITY": ("", "Version detection intensity (0-9)"),
+            "MIN_RATE": ("3900", "Minimum packets per second"),
+            "MAX_RTT_TIMEOUT": ("4.5", "Maximum round-trip time timeout"),
+            "MAX_RETRIES": ("", "Maximum scan probe retransmissions"),
+            "HOST_TIMEOUT": (None, "Give up on host after this long (e.g. 30m)"),
+            "BACKGROUND": ("true", "Launch in background; import XML separately after completion"),
+            "SKIP_DISCOVERY": ("false", "Skip host discovery (-Pn)"),
+            "NO_PING": ("false", "Legacy alias for SKIP_DISCOVERY"),
+            "TRACEROUTE": ("false", "Trace path to each host"),
+            "FRAGMENT": ("false", "Fragment probes (-f), where supported by Nmap"),
+            "DECOY": (None, "Decoy specification (-D), where supported by Nmap"),
+        }
+        for key, (value, description) in definitions.items():
+            self.options[key] = {"value": value, "default": value, "required": key == "RHOST",
+                                 "description": description}
+        self.apply_profile(self.profile_name, defaults=True)
 
-        self.options.update({
-            "RHOST": {
-                "value": None,
-                "required": True,
-                "description": "Target host IP address or network",
-                "default": None
-            },
-            "PORTS": {
-                "value": "-",
-                "required": False,
-                "description": "Port specification (e.g., 1-1000, 80,443, - for all ports)",
-                "default": "-"
-            },
-            "SCAN_TYPE": {
-                "value": "sCV",
-                "required": False,
-                "description": "Scan type (sS, sT, sU, sV, sC, sCV, etc.)",
-                "default": "sCV"
-            },
-            "TOP_PORTS": {
-                "value": None,
-                "required": False,
-                "description": "Scan top N ports (e.g., 100, 1000)",
-                "default": None
-            },
-            "SCRIPT": {
-                "value": None,
-                "required": False,
-                "description": "NSE script to run (e.g., vuln, default)",
-                "default": None
-            },
-            "OUTPUT_FORMAT": {
-                "value": "all",
-                "required": False,
-                "description": "Output format (normal, xml, grepable, all)",
-                "default": "all"
-            },
-            "OUTPUT_FILE": {
-                "value": None,
-                "required": False,
-                "description": "Output file path (without extension for -oA)",
-                "default": None
-            },
-            "TIMING": {
-                "value": "4",
-                "required": False,
-                "description": "Timing template (0-5, 4=aggressive)",
-                "default": "4"
-            },
-            "OS_DETECTION": {
-                "value": "false",
-                "required": False,
-                "description": "Enable OS detection (-O)",
-                "default": "false"
-            },
-            "VERSION_INTENSITY": {
-                "value": None,
-                "required": False,
-                "description": "Version scan intensity (0-9)",
-                "default": None
-            },
-            "MIN_RATE": {
-                "value": "3900",
-                "required": False,
-                "description": "Minimum packets per second",
-                "default": "3900"
-            },
-            "MAX_RTT_TIMEOUT": {
-                "value": "4.5",
-                "required": False,
-                "description": "Maximum round-trip time timeout (e.g., 100ms, 4.5)",
-                "default": "4.5"
-            },
-            "MAX_RETRIES": {
-                "value": None,
-                "required": False,
-                "description": "Maximum port scan probe retransmissions",
-                "default": None
-            },
-            "HOST_TIMEOUT": {
-                "value": None,
-                "required": False,
-                "description": "Give up on host after this long (e.g., 30m)",
-                "default": None
-            },
-            "BACKGROUND": {
-                "value": "true",
-                "required": False,
-                "description": "Run scan in background (true/false)",
-                "default": "true"
-            },
-            "SKIP_DISCOVERY": {
-                "value": "false",
-                "required": False,
-                "description": "Skip host discovery (-Pn)",
-                "default": "false"
-            },
-            "TRACEROUTE": {
-                "value": "false",
-                "required": False,
-                "description": "Trace the network path to each host",
-                "default": "false"
-            }
-        })
+    def apply_profile(self, name: str, *, defaults: bool = False):
+        name = PROFILE_ALIASES.get(name.replace("-", "_"), name.replace("-", "_"))
+        if name not in NMAP_PROFILES:
+            raise ValueError(f"Unknown Nmap profile: {name}")
+        values = {**NMAP_PROFILES[name].options(), "PROFILE": name,
+                  "NO_PING": "false", "FRAGMENT": "false", "DECOY": ""}
+        for key, value in values.items():
+            self.options[key]["value"] = value
+            if defaults:
+                self.options[key]["default"] = value
 
-    def get_operations(self) -> List[Dict[str, Any]]:
-        """
-        Get available scan type operations.
+    def set_option(self, key, value):
+        if key.upper() == "PROFILE":
+            self.apply_profile(str(value))
+            return True
+        return super().set_option(key, value)
 
-        Returns:
-            List of operation dictionaries
-        """
-        return [
-            {
-                "name": "Default Scan",
-                "description": "All ports + version/script detection (-p- -sCV)",
-                "handler": "op_default_scan",
-                "subcategory": "standard"
-            },
-            {
-                "name": "Fast Scan",
-                "description": "Top 100 ports only + quick version (--top-ports 100 -sV -T4)",
-                "handler": "op_fast_scan",
-                "subcategory": "standard"
-            },
-            {
-                "name": "Comprehensive Scan",
-                "description": "All ports + max version intensity (-p- -sCV --version-intensity 9)",
-                "handler": "op_comprehensive_scan",
-                "subcategory": "standard"
-            },
-            {
-                "name": "Aggressive Scan",
-                "description": "OS detection + scripts + traceroute (-sCV -O --traceroute)",
-                "handler": "op_aggressive_scan",
-                "subcategory": "advanced"
-            },
-            {
-                "name": "Stealth Scan",
-                "description": "Stealth SYN + slow timing (requires root: -sS -T2 -p-)",
-                "handler": "op_stealth_scan",
-                "subcategory": "advanced"
-            },
-            {
-                "name": "UDP Scan",
-                "description": "UDP top 100 ports (-sU --top-ports 100)",
-                "handler": "op_udp_scan",
-                "subcategory": "specialized"
-            },
-            {
-                "name": "No Ping Scan",
-                "description": "No ping/discovery + all ports (-Pn -p- -sCV)",
-                "handler": "op_no_ping_scan",
-                "subcategory": "specialized"
-            }
-        ]
+    def validate_options(self):
+        # Preserve RHOST's legacy metadata while accepting list/file input.
+        if not any(self.get_option(key) for key in ("RHOST", "TARGETS", "TARGET_FILE")):
+            return False, "RHOST, TARGETS or TARGET_FILE is required"
+        try:
+            self.build_argv()
+        except (TypeError, ValueError, OSError) as exc:
+            return False, str(exc)
+        return True, ""
 
-    def op_default_scan(self) -> Dict[str, Any]:
-        """Execute default scan: All ports + version/script detection."""
-        # Set default scan options
-        self.set_option("PORTS", "-")
-        self.set_option("SCAN_TYPE", "sCV")
-        self.set_option("TIMING", "4")
-        self.set_option("MIN_RATE", "3900")
-        self.set_option("MAX_RTT_TIMEOUT", "4.5")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "false")
+    def get_operations(self) -> list[dict]:
+        handlers = {"default": "default_scan", "fast": "fast_scan", "comprehensive": "comprehensive_scan",
+                    "aggressive": "aggressive_scan", "stealth": "stealth_scan", "udp": "udp_scan",
+                    "udp_full": "udp_full_scan", "no_ping": "no_ping_scan"}
+        return [{"id": handlers[name].replace("_", "-"), "name": profile.title, "description": profile.description,
+                 "handler": f"op_{handlers[name]}", "subcategory": profile.subcategory,
+                 # Nmap supports synchronous orchestration.  BACKGROUND is an
+                 # interactive invocation preference, not an inherent
+                 # operation requirement advertised by the catalog.
+                 "background": False, "emits": ["host", "service"], "tool": "nmap",
+                 "supported_tool_versions": [], "standards": []}
+                for name, profile in NMAP_PROFILES.items()]
 
+    def _run_profile(self, name):
+        self.apply_profile(name)
         return self.run()
 
-    def op_fast_scan(self) -> Dict[str, Any]:
-        """Execute fast scan: Top 100 ports only."""
-        # Set fast scan options
-        self.set_option("TOP_PORTS", "100")
-        self.set_option("PORTS", None)
-        self.set_option("SCAN_TYPE", "sV")
-        self.set_option("TIMING", "4")
-        self.set_option("MIN_RATE", "5000")
-        self.set_option("MAX_RTT_TIMEOUT", "2")
-        self.set_option("MAX_RETRIES", "1")
-        self.set_option("VERSION_INTENSITY", "2")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "false")
+    def op_default_scan(self):
+        return self._run_profile("default")
 
-        return self.run()
+    def op_fast_scan(self):
+        return self._run_profile("fast")
 
-    def op_comprehensive_scan(self) -> Dict[str, Any]:
-        """Execute comprehensive scan: All ports + max version intensity."""
-        # Set comprehensive scan options
-        self.set_option("PORTS", "-")
-        self.set_option("SCAN_TYPE", "sCV")
-        self.set_option("VERSION_INTENSITY", "9")
-        self.set_option("TIMING", "4")
-        self.set_option("MIN_RATE", "3900")
-        self.set_option("MAX_RTT_TIMEOUT", "4.5")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "false")
+    def op_comprehensive_scan(self):
+        return self._run_profile("comprehensive")
 
-        return self.run()
+    def op_aggressive_scan(self):
+        return self._run_profile("aggressive")
 
-    def op_aggressive_scan(self) -> Dict[str, Any]:
-        """Execute aggressive scan: OS detection + scripts + traceroute."""
-        # Set aggressive scan options
-        self.set_option("SCAN_TYPE", "sCV")
-        self.set_option("OS_DETECTION", "true")
-        self.set_option("VERSION_INTENSITY", "9")
-        self.set_option("TIMING", "4")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "true")
+    def op_stealth_scan(self):
+        return self._run_profile("stealth")
 
-        # Run the scan
-        result = self.run()
+    def op_udp_scan(self):
+        return self._run_profile("udp")
 
-        # Note: Traceroute would need additional implementation in build_command
-        # For now, users can add --traceroute via SCRIPT or custom flags if needed
+    def op_udp_full_scan(self):
+        return self._run_profile("udp_full")
 
-        return result
+    def op_no_ping_scan(self):
+        return self._run_profile("no_ping")
 
-    def op_stealth_scan(self) -> Dict[str, Any]:
-        """Execute stealth scan: SYN scan with slow timing."""
-        # Set stealth scan options
-        self.set_option("SCAN_TYPE", "sS")
-        self.set_option("TIMING", "2")
-        self.set_option("MIN_RATE", "100")
-        self.set_option("MAX_RTT_TIMEOUT", "10")
-        self.set_option("PORTS", "-")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "false")
+    @staticmethod
+    def _split_targets(value):
+        if not value:
+            return []
+        values = list(value) if isinstance(value, (list, tuple)) else shlex.split(str(value))
+        if any(not isinstance(item, str) or not item or item.startswith("-") for item in values):
+            raise ValueError("Targets must be nonempty host/network arguments")
+        return values
 
-        return self.run()
+    def _targets(self):
+        return self._split_targets(self.get_option("RHOST")) + self._split_targets(self.get_option("TARGETS"))
 
-    def op_udp_scan(self) -> Dict[str, Any]:
-        """Execute UDP scan: Top 100 UDP ports."""
-        # Set UDP scan options
-        self.set_option("SCAN_TYPE", "sU")
-        self.set_option("TOP_PORTS", "100")
-        self.set_option("PORTS", None)
-        self.set_option("TIMING", "4")
-        self.set_option("MIN_RATE", "1000")
-        self.set_option("SKIP_DISCOVERY", "false")
-        self.set_option("TRACEROUTE", "false")
+    def _request(self):
+        return self.execution_request or getattr(self, "_execution_context_request", None)
 
-        return self.run()
+    def _background(self):
+        request = self.execution_request
+        return request.background if request is not None else self.option_enabled("BACKGROUND")
 
-    def op_no_ping_scan(self) -> Dict[str, Any]:
-        """Execute no ping scan: Skip host discovery."""
-        # Set no ping scan options
-        self.set_option("PORTS", "-")
-        self.set_option("SCAN_TYPE", "sCV")
-        self.set_option("SKIP_DISCOVERY", "true")
-        self.set_option("TRACEROUTE", "false")
+    def _output_path(self):
+        output = self.get_option("OUTPUT_FILE")
+        output_format = self.get_option("OUTPUT_FORMAT")
+        if not output and output_format != "normal":
+            targets = self._targets()
+            label = targets[0] if len(targets) == 1 and not self.get_option("TARGET_FILE") else "targets"
+            output = "nmap_" + re.sub(r"[^\w.-]", "_", label)
+        if not output:
+            return None
+        request = self._request()
+        run_dir = self.get_option("RUN_DIR") or ((request.cwd or request.run_dir) if request else None)
+        path = Path(str(output))
+        if run_dir and not path.is_absolute():
+            path = Path(run_dir).resolve() / path
+        return str(path)
 
-        return self.run()
+    def build_argv(self) -> list[str]:
+        targets = self._targets()
+        target_file = self.get_option("TARGET_FILE")
+        if not targets and not target_file:
+            raise ValueError("RHOST, TARGETS or TARGET_FILE is required")
+        family_targets = list(targets)
+        if target_file and Path(str(target_file)).is_file():
+            family_targets.extend(token for line in Path(str(target_file)).read_text().splitlines()
+                                  for token in line.split("#", 1)[0].split())
+        families = set()
+        for target in family_targets:
+            try:
+                families.add(ipaddress.ip_network(target, strict=False).version)
+            except ValueError:
+                if ":" in target:
+                    families.add(6)
+        ipv6 = self.option_enabled("IPV6") or 6 in families
+        if ipv6 and 4 in families:
+            raise ValueError("IPv4 and IPv6 targets must be segmented into separate Nmap runs")
+        argv = ["nmap"]
+        if ipv6:
+            argv.append("-6")
+        scan_type = str(self.get_option("SCAN_TYPE") or "")
+        for flag in shlex.split(scan_type):
+            argv.append(flag if flag.startswith("-") else "-" + flag)
+        ports, top_ports = self.get_option("PORTS"), self.get_option("TOP_PORTS")
+        if ports:
+            argv += ["-p", str(ports)]
+        elif top_ports:
+            argv += ["--top-ports", str(top_ports)]
+        if self.get_option("TIMING"):
+            argv.append("-T" + str(self.get_option("TIMING")))
+        for enabled, flag in (("OS_DETECTION", "-O"), ("TRACEROUTE", "--traceroute"),
+                              ("FRAGMENT", "-f")):
+            if self.option_enabled(enabled):
+                argv.append(flag)
+        if self.option_enabled("SKIP_DISCOVERY") or self.option_enabled("NO_PING"):
+            argv.append("-Pn")
+        for key, flag in (("VERSION_INTENSITY", "--version-intensity"), ("MIN_RATE", "--min-rate"),
+                          ("MAX_RTT_TIMEOUT", "--max-rtt-timeout"), ("MAX_RETRIES", "--max-retries"),
+                          ("HOST_TIMEOUT", "--host-timeout"), ("DECOY", "-D")):
+            value = self.get_option(key)
+            if value is not None and value != "":
+                argv += [flag, str(value)]
+        if self.get_option("SCRIPT"):
+            argv.append("--script=" + str(self.get_option("SCRIPT")))
+        output_format = self.get_option("OUTPUT_FORMAT")
+        output_flags = {"all": "-oA", "xml": "-oX", "grepable": "-oG", "normal": "-oN"}
+        if output_format not in output_flags:
+            raise ValueError(f"Unknown Nmap OUTPUT_FORMAT: {output_format}")
+        output = self._output_path()
+        if output:
+            argv += [output_flags[output_format], output]
+        if target_file:
+            argv += ["-iL", str(Path(str(target_file)).resolve())]
+        return argv + targets
 
     def build_command(self) -> str:
-        """
-        Build the nmap command.
-
-        Returns:
-            Command string to execute
-        """
-        rhost = self.get_option("RHOST")
-        ports = self.get_option("PORTS")
-        scan_type = self.get_option("SCAN_TYPE")
-        top_ports = self.get_option("TOP_PORTS")
-        script = self.get_option("SCRIPT")
-        output_format = self.get_option("OUTPUT_FORMAT")
-        output_file = self.get_option("OUTPUT_FILE")
-        timing = self.get_option("TIMING")
-        os_detection = self.get_option("OS_DETECTION")
-        version_intensity = self.get_option("VERSION_INTENSITY")
-        min_rate = self.get_option("MIN_RATE")
-        max_rtt_timeout = self.get_option("MAX_RTT_TIMEOUT")
-        max_retries = self.get_option("MAX_RETRIES")
-        host_timeout = self.get_option("HOST_TIMEOUT")
-        skip_discovery = self.get_option("SKIP_DISCOVERY")
-        traceroute = self.get_option("TRACEROUTE")
-
-        # Base command
-        cmd = f"nmap"
-
-        # Scan type
-        if scan_type:
-            cmd += f" {self.quote_arg('-' + str(scan_type))}"
-
-        # Ports
-        if ports:
-            cmd += f" -p {self.quote_arg(ports)}"
-        elif top_ports:
-            cmd += f" --top-ports {self.quote_arg(top_ports)}"
-
-        # Timing
-        if timing:
-            cmd += f" {self.quote_arg('-T' + str(timing))}"
-
-        # OS detection
-        if self.option_enabled("OS_DETECTION"):
-            cmd += " -O"
-
-        if self.option_enabled("SKIP_DISCOVERY"):
-            cmd += " -Pn"
-
-        if self.option_enabled("TRACEROUTE"):
-            cmd += " --traceroute"
-
-        # Version intensity
-        if version_intensity:
-            cmd += f" --version-intensity {self.quote_arg(version_intensity)}"
-
-        # Performance options
-        if min_rate:
-            cmd += f" --min-rate {self.quote_arg(min_rate)}"
-
-        if max_rtt_timeout:
-            cmd += f" --max-rtt-timeout {self.quote_arg(max_rtt_timeout)}"
-
-        if max_retries:
-            cmd += f" --max-retries {self.quote_arg(max_retries)}"
-
-        if host_timeout:
-            cmd += f" --host-timeout {self.quote_arg(host_timeout)}"
-
-        # Scripts
-        if script:
-            cmd += f" {self.quote_arg('--script=' + str(script))}"
-
-        # Output
-        # If no output file specified but format is set, use target name
-        if not output_file and output_format and output_format != "normal":
-            # Use target as filename (sanitize it)
-            target_name = rhost.replace("/", "_").replace(":", "_")
-            output_file = f"nmap_{target_name}"
-
-        if output_file:
-            if output_format == "xml":
-                cmd += f" -oX {self.quote_arg(output_file)}"
-            elif output_format == "grepable":
-                cmd += f" -oG {self.quote_arg(output_file)}"
-            elif output_format == "all":
-                cmd += f" -oA {self.quote_arg(output_file)}"
-            else:
-                cmd += f" -oN {self.quote_arg(output_file)}"
-
-        # Target
-        cmd += f" {self.quote_arg(rhost)}"
-
-        return cmd
+        return shlex.join(self.build_argv())
 
     def parse_xml_output(self, xml_path: str) -> dict:
-        """
-        Parse nmap XML output file.
-
-        Args:
-            xml_path: Path to nmap XML output file
-
-        Returns:
-            Dictionary with hosts and their services
-        """
-        results = {
-            "hosts": [],
-            "total_hosts": 0,
-            "hosts_with_ports": 0
-        }
-
         try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-
-            for host in root.findall('host'):
-                # Get host status
-                status = host.find('status')
-                if status is None or status.get('state') != 'up':
-                    continue
-
-                # Get IP address
-                address = host.find('address[@addrtype="ipv4"]')
-                if address is None:
-                    address = host.find('address[@addrtype="ipv6"]')
-                if address is None:
-                    continue
-
-                ip = address.get('addr')
-                results["total_hosts"] += 1
-
-                # Get hostname if available
-                hostname = None
-                hostnames = host.find('hostnames')
-                if hostnames is not None:
-                    hostname_elem = hostnames.find('hostname')
-                    if hostname_elem is not None:
-                        hostname = hostname_elem.get('name')
-
-                # Get ports
-                ports_elem = host.find('ports')
-                if ports_elem is None:
-                    continue
-
-                open_ports = []
-                services = {}
-
-                for port in ports_elem.findall('port'):
-                    state = port.find('state')
-                    if state is None or state.get('state') != 'open':
-                        continue
-
-                    protocol = port.get('protocol', 'tcp')
-                    portid = port.get('portid')
-                    port_key = f"{portid}/{protocol}"
-
-                    service = port.find('service')
-                    service_name = service.get('name', 'unknown') if service is not None else 'unknown'
-                    service_product = service.get('product', '') if service is not None else ''
-                    service_version = service.get('version', '') if service is not None else ''
-
-                    version_str = f"{service_product} {service_version}".strip()
-
-                    open_ports.append(port_key)
-                    services[port_key] = {
-                        "service": service_name,
-                        "version": version_str,
-                        "port": int(portid),
-                        "protocol": protocol
-                    }
-
-                # Only add hosts with open ports
-                if open_ports:
-                    results["hosts_with_ports"] += 1
-                    results["hosts"].append({
-                        "ip": ip,
-                        "hostname": hostname,
-                        "open_ports": open_ports,
-                        "services": services
-                    })
-
-        except Exception as e:
-            self.log(f"Error parsing XML: {e}", "error")
-
-        return results
+            request = self._request()
+            return parse_nmap_xml(xml_path, source_execution_id=request.request_id if request else "",
+                                  module_path=request.module_path if request else "recon/nmap")
+        except (OSError, ValueError) as exc:
+            self.log(f"Error parsing XML: {exc}", "error")
+            return {"hosts": [], "total_hosts": 0, "hosts_with_ports": 0, "observations": [], "error": str(exc)}
 
     def parse_output(self, output: str) -> dict:
-        """
-        Parse nmap output.
-
-        Args:
-            output: Command stdout
-
-        Returns:
-            Parsed results dictionary
-        """
-        results = {
-            "open_ports": [],
-            "services": {},
-            "os_guess": None,
-        }
-
-        current_port = None
-
-        # Parse output
-        for line in output.split('\n'):
-            line = line.strip()
-
-            # Parse open ports
-            if "/tcp" in line or "/udp" in line:
-                parts = line.split()
-                if len(parts) >= 3 and "open" in parts[1]:
-                    port = parts[0]
-                    service = parts[2] if len(parts) > 2 else "unknown"
-                    version = " ".join(parts[3:]) if len(parts) > 3 else ""
-
-                    results["open_ports"].append(port)
-                    results["services"][port] = {
-                        "service": service,
-                        "version": version
-                    }
-
-            # Parse OS detection
+        results = {"open_ports": [], "services": {}, "os_guess": None}
+        for line in output.splitlines():
+            match = re.match(r"^\s*(\d+)/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$", line)
+            if match:
+                port, protocol, service, version = match.groups()
+                key = f"{port}/{protocol}"
+                results["open_ports"].append(key)
+                results["services"][key] = {"service": service, "version": version or "",
+                                            "port": int(port), "protocol": protocol}
             if "OS details:" in line or "Aggressive OS guesses:" in line:
-                results["os_guess"] = line.split(":", 1)[1].strip() if ":" in line else None
-
+                results["os_guess"] = line.split(":", 1)[1].strip()
         return results
 
     def process_discovered_hosts(self, parsed_xml: dict):
-        """
-        Process discovered hosts and add them to targets and services.
-
-        Args:
-            parsed_xml: Parsed XML results from parse_xml_output()
-        """
-        for host_info in parsed_xml.get("hosts", []):
-            ip = host_info["ip"]
-            hostname = host_info.get("hostname")
-
-            # Add host to targets (both session and database)
-            try:
-                # Use framework.add_target to add to session, database, and models
-                self.framework.add_target(
-                    target_type="network",
-                    identifier=ip,
-                    name=hostname or ip
-                )
-                # Mark as verified in database
-                self.framework.database.mark_target_verified(ip)
-                self.log(f"Added target: {ip}", "success")
-            except Exception as e:
-                self.log(f"Target {ip} may already exist: {e}", "debug")
-
-            # Add services
-            for port_str, service_info in host_info["services"].items():
-                port = service_info["port"]
-                service_name = service_info["service"]
-                version = service_info["version"]
-
-                # Map common services to framework context
-                if service_name in ["microsoft-ds", "netbios-ssn"]:
-                    self.framework.session.services.add_service(ip, "smb", port)
-                elif service_name in ["ldap", "ldaps"]:
-                    self.framework.session.services.add_service(ip, "ldap", port)
-                elif service_name in ["ms-wbt-server", "rdp"]:
-                    self.framework.session.services.add_service(ip, "rdp", port)
-                elif service_name in ["winrm", "wsman"]:
-                    self.framework.session.services.add_service(ip, "winrm", port)
-                elif service_name in ["ms-sql-s", "mssql"]:
-                    self.framework.session.services.add_service(ip, "mssql", port)
-                elif service_name == "ssh":
-                    self.framework.session.services.add_service(ip, "ssh", port)
-                elif service_name in ["http", "https", "http-proxy"]:
-                    self.framework.session.services.add_service(ip, "http", port)
-
-                # Save to database
-                try:
-                    self.framework.database.add_service(ip, service_name, port, version)
-                    db_manager.add_service(ip, service_name, port, version)
-                except Exception as e:
-                    self.log(f"Service may already exist: {e}", "debug")
-
-        self.log(f"Processed {len(parsed_xml.get('hosts', []))} hosts with open ports", "success")
+        return import_discovered_hosts(self.framework, parsed_xml, models_db=db_manager, log=self.log)
 
     def run(self) -> dict:
-        """
-        Execute nmap scan and auto-import services to context.
-
-        Returns:
-            Execution results
-        """
-        # Check if background mode is enabled
-        background = self.get_option("BACKGROUND")
-        run_in_background = background and str(background).lower() == "true"
-
-        rhost = self.get_option("RHOST")
-        output_file = self.get_option("OUTPUT_FILE")
-
-        # Determine XML output path
-        if not output_file:
-            target_name = rhost.replace("/", "_").replace(":", "_")
-            output_file = f"nmap_{target_name}"
-
-        xml_path = f"{output_file}.xml"
-
-        if run_in_background:
-            # Check tool is installed
+        valid, error = self.validate_options()
+        if not valid:
+            return {"success": False, "error": error, "observations": []}
+        output = self._output_path()
+        if output:
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+        output_format = self.get_option("OUTPUT_FORMAT")
+        xml_path = output if output_format == "xml" else f"{output}.xml" if output_format == "all" else None
+        if self._background():
             if not self.check_tool_installed():
-                return {
-                    "success": False,
-                    "error": f"Tool not found: {self.tool_name}. Please install it first."
-                }
-
-            # Build command and execute in background
-            command = self.build_command()
-            result = self.execute_command(command, background=True)
-
-            # Add note about XML parsing
-            if result.get("success"):
-                result["note"] = f"Scan running in background. Run 'parse {xml_path}' to import results when complete."
-
-            # Return background execution info
+                return {"success": False, "error": "Tool not found: nmap", "observations": []}
+            result = self.execute_command(self.build_argv(), background=True)
+            if result.get("pid") or result.get("background"):
+                result.update(success=False, background=True, observations=[])
+                result["note"] = (f"Scan running in background. Import {xml_path} after completion." if xml_path
+                                  else "Scan running in background; selected output format does not produce XML.")
             return result
-        else:
-            # Run the command normally (synchronous)
-            result = super().run()
-
-            # Try to parse XML output if it exists
-            if result.get("success") and os.path.exists(xml_path):
-                try:
-                    parsed_xml = self.parse_xml_output(xml_path)
-
-                    # Process discovered hosts (add to targets and services)
-                    if parsed_xml.get("hosts"):
-                        self.process_discovered_hosts(parsed_xml)
-
-                        result["xml_parsed"] = True
-                        result["hosts_discovered"] = len(parsed_xml.get("hosts", []))
-                        result["total_scanned"] = parsed_xml.get("total_hosts", 0)
-
-                        self.log(f"Discovered {result['hosts_discovered']} hosts with open ports out of {result['total_scanned']} total hosts", "success")
-                    else:
-                        self.log("No hosts with open ports discovered", "info")
-
-                except Exception as e:
-                    self.log(f"Error parsing XML output: {e}", "error")
-
-            # Also parse stdout for backward compatibility (only if XML parsing failed or didn't happen)
-            if result.get("success") and "parsed" in result and not result.get("xml_parsed"):
-                parsed = result["parsed"]
-
-                # Only import services from stdout if scanning a single host (not a network range)
-                # For network ranges, we need XML output to distinguish individual IPs
-                is_network_range = "/" in rhost or (
-                    "." in rhost and "-" in rhost.split(".")[-1]
-                )
-
-                if not is_network_range:
-                    # Import detected services into framework (for single host scans without XML)
-                    for port_str, service_info in parsed.get("services", {}).items():
-                        # Extract port number
-                        port = int(port_str.split("/")[0])
-                        service_name = service_info.get("service", "unknown")
-
-                        # Map common services
-                        if service_name in ["microsoft-ds", "netbios-ssn"]:
-                            self.framework.session.services.add_service(rhost, "smb", port)
-                        elif service_name in ["ldap", "ldaps"]:
-                            self.framework.session.services.add_service(rhost, "ldap", port)
-                        elif service_name in ["ms-wbt-server", "rdp"]:
-                            self.framework.session.services.add_service(rhost, "rdp", port)
-                        elif service_name in ["winrm", "wsman"]:
-                            self.framework.session.services.add_service(rhost, "winrm", port)
-                        elif service_name in ["ms-sql-s", "mssql"]:
-                            self.framework.session.services.add_service(rhost, "mssql", port)
-                        elif service_name == "ssh":
-                            self.framework.session.services.add_service(rhost, "ssh", port)
-                        elif service_name in ["http", "https", "http-proxy"]:
-                            self.framework.session.services.add_service(rhost, "http", port)
-                else:
-                    self.log("Network range detected - services require XML parsing. Use 'parse <xml_file>' to import.", "warning")
-
+        result = super().run()
+        result.setdefault("observations", [])
+        if not result.get("success"):
             return result
+        if result.get("background"):
+            result["success"] = False
+            return result
+        if xml_path and Path(xml_path).is_file():
+            parsed = self.parse_xml_output(xml_path)
+            if parsed.get("error"):
+                return {**result, "success": False, "xml_parsed": False,
+                        "error": "Nmap XML parsing failed: " + parsed["error"]}
+            self.process_discovered_hosts(parsed)
+            return {**result, "hosts": parsed["hosts"], "observations": parsed["observations"],
+                    "xml_parsed": True, "hosts_discovered": parsed["hosts_with_ports"],
+                    "total_scanned": parsed["total_hosts"], "xml_path": xml_path}
+        # Text-only legacy results can safely associate ports with one literal IP.
+        # A flat port map has no host association for a range, target file or list.
+        targets = self._targets()
+        try:
+            concrete = len(targets) == 1 and not self.get_option("TARGET_FILE")
+            if concrete:
+                ipaddress.ip_address(targets[0])
+        except ValueError:
+            concrete = False
+        services = result.get("parsed", {}).get("services", {})
+        if not concrete:
+            result.update(success=False, error="Nmap range/list discovery requires completed per-host XML output")
+        elif services:
+            host = {"ip": targets[0], "hostname": None, "services": services,
+                    "open_ports": list(services)}
+            self.process_discovered_hosts({"hosts": [host]})
+            result["observations"] = [item.to_dict() for item in observations_for_hosts([host])]
+        return result

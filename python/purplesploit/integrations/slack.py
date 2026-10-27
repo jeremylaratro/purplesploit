@@ -6,7 +6,6 @@ Sends notifications to Slack channels via webhooks or API.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-import json
 import logging
 
 from .base import (
@@ -134,6 +133,8 @@ class SlackIntegration(BaseIntegration, WebhookMixin):
             else:
                 return {"success": False, "error": "No authentication configured"}
 
+            if result.get("success") and result.get("ts") and payload.finding_id:
+                self._thread_map.setdefault(payload.finding_id, result["ts"])
             self._record_request()
             return result
 

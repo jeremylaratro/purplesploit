@@ -14,10 +14,9 @@ Tests cover:
 
 import pytest
 import json
-import tempfile
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from purplesploit.core.workflow import (
     StepStatus,
@@ -852,6 +851,18 @@ class TestConditionChecking:
         result = engine._check_conditions(step2, workflow)
 
         assert result is False
+
+    def test_unknown_condition_fails_closed(self, engine):
+        """An unrecognized condition must never permit step execution."""
+        workflow = Workflow(id="wf", name="Test")
+        step = WorkflowStep(
+            id="step_1",
+            name="Unsafe conditional step",
+            module="test",
+            conditions=[{"type": "future_condition"}],
+        )
+
+        assert engine._check_conditions(step, workflow) is False
 
 
 # =============================================================================

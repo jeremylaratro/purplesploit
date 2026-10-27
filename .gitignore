@@ -61,6 +61,13 @@ outputs/
 results/
 scans/
 loot/
+enum_output/
+my_sessions.json
+graph.dot
+graph.json
+support-*.zip
+*.sbom.json
+*.provenance.json
 
 # Log files
 *.log
@@ -127,6 +134,10 @@ coverage.xml
 .pytest_cache/
 .tox/
 .hypothesis/
+
+# Synthetic test fixtures intentionally versioned despite runtime-output rules above
+!python/tests/fixtures/**/*.xml
+!python/tests/fixtures/**/graph.json
 
 # mypy
 .mypy_cache/

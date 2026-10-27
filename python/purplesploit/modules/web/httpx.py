@@ -4,10 +4,14 @@ HTTPx Module
 Fast HTTP probe and analysis tool.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from pathlib import Path
+import re
+import shlex
+
+from purplesploit.web_observations import WebToolModule, json_records, observation
 
 
-class HTTPxModule(ExternalToolModule):
+class HTTPxModule(WebToolModule):
     """
     HTTPx - Fast HTTP probe and analysis tool.
 
@@ -17,6 +21,9 @@ class HTTPxModule(ExternalToolModule):
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "httpx"
+
+    emits = ["http_endpoint", "service", "technology"]
+    supported_tool_versions = ["ProjectDiscovery httpx 1.x (-json)"]
 
     @property
     def name(self) -> str:
@@ -108,7 +115,8 @@ class HTTPxModule(ExternalToolModule):
         timeout = self.get_option("TIMEOUT")
 
         # Base command
-        cmd = f"httpx -u {self.quote_arg(target)}"
+        target_flag = "-l" if target and Path(str(target)).is_file() else "-u"
+        cmd = f"httpx {target_flag} {self.quote_arg(target)}"
 
         # Ports
         if ports:
@@ -139,9 +147,12 @@ class HTTPxModule(ExternalToolModule):
             cmd += " -follow-redirects"
 
         # Silent mode for cleaner output
-        cmd += " -silent"
+        cmd += " -silent -json -web-server"
 
         return cmd
+
+    def build_argv(self):
+        return shlex.split(self.build_command())
 
     def parse_output(self, output: str) -> dict:
         """
@@ -153,22 +164,41 @@ class HTTPxModule(ExternalToolModule):
         Returns:
             Parsed results dictionary
         """
-        results = {
-            "live_hosts": [],
-            "technologies": [],
-        }
-
-        # Parse output
-        for line in output.split('\n'):
-            if line.strip() and line.startswith('http'):
+        results = {"live_hosts": [], "technologies": [], "endpoints": [], "observations": []}
+        records, errors = json_records(output)
+        if output.strip().startswith(("{", "[")):
+            results["parse_errors"] = errors
+        if not records:
+            for line in output.splitlines():
+                if not line.startswith(("http://", "https://")):
+                    continue
                 results["live_hosts"].append(line.strip())
-
-                # Extract technologies if present
-                if '[' in line and ']' in line:
-                    tech_start = line.index('[')
-                    tech_end = line.index(']', tech_start)
-                    tech = line[tech_start+1:tech_end]
-                    if tech:
-                        results["technologies"].append(tech)
-
+                groups = re.findall(r"\[([^]]*)\]", line)
+                record = {"url": line.split()[0]}
+                if groups and groups[0].isdigit():
+                    record["status_code"] = int(groups.pop(0))
+                # Text fields are ambiguous; retain them without calling status/title a technology.
+                record["text_fields"] = groups
+                if len(groups) == 1 and re.fullmatch(r"[\w.+:-]+(?:,[\w.+:-]+)*", groups[0]):
+                    record["tech"] = groups[0].split(",")
+                records.append(record)
+        for record in records:
+            url = record.get("url") or record.get("input")
+            if not url or not str(url).startswith(("http://", "https://")):
+                continue
+            if not results["live_hosts"] or str(url) not in [line.split()[0] for line in results["live_hosts"]]:
+                results["live_hosts"].append(url)
+            tech = record.get("tech") or record.get("technologies") or []
+            tech = [tech] if isinstance(tech, str) else tech
+            endpoint = {**record, "url": url, "status": record.get("status_code", record.get("status-code")),
+                        "title": record.get("title"), "webserver": record.get("webserver", record.get("web-server")),
+                        "tech": tech}
+            results["endpoints"].append(endpoint)
+            results["observations"].append(observation("http_endpoint", url, **{k: v for k, v in endpoint.items() if k != "url"}))
+            service = observation("service", url, webserver=endpoint["webserver"], status=endpoint["status"])
+            service["target"] = service["attributes"]["host"] or url
+            results["observations"].append(service)
+            for technology in tech:
+                results["technologies"].append(technology)
+                results["observations"].append(observation("technology", url, name=technology))
         return results

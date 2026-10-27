@@ -1,0 +1,14 @@
+{
+  "file": [{
+    "name": "fixture.proto", "package": "fixture", "syntax": "proto3",
+    "message_type": [
+      {"name": "Request", "field": [{"name": "id", "number": 1, "label": "LABEL_OPTIONAL", "type": "TYPE_STRING"}], "nested_type": [{"name": "Metadata", "field": []}]},
+      {"name": "Reply", "field": [{"name": "name", "number": 1, "label": "LABEL_OPTIONAL", "type": "TYPE_STRING"}]}
+    ],
+    "enum_type": [{"name": "State", "value": [{"name": "UNKNOWN", "number": 0}]}],
+    "service": [{"name": "Pets", "method": [
+      {"name": "Get", "input_type": ".fixture.Request", "output_type": ".fixture.Reply"},
+      {"name": "Watch", "input_type": ".fixture.Request", "output_type": ".fixture.Reply", "server_streaming": true}
+    ]}]
+  }]
+}

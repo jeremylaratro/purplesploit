@@ -1,0 +1,1 @@
+{"task_id": "fixture-task", "run_id": "partial-fixture-run", "service": "smb", "target": "host-redacted", "status": "unassessed", "reason": "missing dependency", "rc": 4}

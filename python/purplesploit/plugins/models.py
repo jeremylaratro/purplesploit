@@ -114,6 +114,8 @@ class PluginManifest:
     # Security
     signed: bool = False
     signature: str = ""
+    signing_key_id: str = ""
+    permissions: List[str] = field(default_factory=list)
     trusted_author: bool = False
 
     @classmethod
@@ -158,6 +160,8 @@ class PluginManifest:
             platforms=data.get("platforms", ["linux", "darwin", "win32"]),
             signed=data.get("signed", False),
             signature=data.get("signature", ""),
+            signing_key_id=data.get("signing_key_id", ""),
+            permissions=data.get("permissions", []),
             trusted_author=data.get("trusted_author", False),
         )
 
@@ -186,6 +190,9 @@ class PluginManifest:
             "max_framework_version": self.max_framework_version,
             "platforms": self.platforms,
             "signed": self.signed,
+            "signature": self.signature,
+            "signing_key_id": self.signing_key_id,
+            "permissions": self.permissions,
             "trusted_author": self.trusted_author,
         }
 
@@ -201,6 +208,7 @@ class Plugin:
     install_path: Optional[str] = None
     installed_at: Optional[datetime] = None
     enabled: bool = True
+    last_error: str = ""
     available_versions: List[PluginVersion] = field(default_factory=list)
     rating: float = 0.0
     downloads: int = 0
@@ -236,7 +244,6 @@ class Plugin:
     def is_compatible(self, framework_version: str) -> bool:
         """Check if plugin is compatible with framework version."""
         from packaging.version import Version
-        from packaging.specifiers import SpecifierSet
 
         fw = Version(framework_version)
 
@@ -261,6 +268,7 @@ class Plugin:
             "install_path": self.install_path,
             "installed_at": self.installed_at.isoformat() if self.installed_at else None,
             "enabled": self.enabled,
+            "last_error": self.last_error,
             "rating": self.rating,
             "downloads": self.downloads,
         }
@@ -275,6 +283,7 @@ class Plugin:
             install_path=data.get("install_path"),
             installed_at=datetime.fromisoformat(data["installed_at"]) if data.get("installed_at") else None,
             enabled=data.get("enabled", True),
+            last_error=data.get("last_error", ""),
             rating=data.get("rating", 0.0),
             downloads=data.get("downloads", 0),
         )

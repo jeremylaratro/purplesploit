@@ -25,6 +25,7 @@ from .siem import (
     ElasticConfig,
 )
 from .manager import IntegrationManager, IntegrationManagerConfig
+from .service import IntegrationService
 
 __all__ = [
     # Base classes
@@ -53,4 +54,5 @@ __all__ = [
     # Manager
     "IntegrationManager",
     "IntegrationManagerConfig",
+    "IntegrationService",
 ]

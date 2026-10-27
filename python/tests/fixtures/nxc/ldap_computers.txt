@@ -1,0 +1,8 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2022 (name:DC01) (domain:CORP.TEST)
+LDAP 192.0.2.10 389 DC01 [*] Total records returned: 2
+LDAP 192.0.2.10 389 DC01 DC01$
+LDAP 192.0.2.10 389 DC01 FILE01$
+LDAP 192.0.2.10 389 DC01 [+] Response for object: CN=DC01,OU=Domain Controllers,DC=corp,DC=test
+LDAP 192.0.2.10 389 DC01 sAMAccountName       DC01$
+LDAP 192.0.2.10 389 DC01 [+] Response for object: CN=FILE01,CN=Computers,DC=corp,DC=test
+LDAP 192.0.2.10 389 DC01 sAMAccountName:      FILE01$

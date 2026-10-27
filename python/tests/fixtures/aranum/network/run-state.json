@@ -1,0 +1,1 @@
+{"schema_version": 1, "run_id": "network-fixture-run", "generated_utc": "2026-10-26T12:00:00Z", "execution_mode": "service-batch", "queue_authoritative": false, "services": [{"service": "dns", "status": "completed", "rc": 0}]}

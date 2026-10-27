@@ -7,7 +7,11 @@ AI-assisted pentesting automation using OpenAI or Anthropic.
 from purplesploit.core.module import BaseModule
 from typing import Dict, Any, List
 import os
-import sys
+import json
+
+from purplesploit.ai.advisory import AdvisoryService
+from purplesploit.ai.providers import AdvisoryProvider, DEFAULT_MODELS
+from purplesploit.ai.recommender import ModuleRecommender
 
 
 class AIAutomationModule(BaseModule):
@@ -56,8 +60,8 @@ class AIAutomationModule(BaseModule):
                 "handler": self.op_analyze
             },
             {
-                "name": "Automate Workflow",
-                "description": "AI-driven automated pentesting workflow execution",
+                "name": "Propose Workflow",
+                "description": "Generate and save an advisory draft workflow without execution",
                 "handler": self.op_automate
             },
         ]
@@ -80,10 +84,10 @@ class AIAutomationModule(BaseModule):
                 "default": None
             },
             "MODEL": {
-                "value": "gpt-4",
+                "value": None,
                 "required": False,
-                "description": "Model to use (gpt-4, gpt-3.5-turbo, claude-3-sonnet-4, etc.)",
-                "default": "gpt-4"
+                "description": "Provider model override (otherwise use the provider default)",
+                "default": None
             },
             "PROMPT": {
                 "value": None,
@@ -109,7 +113,7 @@ class AIAutomationModule(BaseModule):
         return {
             "success": False,
             "error": "This module uses operations. Please select an operation to run.",
-            "hint": "Available operations: Chat, Suggest Next Steps, Analyze Context, Automate Workflow"
+            "hint": "Available operations: Chat, Suggest Next Steps, Analyze Context, Propose Workflow"
         }
 
     def _get_api_key(self) -> tuple[str, str]:
@@ -120,6 +124,8 @@ class AIAutomationModule(BaseModule):
             Tuple of (api_key, error_message). If successful, error_message is None.
         """
         provider = self.get_option("PROVIDER")
+        if provider not in DEFAULT_MODELS:
+            return None, f"Unknown provider: {provider}"
         api_key = self.get_option("API_KEY")
 
         # Get API key from env if not provided
@@ -168,7 +174,7 @@ class AIAutomationModule(BaseModule):
             return {"success": False, "error": error}
 
         provider = self.get_option("PROVIDER")
-        model = self.get_option("MODEL")
+        model = self.get_option("MODEL") or DEFAULT_MODELS.get(provider)
 
         # Get initial prompt if provided
         initial_prompt = self.get_option("PROMPT")
@@ -183,7 +189,7 @@ class AIAutomationModule(BaseModule):
                 client = anthropic.Anthropic(api_key=api_key)
             else:
                 return {"success": False, "error": f"Unknown provider: {provider}"}
-        except ImportError as e:
+        except ImportError:
             return {
                 "success": False,
                 "error": f"Failed to import {provider} library. Install with: pip install {provider}"
@@ -233,12 +239,12 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
             try:
                 # Call AI
                 if provider == "openai":
-                    response = client.chat.completions.create(
+                    response = client.responses.create(
                         model=model,
-                        messages=[{"role": "system", "content": system_prompt}] + messages,
-                        temperature=0.7
+                        instructions=system_prompt,
+                        input=messages,
                     )
-                    assistant_message = response.choices[0].message.content
+                    assistant_message = response.output_text
                 elif provider == "anthropic":
                     response = client.messages.create(
                         model=model,
@@ -304,30 +310,12 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
 
         Analyzes current pentesting context including targets, services, and attack surface.
         """
-        self.log("Analyzing current pentest context...", "info")
-
-        context_info = self._get_context_info()
-        user_context = self.get_option("CONTEXT")
-
-        result = self._analyze_context(context_info, user_context)
-
-        # Display analysis nicely
-        if result.get("success") and result.get("analysis"):
-            analysis = result["analysis"]
-            print("\n=== AI Context Analysis ===\n")
-            print(f"Target: {analysis.get('target_summary')}")
-            print(f"Detected Services: {', '.join(analysis.get('detected_services', [])) or 'None'}")
-            print(f"\nAttack Surface:")
-            attack_surface = analysis.get('attack_surface', {})
-            print(f"  Total Services: {attack_surface.get('total_services', 0)}")
-            print(f"  High Value Targets: {', '.join(attack_surface.get('high_value_targets', [])) or 'None'}")
-            print(f"  Weak Protocols: {', '.join(attack_surface.get('weak_protocols', [])) or 'None'}")
-            print(f"\nRecommendations:")
-            for i, rec in enumerate(analysis.get('recommendations', []), 1):
-                print(f"  {i}. {rec}")
-            print()
-
-        return result
+        try:
+            result = self._advisory().analyze(prompt=self.get_option("CONTEXT") or self.get_option("PROMPT"))
+            print(json.dumps(result["analysis"], indent=2))
+            return result
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
 
     def op_automate(self) -> Dict[str, Any]:
         """
@@ -335,12 +323,19 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
 
         Executes automated pentesting workflows based on AI analysis.
         """
-        self.log("Starting automated workflow...", "info")
+        try:
+            return self._advisory().propose_workflow(prompt=self.get_option("PROMPT"))
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "executed": False}
 
-        context_info = self._get_context_info()
-        result = self._automate_workflow(context_info)
-
-        return result
+    def _advisory(self):
+        provider_name = self.get_option("PROVIDER")
+        if provider_name not in DEFAULT_MODELS:
+            raise ValueError(f"Unknown provider: {provider_name}")
+        api_key, _ = self._get_api_key()
+        provider = AdvisoryProvider(provider_name, self.get_option("MODEL"), api_key) if api_key else None
+        return AdvisoryService(self.framework, provider=provider,
+                               workflows=getattr(self.framework, "workflow_engine", None))
 
     # ==================== HELPER METHODS ====================
 
@@ -355,21 +350,7 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
         Returns:
             Analysis results
         """
-        # For now, return a structured analysis
-        # In production, this would call OpenAI/Claude API
-
-        analysis = {
-            "success": True,
-            "analysis": {
-                "target_summary": self._summarize_target(context_info["target"]),
-                "detected_services": list(context_info["services"].keys()) if context_info["services"] else [],
-                "attack_surface": self._assess_attack_surface(context_info),
-                "recommendations": self._generate_recommendations(context_info),
-            }
-        }
-
-        self.log("AI analysis complete", "success")
-        return analysis
+        return self._advisory().analyze(observations=context_info.get("observations"), prompt=user_context)
 
     def _suggest_next_steps(self, context_info: Dict) -> Dict[str, Any]:
         """
@@ -381,48 +362,9 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
         Returns:
             Suggested steps
         """
-        suggestions = []
-
-        # Analyze what's been done and what's next
-        services = context_info.get("services", {})
-
-        if not services:
-            suggestions.append({
-                "priority": "high",
-                "module": "recon/nmap",
-                "reason": "No services detected yet. Run nmap scan to discover attack surface."
-            })
-
-        for target, target_services in services.items():
-            if "smb" in target_services and not any("smb" in cmd for cmd in context_info.get("recent_modules", [])):
-                suggestions.append({
-                    "priority": "high",
-                    "module": "network/nxc_smb",
-                    "reason": f"SMB detected on {target}. Enumerate shares and check for anonymous access."
-                })
-
-            if "ldap" in target_services:
-                suggestions.append({
-                    "priority": "medium",
-                    "module": "network/nxc_ldap",
-                    "reason": f"LDAP detected on {target}. Enumerate AD users and check for AS-REP roasting."
-                })
-
-            if "http" in target_services:
-                suggestions.append({
-                    "priority": "medium",
-                    "module": "web/feroxbuster",
-                    "reason": f"HTTP service detected on {target}. Discover hidden endpoints and files."
-                })
-
-        return {
-            "success": True,
-            "suggestions": suggestions if suggestions else [{
-                "priority": "info",
-                "module": None,
-                "reason": "Continue reconnaissance or try alternative attack vectors."
-            }]
-        }
+        recommender = ModuleRecommender(self.framework)
+        return {"success": True, "mode": "local", "suggestions": [item.to_dict() for item in recommender.get_recommendations(
+            observations=context_info.get("observations"))]}
 
     def _automate_workflow(self, context_info: Dict) -> Dict[str, Any]:
         """
@@ -434,11 +376,7 @@ Provide concise, actionable pentesting advice and suggest specific PurpleSploit 
         Returns:
             Automation results
         """
-        return {
-            "success": True,
-            "message": "Automated workflow execution not yet implemented. Use 'suggest' action for recommendations.",
-            "note": "This feature will automatically execute suggested modules based on detected services."
-        }
+        return self._advisory().propose_workflow(observations=context_info.get("observations"))
 
     def _summarize_target(self, target: Dict) -> str:
         """Summarize target information."""

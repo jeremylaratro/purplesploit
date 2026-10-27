@@ -1,0 +1,5 @@
+include LICENSE README.md pyproject.toml setup.py
+recursive-include purplesploit *.py *.json *.html *.css *.js *.jinja2
+recursive-include scripts *.py
+prune tests
+global-exclude __pycache__ *.py[cod] .coverage

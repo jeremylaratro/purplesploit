@@ -47,7 +47,7 @@ class CommandHandler:
     Processes user input and executes appropriate commands.
     """
 
-    def __init__(self, framework):
+    def __init__(self, framework, services=None):
         """
         Initialize command handler.
 
@@ -55,6 +55,7 @@ class CommandHandler:
             framework: Reference to Framework instance
         """
         self.framework = framework
+        self.services = services
         self.display = Display()
         self.interactive = InteractiveSelector()
         self.commands = self._register_commands()
@@ -140,6 +141,7 @@ class CommandHandler:
             "findings": self.cmd_findings,        # Manage security findings
             "finding": self.cmd_findings,         # Alias
             "workflow": self.cmd_workflow,        # Workflow automation
+            "jobs": self.cmd_jobs,                # Shared background jobs
             "report": self.cmd_report,            # Generate reports
 
             # Phase 3: Plugin marketplace
@@ -3286,8 +3288,10 @@ class CommandHandler:
         """
         from purplesploit.core.workflow import WorkflowEngine
 
-        # Get or create workflow engine
-        if not hasattr(self, '_workflow_engine'):
+        # Production CLI and API share the same workflow store and job layer.
+        if self.services is not None:
+            self._workflow_engine = self.services.workflows
+        elif not hasattr(self, '_workflow_engine'):
             self._workflow_engine = WorkflowEngine(framework=self.framework)
 
         if not args:
@@ -3309,9 +3313,11 @@ class CommandHandler:
             return self._workflow_pause(args[1:])
         elif subcommand == "resume":
             return self._workflow_resume(args[1:])
+        elif subcommand == "stop":
+            return self._workflow_stop(args[1:])
         else:
             self.display.print_error(f"Unknown subcommand: {subcommand}")
-            self.display.print_info("Usage: workflow [list|templates|create|run|status|pause|resume]")
+            self.display.print_info("Usage: workflow [list|templates|create|run|status|pause|resume|stop]")
             return True
 
     def _workflow_list(self) -> bool:
@@ -3431,6 +3437,25 @@ class CommandHandler:
 
         self.display.print_info(f"Running workflow {workflow_id} against {variables['target']}...")
 
+        if self.services is not None:
+            try:
+                job = self.services.run_workflow(
+                    workflow_id, variables=variables
+                )
+            except (KeyError, ValueError) as exc:
+                self.display.print_error(f"Unable to start workflow: {exc}")
+                return True
+            if not hasattr(self, "_workflow_jobs"):
+                self._workflow_jobs = {}
+            self._workflow_jobs[workflow_id] = job["id"]
+            self.display.print_success(
+                f"Workflow queued as job {job['id']}"
+            )
+            self.display.print_info(
+                f"Use 'jobs status {job['id']}' or 'jobs stop {job['id']}'"
+            )
+            return True
+
         # Set up progress callbacks
         def on_step_start(workflow, step):
             self.display.print_info(f"  → Starting: {step.name}")
@@ -3485,12 +3510,30 @@ class CommandHandler:
                 }.get(step.status.value, "?")
                 self.display.console.print(f"  {status_icon} {step.name} [{step.status.value}]")
 
+        if self.services is not None and hasattr(self, "_workflow_jobs"):
+            job_id = self._workflow_jobs.get(workflow_id)
+            if job_id:
+                job = self.services.job_get(job_id)
+                self.display.console.print(
+                    f"Job: {job_id} [{job['status']}] outcome={job.get('outcome') or '-'}"
+                )
+
         return True
 
     def _workflow_pause(self, args: List[str]) -> bool:
         """Pause a workflow."""
         if not args:
             self.display.print_error("Usage: workflow pause <workflow_id>")
+            return True
+
+        if self.services is not None:
+            job_id = getattr(self, "_workflow_jobs", {}).get(args[0], args[0])
+            try:
+                job = self.services.job_control(job_id, "pause")
+            except (KeyError, ValueError) as exc:
+                self.display.print_error(f"Failed to pause workflow job: {exc}")
+                return True
+            self.display.print_success(f"Pause requested for job: {job['id']}")
             return True
 
         success = self._workflow_engine.pause_workflow(args[0])
@@ -3507,12 +3550,74 @@ class CommandHandler:
             self.display.print_error("Usage: workflow resume <workflow_id>")
             return True
 
+        if self.services is not None:
+            job_id = getattr(self, "_workflow_jobs", {}).get(args[0], args[0])
+            try:
+                result = self.services.job_control(job_id, "resume")
+            except (KeyError, ValueError) as exc:
+                self.display.print_error(f"Failed to resume workflow job: {exc}")
+                return True
+            self.display.print_success(f"Resumed workflow job: {result['id']}")
+            return True
+
         result = self._workflow_engine.resume_workflow(args[0])
         if result.get("success"):
             self.display.print_success(f"Resumed workflow: {args[0]}")
         else:
             self.display.print_error(f"Failed to resume: {result.get('error')}")
 
+        return True
+
+    def _workflow_stop(self, args: List[str]) -> bool:
+        """Stop a workflow job at its next execution boundary."""
+        if not args:
+            self.display.print_error("Usage: workflow stop <workflow_id|job_id>")
+            return True
+        if self.services is None:
+            self.display.print_error("Workflow stop requires the shared job service")
+            return True
+        job_id = getattr(self, "_workflow_jobs", {}).get(args[0], args[0])
+        try:
+            job = self.services.job_control(job_id, "stop")
+        except (KeyError, ValueError) as exc:
+            self.display.print_error(f"Failed to stop workflow job: {exc}")
+            return True
+        self.display.print_success(f"Stop requested for job: {job['id']}")
+        return True
+
+    def cmd_jobs(self, args: List[str]) -> bool:
+        """List, inspect, pause, resume, or stop shared capability jobs."""
+        if self.services is None:
+            self.display.print_error("Shared job services are not configured")
+            return True
+        subcommand = args[0].lower() if args else "list"
+        if subcommand == "list":
+            jobs = self.services.job_list()
+            if not jobs:
+                self.display.print_warning("No jobs")
+            for job in jobs:
+                self.display.console.print(
+                    f"{job['id']}  {job['kind']}  {job['status']}  {job.get('outcome') or '-'}"
+                )
+            return True
+        if len(args) < 2:
+            self.display.print_error(
+                "Usage: jobs <status|pause|resume|stop|result> <job_id>"
+            )
+            return True
+        job_id = args[1]
+        try:
+            if subcommand in {"pause", "resume", "stop"}:
+                job = self.services.job_control(job_id, subcommand)
+            elif subcommand in {"status", "result"}:
+                job = self.services.job_get(job_id)
+            else:
+                self.display.print_error(f"Unknown jobs subcommand: {subcommand}")
+                return True
+        except (KeyError, ValueError) as exc:
+            self.display.print_error(str(exc))
+            return True
+        self.display.console.print_json(data=job)
         return True
 
     # =========================================================================
@@ -3655,7 +3760,9 @@ class CommandHandler:
 
         # Get or create plugin manager
         if not hasattr(self, '_plugin_manager'):
-            self._plugin_manager = PluginManager(framework=self.framework)
+            self._plugin_manager = getattr(self.framework, "plugin_manager", None)
+            if self._plugin_manager is None:
+                self._plugin_manager = PluginManager(framework=self.framework)
 
         if not args:
             args = ["list"]
@@ -4096,6 +4203,26 @@ class CommandHandler:
         self.display.print_info(f"Parallel: {parallel}")
         self.display.console.print()
 
+        if self.services is not None:
+            try:
+                job = self.services.run_auto_enum(
+                    targets=targets,
+                    scope=scope,
+                    phases=[phase.value for phase in phases] if phases else None,
+                    parallel=parallel,
+                )
+            except (TypeError, ValueError) as exc:
+                self.display.print_error(f"Unable to start auto-enumeration: {exc}")
+                return True
+            self._auto_job_id = job["id"]
+            self.display.print_success(
+                f"Auto-enumeration queued as job {job['id']}"
+            )
+            self.display.print_info(
+                f"Use 'jobs status {job['id']}' or 'auto stop'"
+            )
+            return True
+
         # Create and configure pipeline
         pipeline = create_auto_enum(self.framework, scope=scope)
 
@@ -4173,6 +4300,15 @@ class CommandHandler:
 
     def _auto_status(self) -> bool:
         """Show auto-enumeration status."""
+        if self.services is not None and hasattr(self, "_auto_job_id"):
+            job = self.services.job_get(self._auto_job_id)
+            self.display.console.print("\n[bold cyan]Auto-Enumeration Status[/bold cyan]")
+            self.display.console.print(f"Job: {job['id']}")
+            self.display.console.print(f"Status: {job['status']}")
+            self.display.console.print(f"Outcome: {job.get('outcome') or '-'}")
+            if job.get("progress"):
+                self.display.console.print_json(data=job["progress"])
+            return True
         if not hasattr(self, '_auto_pipeline') or not self._auto_pipeline:
             self.display.print_warning("No auto-enumeration running")
             return True
@@ -4189,6 +4325,14 @@ class CommandHandler:
 
     def _auto_stop(self) -> bool:
         """Stop running auto-enumeration."""
+        if self.services is not None and hasattr(self, "_auto_job_id"):
+            try:
+                self.services.job_control(self._auto_job_id, "stop")
+            except (KeyError, ValueError) as exc:
+                self.display.print_error(f"Unable to stop auto-enumeration: {exc}")
+                return True
+            self.display.print_success("Stop signal sent")
+            return True
         if not hasattr(self, '_auto_pipeline') or not self._auto_pipeline:
             self.display.print_warning("No auto-enumeration running")
             return True
@@ -4693,12 +4837,12 @@ class CommandHandler:
             spray history                       - Show spray history
             spray wordlist                      - Generate smart wordlist
 
-        Protocols: smb, ldap, winrm, ssh, rdp, mssql, kerberos
+        Protocols: smb, winrm, ssh, rdp, mssql, kerberos
         Patterns: breadth_first, depth_first, low_and_slow, random, smart
 
         Examples:
             spray 192.168.1.100
-            spray dc01.corp.local --protocol ldap --domain CORP
+            spray dc01.corp.local --protocol kerberos --domain CORP
             spray 10.0.0.1 -u admin,user -p Summer2024,P@ssw0rd
             spray 10.0.0.1 --pattern low_and_slow --delay 30
         """
@@ -4707,11 +4851,13 @@ class CommandHandler:
             SprayProtocol, SprayPattern, LockoutPolicy, PasswordGenerator
         )
 
-        # Initialize spray manager if not exists
-        if not hasattr(self, '_credential_spray') or self._credential_spray is None:
-            self._credential_spray = create_credential_spray(self.framework)
-
-        spray = self._credential_spray
+        spray = None
+        if self.services is None:
+            # Compatibility path for embedders that construct a command handler
+            # without the shared application services.
+            if not hasattr(self, '_credential_spray') or self._credential_spray is None:
+                self._credential_spray = create_credential_spray(self.framework)
+            spray = self._credential_spray
 
         if not args:
             self.display.print_error("Usage: spray <target> [options]")
@@ -4720,10 +4866,27 @@ class CommandHandler:
 
         # Handle subcommands
         if args[0] == "status":
+            if self.services is not None and hasattr(self, "_spray_job_id"):
+                job = self.services.job_get(self._spray_job_id)
+                self.display.console.print_json(data=job)
+                return True
             return self._spray_status(spray)
         elif args[0] == "stop":
+            if self.services is not None and hasattr(self, "_spray_job_id"):
+                try:
+                    self.services.job_control(self._spray_job_id, "stop")
+                except (KeyError, ValueError) as exc:
+                    self.display.print_error(f"Unable to stop spray: {exc}")
+                    return True
+                self.display.print_success("Stop signal sent")
+                return True
             return self._spray_stop(spray)
         elif args[0] == "history":
+            if self.services is not None:
+                for job in self.services.job_list():
+                    if job["kind"] == "spray":
+                        self.display.console.print_json(data=job)
+                return True
             return self._spray_history(spray)
         elif args[0] == "wordlist":
             return self._spray_wordlist(args[1:])
@@ -4859,6 +5022,29 @@ class CommandHandler:
         total_attempts = len(targets) * len(users) * len(passwords)
         self.display.print_info(f"Total potential attempts: {total_attempts}")
         self.display.console.print()
+
+        if self.services is not None:
+            try:
+                job = self.services.run_spray(
+                    targets=targets,
+                    users=users,
+                    passwords=passwords,
+                    protocol=protocol,
+                    pattern=pattern,
+                    domain=domain,
+                    delay=delay,
+                    jitter=jitter,
+                    stop_on_success=stop_on_success,
+                )
+            except (TypeError, ValueError) as exc:
+                self.display.print_error(f"Unable to start spray: {exc}")
+                return True
+            self._spray_job_id = job["id"]
+            self.display.print_success(f"Credential spray queued as job {job['id']}")
+            self.display.print_info(
+                f"Use 'jobs status {job['id']}' or 'spray stop'"
+            )
+            return True
 
         # Set up callbacks
         def on_attempt(attempt):

@@ -1,0 +1,7 @@
+SMB 192.0.2.11 445 FILE01 [*] Windows Server 2022 x64 (name:FILE01) (domain:CORP.TEST) (signing:True) (SMBv1:False) (NTLM:True)
+SMB 192.0.2.11 445 FILE01 [+] CORP.TEST\alice:fixture-only
+SMB 192.0.2.11 445 FILE01 [*] Enumerated shares
+SMB 192.0.2.11 445 FILE01 Share           Permissions            Remark
+SMB 192.0.2.11 445 FILE01 -----           -----------            ------
+SMB 192.0.2.11 445 FILE01 Drop            WRITE (SUBDIR)         Upload area
+SMB 192.0.2.11 445 FILE01 Public          READ,WRITE (ACL)       Public area

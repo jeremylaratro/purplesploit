@@ -4,10 +4,10 @@ Impacket SecretsDump Module
 Dump credentials from Windows systems.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from .common import ImpacketAdapter, account, observation
 
 
-class ImpacketSecretsDumpModule(ExternalToolModule):
+class ImpacketSecretsDumpModule(ImpacketAdapter):
     """
     Impacket SecretsDump - Credential dumping tool.
 
@@ -101,51 +101,32 @@ class ImpacketSecretsDumpModule(ExternalToolModule):
             }
         })
 
-    def build_command(self) -> str:
+    emits = ("credential",)
+
+    def build_argv(self) -> list[str]:
         """
         Build the impacket-secretsdump command.
 
         Returns:
             Command string to execute
         """
-        rhost = self.get_option("RHOST")
-        username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        domain = self.get_option("DOMAIN")
-        hash_val = self.get_option("HASH")
         output_file = self.get_option("OUTPUT_FILE")
 
         # Build target string
-        if hash_val:
-            # Hash authentication
-            target = f"{domain}/{username}@{rhost} -hashes {hash_val}"
-        elif password:
-            # Password authentication
-            target = f"{domain}/{username}:{password}@{rhost}"
-        else:
-            # No authentication
-            target = f"{domain}/{username}@{rhost}"
-
-        # Base command
-        cmd = f"impacket-secretsdump {target}"
+        cmd = self.authentication_argv()
 
         # Options
-        sam = self.get_option("SAM")
-        lsa = self.get_option("LSA")
-        ntds = self.get_option("NTDS")
-        history = self.get_option("HISTORY")
-
         # By default, dumps SAM and LSA
         # For NTDS, need -just-dc flag
         if self.option_enabled("NTDS"):
-            cmd += " -just-dc"
+            cmd.append("-just-dc")
 
         if self.option_enabled("HISTORY"):
-            cmd += " -history"
+            cmd.append("-history")
 
         # Output file
         if output_file:
-            cmd += f" -outputfile {output_file}"
+            cmd += ["-outputfile", str(output_file)]
 
         return cmd
 
@@ -165,6 +146,8 @@ class ImpacketSecretsDumpModule(ExternalToolModule):
             "lsa_secrets": [],
             "ntds_hashes": [],
             "total_hashes": 0,
+            "credentials": [],
+            "observations": [],
         }
 
         # Parse output
@@ -190,15 +173,37 @@ class ImpacketSecretsDumpModule(ExternalToolModule):
                 in_lsa = False
                 in_ntds = True
 
-            # Parse hashes
-            if ":" in line and len(line.split(":")) >= 3:
+            # Parse only data lines; colon-bearing progress/error messages are not secrets.
+            if ":" in line and not line.startswith(("[", "Impacket ")):
+                parts = line.split(":")
                 if in_sam:
-                    results["sam_hashes"].append(line)
-                    results["total_hashes"] += 1
+                    if len(parts) >= 4 and parts[1].isdigit():
+                        results["sam_hashes"].append(line)
+                        results["total_hashes"] += 1
                 elif in_lsa:
                     results["lsa_secrets"].append(line)
                 elif in_ntds:
-                    results["ntds_hashes"].append(line)
-                    results["total_hashes"] += 1
+                    if len(parts) >= 4 and parts[1].isdigit():
+                        results["ntds_hashes"].append(line)
+                        results["total_hashes"] += 1
+
+        for section, key in (("sam", "sam_hashes"), ("lsa", "lsa_secrets"), ("ntds", "ntds_hashes")):
+            for line in results[key]:
+                parts = line.split(":")
+                domain, username = account(parts[0], self.get_option("DOMAIN") or "")
+                record = {"username": username, "domain": domain, "source": self.tool_name,
+                          "secret_source": section, "authenticated": False}
+                if section in {"sam", "ntds"}:
+                    record.update(rid=int(parts[1]), hash=f"{parts[2]}:{parts[3]}",
+                                  lmhash=parts[2], nthash=parts[3], credential_type="ntlm")
+                elif len(parts) >= 3 and parts[1].startswith(("aes", "des", "rc4")):
+                    record.update(secret_type=parts[1], secret=":".join(parts[2:]), credential_type="kerberos_key")
+                elif "\\" in parts[0] or "@" in parts[0]:
+                    record.update(password=":".join(parts[1:]), credential_type="password")
+                else:
+                    record.update(secret=":".join(parts[1:]), credential_type="lsa_secret")
+                results["credentials"].append(record)
+                results["observations"].append(observation("credential", self.get_option("RHOST"), **record))
+        results["success"] = results["success"] or bool(results["credentials"])
 
         return results

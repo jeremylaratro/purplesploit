@@ -1,0 +1,8 @@
+{
+  "tenant": {"tenantId": "tenant-1", "displayName": "Example Tenant"},
+  "users": [{"id": "user-1", "displayName": "Alice", "userPrincipalName": "alice@example.test"}],
+  "servicePrincipals": [{"id": "sp-1", "displayName": "automation"}],
+  "roleDefinitions": [{"id": "role-1", "name": "Reader"}],
+  "roleAssignments": [{"id": "assignment-1", "principalId": "sp-1", "roleDefinitionId": "role-1", "scope": "/subscriptions/sub-1"}],
+  "resources": [{"id": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1", "name": "vm1", "type": "virtualMachine", "publicIpAddress": "203.0.113.10"}]
+}

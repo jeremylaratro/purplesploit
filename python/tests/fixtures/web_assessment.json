@@ -1,0 +1,8 @@
+{
+  "httpx": "{\"url\":\"https://app.example:8443/login\",\"scheme\":\"https\",\"host\":\"192.0.2.10\",\"port\":\"8443\",\"status_code\":200,\"title\":\"Sign in\",\"webserver\":\"nginx/1.24\",\"tech\":[\"PHP:8.2\",\"nginx:1.24\"]}\n",
+  "feroxbuster": "{\"type\":\"response\",\"status\":200,\"url\":\"https://app.example:8443/admin\",\"content_length\":412,\"method\":\"GET\"}\n{\"type\":\"response\",\"status\":403,\"url\":\"https://app.example:8443/backup\",\"content_length\":17,\"method\":\"GET\"}\n",
+  "nuclei": "{\"template-id\":\"test-panel\",\"info\":{\"name\":\"Exposed panel\",\"severity\":\"medium\",\"classification\":{\"cwe-id\":[\"CWE-200\"]}},\"type\":\"http\",\"host\":\"https://app.example:8443\",\"matched-at\":\"https://app.example:8443/admin\"}\n",
+  "sqlmap": "Parameter: id (GET)\n    Type: boolean-based blind\n    Title: AND boolean-based blind - WHERE or HAVING clause\n    Payload: id=1 AND 1=1\n",
+  "wfuzz": "000000001:   200        7 L      11 W       162 Ch      \"admin\"\n000000002:   403        5 L      8 W        90 Ch      \"backup\"\n",
+  "wpscan": "{\"target_url\":\"https://app.example:8443\",\"users\":{\"editor\":{\"id\":2}},\"plugins\":{\"example-plugin\":{\"version\":{\"number\":\"1.0\"},\"vulnerabilities\":[{\"title\":\"Example injection\",\"references\":{\"cve\":[\"2026-0000\"]}}]}},\"themes\":{\"sample\":{\"version\":{\"number\":\"2.0\"}}}}\n"
+}

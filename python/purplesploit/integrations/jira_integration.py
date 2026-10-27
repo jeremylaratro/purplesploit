@@ -6,7 +6,6 @@ Creates and manages security findings as Jira issues.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 import json
 import logging
 import base64
@@ -347,7 +346,8 @@ class JiraIntegration(BaseIntegration):
 
         try:
             with open(file_path, "rb") as f:
-                response = requests.post(
+                # Bandit does not recognize a timeout multiplication expression.
+                response = requests.post(  # nosec B113
                     f"{self._base_url}/issue/{issue_key}/attachments",
                     headers={
                         **self._auth_header,

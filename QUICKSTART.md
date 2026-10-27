@@ -1,4 +1,4 @@
-# PurpleSploit v6.7.0 Quick Start Guide
+# PurpleSploit v7.0.0 Quick Start Guide
 
 Get started with PurpleSploit in 5 minutes! Pure Python edition with enhanced auto-completion.
 
@@ -96,7 +96,7 @@ purplesploit> go 192.168.1.100 admin:pass
 
 ### Dropdown Menu Features
 
-PurpleSploit v6.0.0 includes an enhanced dropdown auto-completion menu:
+PurpleSploit includes an enhanced dropdown auto-completion menu:
 
 - **Context-Aware**: Suggestions based on current state
 - **Module Paths**: Auto-complete all available module paths
@@ -260,6 +260,6 @@ Ensure you're running as root/sudo for network scans
 
 *Pure Python. Enhanced Auto-Completion. Built for Speed.*
 
-**Version 6.7.0 - Python Edition**
+**Version 7.0.0 - Python Edition**
 
 </div>

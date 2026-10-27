@@ -5,13 +5,12 @@ Coordinates generation of reports in multiple formats (PDF, HTML, XLSX, Markdown
 """
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 import json
 
-from .models import (
-    Finding, Evidence, ReportConfig, ReportData, Severity, FindingStatus
-)
+from .models import Finding, ReportConfig, ReportData
+from purplesploit.core.findings import FindingsManager
 
 
 class ReportGenerator:
@@ -34,13 +33,18 @@ class ReportGenerator:
         self.config = ReportConfig()
         self._report_data: Optional[ReportData] = None
 
-    def add_finding(self, finding: Finding) -> None:
-        """Add a finding to the report"""
+    def add_finding(self, finding: Union[Finding, Dict[str, Any]]) -> None:
+        """Add a canonical finding or adapt a legacy dictionary losslessly."""
+        if isinstance(finding, dict):
+            finding = Finding.from_dict(finding)
+        if not isinstance(finding, Finding):
+            raise TypeError("Report findings must be canonical Finding objects or dictionaries")
         self.findings.append(finding)
 
     def add_findings(self, findings: List[Finding]) -> None:
         """Add multiple findings to the report"""
-        self.findings.extend(findings)
+        for finding in findings:
+            self.add_finding(finding)
 
     def clear_findings(self) -> None:
         """Clear all findings"""
@@ -51,12 +55,7 @@ class ReportGenerator:
         self.config = config
 
     def create_finding(
-        self,
-        title: str,
-        severity: str,
-        description: str,
-        target: str,
-        **kwargs
+        self, title: str, severity: str, description: str, target: str, **kwargs
     ) -> Finding:
         """
         Create and add a new finding.
@@ -71,43 +70,47 @@ class ReportGenerator:
         Returns:
             The created Finding object
         """
-        import uuid
-
-        finding = Finding(
-            id=kwargs.get("id", str(uuid.uuid4())[:8]),
-            title=title,
-            severity=Severity(severity.lower()),
-            description=description,
-            target=target,
-            cvss_score=kwargs.get("cvss_score"),
-            cvss_vector=kwargs.get("cvss_vector"),
-            cve_ids=kwargs.get("cve_ids", []),
-            cwe_ids=kwargs.get("cwe_ids", []),
-            impact=kwargs.get("impact", ""),
-            remediation=kwargs.get("remediation", ""),
-            references=kwargs.get("references", []),
-            mitre_tactics=kwargs.get("mitre_tactics", []),
-            mitre_techniques=kwargs.get("mitre_techniques", []),
-            module_name=kwargs.get("module_name"),
-            port=kwargs.get("port"),
-            service=kwargs.get("service"),
-            raw_output=kwargs.get("raw_output"),
-            status=FindingStatus(kwargs.get("status", "draft")),
-            notes=kwargs.get("notes", ""),
+        finding = Finding.from_dict(
+            {
+                **kwargs,
+                "title": title,
+                "severity": severity,
+                "description": description,
+                "target": target,
+            }
         )
 
         self.add_finding(finding)
         return finding
 
-    def _build_report_data(self) -> ReportData:
-        """Build ReportData from current state"""
+    def _build_report_data(self, findings=None) -> ReportData:
+        """Use supplied/local findings, then framework manager and legacy DB.
+
+        Explicit report selections take precedence. Only when no findings were
+        selected do we discover framework findings; conversion failures surface
+        to the caller instead of silently producing an empty report.
+        """
         targets = []
         services = []
         credentials = []
 
+        selected = self.findings if findings is None else findings
+        if isinstance(selected, Finding):
+            selected = [selected]
+        elif isinstance(selected, dict) and "title" in selected:
+            selected = [selected]
+        elif isinstance(selected, dict):
+            selected = selected.values()
+        selected = list(selected)
+
         # Pull data from framework if available
         if self.framework:
-            if hasattr(self.framework, 'database'):
+            if findings is None and not selected:
+                for name in ("findings_manager", "_findings_manager"):
+                    manager = getattr(self.framework, name, None)
+                    if isinstance(manager, FindingsManager):
+                        selected.extend(manager.findings.values())
+            if hasattr(self.framework, "database"):
                 db = self.framework.database
                 targets = db.get_targets()
                 services = db.get_services()
@@ -118,20 +121,22 @@ class ReportGenerator:
                     safe_credential["has_hash"] = bool(safe_credential.pop("hash", None))
                     credentials.append(safe_credential)
 
+                if findings is None and not selected:
+                    if callable(getattr(db, "get_findings", None)):
+                        rows = db.get_findings()
+                        if not isinstance(rows, (list, tuple)):
+                            raise TypeError("Database.get_findings() must return finding rows")
+                        selected.extend(rows)
+
         return ReportData(
             config=self.config,
-            findings=self.findings,
+            findings=selected,
             targets=targets,
             services=services,
             credentials=credentials,
         )
 
-    def generate(
-        self,
-        format: str,
-        output_path: Optional[str] = None,
-        **kwargs
-    ) -> str:
+    def generate(self, format: str, output_path: Optional[str] = None, **kwargs) -> str:
         """
         Generate a report in the specified format.
 
@@ -152,106 +157,87 @@ class ReportGenerator:
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             ext = "md" if format == "markdown" else format
-            output_path = f"{self.config.output_dir}/{self.config.filename_prefix}_{timestamp}.{ext}"
+            output_path = (
+                f"{self.config.output_dir}/{self.config.filename_prefix}_{timestamp}.{ext}"
+            )
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Generate based on format
         if format == "pdf":
-            return self._generate_pdf(report_data, output_path, **kwargs)
+            result = self._generate_pdf(report_data, output_path, **kwargs)
         elif format == "html":
-            return self._generate_html(report_data, output_path, **kwargs)
+            result = self._generate_html(report_data, output_path, **kwargs)
         elif format == "xlsx":
-            return self._generate_xlsx(report_data, output_path, **kwargs)
+            result = self._generate_xlsx(report_data, output_path, **kwargs)
         elif format == "markdown" or format == "md":
-            return self._generate_markdown(report_data, output_path, **kwargs)
+            result = self._generate_markdown(report_data, output_path, **kwargs)
         elif format == "json":
-            return self._generate_json(report_data, output_path, **kwargs)
+            result = self._generate_json(report_data, output_path, **kwargs)
         else:
             raise ValueError(f"Unsupported format: {format}")
+        result_path = Path(result)
+        if result_path.exists():
+            result_path.chmod(0o600)
+        return result
 
-    def _generate_pdf(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def _generate_pdf(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """Generate PDF report"""
         from .pdf import PDFReportGenerator
 
         generator = PDFReportGenerator()
         return generator.generate(report_data, output_path, **kwargs)
 
-    def _generate_html(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def _generate_html(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """Generate HTML report"""
         from .html import HTMLReportGenerator
 
         generator = HTMLReportGenerator()
         return generator.generate(report_data, output_path, **kwargs)
 
-    def _generate_xlsx(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def _generate_xlsx(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """Generate Excel report"""
         from .xlsx import XLSXReportGenerator
 
         generator = XLSXReportGenerator()
         return generator.generate(report_data, output_path, **kwargs)
 
-    def _generate_markdown(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def _generate_markdown(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """Generate Markdown report"""
         from .markdown import MarkdownReportGenerator
 
         generator = MarkdownReportGenerator()
         return generator.generate(report_data, output_path, **kwargs)
 
-    def _generate_json(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def _generate_json(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """Generate JSON export of report data"""
         data = report_data.to_dict()
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
         return str(output_path)
 
     def load_findings_from_json(self, json_path: str) -> None:
         """Load findings from a JSON file"""
-        with open(json_path, 'r') as f:
+        with open(json_path, "r") as f:
             data = json.load(f)
 
         if isinstance(data, list):
             # List of findings
             for item in data:
                 self.findings.append(Finding.from_dict(item))
-        elif isinstance(data, dict) and 'findings' in data:
+        elif isinstance(data, dict) and "findings" in data:
             # Full report data
-            for item in data['findings']:
+            for item in data["findings"]:
                 self.findings.append(Finding.from_dict(item))
 
     def save_findings_to_json(self, json_path: str) -> None:
         """Save current findings to a JSON file"""
         data = [f.to_dict() for f in self.findings]
 
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
     def get_summary(self) -> Dict[str, Any]:
@@ -265,17 +251,12 @@ class ReportGenerator:
             "critical_count": report_data.critical_count,
             "high_count": report_data.high_count,
             "findings_by_target": {
-                target: len(findings)
-                for target, findings in report_data.findings_by_target.items()
-            }
+                target: len(findings) for target, findings in report_data.findings_by_target.items()
+            },
         }
 
     def import_from_module_result(
-        self,
-        module_name: str,
-        result: Dict[str, Any],
-        target: str,
-        auto_severity: str = "medium"
+        self, module_name: str, result: Dict[str, Any], target: str, auto_severity: str = "medium"
     ) -> Optional[Finding]:
         """
         Import a finding from a module execution result.
@@ -300,15 +281,17 @@ class ReportGenerator:
         if not description:
             return None
 
+        details = dict(result)
+        for name in ("title", "severity", "description", "target", "module_name"):
+            details.pop(name, None)
+        details.setdefault("raw_output", result.get("stdout", result.get("output", "")))
         finding = self.create_finding(
             title=title,
             severity=severity,
             description=description,
             target=target,
             module_name=module_name,
-            port=result.get("port"),
-            service=result.get("service"),
-            raw_output=result.get("stdout", result.get("output")),
+            **details,
         )
 
         return finding
@@ -316,10 +299,7 @@ class ReportGenerator:
 
 # Convenience functions for CLI usage
 def quick_report(
-    findings: List[Dict[str, Any]],
-    output_path: str,
-    format: str = "html",
-    **config_options
+    findings: List[Dict[str, Any]], output_path: str, format: str = "html", **config_options
 ) -> str:
     """
     Generate a quick report from a list of finding dicts.
@@ -341,6 +321,6 @@ def quick_report(
 
     # Add findings
     for f_data in findings:
-        generator.create_finding(**f_data)
+        generator.add_finding(f_data)
 
     return generator.generate(format, output_path)

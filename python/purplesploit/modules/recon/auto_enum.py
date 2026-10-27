@@ -22,6 +22,11 @@ class AutoEnumModule(ExternalToolModule):
     Organizes output into structured directories and provides detailed results.
     """
 
+    # Retained solely for direct-import compatibility. The canonical
+    # orchestrator is purplesploit.core.auto_enum.AutoEnumPipeline; exposing
+    # both implementations in module discovery created divergent behavior.
+    discoverable = False
+
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "auto-enum"
@@ -275,7 +280,7 @@ class AutoEnumModule(ExternalToolModule):
                 try:
                     port = int(line.split('/')[0].strip())
                     ports.append(port)
-                except:
+                except ValueError:
                     pass
         return sorted(ports)
 
@@ -296,7 +301,7 @@ class AutoEnumModule(ExternalToolModule):
                             "service": service,
                             "version": version
                         })
-                    except:
+                    except ValueError:
                         pass
         return services
 
@@ -600,7 +605,7 @@ class AutoEnumModule(ExternalToolModule):
         # Network summary
         if self.results.get("network"):
             network = self.results["network"]
-            summary.append(f"[+] Network Enumeration:")
+            summary.append("[+] Network Enumeration:")
             summary.append(f"    - Open Ports: {len(network.get('ports', []))}")
             if network.get('ports'):
                 summary.append(f"    - Ports: {', '.join(map(str, network['ports']))}")
@@ -610,7 +615,7 @@ class AutoEnumModule(ExternalToolModule):
         # Web summary
         if self.results.get("web"):
             web = self.results["web"]
-            summary.append(f"[+] Web Enumeration:")
+            summary.append("[+] Web Enumeration:")
             summary.append(f"    - Live URLs: {len(web.get('live_urls', []))}")
             for url in web.get('live_urls', [])[:10]:
                 summary.append(f"      * {url}")
@@ -619,14 +624,14 @@ class AutoEnumModule(ExternalToolModule):
         # DNS summary
         if self.results.get("dns"):
             dns = self.results["dns"]
-            summary.append(f"[+] DNS Enumeration:")
+            summary.append("[+] DNS Enumeration:")
             summary.append(f"    - DNS Records: {len(dns.get('dns_records', []))}")
             summary.append(f"    - Subdomains Found: {len(dns.get('subdomains', []))}")
             summary.append("")
 
         # Exploits summary
         if self.results.get("vulnerabilities"):
-            summary.append(f"[+] Potential Exploits:")
+            summary.append("[+] Potential Exploits:")
             summary.append(f"    - Services with Exploits: {len(self.results['vulnerabilities'])}")
             for vuln in self.results["vulnerabilities"][:5]:
                 summary.append(f"      * {vuln['service']} {vuln['version']} (Port {vuln['port']})")

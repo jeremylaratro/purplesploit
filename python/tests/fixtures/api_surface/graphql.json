@@ -1,0 +1,11 @@
+{
+  "data": {"__schema": {
+    "queryType": {"name": "Query"}, "mutationType": {"name": "Mutation"}, "subscriptionType": null,
+    "types": [
+      {"kind": "OBJECT", "name": "Query", "fields": [{"name": "pet", "args": [{"name": "id", "defaultValue": null, "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "ID"}}}], "type": {"kind": "OBJECT", "name": "Pet"}}]},
+      {"kind": "OBJECT", "name": "Mutation", "fields": [{"name": "rename", "args": [{"name": "name", "defaultValue": "\"unnamed\"", "type": {"kind": "SCALAR", "name": "String"}}], "type": {"kind": "OBJECT", "name": "Pet"}}]},
+      {"kind": "OBJECT", "name": "Pet", "fields": [{"name": "name", "args": [], "type": {"kind": "SCALAR", "name": "String"}}]},
+      {"kind": "SCALAR", "name": "ID"}, {"kind": "SCALAR", "name": "String"}
+    ]
+  }}
+}

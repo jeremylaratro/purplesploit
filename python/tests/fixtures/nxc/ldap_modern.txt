@@ -1,0 +1,9 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2022 (name:DC01) (domain:CORP.TEST) (signing:Enforced) (channel binding:Always)
+LDAP 192.0.2.10 389 DC01 [+] CORP.TEST\alice:fixture-only
+LDAP 192.0.2.10 389 DC01 [*] Enumerated users
+LDAP 192.0.2.10 389 DC01 -Username-                    -Last PW Set-       -BadPW- -Description-
+LDAP 192.0.2.10 389 DC01 alice                         2026-01-02 09:00:00 0        Example user
+LDAP 192.0.2.10 389 DC01 krbtgt                        <never>             0        Service
+LDAP 192.0.2.10 389 DC01 -Group-                                  -Members- -Description-
+LDAP 192.0.2.10 389 DC01 Domain Admins                            2         Designated administrators
+LDAP 192.0.2.10 389 DC01 Domain Users                             14        All users

@@ -5,22 +5,22 @@ Main framework engine that manages modules, session, and execution.
 """
 
 import os
-import sys
 import importlib.util
 import inspect
 from urllib.parse import urlparse
 from pathlib import Path
-from typing import Dict, List, Optional, Type, TYPE_CHECKING
+from typing import Dict, List, Optional, Union
 from datetime import datetime
+from threading import RLock
+
+from .execution import (
+    ExecutionRequest, ExecutionResult, ExecutionOutcome, ExecutionHandle, normalize_observations,
+    normalize_operation, utc_now,
+)
 
 from .module import BaseModule, ModuleMetadata
 from .session import Session
 from .database import Database
-
-# Lazy import for models.database to avoid expensive SQLAlchemy import at startup
-if TYPE_CHECKING:
-    from purplesploit.models.database import DatabaseManager, TargetCreate, CredentialCreate
-
 
 class Framework:
     """
@@ -29,13 +29,22 @@ class Framework:
     Manages module registry, session state, database, and module execution.
     """
 
-    def __init__(self, modules_path: str = None, db_path: str = None):
+    def __init__(
+        self,
+        modules_path: str = None,
+        db_path: str = None,
+        plugins_dir: Optional[Union[str, Path]] = None,
+        plugin_config_dir: Optional[Union[str, Path]] = None,
+        plugin_manager_kwargs: Optional[dict] = None,
+    ):
         """
         Initialize the framework.
 
         Args:
             modules_path: Path to modules directory
             db_path: Path to database file
+            plugins_dir: Optional local plugin installation directory
+            plugin_config_dir: Optional local plugin state directory
         """
         # Determine modules path
         if modules_path is None:
@@ -45,16 +54,30 @@ class Framework:
 
         self.modules_path = modules_path
         self.modules: Dict[str, ModuleMetadata] = {}
+        self._execution_record_lock = RLock()
 
         # Initialize core components
         self.database = Database(db_path)
         self.session = Session()
 
+        # Logging must exist before optional extensions register modules.
+        self.log_messages = []
+
         # Load persisted data
         self._load_persisted_data()
 
-        # Logging
-        self.log_messages = []
+        # Import lazily so the core module registry remains independently
+        # usable. PluginManager discovers enabled local plugins at startup.
+        from purplesploit.plugins.manager import PluginManager
+
+        self.plugin_manager = PluginManager(
+            plugins_dir=Path(plugins_dir) if plugins_dir is not None else None,
+            config_dir=(
+                Path(plugin_config_dir) if plugin_config_dir is not None else None
+            ),
+            framework=self,
+            **(plugin_manager_kwargs or {}),
+        )
 
     def _get_db_manager(self):
         """Lazy load db_manager to avoid expensive SQLAlchemy import at startup."""
@@ -234,6 +257,7 @@ class Framework:
             if (issubclass(obj, BaseModule) and
                 obj is not BaseModule and
                 not inspect.isabstract(obj) and
+                getattr(obj, "discoverable", True) and
                 obj.__module__ == expected_module_name):
 
                 # Create temporary instance to extract metadata
@@ -251,6 +275,54 @@ class Framework:
                     self.log(f"Registered module: {module_path}", "debug")
                 except Exception as e:
                     self.log(f"Error registering {module_path}: {e}", "warning")
+
+    def register_module(self, module_path: str, module_class: type[BaseModule]) -> ModuleMetadata:
+        """Register a module class supplied by an extension.
+
+        Re-registering the same class is idempotent. A different class may not
+        silently replace an existing capability at the same path.
+        """
+        normalized_path = str(module_path).strip().strip("/")
+        if not normalized_path or any(
+            part in {"", ".", ".."} for part in normalized_path.split("/")
+        ):
+            raise ValueError(f"Invalid module path: {module_path!r}")
+        if not inspect.isclass(module_class) or not issubclass(module_class, BaseModule):
+            raise TypeError("module_class must be a BaseModule subclass")
+        if inspect.isabstract(module_class):
+            raise TypeError("module_class must be concrete")
+
+        existing = self.modules.get(normalized_path)
+        if existing is not None:
+            if existing.instance is module_class:
+                return existing
+            raise ValueError(f"Module path already registered: {normalized_path}")
+
+        instance = module_class(self)
+        metadata = ModuleMetadata(
+            path=normalized_path,
+            name=instance.name,
+            category=instance.category,
+            description=instance.description,
+            author=instance.author,
+            instance=module_class,
+        )
+        self.modules[normalized_path] = metadata
+        self.log(f"Registered extension module: {normalized_path}", "debug")
+        return metadata
+
+    def unregister_module(self, module_path: str) -> bool:
+        """Remove an extension module and clear it from the active session."""
+        normalized_path = str(module_path).strip().strip("/")
+        metadata = self.modules.pop(normalized_path, None)
+        if metadata is None:
+            return False
+
+        current = self.session.current_module
+        if current is not None and isinstance(current, metadata.instance):
+            self.session.current_module = None
+        self.log(f"Unregistered extension module: {normalized_path}", "debug")
+        return True
 
     def get_module(self, module_path: str) -> Optional[ModuleMetadata]:
         """
@@ -280,14 +352,152 @@ class Framework:
             return None
 
         try:
-            # Instantiate the module
-            module_instance = metadata.instance(self)
+            module_instance = self.instantiate_module(module_path)
             self.session.load_module(module_instance)
             self.log(f"Loaded module: {metadata.name}", "success")
             return module_instance
         except Exception as e:
             self.log(f"Error loading module: {e}", "error")
             return None
+
+    def instantiate_module(self, module_path: str) -> Optional[BaseModule]:
+        """Create a fresh module without changing the operator's selected module."""
+        metadata = self.get_module(module_path)
+        if metadata is None:
+            return None
+        instance = metadata.instance(self)
+        instance.module_path = module_path
+        return instance
+
+    def find_operation(self, module: BaseModule, selector: str) -> Optional[Dict]:
+        """Resolve a registered stable ID, handler slug, or exact display name.
+
+        Ambiguous aliases are rejected instead of selecting a different operation
+        after an inventory change. Prefix and substring matches are not supported.
+        """
+        operations = [normalize_operation(item, module) for item in module.get_operations()]
+        exact = [item for item in operations if item['id'] == selector or item['name'] == selector]
+        if len(exact) == 1:
+            return exact[0]
+        if exact:
+            return None
+        normalized = str(selector).strip().casefold().replace('_', '-')
+        matches = [item for item in operations if normalized in {
+            str(item['id']).casefold().replace('_', '-'),
+            str(item['name']).casefold().replace('_', '-'),
+        }]
+        return matches[0] if len(matches) == 1 else None
+
+    def execute_request(self, request: ExecutionRequest) -> ExecutionResult:
+        """Execute explicit options through the same pipeline used by the CLI."""
+        started_at = utc_now()
+        try:
+            module = self.instantiate_module(request.module_path)
+        except Exception as exc:
+            return ExecutionResult(
+                request_id=request.request_id, module_path=request.module_path,
+                operation_name=request.operation_name, correlation_id=request.correlation_id,
+                engagement_id=request.engagement_id, job_id=request.job_id,
+                outcome=ExecutionOutcome.ERROR, started_at=started_at, finished_at=utc_now(),
+                error=f'Module initialization failed: {exc}',
+            )
+        if module is None:
+            return ExecutionResult(
+                request_id=request.request_id, module_path=request.module_path,
+                operation_name=request.operation_name, correlation_id=request.correlation_id,
+                engagement_id=request.engagement_id, job_id=request.job_id,
+                outcome=ExecutionOutcome.REJECTED, started_at=started_at, finished_at=utc_now(),
+                error=f'Module not found: {request.module_path}',
+            )
+        module.execution_request = request
+        module.execution_started_at = started_at
+        module.options_locked = set(request.options_locked) | set(request.options)
+        for key, value in request.options.items():
+            if not module.set_option(key, value):
+                result = self._complete_module_results(module, {'success': False, 'error': f'Unknown option: {key}'})
+                return ExecutionResult.from_dict(result['execution'])
+        if 'BACKGROUND' in module.options:
+            module.set_option('BACKGROUND', request.background)
+            module.options_locked.add('BACKGROUND')
+        if request.operation_name:
+            operation = self.find_operation(module, request.operation_name)
+            if operation is None:
+                result = self._complete_module_results(module, {'success': False, 'error': f'Operation not found or ambiguous: {request.operation_name}'})
+            elif operation['interactive'] and request.stdin != 'inherit':
+                result = self._complete_module_results(module, {'success': False, 'error': f'Operation requires interactive stdin: {operation["name"]}'})
+            else:
+                result = self.run_operation(module, operation)
+        else:
+            result = self.run_module(module)
+        execution_result = ExecutionResult.from_dict(result['execution'])
+        if execution_result.outcome is ExecutionOutcome.RUNNING and hasattr(module, 'background_process'):
+            execution_result._handle = ExecutionHandle(module.background_process, execution_result)
+        return execution_result
+
+    def _complete_module_results(self, module: BaseModule, results: Dict) -> Dict:
+        """Normalize the actual process outcome, then record one execution."""
+        request = getattr(module, 'execution_request', None) or getattr(module, '_execution_context_request', None)
+        if not isinstance(request, ExecutionRequest):
+            module_path = getattr(module, 'module_path', None)
+            request = ExecutionRequest(
+                module_path=module_path if isinstance(module_path, str) else module.__class__.__module__,
+                options={key: module.get_option(key) for key in module.options},
+            )
+        observations = normalize_observations(results, request)
+        process_records = getattr(module, 'execution_records', [])
+        if not isinstance(process_records, list):
+            process_records = []
+        process_record = results.get('execution') or (process_records[-1] if process_records else {})
+        data = dict(process_record)
+        data.update(
+            request_id=request.request_id, module_path=request.module_path,
+            operation_name=request.operation_name, correlation_id=request.correlation_id,
+            engagement_id=request.engagement_id, job_id=request.job_id,
+            observations=[item.to_dict() for item in observations],
+            raw_result={key: value for key, value in results.items() if key not in {'execution', 'observations'}},
+        )
+        started_at = getattr(module, 'execution_started_at', None)
+        data.setdefault('started_at', started_at if isinstance(started_at, str) else utc_now())
+        data.setdefault('finished_at', utc_now())
+        tool_name = getattr(module, 'tool_name', None)
+        data.setdefault('tool', tool_name if isinstance(tool_name, str) else None)
+        success = bool(results.get('success', False))
+        # A parser or wrapper cannot turn a failed/pending process into success.
+        if process_records:
+            success = success and all(item.get('success', False) for item in process_records)
+        if 'returncode' in results:
+            data['exit_code'] = results['returncode']
+        if data.get('exit_code') is not None:
+            success = success and data['exit_code'] == 0
+        data['timed_out'] = bool(data.get('timed_out') or results.get('timed_out') or any(item.get('timed_out') for item in process_records))
+        data['cancelled'] = bool(data.get('cancelled') or results.get('cancelled') or any(item.get('cancelled') for item in process_records))
+        running = data.get('outcome') == ExecutionOutcome.RUNNING.value or bool(results.get('background'))
+        success = success and not (data['timed_out'] or data['cancelled'] or running)
+        data['success'] = success
+        data['outcome'] = (
+            ExecutionOutcome.CANCELLED.value if data['cancelled'] else
+            ExecutionOutcome.TIMED_OUT.value if data['timed_out'] else
+            ExecutionOutcome.RUNNING.value if running else
+            ExecutionOutcome.SUCCESS.value if success else ExecutionOutcome.FAILED.value
+        )
+        data['error'] = results.get('error') or data.get('error')
+        if running:
+            data['finished_at'] = None
+        results = dict(results, success=success, observations=data['observations'], execution=data)
+        results = self._redact_module_results(module, results)
+        self._record_module_results(module, results)
+        return results
+
+    def _begin_module_execution(self, module: BaseModule) -> None:
+        module.execution_records = []
+        request = getattr(module, 'execution_request', None)
+        if not isinstance(request, ExecutionRequest):
+            module_path = getattr(module, 'module_path', None)
+            request = ExecutionRequest(
+                module_path=module_path if isinstance(module_path, str) else module.__class__.__module__,
+                options={key: module.get_option(key) for key in module.options},
+            )
+        module._execution_context_request = request
 
     def run_module(self, module: BaseModule = None) -> Dict:
         """
@@ -306,11 +516,12 @@ class Framework:
             return {"success": False, "error": "No module loaded"}
 
         # Populate implicit context before validating required parameters.
+        self._begin_module_execution(module)
         module.auto_set_from_context()
         valid, error = module.validate_options()
         if not valid:
             self.log(f"Validation failed: {error}", "error")
-            return {"success": False, "error": error}
+            return self._complete_module_results(module, {"success": False, "error": error})
 
         # Execute module
         self.log(f"Running module: {module.name}", "info")
@@ -318,12 +529,10 @@ class Framework:
             raw_results = module.run()
             if not isinstance(raw_results, dict):
                 raw_results = {"success": True, "output": str(raw_results)}
-            results = self._redact_module_results(module, raw_results)
-
-            self._record_module_results(module, results)
+            results = self._complete_module_results(module, raw_results)
 
             if results.get('success', False):
-                self.log(f"Module completed successfully", "success")
+                self.log("Module completed successfully", "success")
             else:
                 self.log(f"Module failed: {results.get('error', 'Unknown error')}", "error")
 
@@ -332,48 +541,53 @@ class Framework:
             error_msg = f"Module execution error: {str(e)}"
             self.log(error_msg, "error")
             results = {"success": False, "error": error_msg}
-            self._record_module_results(module, results)
-            return results
+            return self._complete_module_results(module, results)
 
     def run_operation(self, module: BaseModule, operation: Dict) -> Dict:
         """Execute a granular operation through the normal validation/audit pipeline."""
         if module is None:
             return {"success": False, "error": "No module loaded"}
 
+        self._begin_module_execution(module)
         module.auto_set_from_context()
         valid, error = module.validate_options()
         if not valid:
             self.log(f"Validation failed: {error}", "error")
-            return {"success": False, "error": error}
+            return self._complete_module_results(module, {"success": False, "error": error})
 
         handler = operation.get("handler")
         if handler is None:
-            return {"success": False, "error": "No handler defined for operation"}
+            return self._complete_module_results(module, {"success": False, "error": "No handler defined for operation"})
+
+        for key in operation.get('requires', []):
+            if module.get_option(key) in (None, ''):
+                return self._complete_module_results(module, {'success': False, 'error': f'Required option not set: {key}'})
 
         try:
             if isinstance(handler, str):
                 method = getattr(module, handler, None)
                 if method is None or not callable(method):
-                    return {"success": False, "error": f"Handler method not found: {handler}"}
+                    return self._complete_module_results(module, {"success": False, "error": f"Handler method not found: {handler}"})
                 result = method()
             elif callable(handler):
                 result = handler()
             else:
-                return {"success": False, "error": f"Invalid handler type: {type(handler).__name__}"}
+                return self._complete_module_results(module, {"success": False, "error": f"Invalid handler type: {type(handler).__name__}"})
 
             results = result if isinstance(result, dict) else {"success": True, "output": str(result)}
-            results = self._redact_module_results(module, results)
-            self._record_module_results(module, results)
-            return results
+            return self._complete_module_results(module, results)
         except Exception as e:
             error_msg = f"Operation execution error: {e}"
             results = {"success": False, "error": error_msg}
-            self._record_module_results(module, results)
             self.log(error_msg, "error")
-            return results
+            return self._complete_module_results(module, results)
 
     def _record_module_results(self, module: BaseModule, results: Dict) -> None:
         """Persist module output consistently for module and operation execution."""
+        with self._execution_record_lock:
+            self._store_module_results(module, results)
+
+    def _store_module_results(self, module: BaseModule, results: Dict) -> None:
         try:
             options = module.show_options()
             safe_options = {}
@@ -383,6 +597,9 @@ class Framework:
                     safe_option["value"] = "[redacted]"
                 safe_options[key] = safe_option
             self.session.store_results(module.name, results)
+            self.session.module_history.append({
+                'module': module.name, 'execution': results.get('execution'),
+            })
             self.database.add_module_execution(
                 module_name=module.name,
                 module_path=module.__class__.__module__,

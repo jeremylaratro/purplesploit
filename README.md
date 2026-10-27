@@ -1,4 +1,4 @@
-# PurpleSploit Framework v6.8.1
+# PurpleSploit Framework v7.0.0
 
 <div align="center">
 

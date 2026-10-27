@@ -5,15 +5,14 @@ Template-based vulnerability scanning using Project Discovery's Nuclei.
 Supports 8000+ community templates for comprehensive vulnerability detection.
 """
 
-from purplesploit.core.module import ExternalToolModule
+from purplesploit.web_observations import WebToolModule, json_records, observation
 from typing import Dict, Any, List
 from pathlib import Path
-from datetime import datetime
-import json
-import re
+import shlex
+from uuid import uuid4
 
 
-class NucleiModule(ExternalToolModule):
+class NucleiModule(WebToolModule):
     """
     Nuclei vulnerability scanner module.
 
@@ -24,6 +23,9 @@ class NucleiModule(ExternalToolModule):
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "nuclei"
+
+    emits = ["finding"]
+    supported_tool_versions = ["Nuclei 3.x (-jsonl)", "Nuclei 2.x (JSON_FLAG=-json)"]
 
     @property
     def name(self) -> str:
@@ -115,6 +117,10 @@ class NucleiModule(ExternalToolModule):
                 "required": False,
                 "description": "Output format (json, jsonl, csv)",
                 "default": "json"
+            },
+            "JSON_FLAG": {
+                "value": "-jsonl", "default": "-jsonl", "required": False,
+                "description": "JSON output flag: -jsonl for current Nuclei; -json for legacy 2.x",
             },
         }
 
@@ -228,216 +234,100 @@ class NucleiModule(ExternalToolModule):
 
         return None
 
-    def _build_base_command(self) -> str:
-        """Build base nuclei command with common options."""
+    def _build_base_argv(self):
         target = self._get_target()
         if not target:
-            return None
+            return []
+        argv = ["nuclei", "-l" if Path(str(target)).is_file() else "-u", str(target)]
+        for option, flag in (("RATE_LIMIT", "-rl"), ("CONCURRENCY", "-c"), ("TIMEOUT", "-timeout"),
+                             ("RETRIES", "-retries"), ("PROXY", "-proxy"), ("HEADERS", "-H"),
+                             ("TEMPLATES", "-t"), ("SEVERITY", "-s"), ("TAGS", "-tags"),
+                             ("EXCLUDE_TAGS", "-etags")):
+            value = self.get_option(option)
+            if value is not None and value != "":
+                argv.extend([flag, str(value)])
+        return argv
 
-        cmd_parts = ["nuclei"]
+    def _build_base_command(self):
+        return shlex.join(self._build_base_argv())
 
-        # Target - check if file or single target
-        if Path(target).is_file():
-            cmd_parts.append(f"-l '{target}'")
-        else:
-            cmd_parts.append(f"-u '{target}'")
-
-        # Rate limiting
-        rate_limit = self.get_option("RATE_LIMIT")
-        if rate_limit:
-            cmd_parts.append(f"-rl {rate_limit}")
-
-        # Concurrency
-        concurrency = self.get_option("CONCURRENCY")
-        if concurrency:
-            cmd_parts.append(f"-c {concurrency}")
-
-        # Timeout
-        timeout = self.get_option("TIMEOUT")
-        if timeout:
-            cmd_parts.append(f"-timeout {timeout}")
-
-        # Retries
-        retries = self.get_option("RETRIES")
-        if retries:
-            cmd_parts.append(f"-retries {retries}")
-
-        # Proxy
-        proxy = self.get_option("PROXY")
-        if proxy:
-            cmd_parts.append(f"-proxy '{proxy}'")
-
-        # Headers
-        headers = self.get_option("HEADERS")
-        if headers:
-            cmd_parts.append(f"-H '{headers}'")
-
-        return " ".join(cmd_parts)
-
-    def _execute_nuclei(
-        self,
-        extra_args: str = "",
-        run_background: bool = False,
-        scan_name: str = "nuclei"
-    ) -> Dict[str, Any]:
-        """
-        Execute nuclei with specified arguments.
-
-        Args:
-            extra_args: Additional nuclei arguments
-            run_background: Run in background
-            scan_name: Name for logging/database
-
-        Returns:
-            Execution result dictionary
-        """
-        base_cmd = self._build_base_command()
-        if not base_cmd:
+    def _execute_nuclei(self, extra_args="", run_background=False, scan_name="nuclei"):
+        argv = self._build_base_argv()
+        if not argv:
             return {"success": False, "error": "TARGET required"}
-
-        # Create output directory
-        log_dir = Path.home() / ".purplesploit" / "logs" / "nuclei"
+        flag = self.get_option("JSON_FLAG") or "-jsonl"
+        if flag not in {"-jsonl", "-json"}:
+            return {"success": False, "error": "JSON_FLAG must be -jsonl or -json"}
+        request = self.execution_request or getattr(self, "_execution_context_request", None)
+        log_dir = Path(request.run_dir) if request and request.run_dir else Path.home() / ".purplesploit/logs/nuclei"
         log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate output filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        target = self._get_target()
-        safe_target = re.sub(r'[:/\\]', '_', target)[:50]
-        output_file = log_dir / f"nuclei_{safe_target}_{scan_name}_{timestamp}.json"
-
-        # Build full command
-        cmd = f"{base_cmd} {extra_args} -json -o '{output_file}'"
-
-        self.log(f"Starting nuclei {scan_name} scan", "info")
-        self.log(f"Output: {output_file}", "info")
-
-        if run_background:
-            result = self.execute_command(cmd, background=True, timeout=3600)
-            if result.get('success'):
-                result['output_file'] = str(output_file)
-                result['message'] = f"Scan running in background (PID: {result.get('pid')})"
-                # Store scan info
-                self.framework.database.save_scan_results(
-                    scan_name="nuclei",
-                    target=target,
-                    scan_type="vuln",
-                    results={"status": "running", "pid": result.get('pid')},
-                    file_path=str(output_file)
-                )
-        else:
-            result = self.execute_command(cmd, timeout=3600)
-            if result.get('success') and output_file.exists():
-                parsed = self._parse_results(output_file)
-                result['findings'] = parsed['findings']
-                result['summary'] = parsed['summary']
-                result['output_file'] = str(output_file)
-
-                # Import findings to database
-                self._import_findings(parsed['findings'], target)
-
-                # Store scan results
-                self.framework.database.save_scan_results(
-                    scan_name="nuclei",
-                    target=target,
-                    scan_type="vuln",
-                    results=parsed,
-                    file_path=str(output_file)
-                )
-
-                self.log(f"Found {len(parsed['findings'])} vulnerabilities", "success")
-
+        output_file = log_dir / f"nuclei_{scan_name}_{uuid4().hex}.jsonl"
+        extra = shlex.split(extra_args) if isinstance(extra_args, str) else list(extra_args)
+        result = self.execute_command([*argv, *extra, flag, "-silent", "-o", str(output_file)],
+                                      background=run_background, timeout=3600)
+        result["output_file"] = str(output_file)
+        result["artifacts"] = [str(output_file)]
+        if result.get("background"):
+            return result
+        parsed = self._parse_results(output_file) if output_file.exists() else self.parse_output(result.get("stdout", ""))
+        result.update(parsed=parsed, findings=parsed["findings"], summary=parsed["summary"],
+                      observations=parsed["observations"])
+        if result.get("success"):
+            self._import_findings(parsed["findings"], self._get_target())
+        database = getattr(self.framework, "database", None)
+        if database is not None:
+            database.save_scan_results(scan_name="nuclei", target=self._get_target(), scan_type="vuln",
+                                       results=parsed, file_path=str(output_file))
         return result
 
-    def _parse_results(self, output_file: Path) -> Dict[str, Any]:
-        """Parse nuclei JSON output."""
-        findings = []
-        summary = {
-            "total": 0,
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0,
-            "info": 0,
-        }
+    def _parse_results(self, output_file):
+        return self.parse_output(Path(output_file).read_text(errors="replace"))
 
-        try:
-            with open(output_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        finding = json.loads(line)
-                        findings.append(finding)
+    def parse_output(self, output):
+        findings, errors = json_records(output)
+        findings = [item for item in findings if item.get("template-id") or item.get("templateID") or item.get("info")]
+        summary = dict.fromkeys(("total", "critical", "high", "medium", "low", "info", "unknown"), 0)
+        observations = []
+        finding_records = []
+        for finding in findings:
+            info = finding.get("info") or {}
+            severity = str(info.get("severity", "info")).lower()
+            summary[severity if severity in summary else "unknown"] += 1
+            summary["total"] += 1
+            url = finding.get("matched-at") or finding.get("matched") or finding.get("host") or self._get_target() or ""
+            observations.append(observation("finding", url,
+                title=info.get("name", finding.get("template-id", "Nuclei finding")),
+                severity=severity, description=info.get("description", ""),
+                template_id=finding.get("template-id", finding.get("templateID")),
+                matcher_name=finding.get("matcher-name"), extracted_results=finding.get("extracted-results", []),
+                classification=info.get("classification", {}), references=info.get("reference", []),
+                matched_at=url, raw=finding, source="nuclei"))
+            from purplesploit.core.findings import Finding, Severity
+            finding_records.append(Finding(title=info.get("name", "Nuclei finding"),
+                severity=Severity(severity if severity in {"critical", "high", "medium", "low", "info"} else "info"),
+                description=info.get("description", ""), target=finding.get("host") or url,
+                url=url, module_name="nuclei", raw_output=str(finding)).to_dict())
+        return {"findings": findings, "finding_records": finding_records, "summary": summary,
+                "observations": observations, "parse_errors": errors}
 
-                        # Count by severity
-                        severity = finding.get('info', {}).get('severity', 'info').lower()
-                        if severity in summary:
-                            summary[severity] += 1
-                        summary['total'] += 1
-
-                    except json.JSONDecodeError:
-                        continue
-
-        except Exception as e:
-            self.log(f"Error parsing results: {e}", "error")
-
-        return {"findings": findings, "summary": summary}
-
-    def _import_findings(self, findings: List[Dict], target: str):
-        """Import nuclei findings to the reporting module."""
-        try:
-            from purplesploit.reporting import ReportGenerator, Severity
-
-            # Get or create report generator on framework
-            if not hasattr(self.framework, 'report_generator'):
-                self.framework.report_generator = ReportGenerator(self.framework)
-
-            gen = self.framework.report_generator
-
-            for finding in findings:
-                info = finding.get('info', {})
-
-                # Map nuclei severity to our severity
-                sev_map = {
-                    'critical': 'critical',
-                    'high': 'high',
-                    'medium': 'medium',
-                    'low': 'low',
-                    'info': 'info',
-                }
-                severity = sev_map.get(info.get('severity', 'info').lower(), 'info')
-
-                # Extract CVE IDs
-                cve_ids = []
-                classification = info.get('classification', {})
-                if classification.get('cve-id'):
-                    cve_ids = classification['cve-id'] if isinstance(
-                        classification['cve-id'], list
-                    ) else [classification['cve-id']]
-
-                # Create finding
-                gen.create_finding(
-                    title=info.get('name', 'Unknown Vulnerability'),
-                    severity=severity,
-                    description=info.get('description', ''),
-                    target=finding.get('host', target),
-                    cvss_score=classification.get('cvss-score'),
-                    cve_ids=cve_ids,
-                    cwe_ids=classification.get('cwe-id', []),
-                    remediation=info.get('remediation', ''),
-                    references=info.get('reference', []),
-                    module_name="nuclei",
-                    raw_output=finding.get('matched-at', ''),
-                    notes=f"Template: {finding.get('template-id', 'unknown')}",
-                )
-
-            self.log(f"Imported {len(findings)} findings to report generator", "info")
-
-        except ImportError:
-            self.log("Reporting module not available for finding import", "warning")
-        except Exception as e:
-            self.log(f"Error importing findings: {e}", "error")
+    def _import_findings(self, findings, target):
+        """Use the existing lifecycle manager if present; observations always remain available."""
+        manager = getattr(self.framework, "findings", None)
+        if manager is None or not callable(getattr(manager, "create", None)):
+            return
+        for finding in findings:
+            info = finding.get("info") or {}
+            classification = info.get("classification") or {}
+            severity = str(info.get("severity", "info")).lower()
+            severity = severity if severity in {"critical", "high", "medium", "low", "info"} else "info"
+            def values(key):
+                value = classification.get(key) or []
+                return [value] if isinstance(value, str) else value
+            manager.create(title=info.get("name", "Nuclei finding"), severity=severity,
+                description=info.get("description", ""), target=finding.get("host") or target,
+                url=finding.get("matched-at"), cve_ids=values("cve-id"), cwe_ids=values("cwe-id"),
+                cvss_score=classification.get("cvss-score"), remediation=info.get("remediation", ""),
+                references=info.get("reference") or [], module_name="nuclei", raw_output=str(finding))
 
     # ========================================================================
     # Operation Handlers
@@ -502,15 +392,13 @@ class NucleiModule(ExternalToolModule):
         """Use custom template path."""
         templates = self.get_option("TEMPLATES")
         if not templates:
-            templates = input("Template path or directory: ")
-            if not templates:
-                return {"success": False, "error": "Template path required"}
+            return {"success": False, "error": "TEMPLATES required"}
 
         if not Path(templates).exists():
             return {"success": False, "error": f"Template not found: {templates}"}
 
         self.log(f"Running custom templates from: {templates}", "info")
-        return self._execute_nuclei(f"-t '{templates}'", scan_name="custom")
+        return self._execute_nuclei(scan_name="custom")
 
     def op_background_full(self) -> Dict[str, Any]:
         """Run full scan in background."""
@@ -525,5 +413,5 @@ class NucleiModule(ExternalToolModule):
         """Build default command for preview."""
         base = self._build_base_command()
         if base:
-            return f"{base} -s critical,high -json"
+            return f"{base} -s critical,high {self.get_option('JSON_FLAG') or '-jsonl'}"
         return ""

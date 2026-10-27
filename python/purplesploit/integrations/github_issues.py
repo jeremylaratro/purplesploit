@@ -6,7 +6,6 @@ Creates and manages security findings as GitHub Issues.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 import json
 import logging
 
@@ -398,7 +397,7 @@ class GitHubIssuesIntegration(BaseIntegration):
         try:
             # Build search query
             q_parts = [f"repo:{self.github_config.owner}/{self.github_config.repo}"]
-            q_parts.append(f"is:issue")
+            q_parts.append("is:issue")
             q_parts.append(f"state:{state}")
 
             if query:
@@ -428,7 +427,7 @@ class GitHubIssuesIntegration(BaseIntegration):
                         "state": item.get("state"),
                         "url": item.get("html_url"),
                         "created_at": item.get("created_at"),
-                        "labels": [l.get("name") for l in item.get("labels", [])],
+                        "labels": [label.get("name") for label in item.get("labels", [])],
                     })
                 return {
                     "success": True,

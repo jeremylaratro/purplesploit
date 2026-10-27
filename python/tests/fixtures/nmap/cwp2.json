@@ -1,0 +1,8 @@
+[
+  {"kind": "host", "target": "192.0.2.53", "port": null, "protocol": null, "service": null, "version": null, "hostname": "dns.example.test", "product": null, "service_version": null, "scripts": [{"id": "clock-skew", "output": "mean: 0s", "data": []}]},
+  {"kind": "service", "target": "192.0.2.53", "port": 53, "protocol": "tcp", "service": "dns", "version": "BIND 9.18", "hostname": "ns.example.test", "product": "BIND", "service_version": "9.18", "scripts": [{"id": "dns-nsid", "output": "NSID: test", "data": [{"tag": "table", "attributes": {"key": "answers"}, "text": "", "children": [{"tag": "elem", "attributes": {"key": "nsid"}, "text": "test", "children": []}]}]}]},
+  {"kind": "service", "target": "192.0.2.53", "port": 53, "protocol": "udp", "service": "dns", "version": "BIND 9.18", "hostname": "dns.example.test", "product": "BIND", "service_version": "9.18", "scripts": []},
+  {"kind": "host", "target": "2001:db8::443", "port": null, "protocol": null, "service": null, "version": null, "hostname": "web.example.test", "product": null, "service_version": null, "scripts": []},
+  {"kind": "service", "target": "2001:db8::443", "port": 8443, "protocol": "tcp", "service": "https", "version": "nginx 1.26.2", "hostname": "web.example.test", "product": "nginx", "service_version": "1.26.2", "scripts": [{"id": "http-title", "output": "Example dashboard", "data": []}]},
+  {"kind": "host", "target": "192.0.2.99", "port": null, "protocol": null, "service": null, "version": null, "hostname": null, "product": null, "service_version": null, "scripts": []}
+]

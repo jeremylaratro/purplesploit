@@ -32,13 +32,13 @@ __all__ = [
 
 # Optional modules - import only if available
 try:
-    from .agent import Agent, AgentConfig, AgentStatus
+    from .agent import Agent, AgentConfig, AgentStatus  # noqa: F401
     __all__.extend(["Agent", "AgentConfig", "AgentStatus"])
 except ImportError:
     pass
 
 try:
-    from .coordinator import Coordinator, CoordinatorConfig
+    from .coordinator import Coordinator, CoordinatorConfig  # noqa: F401
     __all__.extend(["Coordinator", "CoordinatorConfig"])
 except ImportError:
     pass

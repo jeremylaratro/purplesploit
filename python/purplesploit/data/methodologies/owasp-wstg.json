@@ -1,0 +1,17 @@
+{
+  "id": "owasp-wstg",
+  "name": "OWASP Web Security Testing Guide",
+  "version": "4.2",
+  "profile_version": "1.0.0",
+  "source": "https://owasp.org/www-project-web-security-testing-guide/v42/",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "WSTG v4.2 test identifiers; prompts are paraphrased",
+  "description": "Selected web test cases only; coverage is not full WSTG conformance.",
+  "checks": [
+    {"id": "WSTG-INFO-01", "title": "Inspect public search results for target leakage"},
+    {"id": "WSTG-IDNT-04", "title": "Probe whether accounts can be enumerated"},
+    {"id": "WSTG-ATHN-01", "title": "Inspect transport protection for submitted credentials"},
+    {"id": "WSTG-ATHZ-02", "title": "Check whether authorization can be bypassed"}
+  ]
+}

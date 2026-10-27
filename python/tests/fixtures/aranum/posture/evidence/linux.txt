@@ -1,0 +1,1 @@
+Synthetic portable fixture evidence. No live host was contacted.

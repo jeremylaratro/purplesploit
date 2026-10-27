@@ -1,0 +1,4 @@
+{
+  "images": [{"id": "sha256:cri-image", "repoTags": ["example.test/worker:v1"], "repoDigests": ["example.test/worker@sha256:cri-image"], "size": "32000"}],
+  "containers": [{"id": "cri-container", "metadata": {"name": "worker", "attempt": 0}, "image": {"image": "example.test/worker:v1"}, "imageRef": "sha256:cri-image", "state": "CONTAINER_RUNNING", "mounts": [{"containerPath": "/cache", "hostPath": "/var/cache/worker", "readonly": true}]}]
+}

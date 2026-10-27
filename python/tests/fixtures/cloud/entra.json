@@ -1,0 +1,10 @@
+{
+  "organization": {"id": "tenant-1", "displayName": "Example Directory"},
+  "users": [{"id": "user-1", "displayName": "Alice", "userPrincipalName": "alice@example.test", "groups": [{"id": "group-1"}]}],
+  "groups": [{"id": "group-1", "displayName": "Operators"}],
+  "applications": [{"id": "app-object-1", "appId": "app-1", "displayName": "Portal"}],
+  "servicePrincipals": [{"id": "sp-1", "appId": "app-1", "displayName": "Portal SP"}],
+  "directoryRoles": [{"id": "role-1", "displayName": "Global Reader"}],
+  "roleAssignments": [{"id": "ra-1", "principalId": "user-1", "roleDefinitionId": "role-1"}],
+  "oauth2PermissionGrants": [{"id": "grant-1", "clientId": "sp-1", "resourceId": "graph", "scope": "User.Read Directory.Read.All"}]
+}

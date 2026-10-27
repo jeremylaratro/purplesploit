@@ -6,9 +6,10 @@ RDP protocol operations using NetExec.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCRDPModule(ExternalToolModule):
+class NXCRDPModule(NXCModuleMixin, ExternalToolModule):
     """NetExec RDP module for Remote Desktop Protocol testing."""
 
     def __init__(self, framework):
@@ -42,12 +43,12 @@ class NXCRDPModule(ExternalToolModule):
         })
 
     def get_operations(self) -> List[Dict[str, Any]]:
-        return [
+        return self._operation_manifest([
             {"name": "Test Authentication", "description": "Test RDP authentication", "handler": "op_test_auth"},
             {"name": "Test with Domain", "description": "Test with domain", "handler": "op_test_domain"},
             {"name": "Pass-the-Hash", "description": "PTH authentication", "handler": "op_pth"},
             {"name": "Check NLA Status", "description": "Check Network Level Authentication", "handler": "op_nla"},
-        ]
+        ], interactive={"op_test_domain", "op_pth"})
 
     def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
@@ -64,13 +65,8 @@ class NXCRDPModule(ExternalToolModule):
             auth += " -p ''"
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
-        rhost = self.get_option("RHOST")
-        auth = self._build_auth()
-        cmd = f"nxc rdp {self.quote_arg(rhost)} {auth}"
-        if extra_args:
-            cmd += f" {extra_args}"
-        return self.execute_command(cmd, timeout=60)
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
+        return self._run_nxc("rdp", extra_args, timeout=60)
 
     def op_test_auth(self) -> Dict[str, Any]:
         return self._execute_nxc()
@@ -78,7 +74,7 @@ class NXCRDPModule(ExternalToolModule):
     def op_test_domain(self) -> Dict[str, Any]:
         domain = self.get_option("DOMAIN") or input("Domain: ")
         self.set_option("DOMAIN", domain)
-        return self._execute_nxc(f"-d {domain}")
+        return self._execute_nxc(["-d", domain])
 
     def op_pth(self) -> Dict[str, Any]:
         hash_val = input("NTLM Hash: ")
@@ -88,8 +84,7 @@ class NXCRDPModule(ExternalToolModule):
         return self._execute_nxc()
 
     def op_nla(self) -> Dict[str, Any]:
-        rhost = self.get_option("RHOST")
-        return self.execute_command(f"nxc rdp {rhost}")
+        return self._run_nxc("rdp", timeout=60, authenticate=False)
 
     def run(self) -> Dict[str, Any]:
         return self.op_test_auth()

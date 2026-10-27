@@ -1,0 +1,1 @@
+{"summary": {"hosts": 2}, "hosts": [{"ip": "192.0.2.30", "hostname": "linux.example.test", "state": "up"}, {"ip": "192.0.2.31", "hostname": "windows.example.test", "state": "up"}], "entries": []}

@@ -1,0 +1,6 @@
+LDAP 192.0.2.10 389 DC01 [*] Windows Server 2022 (name:DC01) (domain:CORP.TEST)
+ADCS 192.0.2.10 389 DC01 [*] Starting LDAP search with search filter '(objectClass=pKIEnrollmentService)'
+ADCS 192.0.2.10 389 DC01 Found PKI Enrollment Server: ca.corp.test
+ADCS 192.0.2.10 389 DC01 Found CN: CORP-CA
+ADCS 192.0.2.10 389 DC01 Found PKI Enrollment WebService: https://ca.corp.test/ADPolicyProvider_CEP_Kerberos/service.svc/CEP
+ADCS 192.0.2.10 389 DC01 Found Certificate Template: User

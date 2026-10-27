@@ -220,7 +220,7 @@ class TestDeployViaSsh:
         assert result["success"] is False
 
     def test_successful_ssh_deployment_with_password(self, ligolo_module):
-        """Test successful SSH deployment with password."""
+        """Password helpers are rejected before spawning a process."""
         ligolo_module.set_option("RHOST", "192.168.1.100")
         ligolo_module.set_option("USERNAME", "root")
         ligolo_module.set_option("PASSWORD", "toor")
@@ -229,28 +229,28 @@ class TestDeployViaSsh:
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
             result = ligolo_module.deploy_via_ssh()
-            assert result["success"] is True
-            assert result["method"] == "ssh"
-            assert "/tmp/ligolo-agent" in result["remote_path"]
+            assert result["success"] is False
+            assert "Password SSH is disabled" in result["error"]
+            mock_run.assert_not_called()
 
-    def test_ssh_deployment_with_key(self, ligolo_module):
+    def test_ssh_deployment_with_key(self, ligolo_module, secure_ssh_material):
         """Test SSH deployment with SSH key."""
         ligolo_module.set_option("RHOST", "192.168.1.100")
         ligolo_module.set_option("USERNAME", "root")
-        ligolo_module.set_option("SSH_KEY", "/path/to/id_rsa")
-        ligolo_module.set_option("LOCAL_FILE", "/path/to/agent")
+        ligolo_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        ligolo_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
             result = ligolo_module.deploy_via_ssh()
             assert result["success"] is True
 
-    def test_ssh_upload_failure(self, ligolo_module):
+    def test_ssh_upload_failure(self, ligolo_module, secure_ssh_material):
         """Test handling of SSH upload failure."""
         ligolo_module.set_option("RHOST", "192.168.1.100")
         ligolo_module.set_option("USERNAME", "root")
-        ligolo_module.set_option("PASSWORD", "toor")
-        ligolo_module.set_option("LOCAL_FILE", "/path/to/agent")
+        ligolo_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        ligolo_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
@@ -261,7 +261,8 @@ class TestDeployViaSsh:
 
             result = ligolo_module.deploy_via_ssh()
             assert result["success"] is False
-            assert "Upload failed" in result["error"]
+            assert result["stage"] == "upload"
+            assert result["upload"]["exit_code"] == 1
 
 
 # =============================================================================

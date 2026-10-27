@@ -4,10 +4,13 @@ SQLMap Module
 Automatic SQL injection and database takeover tool.
 """
 
-from purplesploit.core.module import ExternalToolModule
+import re
+import shlex
+from urllib.parse import parse_qsl, urlsplit
+from purplesploit.web_observations import WebToolModule, observation, strip_ansi
 
 
-class SQLMapModule(ExternalToolModule):
+class SQLMapModule(WebToolModule):
     """
     SQLMap - Automatic SQL injection and database takeover tool.
 
@@ -17,6 +20,9 @@ class SQLMapModule(ExternalToolModule):
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "sqlmap"
+
+    emits = ["parameter", "finding"]
+    supported_tool_versions = ["sqlmap 1.x console injection summary"]
 
     @property
     def name(self) -> str:
@@ -132,32 +138,30 @@ class SQLMapModule(ExternalToolModule):
         level = self.get_option("LEVEL")
         risk = self.get_option("RISK")
         threads = self.get_option("THREADS")
-        batch = self.get_option("BATCH")
 
         # Base command
-        cmd = f"sqlmap -u '{url}'"
+        cmd = f"sqlmap -u {self.quote_arg(url)}"
 
         # POST data
         if data:
-            cmd += f" --data='{data}'"
+            cmd += f" --data={self.quote_arg(data)}"
 
         # Cookie
         if cookie:
-            cmd += f" --cookie='{cookie}'"
+            cmd += f" --cookie={self.quote_arg(cookie)}"
 
         # Level and risk
         if level:
-            cmd += f" --level={level}"
+            cmd += f" --level={self.quote_arg(level)}"
         if risk:
-            cmd += f" --risk={risk}"
+            cmd += f" --risk={self.quote_arg(risk)}"
 
         # Threads
         if threads:
-            cmd += f" --threads={threads}"
+            cmd += f" --threads={self.quote_arg(threads)}"
 
         # Batch mode
-        if self.option_enabled("BATCH"):
-            cmd += " --batch"
+        cmd += " --batch"
 
         # Enumeration options
         if self.option_enabled("DBS"):
@@ -167,21 +171,24 @@ class SQLMapModule(ExternalToolModule):
             cmd += " --tables"
             db = self.get_option("DB")
             if db:
-                cmd += f" -D {db}"
+                cmd += f" -D {self.quote_arg(db)}"
 
         if self.option_enabled("DUMP"):
             cmd += " --dump"
             db = self.get_option("DB")
             tbl = self.get_option("TBL")
             if db:
-                cmd += f" -D {db}"
+                cmd += f" -D {self.quote_arg(db)}"
             if tbl:
-                cmd += f" -T {tbl}"
+                cmd += f" -T {self.quote_arg(tbl)}"
 
         if self.option_enabled("DUMP_ALL"):
             cmd += " --dump-all"
 
         return cmd
+
+    def build_argv(self):
+        return shlex.split(self.build_command())
 
     def parse_output(self, output: str) -> dict:
         """
@@ -198,18 +205,45 @@ class SQLMapModule(ExternalToolModule):
             "injection_type": [],
             "databases": [],
             "tables": [],
+            "parameters": [],
+            "findings": [],
+            "observations": [],
         }
 
+        url = self.get_option("URL") or ""
+        for location, text in (("query", urlsplit(url).query), ("body", self.get_option("DATA") or "")):
+            for name, value in parse_qsl(text, keep_blank_values=True):
+                parameter = {"name": name, "value": value, "location": location}
+                results["parameters"].append(parameter)
+                results["observations"].append(observation("parameter", url, **parameter))
+        current = None
+        confirmed = []
+
         # Parse output
-        for line in output.split('\n'):
-            if "is vulnerable" in line.lower():
+        for line in strip_ansi(output).splitlines():
+            if "is vulnerable" in line.lower() and "not vulnerable" not in line.lower():
                 results["vulnerable"] = True
+                detected = re.search(r"(GET|POST|URI|Cookie|HEADER)?\s*parameter\s+['\"]([^'\"]+)['\"].*is vulnerable", line, re.I)
+                if detected:
+                    confirmed.append({"parameter": detected.group(2), "location": detected.group(1) or "unknown",
+                                      "injections": [{"type": "reported injectable", "evidence": line.strip()}]})
+
+            match = re.match(r"\s*Parameter:\s*(.*?)\s*\(([^)]+)\)", line)
+            if match:
+                current = {"parameter": match.group(1), "location": match.group(2), "injections": []}
+                confirmed.append(current)
 
             if "Type:" in line:
                 # Extract injection type
                 parts = line.split("Type:")
                 if len(parts) > 1:
                     results["injection_type"].append(parts[1].strip())
+                    if current is not None:
+                        current["injections"].append({"type": parts[1].strip()})
+
+            for label in ("Title", "Payload"):
+                if current is not None and current["injections"] and line.strip().startswith(label + ":"):
+                    current["injections"][-1][label.lower()] = line.split(":", 1)[1].strip()
 
             if "available databases" in line.lower():
                 results["found_databases"] = True
@@ -220,4 +254,14 @@ class SQLMapModule(ExternalToolModule):
                 if name and not name.startswith("starting"):
                     results["databases"].append(name)
 
+        for item in confirmed:
+            if not item["injections"]:
+                continue
+            results["vulnerable"] = True
+            finding = {"title": f"SQL injection in {item['parameter']}", "severity": "high",
+                       "source": "sqlmap", **item}
+            results["findings"].append(finding)
+            results["observations"].append(observation("finding", url, **finding))
+            results["observations"].append(observation("parameter", url, name=item["parameter"],
+                                                       location=item["location"], injectable=True))
         return results

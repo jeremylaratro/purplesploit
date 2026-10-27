@@ -1,0 +1,9 @@
+{
+  "images": [{"Id": "sha256:fixture", "RepoTags": ["example.test/web:v1"], "RepoDigests": ["example.test/web@sha256:fixture"], "Size": 12000}],
+  "containers": [{"Id": "container-1", "Name": "/web", "Image": "sha256:fixture", "State": {"Status": "running"},
+    "Config": {"Image": "example.test/web:v1", "Env": ["FIXTURE_ENV_SECRET=hidden"], "ExposedPorts": {"53/tcp": {}, "53/udp": {}, "80/tcp": {}}},
+    "Mounts": [{"Type": "bind", "Source": "/srv/app", "Destination": "/app", "RW": false}, {"Type": "volume", "Name": "db", "Source": "/var/lib/docker/volumes/db", "Destination": "/data", "RW": true}],
+    "NetworkSettings": {"Ports": {"53/tcp": [{"HostIp": "0.0.0.0", "HostPort": "1053"}], "53/udp": [{"HostIp": "127.0.0.1", "HostPort": "1053"}], "80/tcp": null}, "Networks": {"bridge": {"NetworkID": "network-1", "IPAddress": "172.17.0.2"}}}
+  }],
+  "networks": [{"Id": "network-1", "Name": "bridge", "Driver": "bridge", "Internal": false, "IPAM": {"Config": [{"Subnet": "172.17.0.0/16"}]}, "Containers": {"container-1": {"Name": "web", "IPv4Address": "172.17.0.2/16"}}}]
+}

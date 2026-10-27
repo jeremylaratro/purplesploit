@@ -1,0 +1,35 @@
+{
+  "contexts": [{"name": "dev-context", "context": {"cluster": "dev", "namespace": "apps", "user": "operator"}}],
+  "clusters": [{"name": "dev", "cluster": {"server": "https://127.0.0.1:6443", "certificate-authority-data": "FIXTURE_CA_BYTES"}}],
+  "namespaces": {"kind": "NamespaceList", "apiVersion": "v1", "items": [{"metadata": {"name": "apps", "uid": "ns-1"}}]},
+  "nodes": [{"metadata": {"name": "node-a", "uid": "node-1"}, "status": {"addresses": [{"type": "InternalIP", "address": "10.0.0.5"}]}}],
+  "pods": {"items": [{
+    "apiVersion": "v1", "metadata": {"name": "web-1", "namespace": "apps", "uid": "pod-1", "labels": {"app": "web", "tier": "frontend"}, "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs", "uid": "rs-1"}]},
+    "spec": {"nodeName": "node-a", "serviceAccountName": "web", "imagePullSecrets": [{"name": "registry"}],
+      "containers": [{"name": "web", "image": "example.test/web:v1", "ports": [{"containerPort": 53, "protocol": "TCP"}, {"containerPort": 53, "protocol": "UDP"}],
+        "env": [{"name": "PLAIN", "value": "FIXTURE_LITERAL_ENV"}, {"name": "PASSWORD", "valueFrom": {"secretKeyRef": {"name": "db", "key": "password"}}}, {"name": "SETTINGS", "valueFrom": {"configMapKeyRef": {"name": "settings", "key": "settings.json"}}}],
+        "envFrom": [{"secretRef": {"name": "shared"}}, {"configMapRef": {"name": "settings"}}]}],
+      "initContainers": [{"name": "init", "image": "example.test/init:v1"}],
+      "ephemeralContainers": [{"name": "debug", "image": "example.test/debug:v1"}],
+      "volumes": [{"name": "tls", "secret": {"secretName": "tls"}}, {"name": "config", "configMap": {"name": "settings"}}, {"name": "projected", "projected": {"sources": [{"secret": {"name": "projected-secret"}}, {"configMap": {"name": "projected-settings"}}]}}]
+    }
+  }]},
+  "deployments": [{"metadata": {"name": "web", "namespace": "apps"}, "spec": {"template": {"metadata": {"labels": {"app": "web"}}, "spec": {"containers": [{"name": "web", "image": "example.test/web:v1"}]}}}}],
+  "statefulsets": [{"metadata": {"name": "db", "namespace": "apps"}, "spec": {"template": {"spec": {"containers": [{"name": "db", "image": "postgres:16"}]}}}}],
+  "daemonsets": [{"metadata": {"name": "agent", "namespace": "apps"}, "spec": {"template": {"spec": {"containers": [{"name": "agent", "image": "agent:v1"}]}}}}],
+  "jobs": [{"metadata": {"name": "backup", "namespace": "apps"}, "spec": {"template": {"spec": {"containers": [{"name": "backup", "image": "backup:v1"}]}}}}],
+  "cronjobs": [{"metadata": {"name": "nightly", "namespace": "apps"}, "spec": {"jobTemplate": {"spec": {"template": {"spec": {"containers": [{"name": "nightly", "image": "backup:v1"}]}}}}}}],
+  "services": [{"metadata": {"name": "web", "namespace": "apps"}, "spec": {"type": "NodePort", "selector": {"app": "web"}, "clusterIP": "10.96.0.5", "ports": [{"name": "dns-tcp", "port": 53, "targetPort": 53, "nodePort": 30053, "protocol": "TCP"}, {"name": "dns-udp", "port": 53, "targetPort": 53, "nodePort": 30053, "protocol": "UDP"}]}},
+    {"metadata": {"name": "public", "namespace": "apps"}, "spec": {"type": "LoadBalancer", "ports": [{"port": 443, "targetPort": "https"}]}, "status": {"loadBalancer": {"ingress": [{"ip": "198.51.100.5"}]}}},
+    {"metadata": {"name": "private-lb", "namespace": "apps"}, "spec": {"type": "LoadBalancer", "ports": [{"port": 443}]}}],
+  "ingresses": [{"metadata": {"name": "web", "namespace": "apps"}, "spec": {"tls": [{"secretName": "tls", "hosts": ["web.example.test"]}], "rules": [{"host": "web.example.test", "http": {"paths": [{"path": "/", "backend": {"service": {"name": "web", "port": {"number": 53}}}}]}}]}}],
+  "routes": [{"metadata": {"name": "route", "namespace": "apps"}, "spec": {"host": "route.example.test", "to": {"kind": "Service", "name": "web"}, "port": {"targetPort": "dns-tcp"}, "tls": {"termination": "edge", "key": "FIXTURE_ROUTE_KEY", "certificate": "FIXTURE_ROUTE_CERT"}}}],
+  "roles": [{"metadata": {"name": "reader", "namespace": "apps"}, "rules": [{"apiGroups": [""], "resources": ["pods", "secrets"], "verbs": ["get", "list"]}]}],
+  "clusterroles": [{"metadata": {"name": "viewer"}, "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["get"]}]}],
+  "rolebindings": [{"metadata": {"name": "read", "namespace": "apps"}, "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "reader"}, "subjects": [{"kind": "ServiceAccount", "name": "web", "namespace": "apps"}, {"kind": "User", "name": "alice"}, {"kind": "Group", "name": "developers"}]}],
+  "clusterrolebindings": [{"metadata": {"name": "view"}, "roleRef": {"kind": "ClusterRole", "name": "viewer"}, "subjects": [{"kind": "ServiceAccount", "name": "web", "namespace": "apps"}]}],
+  "serviceaccounts": [{"metadata": {"name": "web", "namespace": "apps"}, "secrets": [{"name": "web-token"}], "imagePullSecrets": [{"name": "registry"}]}],
+  "networkpolicies": [{"metadata": {"name": "web-ingress", "namespace": "apps"}, "spec": {"podSelector": {"matchLabels": {"app": "web"}, "matchExpressions": [{"key": "tier", "operator": "In", "values": ["frontend"]}]}, "policyTypes": ["Ingress"], "ingress": [{"from": [{"namespaceSelector": {"matchLabels": {"team": "frontend"}}}], "ports": [{"port": 53, "protocol": "TCP"}]}]}}],
+  "secrets": [{"metadata": {"name": "db", "namespace": "apps", "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "FIXTURE_ANNOTATION_SECRET"}}, "type": "Opaque", "data": {"password": "FIXTURE_BASE64_SECRET"}, "stringData": {"extra": "FIXTURE_SECRET_STRING"}}],
+  "configmaps": [{"metadata": {"name": "settings", "namespace": "apps"}, "data": {"settings.json": "FIXTURE_CONFIG_PAYLOAD"}, "binaryData": {"logo": "FIXTURE_BINARY_PAYLOAD"}}]
+}

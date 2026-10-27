@@ -1,0 +1,14 @@
+{
+  "summary": {"hosts": 3, "hosts_up": 3, "open_ports": 4},
+  "hosts": [
+    {"ip": "192.0.2.10", "hostname": "empty.example.test", "state": "up"},
+    {"ip": "2001:db8::10", "hostname": "dual.example.test", "state": "up"},
+    {"ip": "192.0.2.20", "hostname": "desk.example.test", "state": "up"}
+  ],
+  "entries": [
+    {"ip": "2001:db8::10", "hostname": "dual.example.test", "port": 53, "proto": "tcp", "state": "open", "service": "domain", "product": "BIND", "version": "9.fixture", "extrainfo": "synthetic", "tunnel": "", "categories": ["dns"], "future_metadata": {"preserve": true}},
+    {"ip": "2001:db8::10", "hostname": "dual.example.test", "port": 53, "proto": "udp", "state": "open", "service": "domain", "product": "BIND", "version": "9.fixture", "extrainfo": "synthetic", "tunnel": "", "categories": ["dns"]},
+    {"ip": "2001:db8::10", "hostname": "dual.example.test", "port": 9443, "proto": "tcp", "state": "open", "service": "http", "product": "nginx", "version": "fixture", "extrainfo": "TLS endpoint", "tunnel": "ssl", "categories": ["http", "https"]},
+    {"ip": "192.0.2.20", "hostname": "desk.example.test", "port": 3389, "proto": "tcp", "state": "open", "service": "ms-wbt-server", "product": "Remote Desktop", "version": "fixture", "extrainfo": "", "tunnel": "", "categories": ["rdp"]}
+  ]
+}

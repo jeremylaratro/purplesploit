@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap" version="7.95" future="preserve">
+  <host><status state="up"/><address addr="192.0.2.1" addrtype="ipv4"/>
+    <hostnames><hostname name="fixture.example.test" type="PTR"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="53"><state state="open"/><service name="domain" product="BIND" version="9.fixture"/></port>
+      <port protocol="udp" portid="53"><state state="open"/><service name="domain"/></port>
+      <port protocol="tcp" portid="22"><state state="closed"/></port>
+    </ports>
+  </host>
+  <host><status state="down"/><address addr="192.0.2.2" addrtype="ipv4"/></host>
+</nmaprun>

@@ -6,9 +6,10 @@ MSSQL protocol operations using NetExec.
 
 from purplesploit.core.module import ExternalToolModule
 from typing import Dict, Any, List
+from purplesploit.modules.network.nxc_common import NXCModuleMixin
 
 
-class NXCMSSQLModule(ExternalToolModule):
+class NXCMSSQLModule(NXCModuleMixin, ExternalToolModule):
     """NetExec MSSQL module for SQL Server operations."""
 
     def __init__(self, framework):
@@ -43,7 +44,7 @@ class NXCMSSQLModule(ExternalToolModule):
         })
 
     def get_operations(self) -> List[Dict[str, Any]]:
-        return [
+        return self._operation_manifest([
             {"name": "Test Authentication", "description": "Test MSSQL authentication", "handler": "op_test_auth"},
             {"name": "Get Version", "description": "Get SQL Server version", "handler": "op_version"},
             {"name": "List Databases", "description": "List all databases", "handler": "op_list_dbs"},
@@ -51,7 +52,7 @@ class NXCMSSQLModule(ExternalToolModule):
             {"name": "Check Privileges", "description": "Check user privileges", "handler": "op_privs"},
             {"name": "Execute Command (xp_cmdshell)", "description": "Execute OS command via xp_cmdshell", "handler": "op_exec_cmd"},
             {"name": "Enable xp_cmdshell", "description": "Enable xp_cmdshell", "handler": "op_enable_xpcmdshell"},
-        ]
+        ], interactive={"op_list_tables", "op_exec_cmd"})
 
     def _build_auth(self) -> str:
         username = self.get_option("USERNAME")
@@ -68,24 +69,8 @@ class NXCMSSQLModule(ExternalToolModule):
             auth += " -p ''"
         return auth
 
-    def _execute_nxc(self, extra_args: str = "") -> Dict[str, Any]:
-        rhost = self.get_option("RHOST")
-        auth_type = self.get_option("AUTH_TYPE") or "domain"
-        auth = self._build_auth()
-
-        cmd = f"nxc mssql {self.quote_arg(rhost)} {auth}"
-
-        # Add authentication type flags
-        if auth_type == "local":
-            cmd += " --local-auth"
-        elif auth_type == "kerberos":
-            cmd += " --kerberos"
-        elif auth_type == "windows":
-            cmd += " --windows-auth"
-
-        if extra_args:
-            cmd += f" {extra_args}"
-        return self.execute_command(cmd, timeout=180)
+    def _execute_nxc(self, extra_args="") -> Dict[str, Any]:
+        return self._run_nxc("mssql", extra_args, timeout=180)
 
     def op_test_auth(self) -> Dict[str, Any]:
         return self._execute_nxc()
@@ -98,18 +83,19 @@ class NXCMSSQLModule(ExternalToolModule):
 
     def op_list_tables(self) -> Dict[str, Any]:
         db = input("Database name: ")
-        return self._execute_nxc(f"-q 'SELECT * FROM {db}.INFORMATION_SCHEMA.TABLES'")
+        db = db.replace("]", "]]")
+        return self._execute_nxc(["-q", f"SELECT * FROM [{db}].INFORMATION_SCHEMA.TABLES"])
 
     def op_privs(self) -> Dict[str, Any]:
         return self._execute_nxc("-M mssql_priv")
 
     def op_exec_cmd(self) -> Dict[str, Any]:
         cmd = input("Command: ")
-        return self._execute_nxc(f"-x '{cmd}'")
+        return self._execute_nxc(["-x", cmd])
 
     def op_enable_xpcmdshell(self) -> Dict[str, Any]:
         query = "EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;"
-        return self._execute_nxc(f'-q "{query}"')
+        return self._execute_nxc(["-q", query])
 
     def run(self) -> Dict[str, Any]:
         return self.op_test_auth()

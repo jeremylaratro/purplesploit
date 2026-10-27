@@ -5,13 +5,16 @@ Professional findings tracking with lifecycle management, evidence,
 CVSS scoring, and MITRE ATT&CK mapping.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Set
+from dataclasses import dataclass, field, fields
+from typing import Dict, Any, List, Optional, Union
+from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 import json
 import uuid
+
+from .timestamps import parse_iso_datetime
 
 
 class FindingStatus(Enum):
@@ -33,6 +36,20 @@ class Severity(Enum):
     LOW = "low"
     INFO = "info"
 
+    @property
+    def cvss_range(self) -> tuple:
+        return {
+            "critical": (9.0, 10.0), "high": (7.0, 8.9),
+            "medium": (4.0, 6.9), "low": (0.1, 3.9), "info": (0.0, 0.0),
+        }[self.value]
+
+    @property
+    def color(self) -> str:
+        return {
+            "critical": "#7b241c", "high": "#c0392b", "medium": "#e67e22",
+            "low": "#f1c40f", "info": "#3498db",
+        }[self.value]
+
     @classmethod
     def from_cvss(cls, score: float) -> "Severity":
         """Determine severity from CVSS score."""
@@ -49,7 +66,7 @@ class Severity(Enum):
 
 @dataclass
 class Evidence:
-    """Evidence attached to a finding."""
+    """Evidence attached to a finding; file_type is a constructor alias."""
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     finding_id: str = ""
     title: str = ""
@@ -59,6 +76,18 @@ class Evidence:
     evidence_type: str = "text"  # text, screenshot, log, pcap, file
     captured_at: datetime = field(default_factory=datetime.utcnow)
     tags: List[str] = field(default_factory=list)
+    # Legacy reporting keyword; evidence_type remains the canonical spelling.
+    file_type: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.file_type is not None and self.evidence_type == "text":
+            self.evidence_type = self.file_type
+        elif self.file_type is not None and self.file_type != self.evidence_type:
+            raise ValueError("file_type and evidence_type describe conflicting evidence types")
+        self.file_type = self.evidence_type
+        if isinstance(self.captured_at, str):
+            self.captured_at = parse_iso_datetime(self.captured_at)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -70,13 +99,19 @@ class Evidence:
             "content": self.content,
             "evidence_type": self.evidence_type,
             "captured_at": self.captured_at.isoformat() if self.captured_at else None,
-            "tags": self.tags,
+            "tags": list(self.tags),
+            "file_type": self.evidence_type,
+            "metadata": deepcopy(self.metadata),
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Evidence":
+        data = deepcopy(data)
         if data.get("captured_at") and isinstance(data["captured_at"], str):
-            data["captured_at"] = datetime.fromisoformat(data["captured_at"])
+            data["captured_at"] = parse_iso_datetime(data["captured_at"])
+        unknown = {k: data.pop(k) for k in list(data) if k not in {f.name for f in fields(cls)}}
+        if unknown:
+            data.setdefault("metadata", {}).setdefault("legacy_fields", {}).update(unknown)
         return cls(**data)
 
 
@@ -129,16 +164,61 @@ class Finding:
     notes: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     duplicate_of: Optional[str] = None
+    host: Optional[str] = None
+    attribution: Dict[str, Any] = field(default_factory=dict)
+    review: Dict[str, Any] = field(default_factory=dict)
+    remediation_metadata: Dict[str, Any] = field(default_factory=dict)
+    retest: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    risk_accepted_at: Optional[datetime] = None
+    risk_accepted_by: Optional[str] = None
+    risk_acceptance_reason: Optional[str] = None
+
+    def __post_init__(self):
+        if isinstance(self.severity, str):
+            self.severity = Severity(self.severity.lower())
+        if isinstance(self.status, str):
+            self.status = FindingStatus(self.status.lower())
+        if isinstance(self.notes, str):
+            self.notes = [self.notes] if self.notes else []
+        self.evidence = [
+            Evidence.from_dict(e) if isinstance(e, dict) else e
+            for e in self.evidence
+        ]
+        if not self.target and self.host:
+            self.target = self.host
+        for name in self._datetime_fields():
+            value = getattr(self, name)
+            if isinstance(value, str):
+                setattr(self, name, parse_iso_datetime(value))
+
+    @staticmethod
+    def _datetime_fields():
+        return (
+            "discovered_at", "confirmed_at", "reported_at", "remediated_at",
+            "verified_at", "risk_accepted_at",
+        )
 
     def add_evidence(
         self,
-        title: str,
+        title: Union[str, Evidence] = "",
         content: Optional[str] = None,
         file_path: Optional[str] = None,
         evidence_type: str = "text",
         description: str = "",
+        *,
+        evidence: Optional[Evidence] = None,
     ) -> Evidence:
         """Add evidence to the finding."""
+        # Compatibility with former reporting positional and keyword attachments.
+        if evidence is not None:
+            if title:
+                raise TypeError("Specify an evidence object or an evidence title, not both")
+            title = evidence
+        if isinstance(title, Evidence):
+            title.finding_id = self.id
+            self.evidence.append(title)
+            return title
         evidence = Evidence(
             finding_id=self.id,
             title=title,
@@ -187,6 +267,9 @@ class Finding:
     def accept_risk(self, reason: str, accepted_by: str) -> None:
         """Mark as accepted risk."""
         self.status = FindingStatus.ACCEPTED_RISK
+        self.risk_accepted_at = datetime.utcnow()
+        self.risk_accepted_by = accepted_by
+        self.risk_acceptance_reason = reason
         self.notes.append(f"[Accepted Risk by {accepted_by}] {reason}")
 
     def add_note(self, note: str) -> None:
@@ -195,7 +278,7 @@ class Finding:
         self.notes.append(f"[{timestamp}] {note}")
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "id": self.id,
             "title": self.title,
             "severity": self.severity.value,
@@ -229,14 +312,48 @@ class Finding:
             "tags": self.tags,
             "duplicate_of": self.duplicate_of,
         }
+        for name in (
+            "host", "attribution", "review", "remediation_metadata", "retest",
+            "metadata", "risk_accepted_by", "risk_acceptance_reason",
+        ):
+            data[name] = getattr(self, name)
+        data["risk_accepted_at"] = self.risk_accepted_at.isoformat() if self.risk_accepted_at else None
+        return deepcopy(data)
+
+    def to_report_dict(self) -> Dict[str, Any]:
+        """Version 1 report projection is lossless; renderers may select fields."""
+        return {"schema_version": 1, **self.to_dict()}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Finding":
+        """Read canonical data or legacy DB/report rows without mutating input.
+
+        Legacy notes strings become one note; DB text evidence becomes one text
+        attachment; created_at maps to discovered_at. Unrecognized fields remain
+        available under metadata.legacy_fields, rather than being discarded.
+        """
+        data = deepcopy(data)
+        version = data.pop("schema_version", 1)
+        if version != 1:
+            raise ValueError(f"Unsupported finding schema version: {version}")
+        if "created_at" in data and "discovered_at" not in data:
+            data["discovered_at"] = data["created_at"]
+        evidence = data.get("evidence")
+        if isinstance(evidence, str):
+            data["evidence"] = [Evidence(
+                id=f"{data.get('id', 'legacy')}-evidence",
+                finding_id=data.get("id", ""), content=evidence,
+            )] if evidence else []
+        elif evidence is None:
+            data["evidence"] = []
+        unknown = {k: data.pop(k) for k in list(data) if k not in {f.name for f in fields(cls)}}
+        if unknown:
+            data.setdefault("metadata", {}).setdefault("legacy_fields", {}).update(unknown)
         # Convert enums
         if isinstance(data.get("severity"), str):
-            data["severity"] = Severity(data["severity"])
+            data["severity"] = Severity(data["severity"].lower())
         if isinstance(data.get("status"), str):
-            data["status"] = FindingStatus(data["status"])
+            data["status"] = FindingStatus(data["status"].lower())
 
         # Convert evidence
         if data.get("evidence"):
@@ -246,9 +363,9 @@ class Finding:
             ]
 
         # Convert datetimes
-        for dt_field in ["discovered_at", "confirmed_at", "reported_at", "remediated_at", "verified_at"]:
+        for dt_field in cls._datetime_fields():
             if data.get(dt_field) and isinstance(data[dt_field], str):
-                data[dt_field] = datetime.fromisoformat(data[dt_field])
+                data[dt_field] = parse_iso_datetime(data[dt_field])
 
         return cls(**data)
 
@@ -321,7 +438,7 @@ class FindingsManager:
         # Check for duplicates
         duplicate = self._find_duplicate(title, target, kwargs.get("port"))
         if duplicate:
-            duplicate.add_note(f"Duplicate detection triggered for new finding")
+            duplicate.add_note("Duplicate detection triggered for new finding")
             return duplicate
 
         finding = Finding(
@@ -456,8 +573,10 @@ class FindingsManager:
         finding_id: str,
         new_status: FindingStatus,
         notes: str = "",
+        accepted_by: str = "",
     ) -> bool:
         """Transition finding to a new status."""
+        new_status = FindingStatus(new_status)
         finding = self.findings.get(finding_id)
         if not finding:
             return False
@@ -472,6 +591,8 @@ class FindingsManager:
             finding.verify_remediation(True, notes)
         elif new_status == FindingStatus.FALSE_POSITIVE:
             finding.mark_false_positive(notes)
+        elif new_status == FindingStatus.ACCEPTED_RISK:
+            finding.accept_risk(notes, accepted_by or finding.risk_accepted_by or "")
         else:
             finding.status = new_status
 
@@ -540,34 +661,13 @@ class FindingsManager:
         return imported
 
     def to_report_generator(self):
-        """Convert to ReportGenerator findings format."""
+        """Create a report generator consuming canonical findings directly."""
         try:
-            from purplesploit.reporting import ReportGenerator, Finding as ReportFinding, Severity as ReportSeverity
+            from purplesploit.reporting import ReportGenerator
 
             gen = ReportGenerator(self.framework)
 
-            for finding in self.findings.values():
-                gen.create_finding(
-                    title=finding.title,
-                    severity=finding.severity.value,
-                    description=finding.description,
-                    target=finding.target,
-                    cvss_score=finding.cvss_score,
-                    cvss_vector=finding.cvss_vector,
-                    cve_ids=finding.cve_ids,
-                    cwe_ids=finding.cwe_ids,
-                    impact=finding.impact,
-                    remediation=finding.remediation,
-                    references=finding.references,
-                    mitre_tactics=finding.mitre_tactics,
-                    mitre_techniques=finding.mitre_techniques,
-                    module_name=finding.module_name,
-                    port=finding.port,
-                    service=finding.service,
-                    raw_output=finding.raw_output,
-                    status=finding.status.value,
-                    notes="\n".join(finding.notes),
-                )
+            gen.add_findings(list(self.findings.values()))
 
             return gen
         except ImportError:

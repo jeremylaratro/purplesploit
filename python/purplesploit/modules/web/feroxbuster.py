@@ -1,392 +1,165 @@
-"""
-Feroxbuster Module
+"""Noninteractive Feroxbuster directory and endpoint discovery."""
 
-Directory and file discovery using feroxbuster.
-"""
+from pathlib import Path
+import re
+import shlex
+from typing import Any, Dict, List
+from urllib.parse import urlsplit
+from uuid import uuid4
 
-from purplesploit.core.module import ExternalToolModule
-from typing import Dict, Any, List
+from purplesploit.web_observations import WebToolModule, json_records, observation, strip_ansi
 
 
-class FeroxbusterModule(ExternalToolModule):
-    """
-    Feroxbuster module for directory and file discovery.
-
-    Supports various scan types including basic, deep, custom wordlist,
-    Burp integration, API discovery, and backup file discovery.
-    """
+class FeroxbusterModule(WebToolModule):
+    emits = ["path", "http_endpoint"]
+    supported_tool_versions = ["feroxbuster 2.x (--json --no-state)"]
 
     def __init__(self, framework):
         super().__init__(framework)
         self.tool_name = "feroxbuster"
 
-    @property
-    def name(self) -> str:
-        return "Feroxbuster"
+    name = property(lambda self: "Feroxbuster")
+    description = property(lambda self: "Directory and file discovery with explicit scan options")
+    author = property(lambda self: "PurpleSploit Team")
+    category = property(lambda self: "web")
+    parameter_profiles = property(lambda self: ["web_scan_advanced"])
 
-    @property
-    def description(self) -> str:
-        return "Directory and file discovery with 7 scan types"
-
-    @property
-    def author(self) -> str:
-        return "PurpleSploit Team"
-
-    @property
-    def category(self) -> str:
-        return "web"
-
-    @property
-    def parameter_profiles(self) -> List[str]:
-        """Use web scanning parameter profile."""
-        return ["web_scan_advanced"]
-
-    # Legacy _init_options removed - now using parameter profiles
+    def _init_options(self):
+        super()._init_options()
+        for name, default in (("URL", None), ("WORDLIST", None), ("EXTENSIONS", "php,html,js,txt,asp,aspx,jsp"),
+                              ("THREADS", "50"), ("PROXY", "http://127.0.0.1:8080"), ("CUSTOM_FLAGS", "")):
+            self.options[name] = {"value": default, "default": default, "required": name == "URL",
+                                  "description": name.replace("_", " ").title()}
 
     def _init_parameters(self):
-        """Set URL as required parameter."""
         super()._init_parameters()
-        # Make URL required for web scanning
         if "URL" in self.parameters:
             self.parameters["URL"].required = True
             self.options["URL"]["required"] = True
 
     def get_operations(self) -> List[Dict[str, Any]]:
-        """
-        Get list of feroxbuster scan operations.
-
-        Returns:
-            List of operation dictionaries
-        """
-        return [
-            {"name": "Basic Directory Scan", "description": "Basic scan with thorough mode", "handler": "op_basic_scan"},
-            {"name": "Background Basic Scan", "description": "Basic scan running in background", "handler": "op_background_scan"},
-            {"name": "Deep Scan with Extensions", "description": "Deep scan with file extensions", "handler": "op_deep_scan"},
-            {"name": "Custom Wordlist Scan", "description": "Scan with custom wordlist", "handler": "op_custom_wordlist"},
-            {"name": "Burp Integration Scan", "description": "Scan with Burp Suite proxy", "handler": "op_burp_scan"},
-            {"name": "API Discovery", "description": "Scan for API endpoints", "handler": "op_api_discovery"},
-            {"name": "Backup File Discovery", "description": "Scan for backup files", "handler": "op_backup_discovery"},
-            {"name": "Custom Scan", "description": "Custom scan with your own flags", "handler": "op_custom_scan"},
+        entries = [
+            ("Basic Directory Scan", "basic_scan", []),
+            ("Background Basic Scan", "background_scan", []),
+            ("Deep Scan with Extensions", "deep_scan", []),
+            ("Custom Wordlist Scan", "custom_wordlist", ["WORDLIST"]),
+            ("Burp Integration Scan", "burp_scan", []),
+            ("API Discovery", "api_discovery", []),
+            ("Backup File Discovery", "backup_discovery", []),
+            ("Custom Scan", "custom_scan", ["CUSTOM_FLAGS"]),
         ]
+        return [{"name": name, "description": name, "handler": f"op_{handler}",
+                 "interactive": False, "requires": ["URL", *required],
+                 "background": handler == "background_scan", "emits": self.emits}
+                for name, handler, required in entries]
 
-    def _get_url(self) -> str:
-        """Get URL from options or prompt with web service selection support."""
-        url = self.get_option("URL")
-        if url:
-            return url
+    def _get_url(self):
+        return self.get_option("URL")
 
-        # Interactive URL selection
-        from purplesploit.ui.interactive import InteractiveSelector
-        selector = InteractiveSelector()
+    def build_argv(self):
+        argv = ["feroxbuster", "-u", str(self._get_url()), "--thorough", "--methods", "GET", "POST", "--json", "--no-state"]
+        for option, flag in (("THREADS", "-t"), ("WORDLIST", "-w")):
+            if self.get_option(option):
+                argv += [flag, str(self.get_option(option))]
+        return argv
 
-        # Prompt: Select from DB or use selected target
-        try:
-            with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
-                print("\n" + "="*60, file=tty_out)
-                print("Web Target Selection", file=tty_out)
-                print("="*60, file=tty_out)
-                print("\nOptions:", file=tty_out)
-                print("  1. Select web target from database", file=tty_out)
-                print("  2. Use selected target from framework", file=tty_out)
-                print("  3. Enter URL manually", file=tty_out)
-                print("\nChoice (1-3): ", file=tty_out, end='', flush=True)
-                choice = tty_in.readline().strip()
+    def build_command(self):
+        return shlex.join(self.build_argv())
 
-                if choice == '1':
-                    # Get web services from database
-                    web_services = self.framework.database.get_web_services()
-                    if not web_services:
-                        print("\n[!] No web services found in database", file=tty_out)
-                        print("[!] Run an nmap scan first to discover web services", file=tty_out)
-                        return None
-
-                    # Format for FZF selection
-                    service_lines = []
-                    for i, ws in enumerate(web_services, 1):
-                        line = f"{i:2d}. {ws['url']:40s} [{ws['service']:10s}] port {ws['port']}"
-                        service_lines.append(line)
-
-                    # Use FZF to select
-                    if selector.has_fzf:
-                        selected = selector.select_from_list(
-                            service_lines,
-                            prompt="Select Web Target: "
-                        )
-                        if selected:
-                            # Extract index and get URL
-                            try:
-                                idx = int(selected.split('.')[0].strip()) - 1
-                                url = web_services[idx]['url']
-                                self.set_option("URL", url)
-                                return url
-                            except (ValueError, IndexError):
-                                return None
-                    else:
-                        # Fallback without FZF
-                        print("\nAvailable web targets:", file=tty_out)
-                        for line in service_lines:
-                            print(f"  {line}", file=tty_out)
-                        print(f"\nSelect (1-{len(web_services)}): ", file=tty_out, end='', flush=True)
-                        sel = tty_in.readline().strip()
-                        if sel.isdigit():
-                            idx = int(sel) - 1
-                            if 0 <= idx < len(web_services):
-                                url = web_services[idx]['url']
-                                self.set_option("URL", url)
-                                return url
-
-                elif choice == '2':
-                    # Use selected target from framework
-                    current_target = self.framework.session.targets.get_current()
-                    if not current_target:
-                        print("\n[!] No target selected in framework", file=tty_out)
-                        print("[!] Use 'target <ip>' command first", file=tty_out)
-                        return None
-
-                    # Add http:// protocol if not present
-                    target = current_target.get("url") or current_target.get("ip")
-                    if not target:
-                        print("\n[!] Selected target has no usable address", file=tty_out)
-                        return None
-                    if target.startswith('http://') or target.startswith('https://'):
-                        url = target
-                    else:
-                        url = f"http://{target}"
-
-                    self.set_option("URL", url)
-                    return url
-
-                elif choice == '3':
-                    # Manual entry
-                    print("\nTarget URL: ", file=tty_out, end='', flush=True)
-                    url = tty_in.readline().strip()
-                    if url:
-                        # Add protocol if not present
-                        if not url.startswith('http://') and not url.startswith('https://'):
-                            url = f"http://{url}"
-                        self.set_option("URL", url)
-                        return url
-
-        except (KeyboardInterrupt, EOFError):
-            return None
-
-        return None
-
-    def _execute_feroxbuster(self, extra_args: str = "", run_background: bool = False) -> Dict[str, Any]:
-        """
-        Execute feroxbuster with extra arguments.
-
-        Args:
-            extra_args: Additional arguments to pass to feroxbuster
-            run_background: If True, run in background
-
-        Returns:
-            Dictionary with execution results
-        """
-        import os
-        from pathlib import Path
-        from datetime import datetime
-
+    def _execute_feroxbuster(self, extra_args="", run_background=False):
         url = self._get_url()
         if not url:
             return {"success": False, "error": "URL required"}
-
-        # Create logs directory if it doesn't exist
-        log_dir = Path.home() / ".purplesploit" / "logs" / "web"
+        request = self.execution_request or getattr(self, "_execution_context_request", None)
+        log_dir = Path(request.run_dir) if request and request.run_dir else Path.home() / ".purplesploit/logs/web"
         log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate log filename with timestamp and target
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_url = url.replace('://', '_').replace('/', '_').replace(':', '_')
-        log_file = log_dir / f"feroxbuster_{safe_url}_{timestamp}.txt"
-
-        # Build feroxbuster command with output file
-        cmd = f"feroxbuster -u '{url}' --thorough --methods GET,POST -o '{log_file}'"
-
-        if extra_args:
-            cmd += f" {extra_args}"
-
-        # Execute command
-        if run_background:
-            self.log(f"Starting feroxbuster scan in background", "info")
-            self.log(f"Log file: {log_file}", "info")
-            result = self.execute_command(cmd, background=True, timeout=600)
-
-            if result.get('success'):
-                # Store scan info in database for later retrieval
-                self.framework.database.save_scan_results(
-                    scan_name="feroxbuster",
-                    target=url,
-                    scan_type="web",
-                    results={"status": "running", "pid": result.get('pid')},
-                    file_path=str(log_file)
-                )
-                result['log_file'] = str(log_file)
-                result['message'] = f"Scan started in background (PID: {result.get('pid')}). Results will be saved to {log_file}"
-
+        log_file = log_dir / f"feroxbuster_{uuid4().hex}.jsonl"
+        extra = shlex.split(extra_args) if isinstance(extra_args, str) else list(extra_args)
+        result = self.execute_command([*self.build_argv(), *extra, "-o", str(log_file)],
+                                      background=run_background, timeout=600)
+        result["log_file"] = str(log_file)
+        result["artifacts"] = [str(log_file)]
+        if result.get("background"):
             return result
-        else:
-            # Run synchronously
-            self.log(f"Starting feroxbuster scan", "info")
-            self.log(f"Log file: {log_file}", "info")
-            result = self.execute_command(cmd, timeout=600)
+        parsed = self._parse_feroxbuster_results(log_file, url) if log_file.exists() else result.get("parsed", self.parse_output(""))
+        result.update(parsed=parsed, parsed_results=parsed, observations=parsed["observations"])
+        database = getattr(self.framework, "database", None)
+        if database is not None:
+            database.save_scan_results(scan_name="feroxbuster", target=url, scan_type="web",
+                                       results=parsed, file_path=str(log_file))
+        return result
 
-            # Parse and store results
-            if result.get('success') and os.path.exists(log_file):
-                parsed_results = self._parse_feroxbuster_results(log_file, url)
-                result['parsed_results'] = parsed_results
-
-                # Store in database
-                self.framework.database.save_scan_results(
-                    scan_name="feroxbuster",
-                    target=url,
-                    scan_type="web",
-                    results=parsed_results,
-                    file_path=str(log_file)
-                )
-
-                result['log_file'] = str(log_file)
-                self.log(f"Results saved to {log_file}", "success")
-
-            return result
-
-    def _parse_feroxbuster_results(self, log_file: str, url: str) -> Dict[str, Any]:
-        """
-        Parse feroxbuster results from log file.
-
-        Args:
-            log_file: Path to feroxbuster output file
-            url: Target URL
-
-        Returns:
-            Dictionary with parsed results
-        """
-        import re
-        from pathlib import Path
-
-        results = {
-            'target': url,
-            'found_paths': [],
-            'total_requests': 0,
-            'status_codes': {},
-            'interesting_finds': []
-        }
-
-        if not Path(log_file).exists():
-            return results
-
-        try:
-            with open(log_file, 'r') as f:
-                content = f.read()
-
-            # Parse discovered paths (format: STATUS SIZE URL)
-            path_pattern = r'(\d{3})\s+(\d+)l?\s+(\d+)w?\s+(\d+)c?\s+(https?://[^\s]+)'
-            matches = re.findall(path_pattern, content)
-
-            for match in matches:
-                status, lines, words, chars, found_url = match
-                status = int(status)
-
-                path_info = {
-                    'url': found_url,
-                    'status': status,
-                    'size': int(chars),
-                    'path': found_url.replace(url, '')
-                }
-
-                results['found_paths'].append(path_info)
-                results['total_requests'] += 1
-
-                # Track status codes
-                status_key = str(status)
-                results['status_codes'][status_key] = results['status_codes'].get(status_key, 0) + 1
-
-                # Flag interesting findings
-                if status == 200:
-                    results['interesting_finds'].append(path_info)
-                elif status in (301, 302, 307, 308):
-                    results['interesting_finds'].append({**path_info, 'note': 'redirect'})
-                elif status == 403:
-                    results['interesting_finds'].append({**path_info, 'note': 'forbidden'})
-
-        except Exception as e:
-            self.log(f"Error parsing results: {str(e)}", "error")
-
+    def parse_output(self, output):
+        results = {"target": self._get_url(), "found_paths": [], "total_requests": 0,
+                   "status_codes": {}, "interesting_finds": [], "observations": []}
+        records, errors = json_records(output)
+        if output.strip().startswith(("{", "[")):
+            results["parse_errors"] = errors
+        if not records:
+            pattern = r"(?m)^\s*(\d{3})\s+(?:\S+\s+)?(\d+)l?\s+(\d+)w?\s+(\d+)c?\s+(https?://\S+)"
+            records = [{"status": int(status), "url": url, "content_length": int(chars),
+                        "line_count": int(lines), "word_count": int(words)}
+                       for status, lines, words, chars, url in re.findall(pattern, strip_ansi(output))]
+        for record in records:
+            url = record.get("url")
+            if not url or record.get("type", "response") not in {"response", "result"}:
+                continue
+            status = record.get("status", record.get("status_code"))
+            if status is None:
+                continue
+            item = {**record, "status": int(status), "path": urlsplit(url).path,
+                    "size": record.get("content_length", record.get("size", 0))}
+            results["found_paths"].append(item)
+            key = str(status)
+            results["status_codes"][key] = results["status_codes"].get(key, 0) + 1
+            if int(status) in {200, 301, 302, 307, 308, 403}:
+                results["interesting_finds"].append(item)
+            for kind in self.emits:
+                results["observations"].append(observation(kind, url, **{k: v for k, v in item.items() if k != "url"}))
+        results["total_requests"] = len(results["found_paths"])
         return results
 
-    # ========================================================================
-    # Operation Handlers
-    # ========================================================================
+    def _parse_feroxbuster_results(self, log_file, url):
+        path = Path(log_file)
+        parsed = self.parse_output(path.read_text(errors="replace") if path.exists() else "")
+        parsed["target"] = url
+        return parsed
 
-    def op_basic_scan(self) -> Dict[str, Any]:
-        """Basic directory scan with thorough mode."""
-        self.log("Running basic scan with thorough mode", "info")
+    def op_basic_scan(self):
+        self.log("Running directory discovery", "info")
         return self._execute_feroxbuster()
 
-    def op_background_scan(self) -> Dict[str, Any]:
-        """Basic directory scan running in background."""
-        self.log("Starting basic scan in background", "info")
+    def op_background_scan(self):
         return self._execute_feroxbuster(run_background=True)
 
-    def op_deep_scan(self) -> Dict[str, Any]:
-        """Deep scan with custom extensions."""
-        # Use EXTENSIONS parameter from profile
-        exts = self.get_option("EXTENSIONS")
-        if not exts:
-            exts = "php,html,js,txt,asp,aspx,jsp"
+    def op_deep_scan(self):
+        self.log("Running directory discovery with extensions", "info")
+        return self._execute_feroxbuster(["-x", str(self.get_option("EXTENSIONS") or "php,html,js,txt,asp,aspx,jsp")])
 
-        # Use THREADS parameter from profile
-        threads = self.get_option("THREADS") or 50
-
-        self.log(f"Deep scan with extensions: {exts}, threads: {threads}", "info")
-        return self._execute_feroxbuster(f"-x '{exts}' -t {threads}")
-
-    def op_custom_wordlist(self) -> Dict[str, Any]:
-        """Scan with custom wordlist."""
-        # Use WORDLIST parameter from profile
+    def op_custom_wordlist(self):
         wordlist = self.get_option("WORDLIST")
         if not wordlist:
-            # Prompt if not set
-            wordlist = input("Wordlist path: ")
-            if not wordlist:
-                return {"success": False, "error": "Wordlist path required"}
-
-        import os
-        if not os.path.isfile(wordlist):
+            return {"success": False, "error": "WORDLIST required"}
+        if not Path(wordlist).is_file():
             return {"success": False, "error": f"Wordlist not found: {wordlist}"}
+        return self._execute_feroxbuster()
 
-        return self._execute_feroxbuster(f"-w '{wordlist}'")
+    def op_burp_scan(self):
+        return self._execute_feroxbuster(["--proxy", str(self.get_option("PROXY") or "http://127.0.0.1:8080")])
 
-    def op_burp_scan(self) -> Dict[str, Any]:
-        """Scan with Burp Suite integration."""
-        proxy = input("Burp proxy [default: http://127.0.0.1:8080]: ")
-        if not proxy:
-            proxy = "http://127.0.0.1:8080"
+    def op_api_discovery(self):
+        self.log("Running API endpoint discovery", "info")
+        return self._execute_feroxbuster(["--methods", "GET", "POST", "PUT", "DELETE", "PATCH", "-x", "json,xml"])
 
-        self.log("Scanning with Burp integration", "info")
-        self.log("Make sure Burp is running and listening!", "warning")
-        return self._execute_feroxbuster(f"--proxy '{proxy}'")
+    def op_backup_discovery(self):
+        self.log("Running backup file discovery", "info")
+        return self._execute_feroxbuster(["-x", "bak,old,backup,zip,tar,gz,sql,db,config"])
 
-    def op_api_discovery(self) -> Dict[str, Any]:
-        """Scan for API endpoints."""
-        self.log("Scanning for API endpoints", "info")
-        return self._execute_feroxbuster("--methods GET,POST,PUT,DELETE,PATCH -x json,xml")
+    def op_custom_scan(self):
+        flags = self.get_option("CUSTOM_FLAGS")
+        if not flags:
+            return {"success": False, "error": "CUSTOM_FLAGS required"}
+        return self._execute_feroxbuster(flags)
 
-    def op_backup_discovery(self) -> Dict[str, Any]:
-        """Scan for backup files."""
-        self.log("Scanning for backup files", "info")
-        return self._execute_feroxbuster("-x bak,old,backup,zip,tar,gz,sql,db,config")
-
-    def op_custom_scan(self) -> Dict[str, Any]:
-        """Custom scan with user-provided flags."""
-        custom_flags = input("Additional feroxbuster flags: ")
-        if not custom_flags:
-            return {"success": False, "error": "No flags provided"}
-
-        return self._execute_feroxbuster(custom_flags)
-
-    def run(self) -> Dict[str, Any]:
-        """
-        Fallback run method for basic scan.
-        """
+    def run(self):
         return self.op_basic_scan()

@@ -9,6 +9,7 @@ from purplesploit.core.module import BaseModule
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List
+from ._ssh import deploy_over_ssh, split_arguments
 
 
 class ScriptDeployModule(BaseModule):
@@ -402,8 +403,6 @@ class ScriptDeployModule(BaseModule):
 
         rhost = self.get_option("RHOST")
         username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        ssh_key = self.get_option("SSH_KEY")
         local_file = self.get_option("LOCAL_FILE")
         save_output = self.get_option("SAVE_OUTPUT")
         output_file = self.get_option("OUTPUT_FILE")
@@ -420,76 +419,14 @@ class ScriptDeployModule(BaseModule):
                 "error": "Missing required options: RHOST, USERNAME"
             }
 
-        try:
-            remote_path = "/tmp/linpeas.sh"
-
-            # Upload via SCP
-            if ssh_key:
-                scp_cmd = [
-                    "scp", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-            else:
-                scp_cmd = [
-                    "sshpass", "-p", password,
-                    "scp", "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-
-            self.log(f"Uploading LinPEAS to {rhost}...")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
-
-            if result.returncode != 0:
-                return {
-                    "success": False,
-                    "error": f"Upload failed: {result.stderr}"
-                }
-
-            # Execute LinPEAS
-            exec_command = f"chmod +x {remote_path} && {remote_path}"
-
-            if ssh_key:
-                ssh_cmd = [
-                    "ssh", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    exec_command
-                ]
-            else:
-                ssh_cmd = [
-                    "sshpass", "-p", password,
-                    "ssh", "-o", "StrictHostKeyChecking=no",
-                    f"{username}@{rhost}",
-                    exec_command
-                ]
-
-            self.log("Executing LinPEAS...")
-            exec_result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=300)
-
-            output = exec_result.stdout
-
-            # Save output if requested
-            if save_output and output_file:
-                with open(output_file, 'w') as f:
-                    f.write(output)
-                self.log(f"Output saved to {output_file}", "success")
-
-            self.log("LinPEAS execution completed", "success")
-            return {
-                "success": True,
-                "output": output,
-                "method": "ssh",
-                "remote_path": remote_path
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"LinPEAS deployment failed: {str(e)}"
-            }
+        result = deploy_over_ssh(
+            self, host=rhost, username=username, local_file=local_file,
+            remote_path="/tmp/linpeas.sh", execute=True, timeout=300,
+        )
+        result.setdefault("method", "ssh")
+        if result.get("success") and save_output and output_file:
+            Path(output_file).write_text(result.get("output", ""), encoding="utf-8")
+        return result
 
     def deploy_linpeas_nxc(self) -> Dict[str, Any]:
         """Deploy LinPEAS via NetExec SSH."""
@@ -684,8 +621,6 @@ class ScriptDeployModule(BaseModule):
 
         rhost = self.get_option("RHOST")
         username = self.get_option("USERNAME")
-        password = self.get_option("PASSWORD")
-        ssh_key = self.get_option("SSH_KEY")
         local_file = self.get_option("LOCAL_FILE")
         remote_path = self.get_option("REMOTE_PATH")
         execute = self.get_option("EXECUTE")
@@ -697,74 +632,15 @@ class ScriptDeployModule(BaseModule):
                 "error": "Missing required options: RHOST, USERNAME, LOCAL_FILE"
             }
 
-        try:
-            filename = Path(local_file).name
-            if not remote_path:
-                remote_path = f"/tmp/{filename}"
-
-            # Upload via SCP
-            if ssh_key:
-                scp_cmd = [
-                    "scp", "-i", ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-            else:
-                scp_cmd = [
-                    "sshpass", "-p", password,
-                    "scp", "-o", "StrictHostKeyChecking=no",
-                    local_file,
-                    f"{username}@{rhost}:{remote_path}"
-                ]
-
-            self.log(f"Uploading script to {rhost}...")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
-
-            if result.returncode != 0:
-                return {
-                    "success": False,
-                    "error": f"Upload failed: {result.stderr}"
-                }
-
-            output = ""
-
-            # Execute if requested
-            if execute:
-                exec_command = f"chmod +x {remote_path} && {remote_path} {exec_args}".strip()
-
-                if ssh_key:
-                    ssh_cmd = [
-                        "ssh", "-i", ssh_key,
-                        "-o", "StrictHostKeyChecking=no",
-                        f"{username}@{rhost}",
-                        exec_command
-                    ]
-                else:
-                    ssh_cmd = [
-                        "sshpass", "-p", password,
-                        "ssh", "-o", "StrictHostKeyChecking=no",
-                        f"{username}@{rhost}",
-                        exec_command
-                    ]
-
-                self.log("Executing script...")
-                exec_result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=120)
-                output = exec_result.stdout
-
-            self.log("Script deployed successfully", "success")
-            return {
-                "success": True,
-                "output": output,
-                "method": "ssh",
-                "remote_path": remote_path
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"SSH deployment failed: {str(e)}"
-            }
+        if not remote_path:
+            remote_path = f"/tmp/{Path(local_file).name}"
+        result = deploy_over_ssh(
+            self, host=rhost, username=username, local_file=local_file,
+            remote_path=remote_path, arguments=split_arguments(exec_args),
+            execute=execute, timeout=120,
+        )
+        result.setdefault("method", "ssh")
+        return result
 
     def deploy_script_smb(self) -> Dict[str, Any]:
         """Deploy custom script via SMB."""

@@ -10,8 +10,7 @@ Tests cover:
 - ModuleMetadata dataclass
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 from purplesploit.core.module import BaseModule, ExternalToolModule, ModuleMetadata
 
 
@@ -424,10 +423,8 @@ class TestExternalToolModule:
 
             test_external_module.execute_command("test_tool")
 
-            # Check the actual command called
-            called_command = mock_run.call_args[1]["shell"]
-            # The command is passed via shell=True, so check args
-            assert mock_run.called
+            assert mock_run.call_args.kwargs['shell'] is False
+            assert mock_run.call_args.args[0] == ['test_tool', '--verbose', '--debug']
 
     def test_execute_command_background(self, test_external_module):
         """Test background command execution."""
@@ -438,7 +435,8 @@ class TestExternalToolModule:
 
             result = test_external_module.execute_command("long_running_cmd", background=True)
 
-            assert result["success"] is True
+            assert result["success"] is False
+            assert result["execution"]["outcome"] == "running"
             assert result["background"] is True
             assert result["pid"] == 12345
 

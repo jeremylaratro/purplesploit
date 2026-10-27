@@ -221,7 +221,7 @@ class TestDeployViaSsh:
         assert result["success"] is False
 
     def test_successful_ssh_deployment_with_password(self, c2_module):
-        """Test successful SSH deployment with password."""
+        """Password helpers are rejected before spawning a process."""
         c2_module.set_option("RHOST", "192.168.1.100")
         c2_module.set_option("USERNAME", "root")
         c2_module.set_option("PASSWORD", "toor")
@@ -230,15 +230,16 @@ class TestDeployViaSsh:
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
             result = c2_module.deploy_via_ssh()
-            assert result["success"] is True
-            assert result["method"] == "ssh"
+            assert result["success"] is False
+            assert "Password SSH is disabled" in result["error"]
+            mock_run.assert_not_called()
 
-    def test_ssh_deployment_with_key(self, c2_module):
+    def test_ssh_deployment_with_key(self, c2_module, secure_ssh_material):
         """Test SSH deployment with SSH key."""
         c2_module.set_option("RHOST", "192.168.1.100")
         c2_module.set_option("USERNAME", "root")
-        c2_module.set_option("SSH_KEY", "/path/to/id_rsa")
-        c2_module.set_option("LOCAL_FILE", "/path/to/beacon")
+        c2_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        c2_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
@@ -262,12 +263,12 @@ class TestDeployViaSsh:
             result = c2_module.deploy_via_ssh()
             assert result["success"] is False
 
-    def test_ssh_no_execute(self, c2_module):
+    def test_ssh_no_execute(self, c2_module, secure_ssh_material):
         """Test SSH upload without execution."""
         c2_module.set_option("RHOST", "192.168.1.100")
         c2_module.set_option("USERNAME", "root")
-        c2_module.set_option("PASSWORD", "toor")
-        c2_module.set_option("LOCAL_FILE", "/path/to/beacon")
+        c2_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        c2_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
         c2_module.set_option("EXECUTE", False)
 
         with patch('subprocess.run') as mock_run:

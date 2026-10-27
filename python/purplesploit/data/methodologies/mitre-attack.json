@@ -1,0 +1,17 @@
+{
+  "id": "mitre-attack",
+  "name": "MITRE ATT&CK Enterprise",
+  "version": "16.0",
+  "profile_version": "1.0.0",
+  "source": "https://attack.mitre.org/versions/v16/",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "Enterprise ATT&CK technique identifiers; prompts are PurpleSploit assessment checks",
+  "description": "Selected techniques in a pinned Enterprise release; coverage indicates performed checks, not prevention, detection, or certification.",
+  "checks": [
+    {"id": "T1046", "title": "Assess visibility of network service discovery"},
+    {"id": "T1087", "title": "Assess account discovery paths"},
+    {"id": "T1069", "title": "Assess discovery of permission groups"},
+    {"id": "T1078", "title": "Assess behavior of existing account access"}
+  ]
+}

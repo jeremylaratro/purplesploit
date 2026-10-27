@@ -8,6 +8,8 @@ natural language query capabilities for penetration testing.
 from .recommender import ModuleRecommender, Recommendation
 from .attack_paths import AttackPathAnalyzer, AttackPath, AttackStep
 from .nlp import NLPQueryHandler
+from .advisory import AdvisoryPolicy, AdvisoryService
+from .providers import AdvisoryProvider, provider_from_environment
 
 __all__ = [
     'ModuleRecommender',
@@ -16,4 +18,8 @@ __all__ = [
     'AttackPath',
     'AttackStep',
     'NLPQueryHandler',
+    'AdvisoryService',
+    'AdvisoryPolicy',
+    'AdvisoryProvider',
+    'provider_from_environment',
 ]

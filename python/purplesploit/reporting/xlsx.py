@@ -7,12 +7,17 @@ Generates Excel reports with multiple worksheets and pivot table support.
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import os
+import tempfile
+
+from purplesploit.core.output_security import spreadsheet_safe
 
 from .models import ReportData, Finding, Severity
 
 # Check if openpyxl is available
 try:
     import openpyxl
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -29,6 +34,7 @@ class XLSXReportGenerator:
         """Check if openpyxl is available"""
         try:
             import openpyxl
+
             return True
         except ImportError:
             return False
@@ -51,12 +57,7 @@ class XLSXReportGenerator:
         color = severity_colors.get(severity, "95A5A6")
         return PatternFill(start_color=color, end_color=color, fill_type="solid")
 
-    def generate(
-        self,
-        report_data: ReportData,
-        output_path: Path,
-        **kwargs
-    ) -> str:
+    def generate(self, report_data: ReportData, output_path: Path, **kwargs) -> str:
         """
         Generate Excel report.
 
@@ -73,8 +74,7 @@ class XLSXReportGenerator:
         """
         if not self._openpyxl_available:
             raise ImportError(
-                "openpyxl is required for Excel generation. "
-                "Install with: pip install openpyxl"
+                "openpyxl is required for Excel generation. Install with: pip install openpyxl"
             )
 
         from openpyxl import Workbook
@@ -91,12 +91,31 @@ class XLSXReportGenerator:
         self._create_services_sheet(wb, report_data)
 
         # Remove default sheet if still exists
-        if 'Sheet' in wb.sheetnames:
-            del wb['Sheet']
+        if "Sheet" in wb.sheetnames:
+            del wb["Sheet"]
 
-        # Save workbook
+        # Neutralize all externally controlled strings before serializing cells.
+        for worksheet in wb.worksheets:
+            for row in worksheet.iter_rows():
+                for cell in row:
+                    safe_value = spreadsheet_safe(cell.value)
+                    if safe_value != cell.value:
+                        cell.value = safe_value
+
+        # Save atomically with a private file mode.
         output_path = Path(output_path)
-        wb.save(output_path)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=output_path.parent, prefix=f".{output_path.name}.", suffix=".tmp"
+        )
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        try:
+            temporary.chmod(0o600)
+            wb.save(temporary)
+            os.replace(temporary, output_path)
+            output_path.chmod(0o600)
+        finally:
+            temporary.unlink(missing_ok=True)
 
         return str(output_path)
 
@@ -113,30 +132,35 @@ class XLSXReportGenerator:
         header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
 
         # Title
-        ws['A1'] = report_data.config.title
-        ws['A1'].font = title_font
-        ws.merge_cells('A1:D1')
+        ws["A1"] = report_data.config.title
+        ws["A1"].font = title_font
+        ws.merge_cells("A1:D1")
 
         # Report metadata
         row = 3
         metadata = [
             ("Client", report_data.config.client_name),
             ("Assessor", report_data.config.assessor_name),
-            ("Report Date", report_data.config.report_date.strftime("%Y-%m-%d") if report_data.config.report_date else ""),
+            (
+                "Report Date",
+                report_data.config.report_date.strftime("%Y-%m-%d")
+                if report_data.config.report_date
+                else "",
+            ),
             ("Assessment Type", report_data.config.assessment_type),
         ]
 
         for label, value in metadata:
             if value:
-                ws[f'A{row}'] = label
-                ws[f'A{row}'].font = Font(bold=True)
-                ws[f'B{row}'] = value
+                ws[f"A{row}"] = label
+                ws[f"A{row}"].font = Font(bold=True)
+                ws[f"B{row}"] = value
                 row += 1
 
         # Severity summary table
         row += 2
-        ws[f'A{row}'] = "Findings by Severity"
-        ws[f'A{row}'].font = Font(size=14, bold=True)
+        ws[f"A{row}"] = "Findings by Severity"
+        ws[f"A{row}"].font = Font(size=14, bold=True)
         row += 1
 
         severity_headers = ["Severity", "Count"]
@@ -179,7 +203,9 @@ class XLSXReportGenerator:
         if report_data.total_findings > 0:
             pie = PieChart()
             labels = Reference(ws, min_col=1, min_row=chart_start_row, max_row=chart_start_row + 4)
-            data = Reference(ws, min_col=2, min_row=chart_start_row - 1, max_row=chart_start_row + 4)
+            data = Reference(
+                ws, min_col=2, min_row=chart_start_row - 1, max_row=chart_start_row + 4
+            )
             pie.add_data(data, titles_from_data=True)
             pie.set_categories(labels)
             pie.title = "Severity Distribution"
@@ -189,8 +215,8 @@ class XLSXReportGenerator:
 
         # Findings by target
         row += 3
-        ws[f'A{row}'] = "Findings by Target"
-        ws[f'A{row}'].font = Font(size=14, bold=True)
+        ws[f"A{row}"] = "Findings by Target"
+        ws[f"A{row}"].font = Font(size=14, bold=True)
         row += 1
 
         headers = ["Target", "Findings"]
@@ -223,8 +249,19 @@ class XLSXReportGenerator:
 
         # Headers
         headers = [
-            "ID", "Title", "Severity", "CVSS", "Target", "Port", "Service",
-            "Description", "Impact", "Remediation", "CVEs", "Status", "Module"
+            "ID",
+            "Title",
+            "Severity",
+            "CVSS",
+            "Target",
+            "Port",
+            "Service",
+            "Description",
+            "Impact",
+            "Remediation",
+            "CVEs",
+            "Status",
+            "Module",
         ]
 
         for col, header in enumerate(headers, 1):
@@ -234,9 +271,13 @@ class XLSXReportGenerator:
 
         # Severity colors for cells
         severity_fills = {
-            Severity.CRITICAL: PatternFill(start_color="7B241C", end_color="7B241C", fill_type="solid"),
+            Severity.CRITICAL: PatternFill(
+                start_color="7B241C", end_color="7B241C", fill_type="solid"
+            ),
             Severity.HIGH: PatternFill(start_color="C0392B", end_color="C0392B", fill_type="solid"),
-            Severity.MEDIUM: PatternFill(start_color="E67E22", end_color="E67E22", fill_type="solid"),
+            Severity.MEDIUM: PatternFill(
+                start_color="E67E22", end_color="E67E22", fill_type="solid"
+            ),
             Severity.LOW: PatternFill(start_color="F1C40F", end_color="F1C40F", fill_type="solid"),
             Severity.INFO: PatternFill(start_color="3498DB", end_color="3498DB", fill_type="solid"),
         }
@@ -278,7 +319,7 @@ class XLSXReportGenerator:
             ws.column_dimensions[get_column_letter(col)].width = width
 
         # Freeze header row
-        ws.freeze_panes = 'A2'
+        ws.freeze_panes = "A2"
 
         # Add autofilter
         ws.auto_filter.ref = f"A1:M{row - 1}"
@@ -314,7 +355,7 @@ class XLSXReportGenerator:
         for col in range(1, 5):
             ws.column_dimensions[get_column_letter(col)].width = 25
 
-        ws.freeze_panes = 'A2'
+        ws.freeze_panes = "A2"
 
     def _create_services_sheet(self, wb, report_data: ReportData):
         """Create services sheet"""
@@ -343,7 +384,7 @@ class XLSXReportGenerator:
         for col in range(1, 5):
             ws.column_dimensions[get_column_letter(col)].width = 20
 
-        ws.freeze_panes = 'A2'
+        ws.freeze_panes = "A2"
         if row > 2:
             ws.auto_filter.ref = f"A1:D{row - 1}"
 
@@ -351,4 +392,5 @@ class XLSXReportGenerator:
 def get_column_letter(col_idx):
     """Get Excel column letter from index (1-indexed)"""
     from openpyxl.utils import get_column_letter as _get_column_letter
+
     return _get_column_letter(col_idx)

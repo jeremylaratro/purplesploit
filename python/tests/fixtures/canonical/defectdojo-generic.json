@@ -1,0 +1,7 @@
+{
+  "scan_date": "2026-10-26",
+  "findings": [
+    {"title": "TLS issue", "severity": "High", "description": "Legacy TLS", "mitigation": "Upgrade TLS", "unique_id_from_tool": "TLS-1", "vuln_id_from_tool": "TLS", "active": true, "verified": true, "endpoints": [{"host": "192.0.2.1", "port": 443}], "references": "https://example.test/tls", "vendor_field": {"keep": true}},
+    {"title": "TLS issue (second endpoint)", "severity": "Medium", "description": "Second occurrence", "unique_id_from_tool": "TLS-1", "duplicate": true, "endpoints": ["192.0.2.2"], "active": false, "verified": false}
+  ]
+}

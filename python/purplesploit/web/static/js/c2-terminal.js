@@ -73,14 +73,14 @@ async function loadBanner() {
         // Display banner with welcome message
         const bannerElement = document.getElementById('terminal-banner');
         if (bannerElement) {
-            bannerElement.textContent = data.banner + '\n\n              Command & Control Terminal v6.6.2\n\nType \'help\' for available commands.\n';
+            bannerElement.textContent = data.banner + '\n\n              Command & Control Terminal v7.0.0\n\nType \'help\' for available commands.\n';
         }
     } catch (error) {
         console.error('Failed to load banner:', error);
         // Fallback to simple text banner
         const bannerElement = document.getElementById('terminal-banner');
         if (bannerElement) {
-            bannerElement.textContent = '\n═══════════════════════════════════════════════\n        PURPLESPLOIT C2 TERMINAL\n        Command & Control Terminal v6.6.2\n═══════════════════════════════════════════════\n\nType \'help\' for available commands.\n';
+            bannerElement.textContent = '\n═══════════════════════════════════════════════\n        PURPLESPLOIT C2 TERMINAL\n        Command & Control Terminal v7.0.0\n═══════════════════════════════════════════════\n\nType \'help\' for available commands.\n';
         }
     }
 }

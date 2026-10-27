@@ -1,0 +1,17 @@
+{
+  "id": "owasp-asvs",
+  "name": "OWASP Application Security Verification Standard",
+  "version": "4.0.3",
+  "profile_version": "1.0.0",
+  "source": "https://github.com/OWASP/ASVS/tree/v4.0.3/4.0/en",
+  "scope": "representative_subset",
+  "certification": false,
+  "id_namespace": "ASVS v4.0.3 requirement identifiers; prompts are paraphrased",
+  "description": "Pinned historical representative requirements; not full ASVS verification at any level.",
+  "checks": [
+    {"id": "2.1.1", "title": "Check the minimum accepted password length"},
+    {"id": "2.1.3", "title": "Check submitted passwords for truncation"},
+    {"id": "2.1.5", "title": "Exercise the password change feature"},
+    {"id": "2.1.6", "title": "Check password change proof of current credentials"}
+  ]
+}

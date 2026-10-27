@@ -1,0 +1,10 @@
+{
+  "findings": [{"id":"finding-a","title":"Weak authentication","description":"Observed authentication weakness","target":"192.0.2.10","severity":"high","status":"confirmed","discovered_at":"2026-01-02T03:04:05Z","mitre_techniques":["T1110.001"],"evidence":[{"id":"evidence-a","title":"Login transcript","captured_at":"2026-01-02T03:04:05Z","metadata":{"source_observation_id":"obs-host"}}],"metadata":{"custom":"retained"}}],
+  "observations": [
+    {"kind":"host","target":"192.0.2.10","observation_id":"obs-host","source_execution_id":"run-a","observed_at":"2026-01-02T03:04:05Z","confidence":"observed","attributes":{"identifier":"host-a","relationships":[{"type":"owns","target":"bucket-a","target_kind":"resource","evidence_ids":["evidence-a"],"source_records":[{"id":"edge-source"}]}]}},
+    {"kind":"resource","target":"bucket-a","observation_id":"obs-resource","source_execution_id":"run-a","observed_at":"2026-01-02T03:04:05Z","confidence":"observed","attributes":{"identifier":"bucket-a","provider":"fixture","unknown_provider_field":{"retained":true}}}
+  ],
+  "operations": [{"id":"op-a","mitre_techniques":["T1059"],"standards":[],"description":"Declared capability"}],
+  "executions": [{"request_id":"run-a","success":true,"outcome":"success","finished_at":"2026-01-02T03:04:05Z","mitre_techniques":["T1110.001"],"observation_ids":["obs-host"]},{"request_id":"run-b","success":false,"outcome":"failed","finished_at":"2026-01-02T03:04:05Z","mitre_techniques":["T1046"]}],
+  "coverage": {"checks":[{"case_id":"tested-a","control_id":"T1110.001","state":"manual","tested":true,"evidence_refs":["evidence-a"]},{"case_id":"untested-b","control_id":"T1059","state":"not_tested","tested":false}]}
+}

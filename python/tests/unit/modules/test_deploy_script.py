@@ -327,7 +327,7 @@ class TestDeployLinpeasSsh:
         assert "LOCAL_FILE" in result["error"]
 
     def test_successful_ssh_deployment_with_password(self, script_module):
-        """Test successful SSH deployment with password."""
+        """Password helpers are rejected before a subprocess can expose the secret."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "root")
         script_module.set_option("PASSWORD", "toor")
@@ -341,16 +341,16 @@ class TestDeployLinpeasSsh:
             )
 
             result = script_module.deploy_linpeas_ssh()
-            assert result["success"] is True
-            assert result["method"] == "ssh"
-            assert "/tmp/linpeas.sh" in result["remote_path"]
+            assert result["success"] is False
+            assert "Password SSH is disabled" in result["error"]
+            mock_run.assert_not_called()
 
-    def test_ssh_deployment_with_key(self, script_module):
+    def test_ssh_deployment_with_key(self, script_module, secure_ssh_material):
         """Test SSH deployment with SSH key."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "root")
-        script_module.set_option("SSH_KEY", "/path/to/id_rsa")
-        script_module.set_option("LOCAL_FILE", "/path/to/linpeas.sh")
+        script_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        script_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
@@ -365,12 +365,12 @@ class TestDeployLinpeasSsh:
             calls = mock_run.call_args_list
             assert any("-i" in str(call) for call in calls)
 
-    def test_ssh_upload_failure(self, script_module):
+    def test_ssh_upload_failure(self, script_module, secure_ssh_material):
         """Test handling of SSH upload failure."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "root")
-        script_module.set_option("PASSWORD", "toor")
-        script_module.set_option("LOCAL_FILE", "/path/to/linpeas.sh")
+        script_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        script_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
@@ -381,7 +381,8 @@ class TestDeployLinpeasSsh:
 
             result = script_module.deploy_linpeas_ssh()
             assert result["success"] is False
-            assert "Upload failed" in result["error"]
+            assert result["stage"] == "upload"
+            assert result["upload"]["exit_code"] == 1
 
 
 # =============================================================================
@@ -499,12 +500,12 @@ class TestDeployScriptNxc:
 class TestDeployScriptSsh:
     """Tests for custom script SSH deployment."""
 
-    def test_successful_ssh_deployment(self, script_module):
+    def test_successful_ssh_deployment(self, script_module, secure_ssh_material):
         """Test successful SSH script deployment."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "user")
-        script_module.set_option("PASSWORD", "pass")
-        script_module.set_option("LOCAL_FILE", "/path/to/script.sh")
+        script_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        script_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = MagicMock(
@@ -517,12 +518,12 @@ class TestDeployScriptSsh:
             assert result["success"] is True
             assert result["method"] == "ssh"
 
-    def test_custom_remote_path(self, script_module):
+    def test_custom_remote_path(self, script_module, secure_ssh_material):
         """Test deployment with custom remote path."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "user")
-        script_module.set_option("PASSWORD", "pass")
-        script_module.set_option("LOCAL_FILE", "/path/to/script.sh")
+        script_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        script_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
         script_module.set_option("REMOTE_PATH", "/opt/scripts/custom.sh")
 
         with patch('subprocess.run') as mock_run:
@@ -686,16 +687,16 @@ class TestExceptionHandling:
             assert result["success"] is False
             assert "failed" in result["error"].lower()
 
-    def test_ssh_exception_handling(self, script_module):
+    def test_ssh_exception_handling(self, script_module, secure_ssh_material):
         """Test exception handling in SSH deployment."""
         script_module.set_option("RHOST", "192.168.1.100")
         script_module.set_option("USERNAME", "root")
-        script_module.set_option("PASSWORD", "toor")
-        script_module.set_option("LOCAL_FILE", "/path/to/linpeas.sh")
+        script_module.set_option("SSH_KEY", str(secure_ssh_material["identity"]))
+        script_module.set_option("LOCAL_FILE", str(secure_ssh_material["payload"]))
 
         with patch('subprocess.run') as mock_run:
-            mock_run.side_effect = Exception("Network error")
+            mock_run.side_effect = OSError("Network error")
 
             result = script_module.deploy_linpeas_ssh()
             assert result["success"] is False
-            assert "failed" in result["error"].lower()
+            assert "Network error" in result["upload"]["error"]

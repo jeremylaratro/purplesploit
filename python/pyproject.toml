@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=84.1.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "purplesploit"
+dynamic = ["version"]
+description = "Modular framework for authorized security assessment workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "CC-BY-NC-SA-4.0"
+license-files = ["LICENSE"]
+authors = [{name = "PurpleSploit Team", email = "purplesploit@example.com"}]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Information Technology",
+  "Topic :: Security",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "defusedxml>=0.7.1", "slowapi>=0.1.9", "fastapi>=0.104.0",
+  "uvicorn[standard]>=0.24.0", "sqlalchemy>=2.0.0", "pydantic>=2.0.0",
+  "jsonschema>=4.0.0", "python-multipart>=0.0.6", "jinja2>=3.1.0",
+  "aiofiles>=23.0.0", "httpx>=0.25.0", "websockets>=12.0",
+  "requests>=2.31.0", "packaging>=23.0", "rich>=13.0.0",
+  "textual>=0.40.0", "prompt-toolkit>=3.0.0", "pandas>=2.0.0",
+  "matplotlib>=3.7.0", "seaborn>=0.12.0", "weasyprint>=60.0",
+  "python-docx>=1.0.0", "openpyxl>=3.1.0", "cryptography>=41.0.0",
+  "pyyaml>=6.0", "click>=8.1.0",
+]
+
+[project.optional-dependencies]
+ai = ["openai>=1.66.0", "anthropic>=0.42.0"]
+dev = [
+  "bandit>=1.7.10", "build>=1.2.2", "cyclonedx-bom>=5.1.1",
+  "mypy>=1.13.0", "pip-audit>=2.7.3", "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0", "pytest-benchmark>=5.1.0",
+  "pytest-cov>=6.0.0", "pytest-timeout>=2.3.1", "ruff>=0.8.0",
+  "twine>=6.0.0", "types-requests>=2.32.0",
+  "setuptools>=84.1.0",
+]
+
+[project.scripts]
+purplesploit = "purplesploit.main:main"
+purplesploit-api = "purplesploit.services.server:main"
+purplesploit-legacy-api = "purplesploit.api.server:main"
+purplesploit-web = "purplesploit.web.dashboard:main"
+purplesploit-report = "purplesploit.reporting.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jeremylaratro/purplesploit"
+Repository = "https://github.com/jeremylaratro/purplesploit"
+
+[tool.setuptools.dynamic]
+version = {attr = "purplesploit._version.VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests", "tests.*", "scripts", "scripts.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+purplesploit = ["data/methodologies/*.json", "schemas/*.json"]
+"purplesploit.web" = ["templates/*.html", "static/*.html", "static/css/*.css", "static/js/*.js"]
+"purplesploit.reporting" = ["templates/*.html", "templates/*.jinja2"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_configs = true
