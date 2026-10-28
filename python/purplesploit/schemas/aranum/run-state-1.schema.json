@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/run-state-1.schema.json",
+  "title": "aranum run-state.json",
+  "description": "Per-run service/task execution state emitted by auto-enum.sh (PLAN-002 A1.2). schema_version is an integer here (historical), unlike the string-valued document schemas. Envelope keys are closed; service records are open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "execution_mode", "queue_authoritative", "generated_utc", "services"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string"},
+    "execution_mode": {"type": "string"},
+    "queue_authoritative": {"type": "boolean"},
+    "generated_utc": {"type": "string"},
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["service"],
+        "properties": {
+          "service": {"type": "string"},
+          "status": {"type": "string"},
+          "rc": {"type": ["integer", "string"]}
+        }
+      }
+    }
+  }
+}

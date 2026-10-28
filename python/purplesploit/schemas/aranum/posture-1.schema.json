@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/posture-1.schema.json",
+  "title": "aranum posture.json",
+  "description": "Per-host and per-domain posture envelope emitted by report.py (PLAN-002 A1.2). Envelope keys are closed; the hosts/domains maps are open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "label", "generated_utc", "redacted", "hosts", "domains"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "run_id": {"type": ["string", "null"]},
+    "label": {"type": "string"},
+    "generated_utc": {"type": "string"},
+    "redacted": {"type": "boolean"},
+    "hosts": {"type": "object", "additionalProperties": true},
+    "domains": {"type": "object", "additionalProperties": true}
+  }
+}

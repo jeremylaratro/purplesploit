@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/bundle-manifest-1.schema.json",
+  "title": "aranum bundle-manifest.json",
+  "description": "Derived run manifest (PLAN-002 A1.3b): a pure function of the output tree, rebuilt at every stage boundary. Lists every file each present stage produced with its current digest, and folds the per-stage statuses into one bundle status. Envelope keys are closed; stage records are open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "tool_version", "kb", "stages", "files", "status"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "run_id": {"type": ["string", "null"]},
+    "tool_version": {"type": "string"},
+    "kb": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["digest"],
+      "properties": {"digest": {"type": ["string", "null"]}}
+    },
+    "stages": {
+      "type": "object",
+      "description": "stage name (run|local|report) -> that stage's own record (stages/<name>.json). Absent stages are simply absent.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["status"],
+        "properties": {
+          "status": {"enum": ["running", "complete", "partial", "failed"]},
+          "run_id": {"type": ["string", "null"]},
+          "exit_code": {"type": ["integer", "null"]},
+          "started_utc": {"type": ["string", "null"]},
+          "finished_utc": {"type": ["string", "null"]},
+          "consumed": {"type": "array"},
+          "produced": {"type": "array"},
+          "invocation": {"type": ["object", "null"]}
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["path", "sha256", "produced_by"],
+        "properties": {
+          "path": {"type": "string"},
+          "schema": {"type": ["string", "null"]},
+          "sha256": {"type": "string"},
+          "produced_by": {"type": "string"}
+        }
+      }
+    },
+    "status": {"enum": ["complete", "partial", "failed", "interrupted", "stale", "unknown"]}
+  }
+}

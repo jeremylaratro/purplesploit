@@ -33,7 +33,7 @@ class ExecutionOutcome(str, Enum):
 
 
 AuthScope = Literal["local", "domain", "machine"]
-AuthMethod = Literal["password", "hash", "kerberos", "null-session", "anonymous"]
+AuthMethod = Literal["password", "hash", "key", "kerberos", "null-session", "anonymous"]
 
 
 @dataclass
@@ -50,10 +50,10 @@ class AuthContext:
         if self.scope not in {None, "local", "domain", "machine"}:
             raise ValueError("scope must be 'local', 'domain', 'machine', or None")
         if self.auth_method not in {
-            None, "password", "hash", "kerberos", "null-session", "anonymous",
+            None, "password", "hash", "key", "kerberos", "null-session", "anonymous",
         }:
             raise ValueError(
-                "auth_method must be 'password', 'hash', 'kerberos', "
+                "auth_method must be 'password', 'hash', 'key', 'kerberos', "
                 "'null-session', 'anonymous', or None"
             )
 

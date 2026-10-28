@@ -1,0 +1,9 @@
+{
+  "bundle-manifest-1.schema.json": "feb5cd7ea7c4d2100d0ca2e26d15df666c7090ea14703e9356adb00097b49ac7",
+  "dispatchers-1.schema.json": "ba742884c9fa5a4043aa7b2a17f95d91d64c2b03d379cfd96ae9e60060da2641",
+  "findings-2.schema.json": "54bf5c6df7fb53d6beefbaa6830934bb75a4d6338321b87b66dac93a43bccf32",
+  "inventory-1.schema.json": "ea9a89489a45b43ae8fdc4fafba03202e826da3715abcc40afcb413cd9659fe7",
+  "kb-subset-1.schema.json": "362a4cf75d1073a96b70c82453d83d044cdd5814d22ea49191b235277071e234",
+  "posture-1.schema.json": "d21188ada191119ae4889e1efaeb270d76c8fe76233ecaeccc0c737315837db1",
+  "run-state-1.schema.json": "6d7072ea255cf3c0ea9dab0b5e57abc3637128673e88df84f5b748d7d5d1ee65"
+}

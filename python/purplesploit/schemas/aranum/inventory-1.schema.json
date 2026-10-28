@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/inventory-1.schema.json",
+  "title": "aranum inventory (nmap-parse --json)",
+  "description": "Service inventory envelope emitted by nmap-parse.py --json (PLAN-002 A1.1). Envelope keys are closed; records are open (additive fields are allowed without a version bump).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tool", "tool_version", "summary", "hosts", "entries"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "tool": {"type": "string"},
+    "tool_version": {"type": "string"},
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["hosts", "open_ports", "categories"],
+      "properties": {
+        "hosts": {"type": "integer", "minimum": 0},
+        "hosts_up": {"type": "integer", "minimum": 0},
+        "hosts_with_open_ports": {"type": "integer", "minimum": 0},
+        "open_ports": {"type": "integer", "minimum": 0},
+        "unknown": {"type": "array", "items": {"type": "string"}},
+        "categories": {"type": "object"},
+        "device_correlations": {}
+      }
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["ip"],
+        "properties": {
+          "ip": {"type": "string"},
+          "state": {"type": "string"}
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["ip", "port"],
+        "properties": {
+          "ip": {"type": "string"},
+          "port": {"type": ["string", "integer"]},
+          "service": {"type": "string"},
+          "categories": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

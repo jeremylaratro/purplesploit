@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/kb-subset-1.schema.json",
+  "title": "aranum inline finding KB subset",
+  "description": "Run-pinned finding knowledge-base entries embedded in findings.json (PLAN-002 A2.2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "aranum_version", "digest", "categories", "classes", "checks"],
+  "properties": {
+    "schema": {"type": "integer"},
+    "aranum_version": {"type": "string"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "categories": {
+      "type": "object",
+      "additionalProperties": {"type": "object", "additionalProperties": true}
+    },
+    "classes": {
+      "type": "object",
+      "additionalProperties": {"type": "object", "additionalProperties": true}
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {"type": "object", "additionalProperties": true}
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/dispatchers-1.schema.json",
+  "title": "aranum dispatchers.json",
+  "description": "Published list of network service-enumeration dispatchers (PLAN-002 A1.5), generated from the enum-*.sh tree. Consumed by purplesploit's recon/aranum registry (AC-01). Envelope keys are closed; dispatcher records are open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tool", "tool_version", "dispatchers"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "tool": {"type": "string"},
+    "tool_version": {"type": "string"},
+    "dispatchers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "script", "category", "uses_credentials", "tool_family"],
+        "properties": {
+          "name": {"type": "string"},
+          "script": {"type": "string"},
+          "alias_of": {"type": ["string", "null"]},
+          "category": {"type": "string"},
+          "uses_credentials": {"type": "boolean"},
+          "tool_family": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

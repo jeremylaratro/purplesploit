@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aradex.io/aranum/schemas/findings-2.schema.json",
+  "title": "aranum findings.json",
+  "description": "Findings envelope emitted by report.py (PLAN-002 A1.2). Envelope keys are closed; finding and auth-outcome records are open so additive record fields need no version bump.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "label", "generated_utc", "redacted", "mode", "summary", "findings"],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "run_id": {"type": ["string", "null"]},
+    "label": {"type": "string"},
+    "generated_utc": {"type": "string"},
+    "redacted": {"type": "boolean"},
+    "mode": {"type": "string"},
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "coverage": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/coverage"}
+        }
+      }
+    },
+    "kb": {"type": "object", "additionalProperties": true},
+    "auth_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["host", "transport", "outcome"],
+        "properties": {
+          "host": {"type": "string"},
+          "transport": {"type": "string"},
+          "outcome": {
+            "enum": ["success", "failure", "lockout", "error", "anonymous", "null-session"]
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["host", "port", "service", "severity", "finding_id"],
+        "properties": {
+          "host": {"type": "string"},
+          "port": {"type": ["string", "integer"]},
+          "service": {"type": "string"},
+          "severity": {"type": "string"},
+          "finding_id": {"type": "string"},
+          "rule_id": {"type": "string"},
+          "schema_version": {"type": "string"}
+        }
+      }
+    },
+    "posture_quarantine": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "partial": {"type": "boolean"},
+    "errors": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "per_host": {"type": "object", "additionalProperties": true}
+  },
+  "$defs": {
+    "coverage": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "skipped_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["check", "reason"],
+            "properties": {
+              "check": {"type": "string"},
+              "reason": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

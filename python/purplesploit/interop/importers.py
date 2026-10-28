@@ -273,15 +273,44 @@ def _aranum(source, **options):
     if not root.is_dir():
         raise ValueError("Aranum import requires its bundle directory")
     bundle = import_aranum_bundle(root, **options)
+    observations = bundle.observations
+    if not (root / "bundle-manifest.json").is_file():
+        # Preserve the persisted pre-P1 registry projection exactly.  The direct
+        # importer still exposes P2b diagnostics for legacy/pre-manifest callers.
+        legacy_record_types = {
+            "snapshot_metadata", "inventory_host", "inventory_endpoint",
+            "canonical_finding", "posture_subject", "posture_check",
+            "service_execution", "task_execution",
+        }
+        observations = [
+            item for item in observations
+            if item.attributes.get("record_type") in legacy_record_types
+        ]
     # The producer bundle contains all supported and unknown companion payloads.
-    documents = {str(path.relative_to(root)): path.read_text(encoding="utf-8") for path in sorted(root.glob("*.json*"))}
-    by_id = {item.observation_id: item for item in bundle.observations}
+    documents = {}
+    try:
+        source_paths = sorted(root.glob("*.json*"))
+    except OSError:
+        source_paths = []
+    for path in source_paths:
+        try:
+            documents[str(path.relative_to(root))] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+    by_id = {item.observation_id: item for item in observations}
     for finding in bundle.findings:
-        timestamp = by_id[finding.id].observed_at
+        observation = by_id.get(finding.id)
+        timestamp = observation.observed_at if observation is not None else None
         finding.discovered_at = parse_iso_datetime(timestamp) if timestamp else None
         for evidence in finding.evidence:
             evidence.captured_at = finding.discovered_at
-    return ImportResult("aranum-bundle", _observations(bundle.observations, documents, "interop/aranum"), list(bundle.findings), [], {"source": documents})
+    return ImportResult(
+        "aranum-bundle",
+        _observations(observations, documents, "interop/aranum"),
+        list(bundle.findings),
+        [],
+        {"source": documents, "status": bundle.status},
+    )
 
 
 def _object_matches(source, predicate):
@@ -296,7 +325,13 @@ def default_registry():
     registry.register(AdapterImporter("nuclei-jsonl", lambda value: isinstance(value, str) and ('"template-id"' in value or '"templateID"' in value) or isinstance(value, dict) and ("template-id" in value or "templateID" in value), _nuclei))
     registry.register(AdapterImporter("netexec-log", lambda value: isinstance(value, str) and bool(re.search(r"^(SMB|LDAP|MSSQL|SSH|WINRM|RDP)\s", value, re.M)), _netexec))
     registry.register(AdapterImporter("bloodhound-json", lambda value: _object_matches(value, lambda obj: isinstance(obj.get("meta"), dict) and "type" in obj["meta"] or bool(obj) and all(isinstance(item, dict) and "meta" in item for item in obj.values())) or isinstance(value, list) and bool(value) and all(isinstance(item, dict) and "meta" in item for item in value), _bloodhound))
-    registry.register(AdapterImporter("aranum-bundle", lambda value: isinstance(value, Path) and value.is_dir() and (value / "inventory.json").exists(), _aranum))
+    registry.register(AdapterImporter(
+        "aranum-bundle",
+        lambda value: isinstance(value, Path) and value.is_dir() and any(
+            (value / name).exists() for name in ("bundle-manifest.json", "inventory.json")
+        ),
+        _aranum,
+    ))
     adapters = {
         "aws-json": (cloud.import_aws_inventory, lambda obj: "account" in obj or "caller_identity" in obj),
         "azure-json": (cloud.import_azure_inventory, lambda obj: "subscriptions" in obj or "tenant" in obj),
