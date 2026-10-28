@@ -148,6 +148,8 @@ def test_default_rule_operation_names_exist_on_registered_modules(real_framework
 def test_service_rule_runs_exact_operation_on_matching_endpoint(
     real_framework, monkeypatch
 ):
+    # This contract targets the local fallback path, not Aranum's SMB ownership.
+    real_framework.modules.pop("recon/aranum", None)
     captured = {}
 
     def fake_run_operation(module, operation):

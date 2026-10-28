@@ -124,6 +124,9 @@ def test_seeded_real_framework_followup_resolves_registered_operation_and_skips_
         plugin_config_dir=str(tmp_path / "plugin-config"),
     )
     framework.discover_modules()
+    # This test exercises the registered local follow-up fallback. P3 routes RDP
+    # through Aranum whenever recon/aranum remains registered.
+    framework.modules.pop("recon/aranum", None)
     calls = []
 
     def fake_process(argv, **kwargs):

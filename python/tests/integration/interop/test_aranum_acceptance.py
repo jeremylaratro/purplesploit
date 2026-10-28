@@ -370,8 +370,8 @@ def test_ac_12_invocation_discipline():
     assert not any(flag in defaults for flag in forbidden), "default argv contains invasive flags"
     assert "-o" in source, "operator-chosen output-root mapping is absent"
     assert "returncode == 4" in source or "returncode in (0, 4)" in source
-    # P2b-NOTE: Aranum emits bundle-manifest.json; this harness naming bug is fixed in P3.
-    manifest = _document(bundle, "manifest.json")
+    # The fixture emits the producer's canonical bundle manifest.
+    manifest = _document(bundle, "bundle-manifest.json")
     assert manifest.get("status") == "partial", "rc=4 fixture manifest is not partial"
     return "default argv and rc=4 report-chain contract are present"
 

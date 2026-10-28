@@ -206,6 +206,8 @@ def test_external_tools_receive_timeout_and_isolated_run_directory(
 
 
 def test_auth_rule_injects_session_credentials(framework, monkeypatch):
+    # Exercise the legacy fallback explicitly; Aranum owns SMB when registered.
+    framework.modules.pop("recon/aranum", None)
     captured = []
     framework.session.credentials.add(
         {"username": "alice", "password": "test-pass", "domain": "example.test"}
@@ -275,6 +277,8 @@ def test_auth_rules_exclude_offline_and_explicitly_unauthenticated_credentials(f
 
 
 def test_missing_credentials_are_skipped(framework):
+    # Exercise the legacy fallback explicitly; Aranum owns SSH when registered.
+    framework.modules.pop("recon/aranum", None)
     pipeline = AutoEnumPipeline(framework)
     pipeline.service_rules = [
         ServiceRule(service="ssh", modules=["network/nxc_ssh"], requires_auth=True)
