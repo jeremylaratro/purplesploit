@@ -25,16 +25,19 @@ from .canonical import (
     import_sarif,
     validate_document,
 )
+from .derive import DerivationResult, derive_from_bundle
 from .importers import ImportResult, ImporterRegistry, default_registry
 
 __all__ = [
     "AranumBundle",
     "AttackImportResult",
     "CanonicalDocument",
+    "DerivationResult",
     "ImportResult",
     "ImporterRegistry",
     "MappingResult",
     "default_registry",
+    "derive_from_bundle",
     "export_bloodhound",
     "export_csv",
     "export_defectdojo",

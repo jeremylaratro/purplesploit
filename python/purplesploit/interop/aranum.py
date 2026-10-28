@@ -148,6 +148,7 @@ class AranumBundle:
     extensions: dict[str, Any] = field(default_factory=dict)
     observations: list[Observation] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
+    kb: dict[str, Any] = field(default_factory=dict)
 
     def merge_into(self, observations: list[Observation], findings: list[Finding]) -> dict[str, int]:
         """Append unseen occurrences, preserving existing operator-edited objects."""
@@ -448,6 +449,7 @@ def import_aranum_bundle(run_root: str | Path, *, tool_version: str | None = Non
         add("inventory.json", record, "inventory_endpoint", kind="service", target=_host(record) if isinstance(record, dict) else "")
 
     kb = findings_document.get("kb") if isinstance(findings_document.get("kb"), dict) else {}
+    bundle.kb = kb
     kb_checks = kb.get("checks") if isinstance(kb.get("checks"), dict) else {}
     kb_classes = kb.get("classes") if isinstance(kb.get("classes"), dict) else {}
     findings_records = findings_document.get("findings", [])
