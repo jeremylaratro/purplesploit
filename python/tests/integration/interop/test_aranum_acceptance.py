@@ -1,4 +1,4 @@
-"""PLAN-002 tri-state acceptance harness for AC-01 through AC-28."""
+"""PLAN-002 tri-state acceptance harness for AC-01 through AC-29."""
 
 from __future__ import annotations
 
@@ -25,12 +25,13 @@ from purplesploit.core.reuse_campaign import (
 )
 from purplesploit.interop.derive import derive_from_bundle
 from purplesploit.interop.importers import REGISTRY, detect, parse
+from purplesploit.interop.sarif import import_aranum_sarif
 from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
 
 
 PYTHON_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = PYTHON_ROOT / "tests" / "fixtures" / "interop" / "aranum"
-AC_IDS = [f"AC-{number:02d}" for number in range(1, 29)]
+AC_IDS = [f"AC-{number:02d}" for number in range(1, 30)]
 RESULTS = {
     ac_id: {"state": "inconclusive", "reason": "check not executed"} for ac_id in AC_IDS
 }
@@ -65,7 +66,7 @@ def _initialize_results_file():
         for name, value in globals().items()
         if name.startswith("test_ac_") and callable(value)
     }
-    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-28"
+    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-29"
     for ac_id in AC_IDS:
         RESULTS[ac_id] = {"state": "inconclusive", "reason": "check not executed"}
     _write_results()
@@ -909,3 +910,28 @@ def test_ac_28_campaign_end_to_end_derivation():
     assert result.outcomes[-2].reason == "skipped: account locked"
     assert len(result.bundle.observations) == 4
     return "FX-5-shaped outcomes derive local reuse/lockout with exact campaign counts"
+
+
+@acceptance("AC-29")
+def test_ac_29_sarif_fallback_is_enriched_and_forgiving():
+    findings = import_aranum_sarif(FIXTURE_ROOT / "fx-sarif.sarif.json")
+    enriched = next(
+        item for item in findings
+        if item.metadata.get("rule_id") == "TLS-WEAK-PROTOCOL"
+    )
+    bare = next(
+        item for item in findings
+        if item.metadata.get("rule_id") == "CUSTOM-UNRESOLVED"
+    )
+    assert enriched.impact, "descriptor-backed SARIF finding has no KB impact"
+    assert enriched.remediation, "descriptor-backed SARIF finding has no KB remediation"
+    assert enriched.references, "descriptor-backed SARIF finding has no KB reference"
+    assert bare.impact == "", "descriptor-free SARIF finding unexpectedly has impact"
+    assert bare.remediation == "", "descriptor-free SARIF finding unexpectedly has remediation"
+
+    malformed = {
+        "runs": [{"results": [{}, "bad", {"message": {"text": "x"}}]}],
+    }
+    assert isinstance(import_aranum_sarif(malformed), list)
+    assert isinstance(import_aranum_sarif(["not", "an", "object"]), list)
+    return "enriched and bare SARIF findings import; malformed input degrades without raising"
