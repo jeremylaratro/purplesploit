@@ -13,6 +13,11 @@ from datetime import datetime
 from typing import Dict, Any, List
 from purplesploit.core.module import ExternalToolModule
 
+try:
+    from purplesploit.modules.recon.aranum import ARANUM_OWNED_BASELINES
+except (ImportError, AttributeError):
+    ARANUM_OWNED_BASELINES = ()
+
 
 class AutoEnumModule(ExternalToolModule):
     """
@@ -503,6 +508,31 @@ class AutoEnumModule(ExternalToolModule):
         self.results["services"]["smb"] = results
         return results
 
+    def _aranum_available(self) -> bool:
+        """Check the optional module registry without triggering discovery."""
+        registry = getattr(self.framework, "modules", None)
+        return isinstance(registry, dict) and "recon/aranum" in registry
+
+    def _run_aranum_handoff(self, target: str, services: List[str]) -> set[str]:
+        """Coalesce owned discovered services into Aranum's selected-service path."""
+        owned = tuple(
+            service for service in ARANUM_OWNED_BASELINES if service in set(services)
+        )
+        if not owned or not self._aranum_available():
+            return set()
+        module = self.framework.instantiate_module("recon/aranum")
+        if module is None:
+            return set()
+        module.set_option("TARGET", target)
+        module.set_option("SERVICES", ",".join(owned))
+        module.set_option("OUTPUT_ROOT", str(Path(self.output_dir) / "aranum"))
+        operation = self.framework.find_operation(module, "Run Selected Services")
+        if operation is None:
+            return set()
+        result = self.framework.run_operation(module, operation)
+        self.results["services"]["aranum"] = result
+        return set(owned)
+
     def _exploit_search(self, services: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         """
         Search for exploits using searchsploit.
@@ -685,9 +715,22 @@ class AutoEnumModule(ExternalToolModule):
                 network_results = self._network_enumeration()
                 open_ports = network_results.get("ports", [])
 
+            service_names = {
+                str(item.get("service", "")).lower()
+                for item in self.results.get("network", {}).get("services", [])
+                if isinstance(item, dict)
+            }
+            if self.option_enabled("DNS_SCAN"):
+                service_names.add("dns")
+            if self.option_enabled("SMB_SCAN") and 445 in open_ports:
+                service_names.add("smb")
+            deferred_services = self._run_aranum_handoff(
+                self.get_option("TARGET"), sorted(service_names)
+            )
+
             # 2. Web Enumeration
             live_urls = []
-            if self.option_enabled("WEB_SCAN"):
+            if self.option_enabled("WEB_SCAN") and "http" not in deferred_services:
                 web_results = self._web_enumeration(open_ports)
                 live_urls = web_results.get("live_urls", [])
 
@@ -696,11 +739,15 @@ class AutoEnumModule(ExternalToolModule):
                 self._directory_enumeration(live_urls)
 
             # 4. DNS Enumeration
-            if self.option_enabled("DNS_SCAN"):
+            if self.option_enabled("DNS_SCAN") and "dns" not in deferred_services:
                 self._dns_enumeration()
 
             # 5. SMB Enumeration (if port 445 is open)
-            if self.option_enabled("SMB_SCAN") and 445 in open_ports:
+            if (
+                self.option_enabled("SMB_SCAN")
+                and 445 in open_ports
+                and "smb" not in deferred_services
+            ):
                 target = self.get_option("TARGET")
                 self._smb_enumeration(target)
 

@@ -19,6 +19,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = logging.getLogger(__name__)
 
 
+def _aranum_owned_baselines() -> tuple[str, ...]:
+    """Resolve optional ownership lazily to avoid an importer/module cycle."""
+    try:
+        from purplesploit.modules.recon.aranum import ARANUM_OWNED_BASELINES
+    except (ImportError, AttributeError):
+        return ()
+    return tuple(ARANUM_OWNED_BASELINES)
+
+
 class MissingEnumContext(ValueError):
     """A rule cannot run with the available endpoint context."""
 
@@ -589,8 +598,14 @@ class AutoEnumPipeline:
             logger.warning(f"No services discovered for {target}, skipping enumeration")
             return
 
-        # Get applicable rules sorted by priority
-        rules = self._get_applicable_rules(target, services, EnumPhase.ENUMERATION)
+        # Aranum owns the overlapping baseline enumerators. Coalesce them into
+        # one selected-service execution and remove them from local rule dispatch.
+        deferred = self._run_aranum_handoff(target, services)
+
+        # Get applicable rules sorted by priority for services not owned by Aranum.
+        rules = self._get_applicable_rules(
+            target, services.difference(deferred), EnumPhase.ENUMERATION
+        )
 
         for rule in rules:
             if self._stop_requested:
@@ -641,6 +656,49 @@ class AutoEnumPipeline:
                     if result:
                         self.executed_modules.add(exec_key)
                         self._process_enum_results(target, result)
+
+    def _aranum_available(self) -> bool:
+        """Return true only for a concretely registered recon/aranum module."""
+        registry = getattr(self.framework, "modules", None)
+        if isinstance(registry, dict):
+            return "recon/aranum" in registry
+        getter = getattr(self.framework, "get_module", None)
+        if not callable(getter):
+            return False
+        try:
+            metadata = getter("recon/aranum")
+        except Exception:
+            return False
+        return getattr(metadata, "path", None) == "recon/aranum"
+
+    def _run_aranum_handoff(self, target: str, services: Set[str]) -> Set[str]:
+        """Route all owned services through one Aranum operation for a target."""
+        if not self._aranum_available():
+            return set()
+        owned = tuple(
+            service for service in _aranum_owned_baselines() if service in services
+        )
+        if not owned:
+            return set()
+
+        exec_key = f"recon/aranum:Run Selected Services:{target}:{','.join(owned)}"
+        if exec_key in self.executed_modules:
+            return set(owned)
+        self._update_progress(
+            EnumPhase.ENUMERATION,
+            "recon/aranum (Run Selected Services)",
+            target,
+        )
+        result = self._run_module(
+            target=target,
+            module_path="recon/aranum",
+            operation="Run Selected Services",
+            options={"SERVICES": ",".join(owned)},
+        )
+        self.executed_modules.add(exec_key)
+        if result:
+            self._process_enum_results(target, result)
+        return set(owned)
 
     def _run_enumeration_parallel(self, targets: List[str], max_workers: int) -> None:
         """Run enumeration on multiple targets in parallel."""
@@ -1122,6 +1180,7 @@ class AutoEnumPipeline:
         port: Optional[int] = None,
         service: Optional[str] = None,
         endpoint: Optional[Dict[str, Any]] = None,
+        options: Optional[Dict[str, Any]] = None,
     ) -> Optional[EnumResult]:
         """Run a single module and return results."""
         start_time = datetime.now()
@@ -1153,6 +1212,9 @@ class AutoEnumPipeline:
             module.auto_set_from_context()
             self._set_module_target(module, target, port=port, service=service,
                                     endpoint=endpoint, credential=credential)
+            for option_name, option_value in (options or {}).items():
+                if not module.set_option(option_name, option_value):
+                    raise ValueError(f"Unknown option for {module_path}: {option_name}")
 
             # Discovery must return completed output that can be parsed. Nmap's
             # interactive default is background execution, so override it here.

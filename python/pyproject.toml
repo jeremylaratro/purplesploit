@@ -65,6 +65,7 @@ namespaces = false
 
 [tool.setuptools.package-data]
 purplesploit = ["data/methodologies/*.json", "schemas/*.json"]
+"purplesploit.modules.recon" = ["aranum_dispatchers.json"]
 "purplesploit.web" = ["templates/*.html", "static/*.html", "static/css/*.css", "static/js/*.js"]
 "purplesploit.reporting" = ["templates/*.html", "templates/*.jinja2"]
 
