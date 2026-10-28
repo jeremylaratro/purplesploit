@@ -125,9 +125,12 @@ item and the clearest candidate for a fix. **#2** (output dir) and **#5** (targe
 dedup) are small, self-contained changes. The rest are low/cosmetic UX polish.
 
 **Disposition (28 OCT 2026, owner):**
-- **#1 → PS-CONSOLE-01** — being fixed now (background scans registered with a Framework
-  registry, surfaced in `jobs`, and reaped on list/run/exit so no zombies; `job_id`
-  populated).
+- **#1 → PS-CONSOLE-01** — **FIXED, merged PR #121** (commits `733ea78` feat + `3a822ce`
+  test). Background scans are registered with a Framework `_background_jobs` registry
+  (stable `bg-<8hex>` id stamped into the execution record's `job_id`), surfaced in
+  `jobs`, and reaped on `jobs`/`run`/exit via `ExecutionHandle.poll()` so no zombies.
+  Services/API lane excluded via `_register_background=False`. Host gate 4719 passed,
+  1 skipped; 15 new hermetic tests.
 - **#2 → PS-CONSOLE-02** (planned, `docs/plans/PS-CONSOLE-02-28OCT2026-startup-output-dir-warning.md`)
   — default output dir intentionally left as-is; a small startup warning about cwd output
   is logged as a future sprint (owner go required).
