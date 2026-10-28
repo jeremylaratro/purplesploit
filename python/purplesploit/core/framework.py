@@ -7,6 +7,7 @@ Main framework engine that manages modules, session, and execution.
 import os
 import importlib.util
 import inspect
+from uuid import uuid4
 from urllib.parse import urlparse
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -55,6 +56,7 @@ class Framework:
         self.modules_path = modules_path
         self.modules: Dict[str, ModuleMetadata] = {}
         self._execution_record_lock = RLock()
+        self._background_jobs: Dict[str, Dict] = {}
 
         # Initialize core components
         self.database = Database(db_path)
@@ -434,9 +436,11 @@ class Framework:
             elif operation['interactive'] and request.stdin != 'inherit':
                 result = self._complete_module_results(module, {'success': False, 'error': f'Operation requires interactive stdin: {operation["name"]}'})
             else:
-                result = self.run_operation(module, operation)
+                result = self.run_operation(
+                    module, operation, _register_background=False
+                )
         else:
-            result = self.run_module(module)
+            result = self.run_module(module, _register_background=False)
         execution_result = ExecutionResult.from_dict(result['execution'])
         if execution_result.outcome is ExecutionOutcome.RUNNING and hasattr(module, 'background_process'):
             execution_result._handle = ExecutionHandle(module.background_process, execution_result)
@@ -508,7 +512,124 @@ class Framework:
             )
         module._execution_context_request = request
 
-    def run_module(self, module: BaseModule = None) -> Dict:
+    def register_background(self, module: BaseModule, results: Dict) -> Dict:
+        """Register a console-launched background process without breaking a run."""
+        try:
+            execution = results.get('execution')
+            if not isinstance(execution, dict):
+                return results
+            if execution.get('outcome') != ExecutionOutcome.RUNNING.value:
+                return results
+
+            request_id = execution.get('request_id')
+            if not request_id:
+                return results
+
+            registry = self._background_jobs
+            existing = registry.get(request_id)
+            if existing is not None:
+                execution['job_id'] = existing['id']
+                return results
+
+            process = getattr(module, 'background_process', None)
+            if process is None:
+                return results
+            exit_code = process.poll()
+            process_pid = getattr(process, 'pid', None)
+            record_pid = execution.get('pid')
+            if exit_code is not None and record_pid != process_pid:
+                return results
+
+            job_id = f"bg-{uuid4().hex[:8]}"
+            execution_result = ExecutionResult.from_dict(execution)
+            execution_result.job_id = job_id
+            handle = ExecutionHandle(process, execution_result)
+            execution['job_id'] = job_id
+            registry[request_id] = {
+                'id': job_id,
+                'request_id': request_id,
+                'kind': 'bg-scan',
+                'module_path': execution.get('module_path', ''),
+                'operation_name': execution.get('operation_name'),
+                'tool': execution.get('tool'),
+                'pid': execution.get('pid', process_pid),
+                'argv_display': list(execution.get('argv_display') or []),
+                'status': 'running',
+                'exit_code': None,
+                'started_at': execution.get('started_at'),
+                'finished_at': None,
+                'note': results.get('note') or results.get('message') or '',
+                '_handle': handle,
+            }
+        except Exception:
+            # Process tracking is best-effort and must never replace a run result.
+            return results
+        return results
+
+    @staticmethod
+    def _background_snapshot(entry: Dict) -> Dict:
+        """Copy a registry entry without its runtime-only process handle."""
+        return {key: value for key, value in entry.items() if key != '_handle'}
+
+    def reap_background(self) -> List[Dict]:
+        """Poll and reap completed console background processes."""
+        try:
+            registry = self._background_jobs
+            for entry in registry.values():
+                status = entry.get('status')
+                if status not in {'running', 'cancelled'}:
+                    continue
+                if status == 'cancelled' and entry.get('exit_code') is not None:
+                    continue
+                try:
+                    result = entry['_handle'].status()
+                except Exception:
+                    continue
+                if result.exit_code is None:
+                    continue
+                if status == 'cancelled':
+                    entry['exit_code'] = result.exit_code
+                    continue
+                entry['status'] = (
+                    'finished' if result.exit_code == 0 else 'failed'
+                )
+                entry['exit_code'] = result.exit_code
+                entry['finished_at'] = result.finished_at or utc_now()
+            return [self._background_snapshot(entry) for entry in registry.values()]
+        except Exception:
+            return []
+
+    def background_jobs(self) -> List[Dict]:
+        """Return the current serializable console background-job snapshot."""
+        return self.reap_background()
+
+    def stop_background(self, job_id: str) -> Optional[Dict]:
+        """Cancel a console background process by its short session id."""
+        try:
+            entry = next(
+                (
+                    item
+                    for item in self._background_jobs.values()
+                    if item.get('id') == job_id
+                ),
+                None,
+            )
+            if entry is None:
+                return None
+            result = entry['_handle'].cancel()
+            entry['status'] = 'cancelled'
+            entry['exit_code'] = result.exit_code
+            entry['finished_at'] = result.finished_at or utc_now()
+            return self._background_snapshot(entry)
+        except Exception:
+            return None
+
+    def run_module(
+        self,
+        module: BaseModule = None,
+        *,
+        _register_background: bool = True,
+    ) -> Dict:
         """
         Run a module.
 
@@ -539,6 +660,8 @@ class Framework:
             if not isinstance(raw_results, dict):
                 raw_results = {"success": True, "output": str(raw_results)}
             results = self._complete_module_results(module, raw_results)
+            if _register_background:
+                results = self.register_background(module, results)
 
             if results.get('success', False):
                 self.log("Module completed successfully", "success")
@@ -552,7 +675,13 @@ class Framework:
             results = {"success": False, "error": error_msg}
             return self._complete_module_results(module, results)
 
-    def run_operation(self, module: BaseModule, operation: Dict) -> Dict:
+    def run_operation(
+        self,
+        module: BaseModule,
+        operation: Dict,
+        *,
+        _register_background: bool = True,
+    ) -> Dict:
         """Execute a granular operation through the normal validation/audit pipeline."""
         if module is None:
             return {"success": False, "error": "No module loaded"}
@@ -584,7 +713,10 @@ class Framework:
                 return self._complete_module_results(module, {"success": False, "error": f"Invalid handler type: {type(handler).__name__}"})
 
             results = result if isinstance(result, dict) else {"success": True, "output": str(result)}
-            return self._complete_module_results(module, results)
+            results = self._complete_module_results(module, results)
+            if _register_background:
+                results = self.register_background(module, results)
+            return results
         except Exception as e:
             error_msg = f"Operation execution error: {e}"
             results = {"success": False, "error": error_msg}
@@ -1023,5 +1155,6 @@ class Framework:
 
     def cleanup(self):
         """Cleanup framework resources."""
+        self.reap_background()
         if self.database:
             self.database.close()

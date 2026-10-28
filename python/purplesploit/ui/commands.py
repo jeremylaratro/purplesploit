@@ -727,6 +727,10 @@ class CommandHandler:
 
     def cmd_run(self, args: List[str]) -> bool:
         """Run the current module or a specific operation."""
+        try:
+            self.framework.reap_background()
+        except Exception:
+            pass
         module = self.framework.session.current_module
 
         # If no module loaded, check if we can run from last ops results
@@ -3587,17 +3591,27 @@ class CommandHandler:
 
     def cmd_jobs(self, args: List[str]) -> bool:
         """List, inspect, pause, resume, or stop shared capability jobs."""
-        if self.services is None:
-            self.display.print_error("Shared job services are not configured")
-            return True
         subcommand = args[0].lower() if args else "list"
         if subcommand == "list":
-            jobs = self.services.job_list()
-            if not jobs:
+            background_jobs = self.framework.reap_background()
+            jobs = self.services.job_list() if self.services is not None else []
+            if not jobs and not background_jobs:
                 self.display.print_warning("No jobs")
             for job in jobs:
                 self.display.console.print(
                     f"{job['id']}  {job['kind']}  {job['status']}  {job.get('outcome') or '-'}"
+                )
+            outcomes = {
+                'running': 'running',
+                'finished': 'success',
+                'failed': 'failed',
+                'cancelled': 'cancelled',
+            }
+            for job in background_jobs:
+                outcome = outcomes.get(job.get('status'), '-')
+                self.display.console.print(
+                    f"{job['id']}  {job['kind']}  {job['status']}  {outcome}  "
+                    f"pid={job.get('pid') or '-'}  {job.get('module_path') or '-'}"
                 )
             return True
         if len(args) < 2:
@@ -3606,6 +3620,26 @@ class CommandHandler:
             )
             return True
         job_id = args[1]
+        if job_id.startswith('bg-') and subcommand in {'status', 'stop'}:
+            if subcommand == 'stop':
+                job = self.framework.stop_background(job_id)
+            else:
+                job = next(
+                    (
+                        item
+                        for item in self.framework.reap_background()
+                        if item.get('id') == job_id
+                    ),
+                    None,
+                )
+            if job is None:
+                self.display.print_error(f"Unknown background job: {job_id}")
+            else:
+                self.display.console.print_json(data=job)
+            return True
+        if self.services is None:
+            self.display.print_error("Shared job services are not configured")
+            return True
         try:
             if subcommand in {"pause", "resume", "stop"}:
                 job = self.services.job_control(job_id, subcommand)
