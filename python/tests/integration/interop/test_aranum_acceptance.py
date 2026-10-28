@@ -1,4 +1,4 @@
-"""PLAN-002 tri-state acceptance harness for AC-01 through AC-24."""
+"""PLAN-002 tri-state acceptance harness for AC-01 through AC-28."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any, Callable
+from unittest.mock import Mock
 
 import pytest
 
@@ -18,6 +19,10 @@ from purplesploit.core.execution import (
     AuthContext, ExecutionRequest, Observation, normalize_observations,
 )
 from purplesploit.core.attack_graph import EdgeType, NodeType
+from purplesploit.core.credential_spray import LockoutPolicy
+from purplesploit.core.reuse_campaign import (
+    ARANUM_MODULE_PATH, CellExec, ReuseCampaign,
+)
 from purplesploit.interop.derive import derive_from_bundle
 from purplesploit.interop.importers import REGISTRY, detect, parse
 from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
@@ -25,7 +30,7 @@ from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
 
 PYTHON_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = PYTHON_ROOT / "tests" / "fixtures" / "interop" / "aranum"
-AC_IDS = [f"AC-{number:02d}" for number in range(1, 25)]
+AC_IDS = [f"AC-{number:02d}" for number in range(1, 29)]
 RESULTS = {
     ac_id: {"state": "inconclusive", "reason": "check not executed"} for ac_id in AC_IDS
 }
@@ -60,7 +65,7 @@ def _initialize_results_file():
         for name, value in globals().items()
         if name.startswith("test_ac_") and callable(value)
     }
-    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-24"
+    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-28"
     for ac_id in AC_IDS:
         RESULTS[ac_id] = {"state": "inconclusive", "reason": "check not executed"}
     _write_results()
@@ -713,3 +718,194 @@ def test_ac_24_lockout_and_graph():
     assert result.lateral_paths, "local-account reuse must produce lateral candidates"
     assert all("unproven" in path.description for path in result.lateral_paths)
     return "lockout is visible; three success edges and caveated lateral paths are present"
+
+
+@acceptance("AC-25")
+def test_ac_25_campaign_matrix_and_ownership():
+    corpus = [{"account_ref": "credential-a"}, {"account_ref": "credential-b"}]
+    hosts = ["10.0.0.3", "10.0.0.1", "10.0.0.2"]
+    transports = ["winrm", "exec"]
+    calls = []
+
+    def handoff(test):
+        calls.append({"module_path": ARANUM_MODULE_PATH, "test": test})
+        return CellExec("error")
+
+    campaign = ReuseCampaign(
+        corpus=corpus,
+        hosts=hosts,
+        transports=transports,
+        scope="local",
+        handoff=handoff,
+    )
+    matrix = campaign.build_matrix()
+    result = campaign.run()
+
+    assert len(matrix) == 2 * 3 * len(transports)
+    assert [(cell.host, cell.account_ref, cell.transport) for cell in matrix] == [
+        (host, credential["account_ref"], transport)
+        for host in sorted(hosts)
+        for credential in corpus
+        for transport in transports
+    ]
+    assert len(calls) == len(matrix) == result.summary["tested"]
+    assert [call["test"] for call in calls] == matrix
+    assert {call["module_path"] for call in calls} == {"recon/aranum"}
+    assert all(cell.aranum_owned for cell in matrix if cell.transport == "winrm")
+    assert not any(cell.aranum_owned for cell in matrix if cell.transport == "exec")
+    return "the exact 2x3x2 matrix routes in order through recon/aranum ownership"
+
+
+@acceptance("AC-26")
+def test_ac_26_campaign_lockout_accounting():
+    failure_seam = Mock(side_effect=[CellExec("failure"), CellExec("failure")])
+    threshold_campaign = ReuseCampaign(
+        corpus=[{"account_ref": "near-threshold"}],
+        hosts=["host-4", "host-2", "host-1", "host-3"],
+        transports=["winrm"],
+        scope="domain",
+        domain="CORP.LOCAL",
+        lockout_policy=LockoutPolicy(threshold=3),
+        handoff=failure_seam,
+    )
+    threshold_result = threshold_campaign.run()
+
+    assert failure_seam.call_count == 2
+    assert threshold_result.summary["tested"] == 2
+    assert threshold_result.summary["skipped"] == 2
+    assert [item.outcome for item in threshold_result.outcomes] == [
+        "failure", "failure", "skipped", "skipped",
+    ]
+    assert all(
+        item.reason == "skipped: account near-threshold"
+        for item in threshold_result.outcomes[2:]
+    )
+
+    lockout_seam = Mock(return_value=CellExec("lockout", {"outcome": "lockout"}))
+    lockout_campaign = ReuseCampaign(
+        corpus=[{"account_ref": "observed-lockout"}],
+        hosts=["host-1", "host-2", "host-3"],
+        transports=["winrm"],
+        scope="domain",
+        domain="CORP.LOCAL",
+        lockout_policy=LockoutPolicy(threshold=5),
+        handoff=lockout_seam,
+    )
+    lockout_result = lockout_campaign.run()
+
+    lockout_seam.assert_called_once_with(lockout_campaign.build_matrix()[0])
+    assert lockout_result.summary["tested"] == 1
+    assert lockout_result.summary["skipped"] == 2
+    assert lockout_result.summary["locked"] == 1
+    assert [item.outcome for item in lockout_result.outcomes] == [
+        "lockout", "skipped", "skipped",
+    ]
+    assert all("locked" in item.reason for item in lockout_result.outcomes[1:])
+    return "N-1 failures guard the next cell and an observed lockout halts the account"
+
+
+@acceptance("AC-27")
+def test_ac_27_campaign_scope_discipline():
+    def success(test):
+        return CellExec("success", {
+            "host": test.host,
+            "transport": test.transport,
+            "outcome": "success",
+        })
+
+    local_campaign = ReuseCampaign(
+        corpus=[{"account_ref": "svc-local"}],
+        hosts=["10.0.0.2", "10.0.0.1"],
+        transports=["exec"],
+        scope="local",
+        handoff=success,
+    )
+    local_matrix = local_campaign.build_matrix()
+    local = local_campaign.run()
+    assert all(cell.domain is None and cell.local_host == cell.host for cell in local_matrix)
+    assert all(item.auth_context.scope == "local" for item in local.bundle.observations)
+    assert all(item.auth_context.domain is None for item in local.bundle.observations)
+    local_finding = next(item for item in local.findings if "credential-reuse" in item.tags)
+    assert "local" in local_finding.tags
+
+    domain_campaign = ReuseCampaign(
+        corpus=[{"account_ref": "dom-user"}],
+        hosts=["10.0.0.4"],
+        transports=["winrm"],
+        scope="domain",
+        domain="CORP.LOCAL",
+        handoff=success,
+    )
+    domain_matrix = domain_campaign.build_matrix()
+    domain = domain_campaign.run()
+    assert all(
+        cell.domain == "CORP.LOCAL" and cell.local_host is None
+        for cell in domain_matrix
+    )
+    assert all(item.auth_context.scope == "domain" for item in domain.bundle.observations)
+    assert all(
+        item.auth_context.domain == "CORP.LOCAL"
+        for item in domain.bundle.observations
+    )
+    domain_finding = next(item for item in domain.findings if "effective-access" in item.tags)
+    assert "domain" in domain_finding.tags
+    assert domain_finding.metadata["domain"] == "CORP.LOCAL"
+    return "local and domain declarations flow unchanged to P4 observations/findings"
+
+
+@acceptance("AC-28")
+def test_ac_28_campaign_end_to_end_derivation():
+    expected = {
+        ("svc-local", "10.0.0.1"): ("success", "local", None),
+        ("svc-local", "10.0.0.2"): ("success", "local", None),
+        ("svc-local", "10.0.0.3"): ("lockout", "local", None),
+        ("dom-user", "10.0.0.4"): ("success", "domain", "CORP.LOCAL"),
+    }
+
+    def handoff(test):
+        returned = expected.get((test.account_ref, test.host))
+        if returned is None:
+            return CellExec("error")
+        outcome, scope, domain = returned
+        return CellExec(outcome, {
+            "host": test.host,
+            "transport": test.transport,
+            "outcome": outcome,
+            "auth_context": {
+                "account_ref": test.account_ref,
+                "scope": scope,
+                "domain": domain,
+                "local_host": test.host if scope == "local" else None,
+            },
+        })
+
+    result = ReuseCampaign(
+        corpus=[{"account_ref": "svc-local"}, {"account_ref": "dom-user"}],
+        hosts=["10.0.0.4", "10.0.0.3", "10.0.0.2", "10.0.0.1"],
+        transports=["exec"],
+        scope="local",
+        lockout_policy=LockoutPolicy(threshold=5),
+        handoff=handoff,
+    ).run()
+
+    reuse = [item for item in result.findings if "credential-reuse" in item.tags]
+    lockouts = [item for item in result.findings if "lockout" in item.tags]
+    assert len(reuse) == len(lockouts) == 1
+    assert reuse[0].metadata["account_ref"] == "svc-local"
+    assert set(reuse[0].metadata["hosts"]) == {"10.0.0.1", "10.0.0.2"}
+    assert lockouts[0].metadata["account_ref"] == "svc-local"
+    assert lockouts[0].target == "10.0.0.3"
+    assert result.summary == {
+        "tested": 7,
+        "skipped": 1,
+        "locked": 1,
+        "success": 3,
+        "failure": 0,
+        "lockout": 1,
+        "error": 3,
+        "anonymous": 0,
+        "null-session": 0,
+    }
+    assert result.outcomes[-2].reason == "skipped: account locked"
+    assert len(result.bundle.observations) == 4
+    return "FX-5-shaped outcomes derive local reuse/lockout with exact campaign counts"
