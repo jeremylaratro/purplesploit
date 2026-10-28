@@ -40,9 +40,9 @@ null-session, auth_context}`.
 | P1 | purplesploit auth-context + scoped credential identity | **MERGED** #115 |
 | P2b | manifest-first forgiving importer v2 (digest verify, schema validation, KB enrichment, auth_context, auth_outcomes→observations) | **MERGED** #116 |
 | P3 | `recon/aranum` backend module + auto-enum coalescing (owned baselines) | **MERGED** #117 |
-| **P4** | **account-derived analysis + Linux posture (derivation layer)** | **planned (this doc)** |
-| **P6** | **credential-reuse campaign (orchestration)** | **planned (this doc)** |
-| P5 | interchange / SARIF fallback (independent) | planned |
+| P4 | account-derived analysis + Linux posture (derivation layer) | **MERGED** #118 |
+| P6 | credential-reuse campaign (orchestration) | **MERGED** #119 |
+| P5 | interchange / SARIF fallback (independent) | planned (this doc) |
 
 AC-01..AC-20 (acceptance harness `python/tests/integration/interop/
 test_aranum_acceptance.py`) all pass as of P3. Acceptance IDs are assigned in
