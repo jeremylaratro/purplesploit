@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "run_id": "fx-3-run",
+  "execution_mode": "service-batch",
+  "queue_authoritative": false,
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "services": [
+    {
+      "service": "smb",
+      "status": "failed",
+      "rc": 4,
+      "reason": "synthetic partial dispatcher"
+    }
+  ]
+}

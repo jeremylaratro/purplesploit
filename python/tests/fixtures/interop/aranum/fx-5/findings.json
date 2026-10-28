@@ -1,0 +1,234 @@
+{
+  "schema_version": "2",
+  "run_id": "fx-5-run",
+  "label": "FX-5 reuse",
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "redacted": false,
+  "mode": "bulk-enum",
+  "summary": {
+    "total": 4,
+    "hosts": [
+      "10.0.0.1",
+      "10.0.0.2",
+      "10.0.0.3",
+      "10.0.0.4"
+    ],
+    "coverage": []
+  },
+  "findings": [
+    {
+      "schema_version": "2",
+      "finding_id": "FX5-1",
+      "rule_id": "LAB-FX5-1",
+      "host": "10.0.0.1",
+      "port": "0",
+      "service": "winenum",
+      "severity": "low",
+      "title": "Synthetic bulk authentication success",
+      "line": "synthetic lab observation",
+      "evidence_path": "10.0.0.1/winenum.txt",
+      "evidence_paths": [
+        "10.0.0.1/winenum.txt"
+      ],
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.1",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      },
+      "logical_id": "AR-L-d4cd16f8512d95"
+    },
+    {
+      "schema_version": "2",
+      "finding_id": "FX5-2",
+      "rule_id": "LAB-FX5-2",
+      "host": "10.0.0.2",
+      "port": "0",
+      "service": "winenum",
+      "severity": "low",
+      "title": "Synthetic bulk authentication success",
+      "line": "synthetic lab observation",
+      "evidence_path": "10.0.0.2/winenum.txt",
+      "evidence_paths": [
+        "10.0.0.2/winenum.txt"
+      ],
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.2",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      },
+      "logical_id": "AR-L-c23ab3547f9958"
+    },
+    {
+      "schema_version": "2",
+      "finding_id": "FX5-3",
+      "rule_id": "LAB-FX5-3",
+      "host": "10.0.0.3",
+      "port": "0",
+      "service": "winenum",
+      "severity": "medium",
+      "title": "Synthetic bulk authentication lockout",
+      "line": "synthetic lab observation",
+      "evidence_path": "10.0.0.3/winenum.txt",
+      "evidence_paths": [
+        "10.0.0.3/winenum.txt"
+      ],
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.3",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      },
+      "logical_id": "AR-L-b263b1e9c9b9c9"
+    },
+    {
+      "schema_version": "2",
+      "finding_id": "FX5-4",
+      "rule_id": "LAB-FX5-4",
+      "host": "10.0.0.4",
+      "port": "0",
+      "service": "winenum",
+      "severity": "low",
+      "title": "Synthetic bulk authentication success",
+      "line": "synthetic lab observation",
+      "evidence_path": "10.0.0.4/winenum.txt",
+      "evidence_paths": [
+        "10.0.0.4/winenum.txt"
+      ],
+      "auth_context": {
+        "account_label": "dom-user",
+        "scope": "domain",
+        "scope_basis": "declared",
+        "domain": "CORP.LOCAL",
+        "local_host": null,
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "CORP.LOCAL",
+          "local_auth_flag": false,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "domain"
+        }
+      },
+      "logical_id": "AR-L-02d4e588d029d1"
+    }
+  ],
+  "kb": {
+    "schema": 1,
+    "aranum_version": "0.34.0",
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b",
+    "categories": {},
+    "classes": {},
+    "checks": {}
+  },
+  "auth_outcomes": [
+    {
+      "host": "10.0.0.1",
+      "transport": "exec",
+      "outcome": "success",
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.1",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    {
+      "host": "10.0.0.2",
+      "transport": "exec",
+      "outcome": "success",
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.2",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    {
+      "host": "10.0.0.3",
+      "transport": "exec",
+      "outcome": "lockout",
+      "auth_context": {
+        "account_label": "svc-local",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "10.0.0.3",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    {
+      "host": "10.0.0.4",
+      "transport": "winrm",
+      "outcome": "success",
+      "auth_context": {
+        "account_label": "dom-user",
+        "scope": "domain",
+        "scope_basis": "declared",
+        "domain": "CORP.LOCAL",
+        "local_host": null,
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "CORP.LOCAL",
+          "local_auth_flag": false,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "domain"
+        }
+      }
+    }
+  ]
+}

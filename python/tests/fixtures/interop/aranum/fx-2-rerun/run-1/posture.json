@@ -1,0 +1,34 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-2-rerun-run-1",
+  "label": "FX-2 rerun run-1",
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "redacted": false,
+  "hosts": {
+    "linux-lab.invalid": {
+      "os": "linux",
+      "checks": [
+        {
+          "id": "LIN-SUDO",
+          "status": "WARN"
+        }
+      ],
+      "auth_context": {
+        "account_label": "labadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "linux-lab.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    }
+  },
+  "domains": {}
+}

@@ -1,0 +1,839 @@
+{
+  "schema_version": "1",
+  "tool": "aranum-nmap-parse",
+  "tool_version": "0.34.0",
+  "summary": {
+    "hosts": 14,
+    "hosts_up": 14,
+    "hosts_with_open_ports": 14,
+    "open_ports": 41,
+    "unknown": [],
+    "categories": {
+      "smb": [
+        "10.0.0.1:139",
+        "10.0.0.1:445"
+      ],
+      "ldap": [
+        "10.0.0.2:389",
+        "10.0.0.2:636"
+      ],
+      "kerberos": [
+        "10.0.0.2:88"
+      ],
+      "winrm": [
+        "10.0.0.3:5985"
+      ],
+      "rdp": [
+        "10.0.0.3:3389"
+      ],
+      "mssql": [
+        "10.0.0.4:1433"
+      ],
+      "mysql": [
+        "10.0.0.4:3306"
+      ],
+      "postgres": [
+        "10.0.0.4:5432"
+      ],
+      "http": [
+        "10.0.0.10:5984",
+        "10.0.0.11:2375",
+        "10.0.0.12:9090",
+        "10.0.0.14:5000",
+        "10.0.0.14:9000",
+        "10.0.0.5:80",
+        "10.0.0.5:8080"
+      ],
+      "https": [
+        "10.0.0.10:2379",
+        "10.0.0.11:10250",
+        "10.0.0.11:6443",
+        "10.0.0.5:443"
+      ],
+      "squid": [
+        "10.0.0.5:8080"
+      ],
+      "kubernetes": [
+        "10.0.0.11:10250",
+        "10.0.0.11:6443",
+        "10.0.0.5:8080"
+      ],
+      "ssh": [
+        "10.0.0.6:22"
+      ],
+      "ftp": [
+        "10.0.0.6:21"
+      ],
+      "smtp": [
+        "10.0.0.6:25"
+      ],
+      "snmp": [
+        "10.0.0.7:161"
+      ],
+      "dns": [
+        "10.0.0.7:53"
+      ],
+      "nfs": [
+        "10.0.0.7:2049"
+      ],
+      "redis": [
+        "10.0.0.8:6379"
+      ],
+      "mongo": [
+        "10.0.0.8:27017"
+      ],
+      "elastic": [
+        "10.0.0.8:9200"
+      ],
+      "vnc": [
+        "10.0.0.9:5900"
+      ],
+      "jmx": [
+        "10.0.0.9:1099"
+      ],
+      "activemq": [
+        "10.0.0.9:61616"
+      ],
+      "rabbitmq": [
+        "10.0.0.10:15672"
+      ],
+      "memcached": [
+        "10.0.0.10:11211"
+      ],
+      "couchdb": [
+        "10.0.0.10:5984"
+      ],
+      "etcd": [
+        "10.0.0.10:2379"
+      ],
+      "docker": [
+        "10.0.0.11:2375"
+      ],
+      "xmpp": [
+        "10.0.0.12:5222",
+        "10.0.0.12:5269"
+      ],
+      "openfire-admin": [
+        "10.0.0.12:9090"
+      ],
+      "ipmi": [
+        "10.0.0.13:623"
+      ],
+      "oracle": [
+        "10.0.0.13:1521"
+      ],
+      "telnet": [
+        "10.0.0.13:23"
+      ],
+      "artifact": [
+        "10.0.0.14:5000"
+      ],
+      "platform": [
+        "10.0.0.14:4646"
+      ],
+      "storage": [
+        "10.0.0.14:9000"
+      ]
+    },
+    "device_correlations": []
+  },
+  "hosts": [
+    {
+      "ip": "10.0.0.1",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.10",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.11",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.12",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.13",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.14",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.2",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.3",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.4",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.5",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.6",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.7",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.8",
+      "hostname": "",
+      "state": "up"
+    },
+    {
+      "ip": "10.0.0.9",
+      "hostname": "",
+      "state": "up"
+    }
+  ],
+  "entries": [
+    {
+      "ip": "10.0.0.1",
+      "hostname": "",
+      "port": 445,
+      "proto": "tcp",
+      "state": "open",
+      "service": "microsoft-ds",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "smb"
+      ]
+    },
+    {
+      "ip": "10.0.0.1",
+      "hostname": "",
+      "port": 139,
+      "proto": "tcp",
+      "state": "open",
+      "service": "netbios-ssn",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "smb"
+      ]
+    },
+    {
+      "ip": "10.0.0.2",
+      "hostname": "",
+      "port": 389,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ldap",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "ldap"
+      ]
+    },
+    {
+      "ip": "10.0.0.2",
+      "hostname": "",
+      "port": 636,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ldapssl",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "ldap"
+      ]
+    },
+    {
+      "ip": "10.0.0.2",
+      "hostname": "",
+      "port": 88,
+      "proto": "tcp",
+      "state": "open",
+      "service": "kerberos",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "kerberos"
+      ]
+    },
+    {
+      "ip": "10.0.0.3",
+      "hostname": "",
+      "port": 5985,
+      "proto": "tcp",
+      "state": "open",
+      "service": "wsman",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "winrm"
+      ]
+    },
+    {
+      "ip": "10.0.0.3",
+      "hostname": "",
+      "port": 3389,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ms-wbt-server",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "rdp"
+      ]
+    },
+    {
+      "ip": "10.0.0.4",
+      "hostname": "",
+      "port": 1433,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ms-sql-s",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "mssql"
+      ]
+    },
+    {
+      "ip": "10.0.0.4",
+      "hostname": "",
+      "port": 3306,
+      "proto": "tcp",
+      "state": "open",
+      "service": "mysql",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "mysql"
+      ]
+    },
+    {
+      "ip": "10.0.0.4",
+      "hostname": "",
+      "port": 5432,
+      "proto": "tcp",
+      "state": "open",
+      "service": "postgresql",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "postgres"
+      ]
+    },
+    {
+      "ip": "10.0.0.5",
+      "hostname": "",
+      "port": 80,
+      "proto": "tcp",
+      "state": "open",
+      "service": "http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http"
+      ]
+    },
+    {
+      "ip": "10.0.0.5",
+      "hostname": "",
+      "port": 443,
+      "proto": "tcp",
+      "state": "open",
+      "service": "https",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "https"
+      ]
+    },
+    {
+      "ip": "10.0.0.5",
+      "hostname": "",
+      "port": 8080,
+      "proto": "tcp",
+      "state": "open",
+      "service": "http-proxy",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "squid",
+        "kubernetes"
+      ]
+    },
+    {
+      "ip": "10.0.0.6",
+      "hostname": "",
+      "port": 22,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ssh",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "ssh"
+      ]
+    },
+    {
+      "ip": "10.0.0.6",
+      "hostname": "",
+      "port": 21,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ftp",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "ftp"
+      ]
+    },
+    {
+      "ip": "10.0.0.6",
+      "hostname": "",
+      "port": 25,
+      "proto": "tcp",
+      "state": "open",
+      "service": "smtp",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "smtp"
+      ]
+    },
+    {
+      "ip": "10.0.0.7",
+      "hostname": "",
+      "port": 161,
+      "proto": "udp",
+      "state": "open",
+      "service": "snmp",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "snmp"
+      ]
+    },
+    {
+      "ip": "10.0.0.7",
+      "hostname": "",
+      "port": 53,
+      "proto": "udp",
+      "state": "open",
+      "service": "domain",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "dns"
+      ]
+    },
+    {
+      "ip": "10.0.0.7",
+      "hostname": "",
+      "port": 2049,
+      "proto": "tcp",
+      "state": "open",
+      "service": "nfs",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "nfs"
+      ]
+    },
+    {
+      "ip": "10.0.0.8",
+      "hostname": "",
+      "port": 6379,
+      "proto": "tcp",
+      "state": "open",
+      "service": "redis",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "redis"
+      ]
+    },
+    {
+      "ip": "10.0.0.8",
+      "hostname": "",
+      "port": 27017,
+      "proto": "tcp",
+      "state": "open",
+      "service": "mongodb",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "mongo"
+      ]
+    },
+    {
+      "ip": "10.0.0.8",
+      "hostname": "",
+      "port": 9200,
+      "proto": "tcp",
+      "state": "open",
+      "service": "elasticsearch",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "elastic"
+      ]
+    },
+    {
+      "ip": "10.0.0.9",
+      "hostname": "",
+      "port": 5900,
+      "proto": "tcp",
+      "state": "open",
+      "service": "vnc",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "vnc"
+      ]
+    },
+    {
+      "ip": "10.0.0.9",
+      "hostname": "",
+      "port": 1099,
+      "proto": "tcp",
+      "state": "open",
+      "service": "java-rmi",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "jmx"
+      ]
+    },
+    {
+      "ip": "10.0.0.9",
+      "hostname": "",
+      "port": 61616,
+      "proto": "tcp",
+      "state": "open",
+      "service": "activemq",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "activemq"
+      ]
+    },
+    {
+      "ip": "10.0.0.10",
+      "hostname": "",
+      "port": 15672,
+      "proto": "tcp",
+      "state": "open",
+      "service": "rabbitmq",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "rabbitmq"
+      ]
+    },
+    {
+      "ip": "10.0.0.10",
+      "hostname": "",
+      "port": 11211,
+      "proto": "tcp",
+      "state": "open",
+      "service": "memcached",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "memcached"
+      ]
+    },
+    {
+      "ip": "10.0.0.10",
+      "hostname": "",
+      "port": 5984,
+      "proto": "tcp",
+      "state": "open",
+      "service": "http",
+      "product": "CouchDB",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "couchdb"
+      ]
+    },
+    {
+      "ip": "10.0.0.10",
+      "hostname": "",
+      "port": 2379,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ssl/http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "https",
+        "etcd"
+      ]
+    },
+    {
+      "ip": "10.0.0.11",
+      "hostname": "",
+      "port": 2375,
+      "proto": "tcp",
+      "state": "open",
+      "service": "http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "docker"
+      ]
+    },
+    {
+      "ip": "10.0.0.11",
+      "hostname": "",
+      "port": 6443,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ssl/http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "https",
+        "kubernetes"
+      ]
+    },
+    {
+      "ip": "10.0.0.11",
+      "hostname": "",
+      "port": 10250,
+      "proto": "tcp",
+      "state": "open",
+      "service": "ssl/http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "https",
+        "kubernetes"
+      ]
+    },
+    {
+      "ip": "10.0.0.12",
+      "hostname": "",
+      "port": 5222,
+      "proto": "tcp",
+      "state": "open",
+      "service": "xmpp-client",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "xmpp"
+      ]
+    },
+    {
+      "ip": "10.0.0.12",
+      "hostname": "",
+      "port": 5269,
+      "proto": "tcp",
+      "state": "open",
+      "service": "xmpp-server",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "xmpp"
+      ]
+    },
+    {
+      "ip": "10.0.0.12",
+      "hostname": "",
+      "port": 9090,
+      "proto": "tcp",
+      "state": "open",
+      "service": "http",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "openfire-admin"
+      ]
+    },
+    {
+      "ip": "10.0.0.13",
+      "hostname": "",
+      "port": 623,
+      "proto": "udp",
+      "state": "open",
+      "service": "asf-rmcp",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "ipmi"
+      ]
+    },
+    {
+      "ip": "10.0.0.13",
+      "hostname": "",
+      "port": 1521,
+      "proto": "tcp",
+      "state": "open",
+      "service": "oracle-tns",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "oracle"
+      ]
+    },
+    {
+      "ip": "10.0.0.13",
+      "hostname": "",
+      "port": 23,
+      "proto": "tcp",
+      "state": "open",
+      "service": "telnet",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "telnet"
+      ]
+    },
+    {
+      "ip": "10.0.0.14",
+      "hostname": "",
+      "port": 5000,
+      "proto": "tcp",
+      "state": "open",
+      "service": "docker-registry",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "artifact"
+      ]
+    },
+    {
+      "ip": "10.0.0.14",
+      "hostname": "",
+      "port": 4646,
+      "proto": "tcp",
+      "state": "open",
+      "service": "nomad",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "platform"
+      ]
+    },
+    {
+      "ip": "10.0.0.14",
+      "hostname": "",
+      "port": 9000,
+      "proto": "tcp",
+      "state": "open",
+      "service": "minio",
+      "product": "",
+      "version": "",
+      "extrainfo": "",
+      "tunnel": "",
+      "categories": [
+        "http",
+        "storage"
+      ]
+    }
+  ]
+}

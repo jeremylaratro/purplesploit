@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-4-run-2",
+  "tool_version": "0.34.0",
+  "kb": {
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b"
+  },
+  "stages": {
+    "run": {
+      "status": "running",
+      "run_id": "fx-4-run-2",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": []
+    }
+  },
+  "files": [],
+  "status": "interrupted"
+}

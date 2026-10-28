@@ -1,0 +1,93 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-3-run",
+  "tool_version": "0.34.0",
+  "kb": {
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b"
+  },
+  "stages": {
+    "report": {
+      "status": "partial",
+      "run_id": "fx-3-run",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": [],
+      "exit_code": 1,
+      "finished_utc": "2026-10-27T12:00:00Z",
+      "produced": [
+        {
+          "path": "findings.json",
+          "schema": "findings-2"
+        },
+        {
+          "path": "posture.json",
+          "schema": "posture-1"
+        },
+        {
+          "path": "report.md",
+          "schema": null
+        },
+        {
+          "path": "report.html",
+          "schema": null
+        }
+      ]
+    },
+    "run": {
+      "status": "partial",
+      "run_id": "fx-3-run",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": [],
+      "exit_code": 4,
+      "finished_utc": "2026-10-27T12:00:00Z",
+      "produced": [
+        {
+          "path": "inventory.json",
+          "schema": "inventory-1"
+        },
+        {
+          "path": "run-state.json",
+          "schema": "run-state-1"
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "findings.json",
+      "schema": "findings-2",
+      "sha256": "a36fefbb05666396a46af04aab4ca4b5b7aa3d91ad4352eaf13c70a0cec2ee94",
+      "produced_by": "report"
+    },
+    {
+      "path": "inventory.json",
+      "schema": "inventory-1",
+      "sha256": "b070eff2da44fb30847034bff05f7a79a7223857f446a00c51f4b1c96e6de0a1",
+      "produced_by": "run"
+    },
+    {
+      "path": "posture.json",
+      "schema": "posture-1",
+      "sha256": "58a8f551a1f1244a8bdecb3ecc220f9e723440eca14e8a1d6885c52ff4c85b88",
+      "produced_by": "report"
+    },
+    {
+      "path": "report.html",
+      "schema": null,
+      "sha256": "16f8ecaeb952a59bb2353d9e7d5b0d1049a6c797753ca0239ee2a368080adfa1",
+      "produced_by": "report"
+    },
+    {
+      "path": "report.md",
+      "schema": null,
+      "sha256": "51f361eeb2940a03828724007a7debd53ba1107c8961f261f80298604a13afb3",
+      "produced_by": "report"
+    },
+    {
+      "path": "run-state.json",
+      "schema": "run-state-1",
+      "sha256": "c99a1cbf39bea364cff7ca6e85bae184d629867bdb47be1792f6141f89d71b8c",
+      "produced_by": "run"
+    }
+  ],
+  "status": "partial"
+}

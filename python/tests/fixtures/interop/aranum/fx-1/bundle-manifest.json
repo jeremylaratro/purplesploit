@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-1-run",
+  "tool_version": "0.34.0",
+  "kb": {
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b"
+  },
+  "stages": {
+    "run": {
+      "status": "complete",
+      "run_id": "fx-1-run",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": [],
+      "exit_code": 0,
+      "finished_utc": "2026-10-27T12:00:00Z",
+      "produced": [
+        {
+          "path": "inventory.json",
+          "schema": "inventory-1"
+        },
+        {
+          "path": "run-state.json",
+          "schema": "run-state-1"
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "inventory.json",
+      "schema": "inventory-1",
+      "sha256": "698537047ad053740f8946562811bab662611da3fde32bda8fbd317022b4a697",
+      "produced_by": "run"
+    },
+    {
+      "path": "run-state.json",
+      "schema": "run-state-1",
+      "sha256": "f86359ab32da229385b1ae2a5838fed6ac48a9baf5cd90a17bec358472cc0acb",
+      "produced_by": "run"
+    }
+  ],
+  "status": "complete"
+}

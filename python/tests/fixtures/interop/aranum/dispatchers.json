@@ -1,0 +1,794 @@
+{
+  "schema_version": "1",
+  "tool": "aranum",
+  "tool_version": "0.34.0",
+  "dispatchers": [
+    {
+      "name": "activemq",
+      "script": "enum-activemq.sh",
+      "alias_of": null,
+      "category": "activemq",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "afp",
+      "script": "enum-afp.sh",
+      "alias_of": null,
+      "category": "afp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "ajp",
+      "script": "enum-ajp.sh",
+      "alias_of": null,
+      "category": "ajp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "artifact",
+      "script": "enum-artifact.sh",
+      "alias_of": null,
+      "category": "artifact",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "backup",
+      "script": "enum-backup.sh",
+      "alias_of": null,
+      "category": "backup",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "nmap"
+      ]
+    },
+    {
+      "name": "bambu",
+      "script": "enum-bambu.sh",
+      "alias_of": null,
+      "category": "bambu",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "cassandra",
+      "script": "enum-cassandra.sh",
+      "alias_of": null,
+      "category": "cassandra",
+      "uses_credentials": false,
+      "tool_family": [
+        "database-client",
+        "nmap"
+      ]
+    },
+    {
+      "name": "clickhouse",
+      "script": "enum-clickhouse.sh",
+      "alias_of": null,
+      "category": "clickhouse",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "consul",
+      "script": "enum-consul.sh",
+      "alias_of": null,
+      "category": "consul",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "couchbase",
+      "script": "enum-couchbase.sh",
+      "alias_of": null,
+      "category": "couchbase",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "couchdb",
+      "script": "enum-couchdb.sh",
+      "alias_of": null,
+      "category": "couchdb",
+      "uses_credentials": true,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "dns",
+      "script": "enum-dns.sh",
+      "alias_of": null,
+      "category": "dns",
+      "uses_credentials": false,
+      "tool_family": [
+        "dns"
+      ]
+    },
+    {
+      "name": "docker",
+      "script": "enum-docker.sh",
+      "alias_of": null,
+      "category": "docker",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "elastic",
+      "script": "enum-elastic.sh",
+      "alias_of": null,
+      "category": "elastic",
+      "uses_credentials": true,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "etcd",
+      "script": "enum-etcd.sh",
+      "alias_of": null,
+      "category": "etcd",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "finger",
+      "script": "enum-finger.sh",
+      "alias_of": null,
+      "category": "finger",
+      "uses_credentials": false,
+      "tool_family": [
+        "ssh"
+      ]
+    },
+    {
+      "name": "flexnet",
+      "script": "enum-flexnet.sh",
+      "alias_of": null,
+      "category": "flexnet",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "ftp",
+      "script": "enum-ftp.sh",
+      "alias_of": null,
+      "category": "ftp",
+      "uses_credentials": true,
+      "tool_family": [
+        "curl",
+        "nmap",
+        "nxc",
+        "openssl"
+      ]
+    },
+    {
+      "name": "git",
+      "script": "enum-git.sh",
+      "alias_of": null,
+      "category": "git",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "hpc",
+      "script": "enum-hpc.sh",
+      "alias_of": null,
+      "category": "hpc",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "nmap"
+      ]
+    },
+    {
+      "name": "http",
+      "script": "enum-http.sh",
+      "alias_of": null,
+      "category": "http",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "http-enum",
+        "openssl"
+      ]
+    },
+    {
+      "name": "https",
+      "script": "enum-https.sh",
+      "alias_of": "http",
+      "category": "https",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "http-enum",
+        "openssl"
+      ]
+    },
+    {
+      "name": "ike",
+      "script": "enum-ike.sh",
+      "alias_of": null,
+      "category": "ike",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "imap",
+      "script": "enum-imap.sh",
+      "alias_of": null,
+      "category": "imap",
+      "uses_credentials": true,
+      "tool_family": [
+        "nmap",
+        "openssl"
+      ]
+    },
+    {
+      "name": "influxdb",
+      "script": "enum-influxdb.sh",
+      "alias_of": null,
+      "category": "influxdb",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "ipmi",
+      "script": "enum-ipmi.sh",
+      "alias_of": null,
+      "category": "ipmi",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "ipp",
+      "script": "enum-ipp.sh",
+      "alias_of": null,
+      "category": "ipp",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "nmap"
+      ]
+    },
+    {
+      "name": "jabber",
+      "script": "enum-jabber.sh",
+      "alias_of": null,
+      "category": "jabber",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "openssl"
+      ]
+    },
+    {
+      "name": "jmx",
+      "script": "enum-jmx.sh",
+      "alias_of": null,
+      "category": "jmx",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "kafka",
+      "script": "enum-kafka.sh",
+      "alias_of": null,
+      "category": "kafka",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "kerberos",
+      "script": "enum-kerberos.sh",
+      "alias_of": null,
+      "category": "kerberos",
+      "uses_credentials": true,
+      "tool_family": [
+        "impacket",
+        "nmap"
+      ]
+    },
+    {
+      "name": "kubernetes",
+      "script": "enum-kubernetes.sh",
+      "alias_of": null,
+      "category": "kubernetes",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "ldap",
+      "script": "enum-ldap.sh",
+      "alias_of": null,
+      "category": "ldap",
+      "uses_credentials": true,
+      "tool_family": [
+        "impacket",
+        "ldapsearch",
+        "nxc"
+      ]
+    },
+    {
+      "name": "mdns",
+      "script": "enum-mdns.sh",
+      "alias_of": null,
+      "category": "mdns",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap",
+        "ssh"
+      ]
+    },
+    {
+      "name": "memcached",
+      "script": "enum-memcached.sh",
+      "alias_of": null,
+      "category": "memcached",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "mongo",
+      "script": "enum-mongo.sh",
+      "alias_of": null,
+      "category": "mongo",
+      "uses_credentials": true,
+      "tool_family": [
+        "database-client",
+        "nmap"
+      ]
+    },
+    {
+      "name": "monitoring",
+      "script": "enum-monitoring.sh",
+      "alias_of": null,
+      "category": "monitoring",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "nmap"
+      ]
+    },
+    {
+      "name": "mqtt",
+      "script": "enum-mqtt.sh",
+      "alias_of": null,
+      "category": "mqtt",
+      "uses_credentials": false,
+      "tool_family": [
+        "openssl"
+      ]
+    },
+    {
+      "name": "msrpc",
+      "script": "enum-msrpc.sh",
+      "alias_of": null,
+      "category": "msrpc",
+      "uses_credentials": false,
+      "tool_family": [
+        "impacket",
+        "nmap",
+        "samba"
+      ]
+    },
+    {
+      "name": "mssql",
+      "script": "enum-mssql.sh",
+      "alias_of": null,
+      "category": "mssql",
+      "uses_credentials": true,
+      "tool_family": [
+        "nmap",
+        "nxc"
+      ]
+    },
+    {
+      "name": "mysql",
+      "script": "enum-mysql.sh",
+      "alias_of": null,
+      "category": "mysql",
+      "uses_credentials": true,
+      "tool_family": [
+        "database-client",
+        "nmap",
+        "nxc"
+      ]
+    },
+    {
+      "name": "nats",
+      "script": "enum-nats.sh",
+      "alias_of": null,
+      "category": "nats",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "neo4j",
+      "script": "enum-neo4j.sh",
+      "alias_of": null,
+      "category": "neo4j",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "netbios-ns",
+      "script": "enum-netbios-ns.sh",
+      "alias_of": null,
+      "category": "netbios-ns",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "nfs",
+      "script": "enum-nfs.sh",
+      "alias_of": null,
+      "category": "nfs",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "ntp",
+      "script": "enum-ntp.sh",
+      "alias_of": null,
+      "category": "ntp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "oracle",
+      "script": "enum-oracle.sh",
+      "alias_of": null,
+      "category": "oracle",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "platform",
+      "script": "enum-platform.sh",
+      "alias_of": null,
+      "category": "platform",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "pop3",
+      "script": "enum-pop3.sh",
+      "alias_of": null,
+      "category": "pop3",
+      "uses_credentials": true,
+      "tool_family": [
+        "nmap",
+        "openssl"
+      ]
+    },
+    {
+      "name": "postgres",
+      "script": "enum-postgres.sh",
+      "alias_of": null,
+      "category": "postgres",
+      "uses_credentials": true,
+      "tool_family": [
+        "database-client",
+        "nmap",
+        "nxc"
+      ]
+    },
+    {
+      "name": "print",
+      "script": "enum-print.sh",
+      "alias_of": null,
+      "category": "print",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "rabbitmq",
+      "script": "enum-rabbitmq.sh",
+      "alias_of": null,
+      "category": "rabbitmq",
+      "uses_credentials": true,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "radius",
+      "script": "enum-radius.sh",
+      "alias_of": null,
+      "category": "radius",
+      "uses_credentials": false,
+      "tool_family": []
+    },
+    {
+      "name": "rdp",
+      "script": "enum-rdp.sh",
+      "alias_of": null,
+      "category": "rdp",
+      "uses_credentials": true,
+      "tool_family": [
+        "nmap",
+        "nxc"
+      ]
+    },
+    {
+      "name": "redis",
+      "script": "enum-redis.sh",
+      "alias_of": null,
+      "category": "redis",
+      "uses_credentials": false,
+      "tool_family": [
+        "database-client",
+        "nmap"
+      ]
+    },
+    {
+      "name": "rethinkdb",
+      "script": "enum-rethinkdb.sh",
+      "alias_of": null,
+      "category": "rethinkdb",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "rsync",
+      "script": "enum-rsync.sh",
+      "alias_of": null,
+      "category": "rsync",
+      "uses_credentials": false,
+      "tool_family": [
+        "ssh"
+      ]
+    },
+    {
+      "name": "sip",
+      "script": "enum-sip.sh",
+      "alias_of": null,
+      "category": "sip",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap",
+        "openssl"
+      ]
+    },
+    {
+      "name": "slp",
+      "script": "enum-slp.sh",
+      "alias_of": null,
+      "category": "slp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "smb",
+      "script": "enum-smb.sh",
+      "alias_of": null,
+      "category": "smb",
+      "uses_credentials": true,
+      "tool_family": [
+        "enum4linux",
+        "impacket",
+        "nmap",
+        "nxc",
+        "samba",
+        "smbmap"
+      ]
+    },
+    {
+      "name": "smtp",
+      "script": "enum-smtp.sh",
+      "alias_of": null,
+      "category": "smtp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap",
+        "openssl"
+      ]
+    },
+    {
+      "name": "snmp",
+      "script": "enum-snmp.sh",
+      "alias_of": null,
+      "category": "snmp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap",
+        "snmp"
+      ]
+    },
+    {
+      "name": "solr",
+      "script": "enum-solr.sh",
+      "alias_of": null,
+      "category": "solr",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "squid",
+      "script": "enum-squid.sh",
+      "alias_of": null,
+      "category": "squid",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "ssdp",
+      "script": "enum-ssdp.sh",
+      "alias_of": null,
+      "category": "ssdp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "ssh",
+      "script": "enum-ssh.sh",
+      "alias_of": null,
+      "category": "ssh",
+      "uses_credentials": true,
+      "tool_family": [
+        "nxc",
+        "ssh"
+      ]
+    },
+    {
+      "name": "storage",
+      "script": "enum-storage.sh",
+      "alias_of": null,
+      "category": "storage",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "nmap"
+      ]
+    },
+    {
+      "name": "telnet",
+      "script": "enum-telnet.sh",
+      "alias_of": null,
+      "category": "telnet",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap",
+        "ssh"
+      ]
+    },
+    {
+      "name": "tftp",
+      "script": "enum-tftp.sh",
+      "alias_of": null,
+      "category": "tftp",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "unknown",
+      "script": "enum-unknown.sh",
+      "alias_of": null,
+      "category": "unknown",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "database-client",
+        "http-enum",
+        "nmap",
+        "ssh"
+      ]
+    },
+    {
+      "name": "vault",
+      "script": "enum-vault.sh",
+      "alias_of": null,
+      "category": "vault",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl"
+      ]
+    },
+    {
+      "name": "vnc",
+      "script": "enum-vnc.sh",
+      "alias_of": null,
+      "category": "vnc",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "winrm",
+      "script": "enum-winrm.sh",
+      "alias_of": null,
+      "category": "winrm",
+      "uses_credentials": true,
+      "tool_family": [
+        "nxc"
+      ]
+    },
+    {
+      "name": "x11",
+      "script": "enum-x11.sh",
+      "alias_of": null,
+      "category": "x11",
+      "uses_credentials": false,
+      "tool_family": [
+        "nmap"
+      ]
+    },
+    {
+      "name": "xmpp",
+      "script": "enum-xmpp.sh",
+      "alias_of": "jabber",
+      "category": "xmpp",
+      "uses_credentials": false,
+      "tool_family": [
+        "curl",
+        "openssl"
+      ]
+    },
+    {
+      "name": "zookeeper",
+      "script": "enum-zookeeper.sh",
+      "alias_of": null,
+      "category": "zookeeper",
+      "uses_credentials": false,
+      "tool_family": []
+    }
+  ]
+}

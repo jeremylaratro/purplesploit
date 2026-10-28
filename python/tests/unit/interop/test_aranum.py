@@ -11,10 +11,19 @@ from purplesploit.core.auto_enum import AutoEnumPipeline, ServiceRule
 from purplesploit.core.execution import Observation
 from purplesploit.core.findings import FindingStatus
 from purplesploit.core.framework import Framework
-from purplesploit.interop.aranum import INVENTORY_SCHEMA, import_aranum_bundle, seed_auto_enum
+from purplesploit.interop.aranum import INVENTORY_SCHEMA, _port, import_aranum_bundle, seed_auto_enum
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "aranum"
+
+
+def test_zero_empty_and_missing_ports_are_host_scoped():
+    assert [_port(value) for value in ("0", 0, "", None)] == [None, None, None, None]
+    fixture = Path(__file__).resolve().parents[2] / "fixtures" / "interop" / "aranum" / "fx-2-rerun" / "run-1"
+    bundle = import_aranum_bundle(fixture)
+    host_scoped = [item for item in bundle.findings if item.target in {"linux-lab.invalid", "windows-lab.invalid"}]
+    assert len(host_scoped) == 2
+    assert all(item.port is None for item in host_scoped)
 
 
 def test_network_inventory_keeps_host_endpoint_and_producer_identity():
@@ -81,7 +90,11 @@ def test_posture_retains_every_status_without_manufacturing_findings():
     assert bundle.findings[0].status is FindingStatus.DRAFT
     assert "unmapped" in bundle.findings[1].notes[0]
     metadata = next(item for item in bundle.observations if item.attributes["source_file"] == "findings.json" and item.attributes["record_type"] == "snapshot_metadata")
-    assert metadata.raw["kb"]["checks"]["LIN-FAIL"]["remediation"]["steps"]
+    kb_entry = metadata.raw["kb"]["checks"]["LIN-FAIL"]
+    assert kb_entry["why"]
+    assert kb_entry["fix"][0]["text"]
+    assert kb_entry["test"][0]["cmd"]
+    assert kb_entry["refs"]
     host_finding = next(item for item in bundle.observations if item.source_id == "AR-fixture-host")
     assert len(host_finding.attributes["artifacts"]) == 1
     assert host_finding.attributes["artifacts"][0]["exists"] is True
@@ -105,7 +118,11 @@ def test_partial_error_skipped_unassessed_and_redacted_paths_stay_visible():
 
 def test_seeded_real_framework_followup_resolves_registered_operation_and_skips_nmap(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    framework = Framework(db_path=str(tmp_path / "interop.db"))
+    framework = Framework(
+        db_path=str(tmp_path / "interop.db"),
+        plugins_dir=str(tmp_path / "plugins"),
+        plugin_config_dir=str(tmp_path / "plugin-config"),
+    )
     framework.discover_modules()
     calls = []
 
@@ -133,13 +150,45 @@ def test_seeded_real_framework_followup_resolves_registered_operation_and_skips_
 
 
 @pytest.mark.parametrize("filename,version", [("findings.json", 3), ("posture.json", "2"), ("run-state.json", 2)])
-def test_future_companion_schema_is_not_silently_misread(tmp_path, filename, version):
+def test_future_companion_schema_degrades_to_data_quality(tmp_path, filename, version):
     shutil.copytree(FIXTURES / "posture", tmp_path / "invalid")
     (tmp_path / "invalid" / filename).write_text(json.dumps({"schema_version": version}))
-    with pytest.raises(ValueError, match="Unsupported"):
-        import_aranum_bundle(tmp_path / "invalid")
+    bundle = import_aranum_bundle(tmp_path / "invalid")
+    assert any(
+        item.attributes.get("record_type") == "data_quality"
+        and item.attributes.get("marker") == "error"
+        for item in bundle.observations
+    )
 
 
-def test_inventory_is_required(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        import_aranum_bundle(tmp_path)
+def test_empty_pre_manifest_bundle_is_interrupted_not_rejected(tmp_path):
+    bundle = import_aranum_bundle(tmp_path)
+    assert bundle.status == "interrupted"
+    assert any(
+        item.attributes.get("marker") == "interrupted"
+        and item.attributes.get("reason") == "no bundle-manifest.json"
+        for item in bundle.observations
+    )
+
+
+def test_manifest_digest_mismatch_is_recorded_without_dropping_findings(tmp_path):
+    source = Path(__file__).resolve().parents[2] / "fixtures" / "interop" / "aranum" / "fx-2"
+    copied = tmp_path / "fx-2"
+    shutil.copytree(source, copied)
+    findings_path = copied / "findings.json"
+    expected_source_ids = {
+        item["finding_id"]
+        for item in json.loads(findings_path.read_text(encoding="utf-8"))["findings"]
+    }
+    findings_path.write_bytes(findings_path.read_bytes() + b"\n")
+
+    bundle = import_aranum_bundle(copied)
+    mismatches = [
+        item for item in bundle.observations
+        if item.attributes.get("record_type") == "data_quality"
+        and item.attributes.get("marker") == "digest_mismatch"
+    ]
+
+    assert len(mismatches) == 1
+    assert mismatches[0].attributes.get("reason") == "digest mismatch: findings.json"
+    assert {item.metadata.get("source_identity") for item in bundle.findings} == expected_source_ids

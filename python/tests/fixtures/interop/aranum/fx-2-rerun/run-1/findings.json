@@ -1,0 +1,239 @@
+{
+  "schema_version": "2",
+  "run_id": "fx-2-rerun-run-1",
+  "label": "FX-2 rerun run-1",
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "redacted": false,
+  "mode": "mixed",
+  "summary": {
+    "total": 3,
+    "hosts": [
+      "dc-lab.invalid",
+      "linux-lab.invalid",
+      "windows-lab.invalid"
+    ],
+    "coverage": []
+  },
+  "findings": [
+    {
+      "schema_version": "2",
+      "finding_id": "FX2R-LOCAL-LINUX",
+      "rule_id": "LIN-ACCT-NOPASSWD",
+      "host": "linux-lab.invalid",
+      "port": "0",
+      "service": "linlocal",
+      "severity": "medium",
+      "title": "Local account labadmin on Linux host",
+      "line": "local labadmin context on linux-lab.invalid",
+      "evidence_path": "linlocal/linux-lab.invalid/synthetic.txt",
+      "evidence_paths": [
+        "linlocal/linux-lab.invalid/synthetic.txt"
+      ],
+      "logical_id": "AR-L-50528aa8e24b2a",
+      "category": "linlocal",
+      "kb_id": "LIN-ACCT-NOPASSWD",
+      "kb_match": "rule",
+      "confidence": "medium",
+      "scope": "host",
+      "auth_context": {
+        "account_label": "labadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "linux-lab.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    {
+      "schema_version": "2",
+      "finding_id": "FX2R-LOCAL-WINDOWS",
+      "rule_id": "WIN-UAC-LATFP",
+      "host": "windows-lab.invalid",
+      "port": "0",
+      "service": "winlocal",
+      "severity": "high",
+      "title": "Local account labadmin on Windows host",
+      "line": "local labadmin context on windows-lab.invalid",
+      "evidence_path": "winlocal/windows-lab.invalid/synthetic.txt",
+      "evidence_paths": [
+        "winlocal/windows-lab.invalid/synthetic.txt"
+      ],
+      "logical_id": "AR-L-edcc6c7f057afe",
+      "category": "winlocal",
+      "kb_id": "WIN-UAC-LATFP",
+      "kb_match": "rule",
+      "confidence": "high",
+      "scope": "host",
+      "auth_context": {
+        "account_label": "labadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "windows-lab.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    {
+      "schema_version": "2",
+      "finding_id": "FX2R-DOMAIN",
+      "rule_id": "kerberoastable-hash-es-captured-aada6591",
+      "host": "dc-lab.invalid",
+      "port": "389",
+      "service": "ldap",
+      "severity": "high",
+      "title": "Domain account lab-reader exposure",
+      "line": "domain lab-reader context in LAB.INVALID",
+      "evidence_path": "ldap/dc-lab.invalid/synthetic.txt",
+      "evidence_paths": [
+        "ldap/dc-lab.invalid/synthetic.txt"
+      ],
+      "logical_id": "AR-L-2914a976c7dc71",
+      "category": "ad",
+      "kb_id": "kerberoastable-hash-es-captured-aada6591",
+      "kb_match": "rule",
+      "confidence": "high",
+      "scope": "endpoint",
+      "auth_context": {
+        "account_label": "lab-reader",
+        "scope": "domain",
+        "scope_basis": "declared",
+        "domain": "LAB.INVALID",
+        "local_host": null,
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "LAB.INVALID",
+          "local_auth_flag": false,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "domain"
+        }
+      }
+    }
+  ],
+  "kb": {
+    "schema": 1,
+    "aranum_version": "0.34.0",
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b",
+    "categories": {
+      "ad": {
+        "title": "Active Directory & Windows Domain",
+        "order": 1
+      },
+      "winlocal": {
+        "title": "Windows Local Privilege Escalation",
+        "order": 2
+      },
+      "linlocal": {
+        "title": "Linux Local Privilege Escalation",
+        "order": 3
+      }
+    },
+    "classes": {
+      "kerberoastable-hash-es-captured-aada6591": {
+        "category": "ad",
+        "title": "Kerberoastable service account(s)",
+        "why": "Any domain user can request a Kerberos service ticket (TGS) for an account with an SPN; the ticket is encrypted with the account's NTLM hash and can be cracked offline. Weak service-account passwords yield domain credentials.",
+        "test": [
+          {
+            "label": "Enumerate SPN accounts (read-only)",
+            "cmd": "nxc ldap <host> -u <user> -p <pass> --kerberoasting kerb.txt"
+          },
+          {
+            "label": "Impacket, list only",
+            "cmd": "GetUserSPNs.py <domain>/<user>:<pass> -dc-ip <host>"
+          }
+        ],
+        "fix": [
+          {
+            "label": "Use Group Managed Service Accounts (gMSA)",
+            "text": "Replace SPN-bearing user accounts with gMSAs so Windows manages a 120-char random password that rotates automatically."
+          },
+          {
+            "label": "Enforce strong passwords where gMSA is impossible",
+            "text": "Set service-account passwords to >=25 random characters and audit SPN accounts with `Get-ADUser -Filter {ServicePrincipalName -like '*'}`."
+          }
+        ],
+        "refs": [
+          "https://attack.mitre.org/techniques/T1558/003/",
+          "https://learn.microsoft.com/windows-server/security/group-managed-service-accounts/group-managed-service-accounts-overview"
+        ],
+        "attack_ids": [
+          "T1558.003"
+        ]
+      }
+    },
+    "checks": {
+      "LIN-ACCT-NOPASSWD": {
+        "os": "linux",
+        "scope": "host",
+        "group": "accounts",
+        "category": "linlocal",
+        "title": "sudo NOPASSWD rules",
+        "sev_fail": "",
+        "sev_warn": "medium",
+        "semantics": "WARN: >=1 NOPASSWD rule in sudoers/sudoers.d; PASS: none; ERR: sudoers unreadable (needs root); NA: sudo absent.",
+        "why": "A sudo NOPASSWD rule allows the authorized command to run without a fresh authentication check. Malware or an attacker controlling that account can immediately exercise the delegated privilege, and broad command rules may lead directly to root access.",
+        "test": [
+          {
+            "label": "Find active NOPASSWD directives",
+            "cmd": "sudo grep -RHE '^[[:space:]]*[^#].*NOPASSWD[[:space:]]*:' /etc/sudoers /etc/sudoers.d 2>/dev/null"
+          }
+        ],
+        "fix": [
+          {
+            "label": "Remove or narrowly scope passwordless sudo",
+            "text": "Use visudo to remove unnecessary NOPASSWD tags or restrict them to exact non-shell commands with fixed arguments; avoid ALL, interpreters, editors, and commands that can execute arbitrary code."
+          }
+        ],
+        "refs": [
+          "https://www.sudo.ws/docs/man/sudoers.man/"
+        ],
+        "attack_ids": []
+      },
+      "WIN-UAC-LATFP": {
+        "os": "windows",
+        "scope": "host",
+        "group": "access-control",
+        "category": "winlocal",
+        "title": "LocalAccountTokenFilterPolicy",
+        "sev_fail": "",
+        "sev_warn": "medium",
+        "semantics": "WARN: LocalAccountTokenFilterPolicy=1 (full admin token for remote local-account logons; pass-the-hash); PASS: 0/absent.",
+        "why": "LocalAccountTokenFilterPolicy=1 grants a full administrator token to remote network logons using local accounts. An attacker who obtains a local administrator hash can use pass-the-hash for unrestricted remote administration and lateral movement.",
+        "test": [
+          {
+            "label": "Read the remote local-account token policy",
+            "cmd": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\" /v LocalAccountTokenFilterPolicy"
+          }
+        ],
+        "fix": [
+          {
+            "label": "Restore remote UAC token filtering",
+            "cmd": "reg add \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\" /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 0 /f"
+          }
+        ],
+        "refs": [
+          "https://learn.microsoft.com/en-us/troubleshoot/windows-server/windows-security/user-account-control-and-remote-restriction",
+          "https://attack.mitre.org/techniques/T1550/002/"
+        ],
+        "attack_ids": [
+          "T1550.002"
+        ]
+      }
+    }
+  }
+}

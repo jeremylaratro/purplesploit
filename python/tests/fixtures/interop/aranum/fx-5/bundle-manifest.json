@@ -1,0 +1,62 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-5-run",
+  "tool_version": "0.34.0",
+  "kb": {
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b"
+  },
+  "stages": {
+    "local": {
+      "status": "complete",
+      "run_id": "fx-5-run",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": [],
+      "exit_code": 0,
+      "finished_utc": "2026-10-27T12:00:00Z",
+      "produced": []
+    },
+    "report": {
+      "status": "complete",
+      "run_id": "fx-5-run",
+      "started_utc": "2026-10-27T12:00:00Z",
+      "consumed": [],
+      "exit_code": 0,
+      "finished_utc": "2026-10-27T12:00:00Z",
+      "produced": [
+        {
+          "path": "findings.json",
+          "schema": "findings-2"
+        },
+        {
+          "path": "report.md",
+          "schema": null
+        },
+        {
+          "path": "report.html",
+          "schema": null
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "findings.json",
+      "schema": "findings-2",
+      "sha256": "dc6a2fc5e56e505a471cb6b729925a76d0c4e1d91dc750eca978ee9ed12ce6c1",
+      "produced_by": "report"
+    },
+    {
+      "path": "report.html",
+      "schema": null,
+      "sha256": "09661402cee7403c60b04d49fb52e9f3e430c3c83da7e71123332a441b6c4dca",
+      "produced_by": "report"
+    },
+    {
+      "path": "report.md",
+      "schema": null,
+      "sha256": "fc9db545fa09b4553772eeb003857ba452ada201dc57f91b7e4e41ee3b25cb6d",
+      "produced_by": "report"
+    }
+  ],
+  "status": "complete"
+}

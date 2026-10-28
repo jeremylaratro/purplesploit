@@ -1,0 +1,18 @@
+{
+  "status": "complete",
+  "run_id": "fx-1-run",
+  "started_utc": "2026-10-27T12:00:00Z",
+  "consumed": [],
+  "exit_code": 0,
+  "finished_utc": "2026-10-27T12:00:00Z",
+  "produced": [
+    {
+      "path": "inventory.json",
+      "schema": "inventory-1"
+    },
+    {
+      "path": "run-state.json",
+      "schema": "run-state-1"
+    }
+  ]
+}

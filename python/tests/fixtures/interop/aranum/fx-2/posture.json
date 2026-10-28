@@ -1,0 +1,82 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-2-v2-run",
+  "label": "FX-2 v2",
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "redacted": false,
+  "hosts": {
+    "linux-lab.invalid": {
+      "os": "linux",
+      "checks": [
+        {
+          "id": "LIN-SUDO",
+          "status": "WARN"
+        }
+      ],
+      "auth_context": {
+        "account_label": "labadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "linux-lab.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    "windows-lab.invalid": {
+      "os": "windows",
+      "checks": [
+        {
+          "id": "WIN-SMB",
+          "status": "FAIL"
+        }
+      ],
+      "auth_context": {
+        "account_label": "labadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "windows-lab.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    }
+  },
+  "domains": {
+    "LAB.INVALID": {
+      "checks": [
+        {
+          "id": "AD-LDAP-SIGN",
+          "status": "WARN"
+        }
+      ],
+      "auth_context": {
+        "account_label": "lab-reader",
+        "scope": "domain",
+        "scope_basis": "declared",
+        "domain": "LAB.INVALID",
+        "local_host": null,
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "LAB.INVALID",
+          "local_auth_flag": false,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "domain"
+        }
+      }
+    }
+  }
+}

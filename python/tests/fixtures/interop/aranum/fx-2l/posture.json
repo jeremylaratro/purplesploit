@@ -1,0 +1,58 @@
+{
+  "schema_version": "1",
+  "run_id": "fx-2l-v1-run",
+  "label": "FX-2L v1",
+  "generated_utc": "2026-10-27T12:00:00Z",
+  "redacted": false,
+  "hosts": {
+    "local-linux.invalid": {
+      "os": "linux",
+      "checks": [
+        {
+          "id": "LIN-PATH",
+          "status": "WARN"
+        }
+      ],
+      "auth_context": {
+        "account_label": "localadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "local-linux.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    },
+    "local-windows.invalid": {
+      "os": "windows",
+      "checks": [
+        {
+          "id": "WIN-UAC",
+          "status": "FAIL"
+        }
+      ],
+      "auth_context": {
+        "account_label": "localadmin",
+        "scope": "local",
+        "scope_basis": "declared",
+        "domain": null,
+        "local_host": "local-windows.invalid",
+        "auth_method": "password",
+        "invocation": {
+          "domain_arg": "",
+          "local_auth_flag": true,
+          "username_form": "bare",
+          "credential_kind": "password",
+          "auth_scope_declared": "local"
+        }
+      }
+    }
+  },
+  "domains": {}
+}

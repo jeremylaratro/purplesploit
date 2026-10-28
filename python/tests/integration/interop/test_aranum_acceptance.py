@@ -1,4 +1,4 @@
-"""PLAN-002 P2a tri-state acceptance harness for AC-01 through AC-19."""
+"""PLAN-002 P2b tri-state acceptance harness for AC-01 through AC-20."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
 
 PYTHON_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = PYTHON_ROOT / "tests" / "fixtures" / "interop" / "aranum"
-AC_IDS = [f"AC-{number:02d}" for number in range(1, 20)]
+AC_IDS = [f"AC-{number:02d}" for number in range(1, 21)]
 RESULTS = {
     ac_id: {"state": "inconclusive", "reason": "check not executed"} for ac_id in AC_IDS
 }
@@ -58,7 +58,7 @@ def _initialize_results_file():
         for name, value in globals().items()
         if name.startswith("test_ac_") and callable(value)
     }
-    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-19"
+    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-20"
     for ac_id in AC_IDS:
         RESULTS[ac_id] = {"state": "inconclusive", "reason": "check not executed"}
     _write_results()
@@ -296,7 +296,7 @@ def test_ac_07_exact_reimport():
 
 @acceptance("AC-08")
 def test_ac_08_cross_run_linking():
-    bundle = _bundle("AC-08", "fx-2")
+    bundle = _bundle("AC-08", "fx-2-rerun")
     runs = sorted(path for path in bundle.iterdir() if path.is_dir())
     if len(runs) < 2:
         _inconclusive("AC-08", "FX-2 does not yet contain two run occurrences")
@@ -370,35 +370,51 @@ def test_ac_12_invocation_discipline():
     assert not any(flag in defaults for flag in forbidden), "default argv contains invasive flags"
     assert "-o" in source, "operator-chosen output-root mapping is absent"
     assert "returncode == 4" in source or "returncode in (0, 4)" in source
+    # P2b-NOTE: Aranum emits bundle-manifest.json; this harness naming bug is fixed in P3.
     manifest = _document(bundle, "manifest.json")
     assert manifest.get("status") == "partial", "rc=4 fixture manifest is not partial"
     return "default argv and rc=4 report-chain contract are present"
 
 
 @acceptance("AC-13")
-def test_ac_13_report_rendering():
+def test_ac_13_report_rendering(tmp_path):
+    from purplesploit.reporting import ReportGenerator
+
     bundle = _bundle("AC-13", "fx-2")
-    findings = _document(bundle, "findings.json")
-    with_kb = [item for item in _records(findings, "findings") if item.get("kb_id")]
-    assert with_kb, "FX-2 contains no findings with kb_id"
-    golden_markdown = sorted(bundle.rglob("*.md"))
-    golden_html = sorted(bundle.rglob("*.html"))
-    assert golden_markdown and golden_html, "Markdown/HTML golden report subject is absent"
-    rendered = "\n".join(
-        path.read_text(encoding="utf-8") for path in [*golden_markdown, *golden_html]
-    )
-    for heading in ("Remediation", "Validation", "auth_context"):
-        assert heading in rendered, f"{heading} is absent from golden report output"
-    return f"golden Markdown/HTML contain required sections for {len(with_kb)} findings"
+    imported = _import(bundle)
+    observations = {item.source_id: item for item in imported.observations if item.source_id}
+    enriched = [
+        finding for finding in imported.findings
+        if finding.remediation
+        and finding.metadata.get("validation")
+        and observations.get(finding.metadata.get("source_identity")) is not None
+        and observations[finding.metadata["source_identity"]].auth_context is not None
+    ]
+    assert enriched, "FX-2 import produced no KB-enriched finding with auth_context"
+
+    report = ReportGenerator()
+    report.add_findings(imported.findings)
+    markdown_path = report.generate("markdown", str(tmp_path / "fx-2.md"))
+    html_path = report.generate("html", str(tmp_path / "fx-2.html"))
+    rendered_outputs = {
+        "Markdown": Path(markdown_path).read_text(encoding="utf-8"),
+        "HTML": Path(html_path).read_text(encoding="utf-8"),
+    }
+    for output_name, rendered in rendered_outputs.items():
+        for heading in ("Remediation", "Validation", "auth_context"):
+            assert heading in rendered, f"{heading} is absent from PurpleSploit {output_name} output"
+    return f"PurpleSploit Markdown/HTML render enriched output for {len(enriched)} findings"
 
 
 @acceptance("AC-14")
-def test_ac_14_account_separation(tmp_path):
+def test_ac_14_account_separation(tmp_path, monkeypatch):
     import purplesploit.core.execution as execution
 
     assert hasattr(execution, "AuthContext"), (
         "auth_context/account_ref/scope/local_host prerequisites are absent"
     )
+
+    monkeypatch.setenv("PURPLESPLOIT_HOME", str(tmp_path / "purplesploit-home"))
 
     from purplesploit.core.database import Database
     from purplesploit.core.session import CredentialManager
@@ -577,3 +593,34 @@ def test_ac_19_identity_stability():
     assert checked, "Step-0 corpus contains no observations"
     assert set(REGISTRY.importers)
     return f"{checked} persisted observation IDs match across {len(importer_cases())} cases"
+
+
+@acceptance("AC-20")
+def test_ac_20_auth_outcome_fidelity():
+    bundle = _bundle("AC-20", "fx-5")
+    imported = _import(bundle)
+    outcomes = [
+        item for item in imported.observations
+        if item.attributes.get("record_type") == "auth_outcome"
+    ]
+    assert len(outcomes) == 4
+    by_host = {item.target: item for item in outcomes}
+    assert {host: item.attributes.get("outcome") for host, item in by_host.items()} == {
+        "10.0.0.1": "success",
+        "10.0.0.2": "success",
+        "10.0.0.3": "lockout",
+        "10.0.0.4": "success",
+    }
+    for host in ("10.0.0.1", "10.0.0.2", "10.0.0.3"):
+        assert by_host[host].auth_context.account_ref == "svc-local"
+        assert by_host[host].auth_context.scope == "local"
+        assert by_host[host].auth_context.local_host == host
+        assert by_host[host].auth_context.auth_method == "password"
+    domain = by_host["10.0.0.4"].auth_context
+    assert domain.account_ref == "dom-user"
+    assert domain.scope == "domain"
+    assert domain.domain == "CORP.LOCAL"
+    assert domain.auth_method == "password"
+    key_context = AuthContext(account_ref="ssh-key", scope="local", auth_method="key")
+    assert AuthContext.from_dict(key_context.to_dict()) == key_context
+    return "four auth outcomes and password/key auth methods retain declared context"

@@ -1,0 +1,18 @@
+{
+  "host": "10.0.0.3",
+  "user": "svc-local",
+  "port": "",
+  "transport": "exec",
+  "status": "AUTH_LOCKOUT",
+  "fail_reason": "account locked out",
+  "artifact_id": "10.0.0.3",
+  "protocol": "tcp",
+  "domain": "",
+  "invocation": {
+    "domain_arg": "",
+    "local_auth_flag": true,
+    "username_form": "bare",
+    "credential_kind": "password",
+    "auth_scope_declared": "local"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": "1",
+  "tool": "aranum-nmap-parse",
+  "tool_version": "0.34.0",
+  "summary": {
+    "hosts": 1,
+    "hosts_up": 1,
+    "hosts_with_open_ports": 1,
+    "open_ports": 1,
+    "unknown": [],
+    "categories": {
+      "smb": [
+        "<TARGET-1>:445"
+      ]
+    }
+  },
+  "hosts": [
+    {
+      "ip": "<TARGET-1>",
+      "state": "up"
+    }
+  ],
+  "entries": [
+    {
+      "ip": "<TARGET-1>",
+      "port": "445",
+      "proto": "tcp",
+      "service": "microsoft-ds",
+      "categories": [
+        "smb"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,22 @@
 {
   "schema_version": "2", "generated_utc": "2026-10-26T12:01:00Z", "run_id": "posture-fixture-run",
-  "kb": {"checks": {"LIN-FAIL": {"title": "Fixture permission check", "remediation": {"steps": ["Review fixture configuration"]}}}},
+  "kb": {
+    "schema": 1,
+    "aranum_version": "0.34.0",
+    "digest": "0594988c4eeb1d26846836007823a57782a4f4796b74082813caa890c1b5060b",
+    "categories": {"linlocal": {"title": "Linux Local Privilege Escalation", "order": 3}},
+    "classes": {},
+    "checks": {
+      "LIN-FAIL": {
+        "title": "Fixture permission check",
+        "why": "The synthetic fixture permission permits unintended access.",
+        "test": [{"label": "Inspect fixture permissions", "cmd": "stat evidence/linux.txt"}],
+        "fix": [{"label": "Review fixture configuration", "text": "Restrict the synthetic fixture permission."}],
+        "refs": ["https://example.test/fixture-permissions"],
+        "attack_ids": ["T1222.001"]
+      }
+    }
+  },
   "findings": [
     {"finding_id": "AR-fixture-host", "rule_id": "LIN-FAIL", "host": "192.0.2.30", "port": "", "protocol": "", "service": "posture", "severity": "medium", "title": "Fixture host posture", "line": "POSTURE|LIN-FAIL|FAIL|synthetic permission", "posture_scope": "host", "triage_status": "new", "evidence_path": "evidence/linux.txt", "evidence_paths": ["evidence/linux.txt"], "tags": ["posture"]},
     {"finding_id": "AR-fixture-domain", "rule_id": "AD-WARN", "host": "example.test", "port": "", "protocol": "", "service": "posture", "severity": "low", "title": "Fixture domain posture", "line": "POSTURE|AD-WARN|WARN|domain=example.test fixture", "posture_scope": "domain", "triage_status": "reviewed", "evidence_paths": ["missing/domain.txt"], "observed_from": [{"host": "192.0.2.31", "status": "WARN", "detail": "domain=example.test fixture"}]}

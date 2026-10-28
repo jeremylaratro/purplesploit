@@ -1,0 +1,26 @@
+{
+  "status": "complete",
+  "run_id": "fx-2-rerun-run-2",
+  "started_utc": "2026-10-27T12:00:00Z",
+  "consumed": [],
+  "exit_code": 0,
+  "finished_utc": "2026-10-27T12:00:00Z",
+  "produced": [
+    {
+      "path": "findings.json",
+      "schema": "findings-2"
+    },
+    {
+      "path": "posture.json",
+      "schema": "posture-1"
+    },
+    {
+      "path": "report.md",
+      "schema": null
+    },
+    {
+      "path": "report.html",
+      "schema": null
+    }
+  ]
+}

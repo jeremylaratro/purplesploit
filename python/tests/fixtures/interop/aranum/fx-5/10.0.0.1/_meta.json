@@ -1,0 +1,18 @@
+{
+  "host": "10.0.0.1",
+  "user": "svc-local",
+  "port": "",
+  "transport": "exec",
+  "status": "OK",
+  "fail_reason": "",
+  "artifact_id": "10.0.0.1",
+  "protocol": "tcp",
+  "domain": "",
+  "invocation": {
+    "domain_arg": "",
+    "local_auth_flag": true,
+    "username_form": "bare",
+    "credential_kind": "password",
+    "auth_scope_declared": "local"
+  }
+}

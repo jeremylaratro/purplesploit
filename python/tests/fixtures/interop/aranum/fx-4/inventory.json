@@ -1,0 +1,66 @@
+{
+  "schema_version": "1",
+  "tool": "aranum-nmap-parse",
+  "tool_version": "0.34.0",
+  "summary": {
+    "hosts": 3,
+    "hosts_up": 3,
+    "hosts_with_open_ports": 3,
+    "open_ports": 3,
+    "unknown": [],
+    "categories": {
+      "ssh": [
+        "linux-lab.invalid:22"
+      ],
+      "smb": [
+        "windows-lab.invalid:445"
+      ],
+      "ldap": [
+        "dc-lab.invalid:389"
+      ]
+    }
+  },
+  "hosts": [
+    {
+      "ip": "linux-lab.invalid",
+      "state": "up"
+    },
+    {
+      "ip": "windows-lab.invalid",
+      "state": "up"
+    },
+    {
+      "ip": "dc-lab.invalid",
+      "state": "up"
+    }
+  ],
+  "entries": [
+    {
+      "ip": "linux-lab.invalid",
+      "port": "22",
+      "proto": "tcp",
+      "service": "ssh",
+      "categories": [
+        "ssh"
+      ]
+    },
+    {
+      "ip": "windows-lab.invalid",
+      "port": "445",
+      "proto": "tcp",
+      "service": "microsoft-ds",
+      "categories": [
+        "smb"
+      ]
+    },
+    {
+      "ip": "dc-lab.invalid",
+      "port": "389",
+      "proto": "tcp",
+      "service": "ldap",
+      "categories": [
+        "ldap"
+      ]
+    }
+  ]
+}

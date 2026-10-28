@@ -1,0 +1,18 @@
+{
+  "host": "10.0.0.4",
+  "user": "dom-user",
+  "port": "",
+  "transport": "winrm",
+  "status": "OK",
+  "fail_reason": "",
+  "artifact_id": "10.0.0.4",
+  "protocol": "tcp",
+  "domain": "CORP.LOCAL",
+  "invocation": {
+    "domain_arg": "CORP.LOCAL",
+    "local_auth_flag": false,
+    "username_form": "bare",
+    "credential_kind": "password",
+    "auth_scope_declared": "domain"
+  }
+}
