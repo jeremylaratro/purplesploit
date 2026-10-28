@@ -1,4 +1,4 @@
-"""PLAN-002 P2b tri-state acceptance harness for AC-01 through AC-20."""
+"""PLAN-002 tri-state acceptance harness for AC-01 through AC-24."""
 
 from __future__ import annotations
 
@@ -17,13 +17,15 @@ import pytest
 from purplesploit.core.execution import (
     AuthContext, ExecutionRequest, Observation, normalize_observations,
 )
+from purplesploit.core.attack_graph import EdgeType, NodeType
+from purplesploit.interop.derive import derive_from_bundle
 from purplesploit.interop.importers import REGISTRY, detect, parse
 from tests.tools.pre_p1_snapshot import DEFAULT_OUTPUT, importer_cases, run_case
 
 
 PYTHON_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = PYTHON_ROOT / "tests" / "fixtures" / "interop" / "aranum"
-AC_IDS = [f"AC-{number:02d}" for number in range(1, 21)]
+AC_IDS = [f"AC-{number:02d}" for number in range(1, 25)]
 RESULTS = {
     ac_id: {"state": "inconclusive", "reason": "check not executed"} for ac_id in AC_IDS
 }
@@ -58,7 +60,7 @@ def _initialize_results_file():
         for name, value in globals().items()
         if name.startswith("test_ac_") and callable(value)
     }
-    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-20"
+    assert names == set(AC_IDS), "harness must contain exactly one test for every AC-01..AC-24"
     for ac_id in AC_IDS:
         RESULTS[ac_id] = {"state": "inconclusive", "reason": "check not executed"}
     _write_results()
@@ -624,3 +626,90 @@ def test_ac_20_auth_outcome_fidelity():
     key_context = AuthContext(account_ref="ssh-key", scope="local", auth_method="key")
     assert AuthContext.from_dict(key_context.to_dict()) == key_context
     return "four auth outcomes and password/key auth methods retain declared context"
+
+
+@acceptance("AC-21")
+def test_ac_21_reuse_local():
+    imported = _import(_bundle("AC-21", "fx-5"))
+    result = derive_from_bundle(imported)
+    reuse = [item for item in result.findings if "credential-reuse" in item.tags]
+    assert len(reuse) == 1, "FX-5 must derive exactly one local-account reuse finding"
+    finding = reuse[0]
+    assert finding.metadata.get("account_ref") == "svc-local"
+    assert set(finding.metadata.get("hosts", [])) == {"10.0.0.1", "10.0.0.2"}
+    assert "10.0.0.3" not in finding.description
+    assert "10.0.0.3" not in finding.metadata.get("hosts", [])
+    return "svc-local reuse is limited to the two successful local-auth hosts"
+
+
+@acceptance("AC-22")
+def test_ac_22_effective_domain():
+    imported = _import(_bundle("AC-22", "fx-5"))
+    result = derive_from_bundle(imported)
+    effective = [
+        item for item in result.findings
+        if item.metadata.get("account_ref") == "dom-user"
+        and item.target == "10.0.0.4"
+    ]
+    assert len(effective) == 1, "dom-user must derive one effective-on-host finding"
+    finding = effective[0]
+    assert "effective-access" in finding.tags
+    assert "domain" in finding.tags
+    assert "credential-reuse" not in finding.tags
+    assert "effective on host" in finding.title.lower()
+    assert "reuse" not in finding.title.lower()
+    return "dom-user is labeled as domain effective access, not credential reuse"
+
+
+@acceptance("AC-23")
+def test_ac_23_posture():
+    imported = _import(_bundle("AC-23", "fx-2"))
+    checks = [
+        item for item in imported.observations
+        if item.attributes.get("record_type") == "posture_check"
+    ]
+    result = derive_from_bundle(imported)
+    posture = [item for item in result.findings if "posture" in item.tags]
+    assert len(posture) == len(checks) >= 1
+    assert all(item.remediation for item in posture)
+    assert all(item.metadata.get("validation") for item in posture)
+    lin_sudo = next(item for item in posture if item.metadata.get("check_id") == "LIN-SUDO")
+    assert "Harden per posture check LIN-SUDO" in lin_sudo.remediation
+    assert "Re-run aranum posture enumeration for LIN-SUDO" in lin_sudo.metadata["validation"]
+
+    no_posture = derive_from_bundle(_import(_bundle("AC-23", "fx-1")))
+    assert not [item for item in no_posture.findings if "posture" in item.tags]
+    return f"{len(posture)} posture checks derive findings; no-posture input derives zero"
+
+
+@acceptance("AC-24")
+def test_ac_24_lockout_and_graph():
+    imported = _import(_bundle("AC-24", "fx-5"))
+    result = derive_from_bundle(imported)
+    lockouts = [item for item in result.findings if "lockout" in item.tags]
+    assert len(lockouts) == 1
+    assert lockouts[0].metadata.get("account_ref") == "svc-local"
+    assert lockouts[0].target == "10.0.0.3"
+
+    auth_edges = [
+        edge for edge in result.graph.edges.values()
+        if edge.edge_type == EdgeType.AUTHENTICATES_TO
+        and result.graph.nodes[edge.source_id].node_type == NodeType.CREDENTIAL
+        and result.graph.nodes[edge.target_id].node_type == NodeType.HOST
+    ]
+    edge_facts = {
+        (
+            result.graph.nodes[edge.source_id].properties.get("username"),
+            result.graph.nodes[edge.target_id].label,
+        )
+        for edge in auth_edges
+    }
+    assert edge_facts == {
+        ("svc-local", "10.0.0.1"),
+        ("svc-local", "10.0.0.2"),
+        ("dom-user", "10.0.0.4"),
+    }
+    assert not any(host == "10.0.0.3" for _, host in edge_facts)
+    assert result.lateral_paths, "local-account reuse must produce lateral candidates"
+    assert all("unproven" in path.description for path in result.lateral_paths)
+    return "lockout is visible; three success edges and caveated lateral paths are present"
