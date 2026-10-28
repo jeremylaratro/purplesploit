@@ -45,8 +45,10 @@ null-session, auth_context}`.
 | P5 | interchange / SARIF fallback (independent) | planned |
 
 AC-01..AC-20 (acceptance harness `python/tests/integration/interop/
-test_aranum_acceptance.py`) all pass as of P3. P4 adds AC-25..AC-28 (derivation); P6
-adds AC-21..AC-24 (campaign). P5 adds AC-29.. as needed.
+test_aranum_acceptance.py`) all pass as of P3. Acceptance IDs are assigned in
+**landing order** so the harness's generated `AC_IDS` stays contiguous: P4 (lands
+first) adds AC-21..AC-24 (derivation); P6 adds AC-25..AC-28 (campaign). P5 adds
+AC-29.. as needed.
 
 ---
 
@@ -85,17 +87,21 @@ result path) that takes the `AranumBundle`/`ImportResult` and returns additional
 raises; missing signals → no derived finding, not an error) and **deterministic**
 (stable ordering, stable finding `logical_id`s).
 
-### Acceptance (new AC-25..AC-28)
-- **AC-25 reuse-local:** importing `fx-5` derives exactly one local-account-reuse
+### Acceptance (new AC-21..AC-24)
+- **AC-21 reuse-local:** importing `fx-5` derives exactly one local-account-reuse
   finding for `svc-local` naming hosts 10.0.0.1 and 10.0.0.2 (both `success`), and
   does **not** flag 10.0.0.3 (lockout) as a reuse host.
-- **AC-26 effective-domain:** `fx-5`'s `dom-user` (`scope=domain`, success on
+- **AC-22 effective-domain:** `fx-5`'s `dom-user` (`scope=domain`, success on
   10.0.0.4) derives an effective-on-host finding labeled distinctly from local reuse
   (not a "reuse" finding).
-- **AC-27 posture:** a bundle with Linux `per_host`/`posture` (fx-2/fx-3) derives
-  posture findings carrying remediation + validation; a bundle with none derives zero
-  (no crash).
-- **AC-28 lockout-surfaced + graph:** `fx-5`'s lockout surfaces as its own
+- **AC-23 posture:** a bundle with Linux `per_host`/`posture` (fx-2/fx-3) derives one
+  posture finding per host posture-check, each carrying a non-empty remediation and a
+  non-empty validation/test — sourced from the run-pinned KB when the check id resolves
+  in `kb.checks`, otherwise from a deterministic fallback (fx-2's `LIN-SUDO`/`WIN-SMB`
+  are **not** in the fixture KB, so they exercise the fallback path). A bundle with no
+  posture derives zero posture findings (no crash). Requires `AranumBundle` to expose
+  the run-pinned `kb` subset (small importer addition).
+- **AC-24 lockout-surfaced + graph:** `fx-5`'s lockout surfaces as its own
   finding/observation, and the derived graph contains credential→host
   `AUTHENTICATES_TO` edges for the successes (reuse candidate path present), with the
   "unproven possession" caveat intact.
@@ -135,20 +141,20 @@ A campaign orchestrator (e.g. `core/reuse_campaign.py` or a `modules/` operation
 composes: session credential store → matrix builder → lockout accountant → P3 aranum
 handoff (mockable) → P4 derivation. No new transport code — reuse P3/local-enum.
 
-### Acceptance (new AC-21..AC-24; aranum execution mocked, no network/sockets)
-- **AC-21 matrix + ownership:** given a corpus of 2 credentials × 3 hosts × a
+### Acceptance (new AC-25..AC-28; aranum execution mocked, no network/sockets)
+- **AC-25 matrix + ownership:** given a corpus of 2 credentials × 3 hosts × a
   transport list, the campaign builds exactly the declared matrix (no implicit
   expansion) and routes execution through `recon/aranum` (asserted via a mocked
   handoff), honoring `ARANUM_OWNED_BASELINES` transport ownership.
-- **AC-22 lockout accounting:** with a lockout threshold of N, an account that has
+- **AC-26 lockout accounting:** with a lockout threshold of N, an account that has
   reached N-1 prior failures is **not** tested again (campaign skips it with a recorded
   reason); an observed `lockout` outcome halts further tests for that account for the
   cooldown. Assert the exact attempt counts and the stop decision.
-- **AC-23 scope discipline:** a `local`-scope campaign tests credentials as local
+- **AC-27 scope discipline:** a `local`-scope campaign tests credentials as local
   accounts per host (no domain argument); a `domain`-scope campaign stamps the domain —
   assert the scope flows into the aranum invocation and into the derived findings'
   `auth_context` (zero inference; declared only).
-- **AC-24 end-to-end derivation:** a mocked campaign whose handoff returns fx-5-shaped
+- **AC-28 end-to-end derivation:** a mocked campaign whose handoff returns fx-5-shaped
   `auth_outcomes` derives (via P4) the local-reuse finding across the success hosts and
   the lockout finding, and records a campaign summary (tested/skipped/locked counts).
 
