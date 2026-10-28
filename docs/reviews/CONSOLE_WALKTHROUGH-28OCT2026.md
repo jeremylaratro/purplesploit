@@ -123,3 +123,12 @@ output ("run `auto` to add these to the graph").
 Finding **#1** (background job tracking + child reaping) is the only medium-severity
 item and the clearest candidate for a fix. **#2** (output dir) and **#5** (target
 dedup) are small, self-contained changes. The rest are low/cosmetic UX polish.
+
+**Disposition (28 OCT 2026, owner):**
+- **#1 → PS-CONSOLE-01** — being fixed now (background scans registered with a Framework
+  registry, surfaced in `jobs`, and reaped on list/run/exit so no zombies; `job_id`
+  populated).
+- **#2 → PS-CONSOLE-02** (planned, `docs/plans/PS-CONSOLE-02-28OCT2026-startup-output-dir-warning.md`)
+  — default output dir intentionally left as-is; a small startup warning about cwd output
+  is logged as a future sprint (owner go required).
+- #3–#7 and the minor/cosmetic items remain open UX polish, unscheduled.
