@@ -5,7 +5,8 @@ the import spine when present, while pre-manifest inventory bundles remain
 readable. Producer records are retained in ``Observation.raw`` and malformed
 input is represented as data-quality observations instead of aborting import.
 The marker vocabulary is ``error``, ``interrupted``, ``unlisted``, ``partial``,
-``quarantine``, ``redact``, ``stale``, ``unknown``, and ``digest_mismatch``.
+``quarantine``, ``redact``, ``stale``, ``unknown``, ``digest_mismatch``, and
+``sarif_fallback``.
 """
 
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ from jsonschema import validators
 from purplesploit.core.auto_enum import AutoEnumPipeline
 from purplesploit.core.execution import AuthContext, Observation
 from purplesploit.core.findings import Evidence, Finding, FindingStatus, Severity
+from purplesploit.interop.sarif import import_aranum_sarif
 
 
 INVENTORY_SCHEMA = "aranum/inventory-unversioned;adapter=1"
@@ -649,5 +651,39 @@ def import_aranum_bundle(run_root: str | Path, *, tool_version: str | None = Non
                 quality("quarantine", f"{filename}: quarantined record", filename, record)
         if document.get("redacted") is True:
             quality("redact", f"{filename}: redacted", filename, document)
+
+    if not bundle.findings:
+        declared_sarif = sorted(
+            path for path in declared_paths if Path(path).suffix.lower() == ".sarif"
+        )
+        sarif_path = None
+        for relative in declared_sarif:
+            candidate = root / relative
+            try:
+                if candidate.is_file():
+                    sarif_path = candidate
+                    break
+            except OSError:
+                continue
+        if sarif_path is None:
+            try:
+                root_sarif = sorted(path for path in root.glob("*.sarif") if path.is_file())
+            except OSError:
+                root_sarif = []
+            sarif_path = root_sarif[0] if root_sarif else None
+        if sarif_path is not None:
+            fallback_findings = import_aranum_sarif(sarif_path)
+            if fallback_findings:
+                bundle.findings.extend(fallback_findings)
+                try:
+                    source = sarif_path.relative_to(root).as_posix()
+                except ValueError:
+                    source = sarif_path.name
+                quality(
+                    "sarif_fallback",
+                    f"imported {len(fallback_findings)} findings from SARIF fallback: {source}",
+                    source,
+                    {"source": source, "finding_count": len(fallback_findings)},
+                )
 
     return bundle

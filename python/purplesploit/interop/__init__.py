@@ -27,6 +27,7 @@ from .canonical import (
 )
 from .derive import DerivationResult, derive_from_bundle
 from .importers import ImportResult, ImporterRegistry, default_registry
+from .sarif import import_aranum_sarif
 
 __all__ = [
     "AranumBundle",
@@ -47,6 +48,7 @@ __all__ = [
     "export_sarif",
     "export_stix_bundle",
     "import_aranum_bundle",
+    "import_aranum_sarif",
     "import_bloodhound",
     "import_csv",
     "import_defectdojo",
