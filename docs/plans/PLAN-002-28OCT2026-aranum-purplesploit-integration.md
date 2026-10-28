@@ -42,13 +42,15 @@ null-session, auth_context}`.
 | P3 | `recon/aranum` backend module + auto-enum coalescing (owned baselines) | **MERGED** #117 |
 | P4 | account-derived analysis + Linux posture (derivation layer) | **MERGED** #118 |
 | P6 | credential-reuse campaign (orchestration) | **MERGED** #119 |
-| P5 | interchange / SARIF fallback (independent) | planned (this doc) |
+| P5 | interchange / SARIF fallback (independent) | **MERGED** #120 |
 
 AC-01..AC-20 (acceptance harness `python/tests/integration/interop/
 test_aranum_acceptance.py`) all pass as of P3. Acceptance IDs are assigned in
 **landing order** so the harness's generated `AC_IDS` stays contiguous: P4 (lands
-first) adds AC-21..AC-24 (derivation); P6 adds AC-25..AC-28 (campaign). P5 adds
-AC-29.. as needed.
+first) adds AC-21..AC-24 (derivation); P6 adds AC-25..AC-28 (campaign); P5 adds
+AC-29 (SARIF import). `AC_IDS` = `range(1, 30)`. **All of P1–P6 are merged; the
+integration is code-complete.** Remaining: the tmux manual bug/quirk walkthrough
+and the version cut.
 
 ---
 
