@@ -1,8 +1,17 @@
 # PLAN-003 — AD engagement toolchain qualification and delivery plan
 
 **Date:** 14NOV2026  
-**Status:** PLAN r2 — peer review GREEN (round-3 verification, 14NOV2026); awaiting owner go for P0-S0  
+**Status:** PLAN r3 — owner directive incorporated, 14NOV2026; P0-S0 toolkit half DONE, provisioner half BLOCKED; P0-S1 BLOCKED on SP0-01 prerequisites
 **Plan host:** PurpleSploit, because it owns cross-repository integration. `[recorded: owner brief, 14NOV2026]`
+
+## Revision r3 (14NOV2026)
+
+- Added C7 with the verbatim owner directive: no ShadowHex dependency and no LLM in any engagement, lab or analysis step; all analysis, ranking and reporting use deterministic code. `[recorded: owner directive, 14NOV2026]`
+- Reassigned every active harness owner, component, command, schema, fixture, profile, truth file, record, measurement directory and rollback to the dedicated `ad-lab-harness`; retained branch names. Recorded root `782b499`, local-only state, stdlib runtime, pytest, tri-state exits and read-only libvirt allowlist. Its own full suite is the regression manifest; there is no inherited regression surface. `[measured: git -C /srv/share/dev/ad-lab-harness log --oneline --all; git -C /srv/share/dev/ad-lab-harness remote -v]` `[recorded: /srv/share/dev/ad-lab-harness/CLAUDE.md]`
+- Withdrew G6-04/P6-S3 and roadmap P6-06 under C7, retaining identifiers and removing controller evaluation from active dependencies; there is no LLM controller. `[recorded: owner directive, 14NOV2026]`
+- Classified all seven `purplesploit/ai/` files and `modules/ai/ai_automation.py` from code under C7, prohibited invoking provider-calling modules, and required all planned commands to work without `openai`/`anthropic`. Added one SDK-absence test-plan row to P0-S3 and made P3-S2's deterministic ranking method explicit. `[verified: python/purplesploit/ai]` `[verified: python/purplesploit/modules/ai/ai_automation.py]` `[inferred]`
+- Recorded P0-S0 toolkit completion, byte fidelity and Sol review disposition; the provisioner permission block; SP0-01 implementation, Astra review fixes, unchanged-logic port and inconclusive dry run; and the resulting P0-S1 prerequisite block. Preserved initial baselines as dated starting snapshots alongside current status. `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` `[measured: git -C /srv/share/dev/28julytoolkit rev-parse HEAD plan003-p0-source-base^{commit}, 14NOV2026]`
+- Marked retained historical evidence read-only in §3.1 and prepended owner-directive errata to the assessment without rewriting its body. All other gates, tests, denominators, baseline values and decision trees remain intact. `[recorded: owner directive, 14NOV2026]` `[inferred]`
 
 ## Effort objective
 
@@ -20,7 +29,7 @@ The security and integrity of the project’s own tooling—including hardening,
 - `[inferred]` — recommendation, calculation, proposed design, or conclusion from evidence.
 - `[upstream knowledge, unverified]` — not established from the on-disk sources; a dependent implementation must receive a time-boxed verification or decision record. `[recorded: owner brief, 14NOV2026]`
 
-No builds, installers, VMs, or test suites were run while preparing this revision. `[recorded: owner brief, 14NOV2026]`
+No builds, installers, VMs, or test suites were run while preparing this document revision; execution results below are carried forward from cited records. `[recorded: owner brief, 14NOV2026]`
 
 ## Owner decisions and constraints
 
@@ -32,6 +41,22 @@ No builds, installers, VMs, or test suites were run while preparing this revisio
 | C4 | Lockout and traffic budgets remain unset. Configuration fields remain present but null; this plan does not invent operational values. `[recorded: owner brief, 14NOV2026]` |
 | C5 | The supported team size is one through five concurrent operators. `[recorded: owner brief, 14NOV2026]` |
 | C6 | The lab runs on net0srv using VirtualBox and Vagrant. SP0-01 is a one-day predecessor go/no-go gate proving that VirtualBox can operate beside the running KVM/libvirt VMs. If SP0-01 fails, P0-S1 is `blocked` until the owner names another host; this plan defines no alternate provider or host. `[recorded: owner decision, 14NOV2026]` |
+| C7 | Owner directive (14NOV2026), verbatim: "Don't use ShadowHex here, we won't have any LLM". No LLM in any engagement, lab or analysis step; no dependency on, invocation of, writes to, or qualification by ShadowHex. Every analysis, ranking and reporting step uses deterministic code. The independent lab-truth and qualification authority is the dedicated LLM-free `ad-lab-harness`. No PLAN-003 sprint may invoke the LLM-calling modules `purplesploit.ai.providers`, `purplesploit.ai.advisory` or `purplesploit.modules.ai.ai_automation`, including their local fallback entrypoints; the offline attack box must not need their SDKs (`openai`, `anthropic`) for any planned command. `[recorded: owner directive and harness choice, 14NOV2026]` `[recorded: /srv/share/dev/ad-lab-harness/CLAUDE.md]` |
+
+### C7 code classification (read-only)
+
+Classification concerns callable behavior, including indirect provider calls; an `ai/` directory name alone does not imply a provider. Definitions imported by the package initializer do not call a provider or load either SDK. Deterministic helpers remain eligible only through direct deterministic entrypoints, with no invocation of the three excluded modules. `[verified: python/purplesploit/ai/__init__.py:8]` `[verified: python/purplesploit/ai/providers.py:31]` `[inferred]`
+
+| Module (relative to `python/purplesploit/`) | Calls LLM? (C7 classification) | Code evidence and PLAN-003 disposition |
+|---|---|---|
+| `ai/providers.py` | Yes, directly | SDK imports at 37/40; `client.responses.create` at 56 and `client.messages.create` at 63. Excluded. `[verified: python/purplesploit/ai/providers.py:37]` `[verified: python/purplesploit/ai/providers.py:56]` `[verified: python/purplesploit/ai/providers.py:63]` |
+| `ai/advisory.py` | Yes, indirectly when configured | `self.provider.generate` at 146; analysis/workflow branches call it at 184/203. Local recommendation branch at 171 is deterministic, but the module's entrypoints are excluded by C7. `[verified: python/purplesploit/ai/advisory.py:146]` `[verified: python/purplesploit/ai/advisory.py:171]` `[verified: python/purplesploit/ai/advisory.py:203]` |
+| `modules/ai/ai_automation.py` | Yes, directly and indirectly | SDK imports at 185/188; direct provider calls at 242/249; advisory entrypoints at 314/327 construct a provider at 336. Local suggestion at 365 is deterministic, but this module is excluded. `[verified: python/purplesploit/modules/ai/ai_automation.py:185]` `[verified: python/purplesploit/modules/ai/ai_automation.py:242]` `[verified: python/purplesploit/modules/ai/ai_automation.py:314]` `[verified: python/purplesploit/modules/ai/ai_automation.py:336]` `[verified: python/purplesploit/modules/ai/ai_automation.py:365]` |
+| `ai/recommender.py` | No; deterministic rules | Static service map at 51, prerequisite filtering at 395, priority/confidence sort at 419 and arithmetic confidence at 571. `[verified: python/purplesploit/ai/recommender.py:51]` `[verified: python/purplesploit/ai/recommender.py:395]` `[verified: python/purplesploit/ai/recommender.py:419]` `[verified: python/purplesploit/ai/recommender.py:571]` |
+| `ai/attack_paths.py` | No; deterministic templates | Probability product at 66; fixed-template evaluation and sorting at 345/351; text report at 472. These generic templates do not replace authoritative BloodHound AD semantics. `[verified: python/purplesploit/ai/attack_paths.py:66]` `[verified: python/purplesploit/ai/attack_paths.py:345]` `[verified: python/purplesploit/ai/attack_paths.py:472]` `[inferred]` |
+| `ai/nlp.py` | No; deterministic regex/templates | Intent matching uses `re.search` at 156; response handler dispatch at 120; direct deterministic recommender/path helpers at 231/554. `[verified: python/purplesploit/ai/nlp.py:120]` `[verified: python/purplesploit/ai/nlp.py:156]` `[verified: python/purplesploit/ai/nlp.py:231]` `[verified: python/purplesploit/ai/nlp.py:554]` |
+| `ai/inventory.py` | No; deterministic introspection | Instantiates/imports module definitions at 19/21, reads metadata at 29, resolves operations at 37; does not run operations. Behavior still depends on the inspected module's constructor. `[verified: python/purplesploit/ai/inventory.py:19]` `[verified: python/purplesploit/ai/inventory.py:29]` `[verified: python/purplesploit/ai/inventory.py:37]` |
+| `ai/__init__.py` | No call; mixed re-exports | Imports deterministic helpers at 8–10 and excluded provider/advisory definitions at 11–12; imports alone do not load the lazy SDKs or invoke the exported services. Use deterministic helper entrypoints only. `[verified: python/purplesploit/ai/__init__.py:8]` `[verified: python/purplesploit/ai/__init__.py:11]` `[verified: python/purplesploit/ai/providers.py:31]` |
 
 ## Repository bases
 
@@ -39,12 +64,12 @@ No builds, installers, VMs, or test suites were run while preparing this revisio
 |---|---|---|
 | PurpleSploit | `918d73c` on `main`, matching `origin/main`. `[recorded: owner brief, 14NOV2026]` | Phase 0 integration consumer and plan host. `[inferred]` |
 | Aranum | `550f1cd` on `main`, matching `origin/main`. `[recorded: owner brief, 14NOV2026]` | Enumeration and local-check producer. `[inferred]` |
-| ShadowHex | `92a851e` on `main`, matching `origin/main`; another session may advance it. `[recorded: owner brief, 14NOV2026]` | Lab truth and qualification harness. `[inferred]` |
+| `ad-lab-harness` | Root `782b499`; local-only, no remote. `[measured: git -C /srv/share/dev/ad-lab-harness log --oneline --all; git -C /srv/share/dev/ad-lab-harness remote -v]` | Independent lab truth and qualification harness, LLM-free under C7; `adlab/`, stdlib-only runtime, pytest tests, tri-state verdicts (exits 0/1/2) and read-only libvirt allowlist. `[recorded: /srv/share/dev/ad-lab-harness/CLAUDE.md]` |
 | GOAD reference clone | `74af01e`, commit date 2026-10-24. `[measured: git -C upstream/GOAD show -s --format='%H %cI %s']` | Immutable upstream lab input. `[inferred]` |
 | `pt_provision` | No base SHA; `master` has zero commits. `[measured: git -c safe.directory=/srv/share/dev/pt_provision -C /srv/share/dev/pt_provision rev-parse --verify HEAD]` | Eight intended untracked top-level source entries are visible, including `AGENTS.md`; generated bundle files are ignored. `[measured: P0-S0 top-level inventory command]` |
-| `28julytoolkit` | No base SHA; `feat/initial-toolkit` has zero commits. `[measured: git -C /srv/share/dev/28julytoolkit rev-parse --verify HEAD]` | Eleven untracked top-level entries are present. `[measured: P0-S0 top-level inventory command]` |
+| `28julytoolkit` | Byte-faithful root `195acd2`, tagged `plan003-p0-source-base`; `main` at `2f0dede`. `[measured: git -C /srv/share/dev/28julytoolkit rev-parse HEAD plan003-p0-source-base^{commit}, 14NOV2026]` | P0-S0 toolkit half DONE 14NOV2026; initial 11-entry inventory retained in §4.1. `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` |
 
-Every sprint records its actual execution-start SHA. ShadowHex must not assume `92a851e` remains current. `[inferred]`
+Every sprint records its actual execution-start SHA. `ad-lab-harness` must not assume root `782b499` remains current. `[inferred]`
 
 ---
 
@@ -71,7 +96,7 @@ There are no manual tier adjustments. `[inferred]`
 | G0-02 | Attack-box definition omits the native AD stack and BloodHound CE service. `[verified: /srv/share/dev/pt_provision/config/repositories.tsv]` | 5 | 4 | P0 | now | A fresh box cannot run the required chain. `[inferred]` |
 | G0-03 | Existing offline bundle predates the October integration. `[verified: /srv/share/dev/pt_provision/pt-offline-bundle-20260915T023140Z.tar.gz.enc]` | 5 | 2 | P0 | now | The deployable artifact cannot represent the current chain. `[inferred]` |
 | G0-04 | Repository inputs follow remote HEAD rather than a declared lock. `[verified: /srv/share/dev/pt_provision/deploy.sh]` | 5 | 3 | P0 | now | Equivalent build requests can resolve different inputs. `[inferred]` |
-| G0-05 | `pt_provision` and `28julytoolkit` have no commits or base SHAs. `[measured: repository-base commands]` | 5 | 2 | P0 | now | No dependent sprint can state a source baseline until versioned roots exist. `[inferred]` |
+| G0-05 | At the initial r2 baseline, `pt_provision` and `28julytoolkit` had no commits or base SHAs; toolkit half now DONE, provisioner half BLOCKED (§4.1). `[measured: repository-base commands]` | 5 | 2 | P0 | now | No dependent sprint can state a source baseline until versioned roots exist. `[inferred]` |
 | G1-01 | Discovery and Aranum enumeration remain separate workflows. `[verified: /srv/share/dev/aranum/aranumtoolkit/network/auto-enum.sh]` | 5 | 3 | P0 | now | This blocks the production one-run chain. `[inferred]` |
 | G1-02 | Unauthenticated AD coverage is not truth-measured or scale-qualified. `[verified: /srv/share/dev/aranum/aranumtoolkit/network/enum-smb.sh]` | 5 | 4 | P0 | now | Missing DCs or signals could remain silent. `[inferred]` |
 | G1-03 | Retry/resume and attempted-versus-absent accounting are not proven at scale. `[verified: /srv/share/dev/aranum/aranumtoolkit/schemas/run-state-1.schema.json]` | 5 | 4 | P0 | now | A partial run could be mistaken for complete coverage. `[inferred]` |
@@ -95,13 +120,13 @@ There are no manual tier adjustments. `[inferred]`
 | G6-01 | Canonical/job state is not a durable shared store for one through five operators. `[verified: /srv/share/dev/purplesploit/python/purplesploit/distributed/README.md]` `[recorded: owner decision C5]` | 5 | 5 | P0 | now | Multi-operator ownership and restartability are blocked. `[inferred]` |
 | G6-02 | Aranum, PurpleSploit, and `pentest_scripts` evidence manifests are separate. `[verified: /srv/share/dev/pentest_scripts/evidence/workspace.py]` | 3 | 2 | P1 | later | The reporting chain functions before this bridge. `[inferred]` |
 | G6-03 | Graph, access, service, and host findings lack one correlation rule set. `[verified: /srv/share/dev/purplesploit/python/purplesploit/services/README.md]` | 4 | 4 | P1 | later | Correlation follows stable source contracts. `[inferred]` |
-| G6-04 | ShadowHex remains unqualified as the production controller. `[verified: /srv/share/dev/ShadowHex/docs/EXPANDED-AD-LINUX-APPLICATION-GATE-2026-11-02.md]` | 2 | 1 | P2 | document-and-move-on | Keep it as the Phase 0 truth harness; reconsider only after E2/E3. `[inferred]` |
+| G6-04 | **WITHDRAWN under C7** — production LLM controller evaluation. | 2 | 1 | P2 | withdrawn | Owner directive excludes this work; no controller ADR or E2/E3 reconsideration dependency remains. `[recorded: owner directive, 14NOV2026]` |
 
 ### Lane summary
 
 - **Now — 18 items:** G0-01–G0-05; G1-01–G1-03; G2-01, G2-03; G3-01–G3-03; G4-02–G4-03; G5-04–G5-05; G6-01. `[inferred]`
 - **Later — 10 items:** G2-02, G2-04, G3-04, G4-01, G4-04, G5-01–G5-03, G6-02–G6-03. `[inferred]`
-- **Document-and-move-on — 1 item:** G6-04. `[inferred]`
+- **Withdrawn — 1 item:** G6-04 under C7; retained for traceability, outside the active lanes. `[recorded: owner directive, 14NOV2026]`
 - **Out-of-scope gap items — none.** The standing exclusions are not converted into work items. `[inferred]`
 
 ---
@@ -114,39 +139,39 @@ All proposed branches, exits, blast radii, rollback actions, and roadmap IDs are
 
 | Order | Sprint/gate | Band | Gap items | Roadmap/ride-alongs | Repo(s) and branch | Independently shippable exit | Blast radius and rollback |
 |---:|---|---|---|---|---|---|---|
-| 0 | SP0-01 — provider coexistence go/no-go | predecessor | C6 | Provider eligibility | ShadowHex preliminary record | VirtualBox and Vagrant complete one disposable create/start/snapshot/restore cycle on net0srv while the previously running KVM/libvirt VMs remain running and observable. Any fail or inconclusive result blocks P0-S1. | Disposable spike VM only; remove the spike VM after evidence capture. No alternate host/provider is selected. |
-| 1 | P0-S0 — versioned source roots | P0 | G0-05 | P0-02, P0-03 | `pt_provision`, `28julytoolkit`: `bootstrap/plan003-source-baseline` | Both inputs have reviewed root commits, clean intended-source inventories, and recorded tree hashes. | Version metadata only; before integration drop the branch, after integration correct forward without deleting source files. |
-| 2 | P0-S1 — full-GOAD first gate and truth model | P0 | G0-01 | P0-01, P0-06; scaffolding for G1-02/G2-01 | ShadowHex: `plan003/p0-goad-truth-gate`; GOAD remains pinned/unchanged | Full `ad/GOAD` rebuilds twice and topology/trust/AD-CS truth comparison returns only pass/fail/inconclusive, with no inconclusive counted as pass. | Lab harness and VMs; revert the harness commit and power off retained test VMs. |
-| 3 | SP0-04 — effective-rights decision record | predecessor | C3 | API comparison | ShadowHex/Aranum record | Authz and AccessCheck are compared against the same controlled Windows ACL fixtures on a qualified P0-S1 Windows host; the record selects the implementation used by P0-S2. | Decision record only; supersede if evidence changes. |
+| 0 | SP0-01 — provider coexistence go/no-go | predecessor | C6 | Provider eligibility | ad-lab-harness preliminary record | VirtualBox and Vagrant complete one disposable create/start/snapshot/restore cycle on net0srv while the previously running KVM/libvirt VMs remain running and observable. Any fail or inconclusive result blocks P0-S1. Harness implemented/reviewed; unchanged-logic port recorded in §4.2. Current dry run: exit 2, inconclusive/prerequisite_missing; owner must install VirtualBox 7.1 and Vagrant before re-run. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` | Disposable spike VM only; remove the spike VM after evidence capture. No alternate host/provider is selected. |
+| 1 | P0-S0 — versioned source roots | P0 | G0-05 | P0-02, P0-03 | `pt_provision`, `28julytoolkit`: `bootstrap/plan003-source-baseline` | Both inputs have reviewed root commits, clean intended-source inventories, and recorded tree hashes. Toolkit half DONE 14NOV2026; provisioner half BLOCKED on owner/root directory-permission fix (§4.1). `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` | Version metadata only; before integration drop the branch, after integration correct forward without deleting source files. |
+| 2 | P0-S1 — full-GOAD first gate and truth model | P0 | G0-01 | P0-01, P0-06; scaffolding for G1-02/G2-01 | ad-lab-harness: `plan003/p0-goad-truth-gate`; GOAD remains pinned/unchanged | Full `ad/GOAD` rebuilds twice and topology/trust/AD-CS truth comparison returns only pass/fail/inconclusive, with no inconclusive counted as pass. Currently BLOCKED on SP0-01 prerequisites and a subsequent pass (§4.2). `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` | Lab harness and VMs; revert the harness commit and power off retained test VMs. |
+| 3 | SP0-04 — effective-rights decision record | predecessor | C3 | API comparison | ad-lab-harness/Aranum record | Authz and AccessCheck are compared against the same controlled Windows ACL fixtures on a qualified P0-S1 Windows host; the record selects the implementation used by P0-S2. | Decision record only; supersede if evidence changes. |
 | 4 | P0-S2 — ACL-first writable-path contract | P0 | G5-04 | P0-05 | Aranum: `plan003/p0-acl-first-write-gate` | All three default writability checks use one effective-rights implementation without file creation; the repo-wide writer inventory and classification manifest agree exactly; no `default-probe` or ungated `opt-in-output` site remains; every target-side creation site is reachable only through explicit `--write`/`-WriteValidate`. | Windows collectors and flag plumbing; revert the sprint commit to compare behavior, while marking the prior version unqualified under C3. |
 | 5 | P0-S3 — pinned offline attack-box definition | P0 | G0-02, G0-04, G3-01 | P0-02; packaging support for G2-03 | `pt_provision`: `plan003/p0-ad-box-lock` | A Debian-based lock resolves all 17 capabilities, native packages, both collectors, and the selected three-service BloodHound CE composition. | Provisioning manifest/build output; revert the sprint commit and continue using the parent only for non-PLAN-003 uses. |
 | 6 | P0-S4 — reproducible offline release | P0 | G0-03 | P0-03 | `pt_provision`: `release/plan003-p0-offline-bundle` | Two builds resolve identical normalized identities; a pristine pinned-base VM, disconnected before real bootstrap, consumes only the release artifact and passes installation/service/import/report checks. | Release artifact only; withdraw a failed release record and rebuild from the retained lock. |
-| 7 | P0-S5 — live Phase 0 interoperability smoke | P0 | G4-03 | P0-04, P0-05; non-promoting probes of later interfaces | ShadowHex, Aranum, PurpleSploit: `plan003/p0-live-interoperability` | The detached attack box produces six lineage-linked stage receipts plus success/denied/unavailable/partial/inconclusive transport classifications. This qualifies interoperability and G4-03, not the production automated chain. | Qualification fixtures and harness records; revert commits and retain raw run evidence outside source trees. |
+| 7 | P0-S5 — live Phase 0 interoperability smoke | P0 | G4-03 | P0-04, P0-05; non-promoting probes of later interfaces | ad-lab-harness, Aranum, PurpleSploit: `plan003/p0-live-interoperability` | The detached attack box produces six lineage-linked stage receipts plus success/denied/unavailable/partial/inconclusive transport classifications. This qualifies interoperability and G4-03, not the production automated chain. | Qualification fixtures and harness records; revert commits and retain raw run evidence outside source trees. |
 | 8 | P1-S1 — discovery-to-Aranum production workflow | P0 | G1-01, G1-02 | P1-01, P1-02 | PurpleSploit + Aranum: `plan003/p1-discovery-chain` | One run ID preserves discovery XML, runs unauthenticated enumeration, imports results, and matches lab truth. | Discovery/workflow adapter; revert both coordinated commits. |
 | 9 | P1-S2 — resumable coverage ledger | P0 | G1-03 | P1-03, P1-04 | Aranum: `plan003/p1-resume-ledger` | Interrupted synthetic and lab runs resume without converting skipped work to absence. | Run-state schema; additive rollback through reader compatibility and commit revert. |
-| 10 | P2-S1 — directory inventory and graph collection | P0 | G2-01, G2-03 | P2-02, P2-03, P2-05 | Aranum + ShadowHex: `plan003/p2-directory-graph` | Versioned inventory and collection receipts match truth with discrepancy classifications. | LDAP schemas/collector adapter; revert additive schema and adapter commits. |
+| 10 | P2-S1 — directory inventory and graph collection | P0 | G2-01, G2-03 | P2-02, P2-03, P2-05 | Aranum + ad-lab-harness: `plan003/p2-directory-graph` | Versioned inventory and collection receipts match truth with discrepancy classifications. | LDAP schemas/collector adapter; revert additive schema and adapter commits. |
 | 11 | P3-S1 — authoritative graph ingest | P0 | G3-02, G3-03 | P3-02, P3-03; G3-01 closed by P0-S3 | PurpleSploit: `plan003/p3-bhce-ingest` | Collector artifacts automatically register, ingest into BloodHound CE, and return normalized path receipts. | Artifact/job contracts; revert adapter and retain raw collection. |
-| 12 | P4-S1 — local access through the console and workstation profile | P0 | G4-02 | P4-01, P4-02, P4-05; later WS01 profile | PurpleSploit + Aranum + ShadowHex: `plan003/p4-aranum-local` | Proven transport capabilities determine eligible local jobs; results return through the importer; the later WS01 truth profile proves one workstation path without changing the first gate. | Console adapter, access schema, and separate WS01 truth profile; revert additive operations/profile. |
-| 13 | P5-S1 — restartable fleet execution | P0 | G5-05 | P5-04, P5-06; G5-04 closed by P0-S2 | Aranum + ShadowHex: `plan003/p5-fleet-coverage` | Mixed full-GOAD/WS01 and simulated runs report a terminal state for every host/check and resume after interruption. | Fleet state/fixtures; revert additive queue changes. |
+| 12 | P4-S1 — local access through the console and workstation profile | P0 | G4-02 | P4-01, P4-02, P4-05; later WS01 profile | PurpleSploit + Aranum + ad-lab-harness: `plan003/p4-aranum-local` | Proven transport capabilities determine eligible local jobs; results return through the importer; the later WS01 truth profile proves one workstation path without changing the first gate. | Console adapter, access schema, and separate WS01 truth profile; revert additive operations/profile. |
+| 13 | P5-S1 — restartable fleet execution | P0 | G5-05 | P5-04, P5-06; G5-04 closed by P0-S2 | Aranum + ad-lab-harness: `plan003/p5-fleet-coverage` | Mixed full-GOAD/WS01 and simulated runs report a terminal state for every host/check and resume after interruption. | Fleet state/fixtures; revert additive queue changes. |
 | 14 | P6-S1 — durable one-to-five-operator state | P0 | G6-01 | P6-01, P6-02 | PurpleSploit: `plan003/p6-durable-team-state` | Acceptance passes independently at operator counts 1, 2, 3, 4, and 5, including restart and ownership/lease transitions at counts 1 and 5. | Canonical persistence and jobs; restore the pre-migration export and revert code. |
 | 15 | P2-S2 — policy slots and normalized domain classes | P1 | G2-02, G2-04 | P2-01, P2-04 | PurpleSploit + Aranum: `plan003/p2-domain-normalization` | Null lockout/traffic slots remain unusable until explicitly populated; AD CS/GPO/delegation rows have terminal coverage. | Configuration/schema changes; revert additive fields/adapters. |
-| 16 | P3-S2 — path prioritization | P1 | G3-04 | P3-04, P3-05 | PurpleSploit + ShadowHex: `plan003/p3-path-ranking` | Seeded paths rank deterministically with visible factors and unproven prerequisites remain unconfirmed. | Ranking/query pack; revert query-pack version. |
+| 16 | P3-S2 — path prioritization | P1 | G3-04 | P3-04, P3-05 | PurpleSploit + ad-lab-harness: `plan003/p3-path-ranking` | Seeded paths rank deterministically with visible factors and unproven prerequisites remain unconfirmed. | Ranking/query pack; revert query-pack version. |
 | 17 | P4-S2 — manual session records | P1 | G4-04 | P4-04 | PurpleSploit: `plan003/p4-manual-sessions` | Manual observations enter the same access/coverage model without claiming automated proof. | Additive record/UI path; revert schema/UI commit. |
-| 18 | P5-S2 — expanded Windows local coverage | P1 | G5-01, G5-02, G5-03 | P5-02, P5-03; WS01 workstation depth | Aranum + ShadowHex: `plan003/p5-windows-depth` | Bounded directory/share, task-chain, startup, search-path, and workstation truth cases have explicit results and negative controls. | Windows collectors and truth profile; revert collector pack version. |
+| 18 | P5-S2 — expanded Windows local coverage | P1 | G5-01, G5-02, G5-03 | P5-02, P5-03; WS01 workstation depth | Aranum + ad-lab-harness: `plan003/p5-windows-depth` | Bounded directory/share, task-chain, startup, search-path, and workstation truth cases have explicit results and negative controls. | Windows collectors and truth profile; revert collector pack version. |
 | 19 | P6-S2 — evidence bridge and correlation | P1 | G6-02, G6-03 | P6-03–P6-05 | PurpleSploit + `pentest_scripts`: `plan003/p6-correlation-evidence` | One run registers all artifacts and produces deduplicated findings with retained lineage. | Correlation/evidence registration; revert rules and bridge commits. |
 | 20 | P4-S3 — interactive desktop access | P2 | G4-01 | P4-03 | Aranum: `plan003/p4-desktop-transports` | RDP produces qualified collection results and VNC records assisted/manual status explicitly. | Transport resolver; revert additive transport implementation. |
-| 21 | P6-S3 — controller decision | P2 | G6-04 | P6-06 | ShadowHex docs: `plan003/p6-controller-adr` | ADR records retain/replace decision based on passed E2/E3 and reproduction evidence. | Documentation only; supersede the ADR if evidence changes. |
+| 21 | P6-S3 — controller decision — **WITHDRAWN under C7** | withdrawn (formerly P2) | G6-04 (withdrawn) | P6-06 (withdrawn) | None; no branch or repository work | No LLM controller; no ADR, reproduction test or promotion dependency. `[recorded: owner directive, 14NOV2026]` | No implementation to roll back; identifier retained only for traceability. |
 
 ## 2.2 Dependency order
 
 1. SP0-01 is a hard predecessor of P0-S1. A `fail` or `inconclusive` result sets P0-S1 to `blocked` until the owner names another host; no provider engineering or alternate-host work is implied. `[recorded: owner decision C6]`
-2. P0-S0 precedes every `pt_provision` or `28julytoolkit` modification because neither currently has a base commit. `[inferred]`
+2. P0-S0 precedes every later `pt_provision` or `28julytoolkit` modification. The toolkit half is DONE; provisioner changes remain blocked until its permission fix and reviewed root commit. `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` `[measured: git -C /srv/share/dev/28julytoolkit rev-parse HEAD plan003-p0-source-base^{commit}, 14NOV2026]`
 3. P0-S1 starts only after SP0-01 passes. Its lab-ready Windows slice precedes SP0-04. `[inferred]`
 4. SP0-04’s signed decision record precedes P0-S2 implementation. P0-S2 is therefore not independent of the lab. `[inferred]`
 5. P0-S3 depends on P0-S0 and on SP0-02/SP0-03 decision records for the base release and BloodHound CE composition. `[inferred]`
 6. P0-S4 depends on P0-S3. `[inferred]`
 7. P0-S5 depends on passed P0-S1, P0-S2, and P0-S4 gates. `[inferred]`
-8. Phase 1 depends on the Phase 0 interoperability gate. Phase 2 depends on Phase 1 discovery/coverage. Phase 3 depends on Phase 2 collection. Phase 4 depends on proven access state. Phase 5 depends on Phase 4 dispatch eligibility. Phase 6 depends on stable producer contracts from Phases 1–5. `[inferred]`
+8. Phase 1 depends on the Phase 0 interoperability gate. Phase 2 depends on Phase 1 discovery/coverage. Phase 3 depends on Phase 2 collection. Phase 4 depends on proven access state. Phase 5 depends on Phase 4 dispatch eligibility. Active Phase 6 sprints P6-S1 and P6-S2 depend on stable producer contracts from Phases 1–5. `[inferred]`
 9. Before a Phase 4 or 5 exit may claim per-workstation coverage, P4-S1 must install and separately qualify the upstream WS01 extension profile. The full-GOAD first-gate denominator remains five VMs. `[recorded: owner decision C1]` `[verified: upstream/GOAD/extensions/ws01/README.md]`
 10. Lower-tier work never pulls a higher-tier gap item into the same sprint. `[inferred]`
 
@@ -155,6 +180,8 @@ All proposed branches, exits, blast radii, rollback actions, and roadmap IDs are
 # 3. Phase 0 research
 
 ## 3.1 Evidence reviewed
+
+The ShadowHex citations below and in G0-01 are read-only historical references; nothing in PLAN-003 reads, writes or depends on ShadowHex at runtime. `[recorded: owner directive, 14NOV2026]`
 
 1. GOAD clone at `upstream/GOAD`, including `ad/`, `extensions/`, provider definitions, documentation, `goad.py`, and provider factory. `[verified: upstream/GOAD]`
 2. ShadowHex expanded AD gate. `[verified: /srv/share/dev/ShadowHex/docs/EXPANDED-AD-LINUX-APPLICATION-GATE-2026-11-02.md]`
@@ -358,13 +385,19 @@ Every new acceptance gate has exactly three outcomes:
 
 Regression manifests contain the exact suite command, working directory, execution-start SHA, inputs, denominator, and one row per test identity with `pass|fail|skip|inconclusive`. `[inferred]`
 
-Current per-test statuses are deferred to sprint execution because this planning pass was read-only and prohibited test execution. `[recorded: owner brief, 14NOV2026]`
+Except for the completed P0-S0 toolkit work and SP0-01 records cited below, per-test statuses remain deferred to sprint execution; this document revision runs no implementation tests. `[recorded: owner brief, 14NOV2026]`
 
 ## 4.1 P0-S0 — versioned source roots
 
 ### Problem and closure
 
-`pt_provision` and `28julytoolkit` cannot supply real base SHAs because both have zero commits. This closes G0-05 and is a hard dependency for every later modification to those repositories. `[measured: repository-base commands]` `[inferred]`
+At the initial r2 baseline, `pt_provision` and `28julytoolkit` both had zero commits. This sprint closes G0-05 and is a hard dependency for every later modification to those repositories; current disposition is partial completion as recorded below. `[measured: repository-base commands, initial r2 baseline]` `[inferred]`
+
+### Status (14NOV2026)
+
+- **28julytoolkit half: DONE.** Byte-faithful root `195acd2`, tag `plan003-p0-source-base`, `main` at `2f0dede`. `tests/test-ad-modern-inventory.sh` passes **18/18 on main**, covering **23,389 blobs, 0 byte mismatches**. `[measured: bash tests/test-ad-modern-inventory.sh on 28julytoolkit main 2f0dede, exit 0, 14NOV2026]`
+- **Review:** Sol R1 **FIX-FIRST** identified CRLF normalization; fixed. Sol R2 **SHIP**. `[recorded: 28julytoolkit/docs/reviews/PLAN003-P0-S0-REVIEW-SOL-R1-14NOV2026.md]` `[recorded: 28julytoolkit/docs/reviews/PLAN003-P0-S0-REVIEW-SOL-R2-14NOV2026.md]` `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]`
+- **pt_provision half: BLOCKED** until the owner fixes directory write permission: owner `srv0:nfs_users`, mode `755/2755`; root is required. It still has no accepted root. This is a prerequisite block, not a failed source-fidelity gate. `[measured: stat -c '%U:%G %a' /srv/share/dev/pt_provision gives srv0:nfs_users 2755, 14NOV2026]` `[inferred]`
 
 ### Decisions
 
@@ -376,7 +409,7 @@ The `pt_provision` root includes exactly these eight intended source entries: `.
 
 The current encrypted bundle and checksum remain generated artifacts excluded by `.gitignore`. `[verified: /srv/share/dev/pt_provision/.gitignore]`
 
-The `28julytoolkit` root includes exactly 11 current untracked entries: `CYBER-FLAGS-LOG.md`, `README.md`, `ROE-TEMPLATE.md`, `ad-modern/`, `aranum/`, `c2-alt/`, `evasion-modern/`, `payloads/`, `potatoes/`, `sliver/`, and `toolchains/`. `[measured: P0-S0 top-level inventory command]`
+The accepted `28julytoolkit` root includes the 11 entries recorded as untracked at the initial r2 baseline: `CYBER-FLAGS-LOG.md`, `README.md`, `ROE-TEMPLATE.md`, `ad-modern/`, `aranum/`, `c2-alt/`, `evasion-modern/`, `payloads/`, `potatoes/`, `sliver/`, and `toolchains/`. `[measured: P0-S0 top-level inventory command]`
 
 If the owner does not intend all 11 entries to share one history, P0-S0 stops and records an owner-approved root boundary before committing anything. `[inferred]`
 
@@ -418,6 +451,8 @@ RED proof:
 
 ### Baselines
 
+The two rows below preserve the initial r2 starting measurements (before P0-S0 execution). Current source addressability is **1/2**, with the toolkit DONE and provisioner BLOCKED as recorded above; re-running the literal commands will reflect that progress. `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]`
+
 | Metric | Exact command and working directory | Inputs and denominator | Baseline |
 |---|---|---|---|
 | Version-addressable source repositories | `git -c safe.directory=/srv/share/dev/pt_provision -C /srv/share/dev/pt_provision rev-parse --verify HEAD; git -c safe.directory=/srv/share/dev/28julytoolkit -C /srv/share/dev/28julytoolkit rev-parse --verify HEAD` from any directory | Two repositories | **0/2 measured; both commands returned status 128.** `[measured: stated commands]` |
@@ -430,6 +465,14 @@ Before integration, remove only the bootstrap branches/tags; existing working fi
 After integration, do not delete tracked source to undo the root. Retire the baseline tag, add a corrective commit or owner-approved replacement root, and block dependent branches until rebased onto corrected provenance. `[inferred]`
 
 ## 4.2 P0-S1 — full-GOAD first gate and truth model
+
+### Status and SP0-01 predecessor (14NOV2026)
+
+SP0-01's harness is implemented and reviewed. Astra R1 raised **1 HIGH, 3 MEDIUM, 1 LOW**, all fixed; Astra R2 raised no new BLOCKER/HIGH and its MEDIUM was fixed. `[recorded: ad-lab-harness/docs/reviews/PLAN003-SP0-01-CODE-REVIEW-ASTRA-R1-2026-11-14.md]` `[recorded: ad-lab-harness/docs/reviews/PLAN003-SP0-01-CODE-REVIEW-ASTRA-R2-2026-11-14.md]`
+
+The owner-directed port targets `ad-lab-harness/adlab/provider_coexistence.py`, with logic unchanged. The port has now landed at `30bcff3` (docs at `0a38f41`); its recorded full-suite result is **47 passed**. Root `782b499` had no pre-existing regression surface; the regression manifest is this repository's own full suite. `[measured: git -C /srv/share/dev/ad-lab-harness log --oneline --all]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]`
+
+Dry run on net0srv: **exit 2, `inconclusive` / `prerequisite_missing`**, because `VBoxManage`, `vagrant` and `vboxdrv` are absent. **P0-S1 stays BLOCKED** until the owner installs **VirtualBox 7.1 and Vagrant** and SP0-01 then passes. Installation alone is not a pass; the existing C6 fail/inconclusive decision tree still applies. `[measured: dry run recorded in ad-lab-harness/docs/records/PLAN003-SP0-01-RAW-2026-11-14/port-dryrun.json]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` `[inferred]`
 
 ### Problem and closure
 
@@ -452,46 +495,46 @@ There is no reproducibly built, truth-backed Windows domain lab. This sprint clo
 | Repo/path | Change/command ownership | Contract affected | Introduced failure mode |
 |---|---|---|---|
 | `upstream/GOAD` | No edits; retain pin `74af01e`. `[inferred]` | Immutable lab definition. `[inferred]` | Local drift from the pin. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/provider_coexistence.py` | Implement SP0-01 observer/runner. `[inferred]` | C6 go/no-go record. `[inferred]` | Existing libvirt state not sampled at all required points. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/fixtures/virtualbox-onevm/Vagrantfile` | Own the disposable one-VM Vagrant fixture used only by SP0-01. `[inferred]` | Provider coexistence input. `[inferred]` | Fixture exercises a path unlike the selected provider. `[inferred]` |
-| `ShadowHex/docs/records/PLAN003-SP0-01-net0srv.json` | Own the coexistence result consumed by P0-S1. `[inferred]` | Predecessor decision. `[inferred]` | Missing pre/during/post KVM observations. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/goad_profile.py` | Parse only full GOAD metadata and normalize hosts, domains, forests, trusts, AD CS, and resources. `[inferred]` | Lab-profile contract. `[inferred]` | Parent/child and external trust are conflated. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/profiles/GOAD-virtualbox.json` | Own the fixed first-gate profile used by every command. `[inferred]` | Gate input. `[inferred]` | Profile points to another variant or provider. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/truth.schema.json` | Define expected, observed, status, evidence, and reason fields with `pass|fail|inconclusive`. `[inferred]` | Truth-comparison contract. `[inferred]` | Missing rows are silently accepted. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/truth/GOAD.json` | Own reviewed full-GOAD truth from pin `74af01e`. `[inferred]` | Expected lab state. `[inferred]` | Stale truth after pin change. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/qualify.py` | Build/observe/compare two full-GOAD runs and emit the result. `[inferred]` | First-gate command. `[inferred]` | Empty observations pass or unknown becomes absence. `[inferred]` |
-| `ShadowHex/tests/unit/recon_lab/`, `ShadowHex/tests/lab/` | Existing regression command inputs plus new GOAD-specific tests. `[inferred]` | Regression surface. `[verified: paths]` | Existing suite failures are ignored. `[inferred]` |
-| `ShadowHex/docs/test-results/plan003-p0-s1-base.xml` | Own pytest output. `[inferred]` | Regression manifest. `[inferred]` | Results reference the wrong SHA. `[inferred]` |
-| `ShadowHex/docs/test-results/plan003-p0-s1-live.json` | Own the gate output. `[inferred]` | Live qualification record. `[inferred]` | Result is not linked to truth/profile/run IDs. `[inferred]` |
-| `ShadowHex/docs/records/PLAN003-P0-GOAD-GATE-<run>.json` | Own provider, GOAD pin, two rebuilds, SP0-05 disk measurements, and terminal result. `[inferred]` | Promotion record. `[inferred]` | Summary disagrees with the raw result. `[inferred]` |
+| `ad-lab-harness/adlab/provider_coexistence.py` | Implemented SP0-01 observer/runner; unchanged-logic port recorded above. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` | C6 go/no-go record. `[inferred]` | Existing libvirt state not sampled at all required points. `[inferred]` |
+| `ad-lab-harness/fixtures/virtualbox-onevm/Vagrantfile` | Own the disposable one-VM Vagrant fixture used only by SP0-01. `[inferred]` | Provider coexistence input. `[inferred]` | Fixture exercises a path unlike the selected provider. `[inferred]` |
+| `ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json` | Own the coexistence result consumed by P0-S1. `[inferred]` | Predecessor decision. `[inferred]` | Missing pre/during/post KVM observations. `[inferred]` |
+| `ad-lab-harness/adlab/goad_profile.py` | Parse only full GOAD metadata and normalize hosts, domains, forests, trusts, AD CS, and resources. `[inferred]` | Lab-profile contract. `[inferred]` | Parent/child and external trust are conflated. `[inferred]` |
+| `ad-lab-harness/profiles/GOAD-virtualbox.json` | Own the fixed first-gate profile used by every command. `[inferred]` | Gate input. `[inferred]` | Profile points to another variant or provider. `[inferred]` |
+| `ad-lab-harness/schemas/truth.schema.json` | Define expected, observed, status, evidence, and reason fields with `pass|fail|inconclusive`. `[inferred]` | Truth-comparison contract. `[inferred]` | Missing rows are silently accepted. `[inferred]` |
+| `ad-lab-harness/truth/GOAD.json` | Own reviewed full-GOAD truth from pin `74af01e`. `[inferred]` | Expected lab state. `[inferred]` | Stale truth after pin change. `[inferred]` |
+| `ad-lab-harness/adlab/qualify.py` | Build/observe/compare two full-GOAD runs and emit the result. `[inferred]` | First-gate command. `[inferred]` | Empty observations pass or unknown becomes absence. `[inferred]` |
+| `ad-lab-harness/tests/unit/`, `ad-lab-harness/tests/lab/` | Own full-suite regression manifest, including SP0-01 and new GOAD-specific tests; no pre-existing regression surface at root `782b499`. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` `[inferred]` | Harness regression surface. `[inferred]` | A collected test is omitted from the manifest. `[inferred]` |
+| `ad-lab-harness/docs/test-results/plan003-p0-s1-base.xml` | Own pytest output. `[inferred]` | Regression manifest. `[inferred]` | Results reference the wrong SHA. `[inferred]` |
+| `ad-lab-harness/docs/test-results/plan003-p0-s1-live.json` | Own the gate output. `[inferred]` | Live qualification record. `[inferred]` | Result is not linked to truth/profile/run IDs. `[inferred]` |
+| `ad-lab-harness/docs/records/PLAN003-P0-GOAD-GATE-<run>.json` | Own provider, GOAD pin, two rebuilds, SP0-05 disk measurements, and terminal result. `[inferred]` | Promotion record. `[inferred]` | Summary disagrees with the raw result. `[inferred]` |
 
 ### Test plan
 
 SP0-01 predecessor command:
 
 ```bash
-cd /srv/share/dev/ShadowHex
-python3 probes/recon_lab/ad/provider_coexistence.py \
+cd /srv/share/dev/ad-lab-harness
+python3 -B adlab/provider_coexistence.py \
   --host net0srv \
-  --fixture probes/recon_lab/ad/fixtures/virtualbox-onevm/Vagrantfile \
+  --fixture fixtures/virtualbox-onevm/Vagrantfile \
   --result docs/records/PLAN003-SP0-01-net0srv.json
 ```
 
-P0-S1 regression command:
+P0-S1 regression command (the repository's own full suite, not a borrowed suite):
 
 ```bash
-cd /srv/share/dev/ShadowHex
-python -m pytest tests/unit/recon_lab tests/lab -q \
+cd /srv/share/dev/ad-lab-harness
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q -p no:cacheprovider \
   --junitxml=docs/test-results/plan003-p0-s1-base.xml
 ```
 
 Fixed full-GOAD gate command:
 
 ```bash
-cd /srv/share/dev/ShadowHex
-python3 probes/recon_lab/ad/qualify.py \
-  --profile probes/recon_lab/ad/profiles/GOAD-virtualbox.json \
-  --truth probes/recon_lab/ad/truth/GOAD.json \
+cd /srv/share/dev/ad-lab-harness
+python3 -B adlab/qualify.py \
+  --profile profiles/GOAD-virtualbox.json \
+  --truth truth/GOAD.json \
   --result docs/test-results/plan003-p0-s1-live.json
 ```
 
@@ -516,15 +559,17 @@ RED proof:
 
 ### Baselines
 
+These values preserve the initial r2 starting snapshot; the commands/directories below are mapped to the new harness for execution-start refresh, not represented as new measurements. The current SP0-01 dry-run record is cited above and is inconclusive, so it does not qualify P0-S1. `[recorded: PLAN-003 r2 initial baselines]` `[inferred]`
+
 | Metric | Exact command and working directory | Inputs and denominator | Baseline |
 |---|---|---|---|
-| Passed full-GOAD gate records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-P0-GOAD-GATE-*.json' -print \| wc -l` in `/srv/share/dev/ShadowHex` | Passed records; denominator one required first gate | **0 measured.** `[measured: stated command]` |
-| Machine-readable full-GOAD truth manifests | `find probes/recon_lab/ad/truth -maxdepth 1 -type f -name 'GOAD.json' -print \| wc -l` in `/srv/share/dev/ShadowHex` | One required manifest | **0/1 measured.** `[measured: stated command]` |
-| Provider coexistence records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-SP0-01-*.json' -print \| wc -l` in `/srv/share/dev/ShadowHex` | One required SP0-01 result | **0/1 measured.** `[measured: stated command]` |
+| Passed full-GOAD gate records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-P0-GOAD-GATE-*.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | Passed records; denominator one required first gate | **0 measured.** `[measured: stated command]` |
+| Machine-readable full-GOAD truth manifests | `find truth -maxdepth 1 -type f -name 'GOAD.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required manifest | **0/1 measured.** `[measured: stated command]` |
+| Provider coexistence records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-SP0-01-*.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required SP0-01 result | **0/1 measured.** `[measured: stated command]` |
 
 ### Rollback
 
-Before integration, discard the ShadowHex branch and power off the test VMs; retain raw measurements until review completes. `[inferred]`
+Before integration, discard the ad-lab-harness branch and power off the test VMs; retain raw measurements until review completes. `[inferred]`
 
 After integration, revert the qualification-harness commit and mark the gate record superseded. VM removal is a separate lab-cleanup decision. `[inferred]`
 
@@ -568,7 +613,7 @@ The complete current inventory contains six target-side writer sites across five
 | `aranum/aranumtoolkit/tests/` | Existing `unittest` and `pytest` discovery root. `[verified: path]` | Existing regression suite input. `[inferred]` | Existing failures are omitted from the sprint record. `[inferred]` |
 | `aranum/aranumtoolkit/tests/smoke.sh` | Existing smoke command input. `[verified: path]` | Aranum smoke regression. `[inferred]` | Smoke result is not captured. `[inferred]` |
 | `aranum/aranumtoolkit/tests/data_audit.py` | Existing data-audit command input. `[verified: path]` | Aranum data regression. `[inferred]` | Data-audit result is not captured. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/profiles/GOAD-virtualbox.json` | P0-S1-owned external live-gate input; P0-S2 consumes but does not modify it. `[inferred]` | Qualified Windows target selection. `[inferred]` | Live gate runs against an unqualified profile. `[inferred]` |
+| `ad-lab-harness/profiles/GOAD-virtualbox.json` | P0-S1-owned external live-gate input; P0-S2 consumes but does not modify it. `[inferred]` | Qualified Windows target selection. `[inferred]` | Live gate runs against an unqualified profile. `[inferred]` |
 | `aranum/docs/test-strategy/raw/plan003/p0-s2/` | Own `base-unittest.log`, `base.xml`, `smoke.log`, `data-audit.log`, `writer-inventory.tsv`, `effective-rights.json`, and `live-write-gate.json`. `[inferred]` | All sprint command outputs. `[inferred]` | Outputs reference the wrong decision record/SHA. `[inferred]` |
 | `aranum/docs/decisions/PLAN003-SP0-04-effective-rights.md` | Own the prerequisite API comparison/selection. `[inferred]` | Implementation decision. `[inferred]` | Implementation begins before selection. `[inferred]` |
 
@@ -607,7 +652,7 @@ Live gate after P0-S1 and SP0-04:
 ```bash
 cd /srv/share/dev/aranum
 python3 aranumtoolkit/tests/run_live_write_gate.py \
-  --profile /srv/share/dev/ShadowHex/probes/recon_lab/ad/profiles/GOAD-virtualbox.json \
+  --profile /srv/share/dev/ad-lab-harness/profiles/GOAD-virtualbox.json \
   --decision docs/decisions/PLAN003-SP0-04-effective-rights.md \
   --result docs/test-strategy/raw/plan003/p0-s2/live-write-gate.json
 ```
@@ -677,7 +722,7 @@ The current provisioner vendors Python-oriented source and wheels but omits nati
 
 | Repo/path | Change/command ownership | Contract affected | Introduced failure mode |
 |---|---|---|---|
-| `pt_provision/config/ad-attack-box.lock.toml` | Root lock with schema, base identity, architecture, subordinate digests, and 17 capability IDs. `[inferred]` | Reproducible input contract. `[inferred]` | Root references mismatched subordinate locks. `[inferred]` |
+| `pt_provision/config/ad-attack-box.lock.toml` | Root lock with schema, base identity, architecture, subordinate digests, 17 capability IDs and the exact planned deterministic stage-command manifest consumed by the SDK-absence test. `[inferred]` | Reproducible input contract. `[inferred]` | Root references mismatched subordinate locks. `[inferred]` |
 | `pt_provision/config/repositories.tsv` | Add exact revision/tree fields and versioned `28julytoolkit` input. `[inferred]` | Source resolution. `[inferred]` | Requested revision resolves to another tree. `[inferred]` |
 | `pt_provision/config/base-os.lock` | Own SP0-02-selected Debian base and repository snapshot facts. `[inferred]` | Qualification base. `[inferred]` | Base and package set disagree. `[inferred]` |
 | `pt_provision/config/os-packages.lock` | Exact native package identities and offline index metadata. `[inferred]` | Native capability availability. `[inferred]` | Architecture/release mismatch. `[inferred]` |
@@ -690,12 +735,12 @@ The current provisioner vendors Python-oriented source and wheels but omits nati
 | Bundle member `manifest/build.json` | Generated in P0-S3 by `deploy.sh`; immutable input to unpack/bootstrap and source for the installed runtime manifest. `[inferred]` | Build identity handoff. `[inferred]` | Bundle lacks the normalized identity consumed by later stages. `[inferred]` |
 | `pt_provision/templates/bootstrap.sh` | Install native/Python artifacts, load all three OCI archives, and copy bundle member `manifest/build.json` to `/mnt/attack-box/manifest/build.json` during the real qualified bootstrap. `[inferred]` | Fresh-box installation and exact runtime-manifest path. `[inferred]` | Bootstrap omits or transforms the runtime manifest. `[inferred]` |
 | `/mnt/attack-box/manifest/build.json` | Installed by `templates/bootstrap.sh` from the released bundle member; verified by P0-S4 and read-only input to P0-S5. `[inferred]` | Installed build identity. `[inferred]` | P0-S5 consumes an unproduced or unrelated path. `[inferred]` |
-| `pt_provision/templates/offline-smoke.sh` | Check 17 capabilities, service health, collector startup, fixture import/query, PurpleSploit import, and report rendering. `[inferred]` | Post-bootstrap acceptance. `[inferred]` | Presence-only shim passes. `[inferred]` |
+| `pt_provision/templates/offline-smoke.sh` | Check 17 capabilities, service health, collector startup, fixture import/query, PurpleSploit import, and report rendering through deterministic direct interfaces; expose the same commands to the SDK-absence test below. `[inferred]` | Post-bootstrap acceptance. `[inferred]` | Presence-only shim passes. `[inferred]` |
 | `pt_provision/tests/test-deploy.sh` | Existing fixture regression extended for the root lock/manifest contract. `[inferred]` | Regression gate. `[inferred]` | Fixture does not cover a new artifact class. `[inferred]` |
 | `pt_provision/tests/test-locks.sh` | New lock/identity/denominator tests. `[inferred]` | Lock validation. `[inferred]` | Valid-looking mixed locks pass. `[inferred]` |
-| `pt_provision/tests/test-offline-smoke.sh` | Fixture-only smoke regression; never a promotion oracle. `[inferred]` | Smoke harness regression. `[inferred]` | Fixture-only result is confused with real installation. `[inferred]` |
+| `pt_provision/tests/test-offline-smoke.sh` | Fixture-only smoke regression plus the C7 `--sdk-absent --commands-from-lock` mode below; never a release promotion oracle. `[inferred]` | Smoke harness regression. `[inferred]` | Fixture-only result is confused with real installation. `[inferred]` |
 | `pt_provision/tests/test-manifest.py` | Validate root lock, generated bundle/runtime-manifest fields, and 17-capability mapping. `[inferred]` | Capability and manifest denominator. `[inferred]` | Duplicate capability IDs or missing install-path facts pass. `[inferred]` |
-| `pt_provision/docs/test-strategy/raw/plan003/p0-s3/` | Own `test-deploy.log`, `test-locks.log`, `fixture-smoke.log`, and `manifest.json`. `[inferred]` | All sprint test outputs. `[inferred]` | Output references the wrong lock/SHA. `[inferred]` |
+| `pt_provision/docs/test-strategy/raw/plan003/p0-s3/` | Own `test-deploy.log`, `test-locks.log`, `fixture-smoke.log`, `sdk-absent.json`, and `manifest.json`. `[inferred]` | All sprint test outputs. `[inferred]` | Output references the wrong lock/SHA. `[inferred]` |
 | `pt_provision/docs/decisions/PLAN003-SP0-02-base.md`, `PLAN003-SP0-03-bhce.md` | Own predecessor decisions. `[inferred]` | Implementation inputs. `[inferred]` | Implementation starts before a decision is final. `[inferred]` |
 
 C4 remains represented as:
@@ -729,6 +774,10 @@ python3 tests/test-manifest.py \
 
 These fixture commands test the builder and harness but cannot promote P0-S3 or P0-S4 as an offline release. `[inferred]`
 
+| Additional test | Command, observation and required result |
+|---|---|
+| C7 — planned command chain with provider SDKs absent | From `/srv/share/dev/pt_provision`, run proposed `bash tests/test-offline-smoke.sh --sdk-absent --commands-from-lock config/ad-attack-box.lock.toml --output docs/test-strategy/raw/plan003/p0-s3/sdk-absent.json`. In a clean offline Python environment, positively establish that both `openai` and `anthropic` distributions and import specs are absent; run every command in the lock's planned chain through its real installed entrypoint/direct interface over recorded GOAD fixtures, covering console startup/module discovery, no-credentials enumeration, low-privilege enumeration, collector/ingest/query, deterministic path ranking, local access/checks, import and report rendering. Instrument imports before application startup in every Python process, including children; any attempted import of either SDK fails this test even if application code catches `ImportError` and reports success. Require a non-empty command manifest, exact planned-command coverage and successful functional receipts, including a rendered report; missing observations are inconclusive. Prove the check detects an import by adding a test-only `import openai` and then `import anthropic` separately to a disposable copy of a planned command: each run must fail, then the restored chain must pass. Use the existing direct stage interfaces available at P0-S3; refresh this same test when a later sprint adds or changes planned commands. This creates no prerequisite on later production adapters and leaves P0-S4's pristine-VM release gate intact. `[recorded: owner directive C7, 14NOV2026]` `[inferred]` |
+
 New gates:
 
 - All 17 capability IDs exist exactly once and resolve to an artifact/package/runtime entry. `[inferred]`
@@ -754,7 +803,7 @@ RED proof:
 | Required capability identities directly represented | `awk -F '\t' '$1=="purplesploit" || $1=="aranum" {n++} END{print n+0}' config/repositories.tsv` in `/srv/share/dev/pt_provision` | Current manifest versus 17 capabilities | **2/17 measured.** `[measured: stated command]` |
 | Repository rows with requested revision/tree fields | `awk -F '\t' '!/^#/ && NF && NF>=7 {n++} END{print n+0}' config/repositories.tsv` in `/srv/share/dev/pt_provision` | Seven repository rows | **0/7 measured.** `[measured: stated command]` |
 | BloodHound CE service definitions | `find . -type f \( -iname '*compose*.yml' -o -iname '*compose*.yaml' -o -iname '*bloodhound*' -o -iname '*oci-images*' \) -print \| wc -l` in `/srv/share/dev/pt_provision` | One composition plus three image identities required | **0 definitions measured.** `[measured: stated command]` |
-| `28julytoolkit` source base | `git rev-parse --verify HEAD` in `/srv/share/dev/28julytoolkit` | One source base | **No SHA; command returned status 128.** `[measured: stated command]` |
+| `28julytoolkit` source base | `git rev-parse --verify HEAD` in `/srv/share/dev/28julytoolkit` | One source base | **Initial r2 baseline: no SHA; command returned status 128.** `[measured: stated command, initial r2 baseline]` Current root `195acd2`, `main` `2f0dede`; P0-S0 toolkit half DONE. `[measured: git -C /srv/share/dev/28julytoolkit rev-parse HEAD plan003-p0-source-base^{commit}, 14NOV2026]` |
 
 ### Rollback
 
@@ -893,7 +942,7 @@ P0-S5 does not close G1-01, G2-03, G3-02, G3-03, or G4-02 and does not qualify t
 
 ### Decisions
 
-**Harness authority:** ShadowHex’s truth comparator owns the live smoke result; Aranum and PurpleSploit retain producer/consumer roles. `[inferred]`
+**Harness authority:** ad-lab-harness’s truth comparator owns the live smoke result; Aranum and PurpleSploit retain producer/consumer roles. `[inferred]`
 
 **Transport cases:** require one successful low-privilege WinRM case plus denied, unavailable, and partial/error controls. `[inferred]`
 
@@ -907,12 +956,12 @@ P0-S5 does not close G1-01, G2-03, G3-02, G3-03, or G4-02 and does not qualify t
 
 | Repo/path | Change/command ownership | Contract affected | Introduced failure mode |
 |---|---|---|---|
-| `ShadowHex/probes/recon_lab/ad/qualify_interop.py` | Run/score the six-stage interoperability smoke, verify receipt lineage, and read the installed attack-box build manifest. `[inferred]` | Phase 0 interoperability gate. `[inferred]` | Unrelated stage outputs or unqualified build identities are accepted. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/interop.schema.json` | Define stage ID, command identity, inputs, outputs, lineage, coverage, and tri-state result. `[inferred]` | Qualification artifact. `[inferred]` | Partial/inconclusive collapses to success. `[inferred]` |
-| `ShadowHex/probes/recon_lab/ad/profiles/GOAD-interoperability.json` | Own fixed GOAD stage targets/expected truths. `[inferred]` | Live smoke input. `[inferred]` | Profile silently includes WS01 or another lab. `[inferred]` |
+| `ad-lab-harness/adlab/qualify_interop.py` | Run/score the six-stage interoperability smoke, verify receipt lineage, and read the installed attack-box build manifest. `[inferred]` | Phase 0 interoperability gate. `[inferred]` | Unrelated stage outputs or unqualified build identities are accepted. `[inferred]` |
+| `ad-lab-harness/schemas/interop.schema.json` | Define stage ID, command identity, inputs, outputs, lineage, coverage, and tri-state result. `[inferred]` | Qualification artifact. `[inferred]` | Partial/inconclusive collapses to success. `[inferred]` |
+| `ad-lab-harness/profiles/GOAD-interoperability.json` | Own fixed GOAD stage targets/expected truths. `[inferred]` | Live smoke input. `[inferred]` | Profile silently includes WS01 or another lab. `[inferred]` |
 | `/mnt/attack-box/manifest/build.json` | Exact P0-S3-produced/P0-S4-qualified command input; installed by `pt_provision/templates/bootstrap.sh` from released `manifest/build.json`. `[inferred]` | Attack-box source/build identity. `[inferred]` | Smoke reads an unmapped or stale manifest. `[inferred]` |
-| `ShadowHex/tests/unit/recon_lab/`, `ShadowHex/tests/lab/` | Existing regression inputs plus interop schema/lineage tests. `[inferred]` | ShadowHex regression. `[inferred]` | Gate code is not regression-tested. `[inferred]` |
-| `ShadowHex/docs/test-results/plan003-p0-s5-shadowhex-base.xml`, `plan003-p0-s5-live.json` | Own ShadowHex regression/live outputs. `[inferred]` | Qualification record. `[inferred]` | Live result points to fixture evidence. `[inferred]` |
+| `ad-lab-harness/tests/unit/`, `ad-lab-harness/tests/lab/` | Own full suite plus interop schema/lineage tests; no inherited regression surface. `[inferred]` | ad-lab-harness regression. `[inferred]` | Gate code is not regression-tested. `[inferred]` |
+| `ad-lab-harness/docs/test-results/plan003-p0-s5-ad-lab-harness-base.xml`, `plan003-p0-s5-live.json` | Own ad-lab-harness regression/live outputs. `[inferred]` | Qualification record. `[inferred]` | Live result points to fixture evidence. `[inferred]` |
 | `aranum/aranumtoolkit/network/bulk-enum-windows.py` | Existing production WinRM command under live qualification; no new production workflow adapter is claimed here. `[inferred]` | G4-03 transport. `[inferred]` | Harness wrapper masks transport classification. `[inferred]` |
 | `aranum/aranumtoolkit/tests/test_bulk_enum_windows.py`, `test_bulk_enum_windows_transports.py`, `test_local_access.py`, `test_interop_contract.py` | Existing regression command inputs. `[verified: paths]` | Aranum regression. `[inferred]` | Regression baseline omitted. `[inferred]` |
 | `aranum/docs/test-strategy/raw/plan003/p0-s5/aranum-base.xml` | Own Aranum pytest output. `[inferred]` | Regression manifest. `[inferred]` | Wrong execution SHA. `[inferred]` |
@@ -947,20 +996,20 @@ python -m pytest \
   -q --junitxml=../docs/test-results/plan003-p0-s5-purplesploit-base.xml
 ```
 
-ShadowHex regression:
+ad-lab-harness regression (its own full suite; root `782b499` had no pre-existing regression surface):
 
 ```bash
-cd /srv/share/dev/ShadowHex
-python -m pytest tests/unit/recon_lab tests/lab -q \
-  --junitxml=docs/test-results/plan003-p0-s5-shadowhex-base.xml
+cd /srv/share/dev/ad-lab-harness
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q -p no:cacheprovider \
+  --junitxml=docs/test-results/plan003-p0-s5-ad-lab-harness-base.xml
 ```
 
 Live interoperability command:
 
 ```bash
-cd /srv/share/dev/ShadowHex
-python3 probes/recon_lab/ad/qualify_interop.py \
-  --profile probes/recon_lab/ad/profiles/GOAD-interoperability.json \
+cd /srv/share/dev/ad-lab-harness
+python3 -B adlab/qualify_interop.py \
+  --profile profiles/GOAD-interoperability.json \
   --attack-box-manifest /mnt/attack-box/manifest/build.json \
   --result docs/test-results/plan003-p0-s5-live.json
 ```
@@ -991,9 +1040,11 @@ RED proof:
 
 ### Baselines
 
+The initial r2 baseline values are retained; the harness-owned command below is mapped to the new repository for execution-start refresh, not a fresh measurement. `[recorded: PLAN-003 r2 initial baselines]` `[inferred]`
+
 | Metric | Exact command and working directory | Inputs and denominator | Baseline |
 |---|---|---|---|
-| Passed live interoperability records | `find docs/test-results -maxdepth 1 -type f -name 'plan003-p0-s5-live.json' -print \| wc -l` in `/srv/share/dev/ShadowHex` | One required live smoke | **0 measured.** `[measured: stated command]` |
+| Passed live interoperability records | `find docs/test-results -maxdepth 1 -type f -name 'plan003-p0-s5-live.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required live smoke | **0 measured.** `[measured: stated command]` |
 | Captured Aranum live transport fixtures | `find aranumtoolkit/tests/fixtures/plan003 -type f -print \| wc -l` in `/srv/share/dev/aranum` | Four transport classifications required | **0 files measured.** `[measured: stated command]` |
 | PurpleSploit PLAN-003 live acceptance fixture/test | `find python/tests/integration/interop/fixtures/plan003 -type f -print \| wc -l; find python/tests/integration/interop -maxdepth 1 -type f -name 'test_plan003_live_acceptance.py' -print \| wc -l` in `/srv/share/dev/purplesploit` | At least one live fixture set and one acceptance test | **0 fixtures and 0 test files measured.** `[measured: stated commands]` |
 
@@ -1051,7 +1102,7 @@ Detailed designs, exact file lists, mutation tests, and execution-start baseline
 ### P3-S2 — path prioritization
 
 - **Items:** G3-04; P3-04, P3-05. `[inferred]`
-- **Scope:** deterministic ranking from reachability, evidence confidence, prerequisites, and affected assets without treating hypotheses as confirmed. `[inferred]`
+- **Scope:** deterministic ranking from reachability, evidence confidence, prerequisites, and affected assets without treating hypotheses as confirmed. Use versioned BloodHound CE queries plus an explicit weighted scoring function and stable path-ID tie-break over recorded path receipts. `purplesploit/ai/attack_paths.py` is deterministic template/probability code (66, 345, 351), but its generic templates are not the AD ranking authority; this sprint does not invoke advisory/provider/automation entrypoints. `[verified: python/purplesploit/ai/attack_paths.py:66]` `[verified: python/purplesploit/ai/attack_paths.py:345]` `[verified: python/purplesploit/ai/attack_paths.py:351]` `[inferred]`
 - **Exit:** seeded path ordering is reproducible and every factor is inspectable; removed truth edges remove or downgrade the related result. `[inferred]`
 
 ## Phase 4 — local access
@@ -1107,11 +1158,11 @@ Detailed designs, exact file lists, mutation tests, and execution-start baseline
 - **Scope:** register Aranum bundles, graph receipts, and PurpleSploit exports into the evidence workspace; deduplicate domain, graph, access, service, and local findings. `[inferred]`
 - **Exit:** one run registers all expected artifacts; merged findings retain every affected asset and evidence lineage; reports show incomplete checks. `[inferred]`
 
-### P6-S3 — controller decision
+### P6-S3 — controller decision — WITHDRAWN under C7
 
-- **Items:** G6-04; P6-06. `[inferred]`
-- **Scope:** compare a completed Aranum/PurpleSploit production run with ShadowHex E2/E3 reproduction. `[inferred]`
-- **Exit:** ADR retains ShadowHex as the lab gate or adopts it as controller only if it reproduces the run without losing producer/consumer contracts. `[inferred]`
+- **Items:** G6-04 and P6-06 are withdrawn; identifiers retained without renumbering. `[recorded: owner directive, 14NOV2026]`
+- **Reason:** no LLM controller under C7; no controller ADR, engagement dispatch or E2/E3 reproduction work is scheduled here. `[recorded: owner directive, 14NOV2026]`
+- **Decision tree disposition:** C7 withdraws controller evaluation on every branch; no E2/E3 outcome reactivates it. P6-S1/P6-S2 and all other active gates retain their existing dependencies, and `ad-lab-harness` is solely the independent deterministic lab-truth and qualification authority. `[recorded: owner directive, 14NOV2026]` `[inferred]`
 
 ---
 

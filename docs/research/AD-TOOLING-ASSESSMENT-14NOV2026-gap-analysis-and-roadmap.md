@@ -1,3 +1,5 @@
+> **Errata — owner directive, 14NOV2026 (C7):** ShadowHex is not used and no LLM is used in any engagement, lab or analysis step. [PLAN-003 r3](../plans/PLAN-003-14NOV2026-ad-engagement-toolchain.md) assigns the independent lab-truth and qualification role to `ad-lab-harness` and supersedes every ShadowHex role in this assessment, including the withdrawn controller proposal. All ShadowHex mentions below are historical; the original assessment body is retained unchanged. `[recorded: owner directive and harness choice, 14NOV2026]`
+
 # AD engagement tooling assessment and phased build plan
 
 **Assessment date:** 2026-11-14  
