@@ -1,8 +1,21 @@
 # PLAN-003 — AD engagement toolchain qualification and delivery plan
 
 **Date:** 14NOV2026  
-**Status:** PLAN r4 — C6 revised to exclusive use of a clean net0srv, 15NOV2026; P0-S0 DONE (toolkit 14NOV2026, provisioner 15NOV2026); VirtualBox 7.1.18 and Vagrant 2.4.9 installed 15NOV2026; P0-S1 BLOCKED on the SP0-01 r2 harness change, a clean and quiet host, and an SP0-01 pass
+**Status:** PLAN r5 — SP0-01 **pass** on a clean net0srv (16NOV2026 UTC), so P0-S1 is permitted; SP0-02 and SP0-03 decision records written, each with one open owner decision (OD-1 for the base; SP0-03 Deviation 1 for the BloodHound readiness check); P0-S3 stays blocked until both are accepted, or the remediation each record names is done (§2.2 item 5); P0-S0 DONE (toolkit 14NOV2026, provisioner 15NOV2026); C6 exclusive use of a clean net0srv (r4)
 **Plan host:** PurpleSploit, because it owns cross-repository integration. `[recorded: owner brief, 14NOV2026]`
+
+## Revision r5 (15NOV2026)
+
+The three Phase-0 spikes ran on 16NOV2026 UTC (15NOV2026 local). Times below are UTC.
+
+- **SP0-01: pass.** The r2 exclusive-use harness (head `fe6bc42`) ran on net0srv from 01:08:54Z to 01:11:23Z. `bento/debian-12` went through `up`, snapshot save and restore, `halt` and `destroy`. All eight samples (`pre_1` to `post_probe`) are complete, with the six libvirt domains shut off, autostart disabled and `kvm_intel` refcount 0. The KVM create-VM probe succeeded before and after the cycle, cleanup succeeded, and no reason code was raised. The record's decision is `p0_s1: permitted`. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json (d718ce9)]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-15.md]`
+  - The r2 harness was implemented by Sol and reviewed by an Opus subagent over two rounds; its suite gives 107 passed, and every planned mutation is caught. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-15.md]`
+  - The six libvirt domains are still shut off with autostart disabled. The owner restarts them. `[measured: virsh -c qemu:///system list --all, 15NOV2026]`
+- **SP0-02: fail on one capability as the tree is written; owner decision OD-1.** On Debian 13 "trixie" at pinned snapshots, every fork holds except the Nmap NSE census: 8 script names that Aranum references load on neither baseline. Kali's and upstream Nmap lack them too, so no base change resolves them. **OD-1 recommendation:** select trixie at the record's pins, accept Nmap for the base, and route the 8 names to Aranum. Until the owner accepts OD-1, or the names are fixed in Aranum and the census rerun, P0-S3 must not treat SP0-02 as a pass. Sol review: R1 FIX-FIRST, R2 SHIP. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-02-base-15NOV2026.md]`
+- **SP0-03: pass with Method A, under one revised criterion.** The pinned official Compose file (BloodHound `v9.9.2`) with an override, run by Debian's `docker-compose` in a container with no network, holds E1 to E5, and its teardown is clean. §3.9 does not flip to `bloodhound-cli`: the CLI needs no fewer operator commands. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-03-bhce-15NOV2026.md]`
+  - **Deviation 1 (owner acceptance).** The spike plan's E4 asks for HTTP 200 from an unauthenticated `GET /api/version`. The route needs a session, so it returns 401. The record revises the check to 401 without a session, then 200 JSON after login, and explains why the E6 diagnostics were not run. If the owner does not accept this, SP0-03 needs E6 before it has a verdict.
+  - **Hand-offs to P0-S3:** use `stop` then `start`, never `restart` (BloodHound exits when the databases restart under it); readiness is the authenticated 200; Docker's DNS forwarding of names that do not resolve is a tolerated attempt to document; reference images by their local tag after `docker load`.
+- **Re-scoped surfaces:** status; §2.1 row 0; §2.2 items 1, 3 and 5; §3.4; §§3.5 and 3.9 closing notes; the §3.10 table; §4.2 status and blocked result; the SP0-01 baseline row; §4.4 base and BloodHound decisions; the decision-record names in the §4.4 components.
 
 ## Revision r4 (15NOV2026)
 
@@ -151,7 +164,7 @@ All proposed branches, exits, blast radii, rollback actions, and roadmap IDs are
 
 | Order | Sprint/gate | Band | Gap items | Roadmap/ride-alongs | Repo(s) and branch | Independently shippable exit | Blast radius and rollback |
 |---:|---|---|---|---|---|---|---|
-| 0 | SP0-01 — VirtualBox go/no-go on a clean net0srv | predecessor | C6 | Provider eligibility | ad-lab-harness preliminary record | On a clean, quiet net0srv (no KVM user, libvirt domains shut off with autostart disabled), VirtualBox and Vagrant complete one disposable create/start/snapshot/restore cycle. The host is clean at every sampled checkpoint (the two baseline samples, after each cycle step, after cleanup and after probe `post`; after probe `pre` only the KVM count is re-read; the harness plan's residual risk names what sampling cannot see), and KVM can create a VM before and after the cycle. Only a pass permits P0-S1; recovery follows §2.2. The r1 harness was implemented, reviewed and ported (§4.2). The r2 clean-host revision is planned in the harness's SP0-01 plan; Sol plan review R1 is dispositioned, and R2, implementation and code review are pending. The r1 dry run gave exit 2, inconclusive/`prerequisite_missing`; VirtualBox 7.1.18 and Vagrant 2.4.9 were installed 15NOV2026. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md (r2)]` | Disposable spike VM only; remove it after evidence capture. KVM guests stay stopped until the owner restarts them. No alternate host/provider is selected. |
+| 0 | SP0-01 — VirtualBox go/no-go on a clean net0srv | predecessor | C6 | Provider eligibility | ad-lab-harness preliminary record | On a clean, quiet net0srv (no KVM user, libvirt domains shut off with autostart disabled), VirtualBox and Vagrant complete one disposable create/start/snapshot/restore cycle. The host is clean at every sampled checkpoint (the two baseline samples, after each cycle step, after cleanup and after probe `post`; after probe `pre` only the KVM count is re-read; the harness plan's residual risk names what sampling cannot see), and KVM can create a VM before and after the cycle. Only a pass permits P0-S1; recovery follows §2.2. **Result: pass, 16NOV2026 UTC** (r2 harness `fe6bc42`): the cycle completed, all eight samples were clean, the KVM probe succeeded before and after, and no reason was raised; P0-S1 is permitted (§4.2). `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-15.md]` | Disposable spike VM only; remove it after evidence capture. KVM guests stay stopped until the owner restarts them. No alternate host/provider is selected. |
 | 1 | P0-S0 — versioned source roots | P0 | G0-05 | P0-02, P0-03 | `pt_provision`, `28julytoolkit`: `bootstrap/plan003-source-baseline` | Both inputs have reviewed root commits, clean intended-source inventories, and recorded tree hashes. DONE: toolkit half 14NOV2026, provisioner half 15NOV2026 (§4.1). `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` | Version metadata only; before integration drop the branch, after integration correct forward without deleting source files. |
 | 2 | P0-S1 — full-GOAD first gate and truth model | P0 | G0-01 | P0-01, P0-06; scaffolding for G1-02/G2-01 | ad-lab-harness: `plan003/p0-goad-truth-gate`; GOAD remains pinned/unchanged | Full `ad/GOAD` rebuilds twice and topology/trust/AD-CS truth comparison returns only pass/fail/inconclusive, with no inconclusive counted as pass. Currently BLOCKED on SP0-01 prerequisites and a subsequent pass (§4.2). `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-14.md]` | Lab harness and VMs; revert the harness commit and power off retained test VMs. |
 | 3 | SP0-04 — effective-rights decision record | predecessor | C3 | API comparison | ad-lab-harness/Aranum record | Authz and AccessCheck are compared against the same controlled Windows ACL fixtures on a qualified P0-S1 Windows host; the record selects the implementation used by P0-S2. | Decision record only; supersede if evidence changes. |
@@ -176,11 +189,15 @@ All proposed branches, exits, blast radii, rollback actions, and roadmap IDs are
 
 ## 2.2 Dependency order
 
-1. SP0-01 is a hard predecessor of P0-S1, which stays `blocked` until a `pass` on a clean host (C6, revised 15NOV2026). A `fail` requires the owner to name another host (C6). An `inconclusive` result requires fixing the prerequisite, host or harness cause and rerunning once; if still inconclusive, the owner names another host. The pre-install dry run is a precondition check, not the SP0-01 result, and does not consume the single rerun. Neither does any run that stops before its first Vagrant command (for example `host_not_clean` or `host_not_quiet` at baseline). No provider engineering or alternate-host work is implied. `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` `[inferred]`
+1. SP0-01 is a hard predecessor of P0-S1, which stays `blocked` until a `pass` on a clean host (C6, revised 15NOV2026). A `fail` requires the owner to name another host (C6). An `inconclusive` result requires fixing the prerequisite, host or harness cause and rerunning once; if still inconclusive, the owner names another host. The pre-install dry run is a precondition check, not the SP0-01 result, and does not consume the single rerun. Neither does any run that stops before its first Vagrant command (for example `host_not_clean` or `host_not_quiet` at baseline). No provider engineering or alternate-host work is implied. **SP0-01 passed on 16NOV2026 UTC, so P0-S1 is permitted.** `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]` `[inferred]`
 2. P0-S0 precedes every later `pt_provision` or `28julytoolkit` modification. Both halves are DONE; later provisioner changes build on root `1984a59` (tag `plan003-p0-source-base`). `[measured: git -C /srv/share/dev/pt_provision rev-parse plan003-p0-source-base^{commit}, 15NOV2026]` `[recorded: 28julytoolkit/docs/test-strategy/PLAN003-P0-S0-TEST-CARD-14NOV2026.md]` `[measured: git -C /srv/share/dev/28julytoolkit rev-parse HEAD plan003-p0-source-base^{commit}, 14NOV2026]`
-3. P0-S1 starts only after SP0-01 passes. Its lab-ready Windows slice precedes SP0-04. `[inferred]`
+3. P0-S1 starts only after SP0-01 passes; it passed on 16NOV2026 UTC. Its lab-ready Windows slice precedes SP0-04. `[inferred]` `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]`
 4. SP0-04’s signed decision record precedes P0-S2 implementation. P0-S2 is therefore not independent of the lab. `[inferred]`
-5. P0-S3 depends on P0-S0 and on SP0-02/SP0-03 decision records for the base release and BloodHound CE composition. `[inferred]`
+5. P0-S3 depends on P0-S0 and on SP0-02/SP0-03 decision records for the base release and BloodHound CE composition. `[inferred]` Both records exist (16NOV2026 UTC). Each carries an open owner decision: OD-1 for SP0-02, and Deviation 1 for SP0-03. A decision alone does not release P0-S3. It starts only when both spikes are resolved in its favour:
+   - **SP0-02:** the owner accepts OD-1's recommendation; or, if the owner holds, the 8 names are fixed in Aranum and the NSE census is rerun with none unresolved;
+   - **SP0-03:** the owner accepts Deviation 1; or, if the owner rejects it, E6a and E6b are run and the record then carries a verdict that permits the composition.
+
+   `[recorded: pt_provision/docs/decisions/PLAN003-SP0-02-base-15NOV2026.md]` `[recorded: pt_provision/docs/decisions/PLAN003-SP0-03-bhce-15NOV2026.md]`
 6. P0-S4 depends on P0-S3. `[inferred]`
 7. P0-S5 depends on passed P0-S1, P0-S2, and P0-S4 gates. `[inferred]`
 8. Phase 1 depends on the Phase 0 interoperability gate. Phase 2 depends on Phase 1 discovery/coverage. Phase 3 depends on Phase 2 collection. Phase 4 depends on proven access state. Phase 5 depends on Phase 4 dispatch eligibility. Active Phase 6 sprints P6-S1 and P6-S2 depend on stable producer contracts from Phases 1–5. `[inferred]`
@@ -252,6 +269,7 @@ C6 (revised 15NOV2026) therefore fixes the following outcome:
   - KVM can create a VM both before and after the cycle.
 - A host that becomes unclean during the run (foreign KVM, libvirt or VirtualBox activity) makes the result `inconclusive`, never `fail`, because the failure could not then be attributed to VirtualBox. The fixture's own leftovers are a cleanup failure, not contamination, so they leave a provider fail standing. `[inferred]`
 - P0-S1 stays blocked until SP0-01 passes; failure and inconclusive recovery follow §2.2. `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]`
+- **Result:** SP0-01 passed on 16NOV2026 UTC (§4.2). `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]`
 - This plan contains no provider-development path and no alternate host. `[recorded: owner decision C6]`
 
 ## 3.5 Kali versus Debian
@@ -266,6 +284,8 @@ C6 (revised 15NOV2026) therefore fixes the following outcome:
 The selection flips to Kali only if SP0-02 demonstrates that a pinned Kali image resolves and reconstructs all 17 capabilities twice while the Debian candidate cannot provide a required functional capability or materially increases offline installation complexity. `[inferred]`
 
 SP0-02’s decision record is a predecessor to P0-S3 implementation. `[inferred]`
+
+**SP0-02 outcome (16NOV2026 UTC).** The selection does not flip to Kali: Kali's Nmap lacks the same 8 NSE script names that Debian's does, and so does upstream Nmap. As the tree is written, Debian fails on NSE coverage, and the record takes it to the owner as OD-1, recommending Debian 13 "trixie" at the record's pins with the 8 names routed to Aranum. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-02-base-15NOV2026.md]`
 
 ## 3.6 Attack-box capability denominator
 
@@ -377,13 +397,15 @@ The choice flips to `bloodhound-cli` only if SP0-03 proves, with networking disa
 
 SP0-03 records the selected upstream revision, exact image digests, compatible runtime/Compose versions, health interfaces, import interface, and offline load/start commands before the BloodHound portion of P0-S3 is implemented. `[inferred]`
 
+**SP0-03 outcome (16NOV2026 UTC).** The choice does not flip: in the live run, `bloodhound-cli` v0.2.1 needed no fewer operator commands for any operation, because each of its lifecycle commands wraps one Compose command. Method A stands at BloodHound `v9.9.2`, under one revised readiness criterion that awaits the owner's acceptance (Deviation 1). The record lists the pins, image identities, runtime, health and import interfaces, and offline commands. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-03-bhce-15NOV2026.md]`
+
 ## 3.10 Phase 0 spikes and decisions
 
 | ID | Time box | Question and decisive evidence | Predecessor/home |
 |---|---:|---|---|
-| SP0-01 | 1 day | On a clean, quiet net0srv (C6, revised 15NOV2026), can VirtualBox/Vagrant create, start, snapshot, restore, and stop one disposable VM while the host stays clean, with KVM able to create a VM before and after? Only a pass permits P0-S1; failure and inconclusive recovery follow §2.2. `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` | Hard predecessor to P0-S1 |
-| SP0-02 | 0.5 day | Which exact Debian stable base/repository snapshot resolves the native capability set for the recorded architecture? Flip to Kali only under §3.5’s evidence. `[inferred]` | Decision record precedes P0-S3 |
-| SP0-03 | 1 day | Pin and validate the selected official three-service BloodHound CE Compose graph, OCI identities, runtime, health checks, and import interface; compare it with pinned `bloodhound-cli` under §3.9. `[inferred]` | Decision record precedes P0-S3 service implementation |
+| SP0-01 | 1 day | On a clean, quiet net0srv (C6, revised 15NOV2026), can VirtualBox/Vagrant create, start, snapshot, restore, and stop one disposable VM while the host stays clean, with KVM able to create a VM before and after? Only a pass permits P0-S1; failure and inconclusive recovery follow §2.2. `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` | Hard predecessor to P0-S1. **Pass, 16NOV2026 UTC** |
+| SP0-02 | 0.5 day | Which exact Debian stable base/repository snapshot resolves the native capability set for the recorded architecture? Flip to Kali only under §3.5’s evidence. `[inferred]` | Decision record precedes P0-S3. **Record written: fail on NSE coverage as written; OD-1** |
+| SP0-03 | 1 day | Pin and validate the selected official three-service BloodHound CE Compose graph, OCI identities, runtime, health checks, and import interface; compare it with pinned `bloodhound-cli` under §3.9. `[inferred]` | Decision record precedes P0-S3 service implementation. **Record written: pass with Method A, Deviation 1 awaits the owner** |
 | SP0-04 | 0.5 day | Compare Authz and `AccessCheck` on allow, deny, inherited, group, and mixed-order fixtures under the supported Windows PowerShell/CLR versions; select under §3.8. `[inferred]` | P0-S1 Windows slice → SP0-04 → P0-S2 |
 | SP0-05 | 0.5 day | Record disk consumed after image/template acquisition and both full-GOAD builds. `[inferred]` | P0-S1 |
 
@@ -403,7 +425,7 @@ Every new acceptance gate has exactly three outcomes:
 
 Regression manifests contain the exact suite command, working directory, execution-start SHA, inputs, denominator, and one row per test identity with `pass|fail|skip|inconclusive`. `[inferred]`
 
-Except for the completed P0-S0 work and SP0-01 records cited below, per-test statuses remain deferred to sprint execution; this document revision runs no implementation tests. `[recorded: owner brief, 14NOV2026]`
+Except for the completed P0-S0 work, the SP0-01 records and the SP0-02/SP0-03 decision records cited below, per-test statuses remain deferred to sprint execution; this document revision runs no implementation tests. `[recorded: owner brief, 14NOV2026]`
 
 ## 4.1 P0-S0 — versioned source roots
 
@@ -513,6 +535,16 @@ Dry run on net0srv: **exit 2, `inconclusive` / `prerequisite_missing`**, because
   `[measured: virsh dominfo; /sys/module/kvm_intel/refcnt; /proc/pressure/io; VBoxManage --version; vagrant --version; /sys/module/vboxdrv/refcnt, 15NOV2026]`
 - **Unchanged:** SP0-01 runs only once the r2 harness is merged (VirtualBox and Vagrant are now installed). P0-S1 stays BLOCKED until SP0-01 passes. `[inferred]`
 
+### SP0-01 result (16NOV2026 UTC, r5)
+
+This supersedes the r4 status above.
+
+- **Harness:** r2, implemented by Sol and reviewed cross-family by an Opus subagent over two rounds; head `fe6bc42`, 107 passed, every planned mutation caught. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-TEST-CARD-2026-11-15.md]`
+- **Live run on net0srv, 01:08:54Z to 01:11:23Z:** `bento/debian-12` through `up`, snapshot save and restore, `halt` and `destroy`. VirtualBox 7.1.18r173720, Vagrant 2.4.9, kernel 6.8.0-149-generic. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]`
+- **Clean host throughout:** all eight samples (`pre_1`, `pre_2`, `up`, `snapshot_save`, `snapshot_restore`, `halt`, `post`, `post_probe`) are complete, with the six domains shut off, autostart disabled and `kvm_intel` refcount 0. `[measured: python3 over the record's samples, 15NOV2026]`
+- **KVM before and after:** the create-VM probe succeeded at `pre` and `post`. Cleanup succeeded. No reason code. `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json]`
+- **Verdict `pass`; decision `p0_s1: permitted`.** The single-rerun rule was not needed. P0-S1 may start; each of its rebuilds still starts from a clean host (Decisions, below). `[recorded: ad-lab-harness/docs/records/PLAN003-SP0-01-net0srv.json (d718ce9)]`
+
 ### Problem and closure
 
 There is no reproducibly built, truth-backed Windows domain lab. This sprint closes G0-01 using the fixed full `ad/GOAD` profile. `[inferred]`
@@ -523,7 +555,7 @@ There is no reproducibly built, truth-backed Windows domain lab. This sprint clo
 
 **Provider:** VirtualBox/Vagrant on net0srv, allowed to proceed only after SP0-01 passes. `[recorded: owner decision C6]` Every P0-S1 rebuild starts from a clean host, and the gate records the same clean-host observations as SP0-01 r2 before each rebuild. This is because SP0-01 qualifies exclusive use, not coexistence. `[recorded: owner reply, 15NOV2026]` `[inferred]`
 
-**Blocked result:** P0-S1 stays `blocked` until SP0-01 returns `pass`. A `fail` requires the owner to name another host (C6). An `inconclusive` result requires fixing the prerequisite or harness cause and rerunning once; if still inconclusive, the owner names another host. The pre-install dry run does not consume that single rerun. No other provider or host work starts under this plan. `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` `[inferred]`
+**Blocked result:** P0-S1 stays `blocked` until SP0-01 returns `pass`. A `fail` requires the owner to name another host (C6). An `inconclusive` result requires fixing the prerequisite or harness cause and rerunning once; if still inconclusive, the owner names another host. The pre-install dry run does not consume that single rerun. No other provider or host work starts under this plan. **SP0-01 returned `pass` on 16NOV2026 UTC, so this block is lifted.** `[recorded: owner decision C6]` `[recorded: ad-lab-harness/docs/plans/PLAN003-SP0-01-PROVIDER-COEXISTENCE-2026-11-14.md]` `[inferred]`
 
 **Truth source:** construct expected truth from GOAD’s pinned `config.json`, inventory, and provider host definitions, then observe provisioned state independently. Runtime self-discovery is not the expected-truth source. `[inferred]`
 
@@ -598,13 +630,13 @@ RED proof:
 
 ### Baselines
 
-These values preserve the initial r2 starting snapshot; the commands/directories below are mapped to the new harness for execution-start refresh, not represented as new measurements. The current SP0-01 dry-run record is cited above and is inconclusive, so it does not qualify P0-S1. `[recorded: PLAN-003 r2 initial baselines]` `[inferred]`
+These values preserve the initial r2 starting snapshot; the commands/directories below are mapped to the new harness for execution-start refresh, not represented as new measurements. The SP0-01 dry-run record cited above was inconclusive and did not qualify P0-S1; the live r2 run passed on 16NOV2026 UTC and does (§4.2). `[recorded: PLAN-003 r2 initial baselines]` `[inferred]`
 
 | Metric | Exact command and working directory | Inputs and denominator | Baseline |
 |---|---|---|---|
 | Passed full-GOAD gate records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-P0-GOAD-GATE-*.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | Passed records; denominator one required first gate | **0 measured.** `[measured: stated command]` |
 | Machine-readable full-GOAD truth manifests | `find truth -maxdepth 1 -type f -name 'GOAD.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required manifest | **0/1 measured.** `[measured: stated command]` |
-| SP0-01 result records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-SP0-01-*.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required SP0-01 result | **0/1 measured.** `[measured: stated command]` |
+| SP0-01 result records | `find docs/records -maxdepth 1 -type f -name 'PLAN003-SP0-01-*.json' -print \| wc -l` in `/srv/share/dev/ad-lab-harness` | One required SP0-01 result | **1/1 measured, 15NOV2026** (`PLAN003-SP0-01-net0srv.json`, verdict `pass`); 0/1 at r4. `[measured: stated command]` |
 
 ### Rollback
 
@@ -743,7 +775,7 @@ The current provisioner vendors Python-oriented source and wheels but omits nati
 
 ### Decisions
 
-**Base distribution:** pinned Debian stable, with the exact release/snapshot selected by SP0-02 before implementation. `[inferred]`
+**Base distribution:** pinned Debian stable, with the exact release/snapshot selected by SP0-02 before implementation. `[inferred]` SP0-02 recommends Debian 13 "trixie" at its record's pins; the selection waits on OD-1. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-02-base-15NOV2026.md]`
 
 **Native dependencies:** bundle exact `.deb` identities and an offline package index. Preinstalling dependencies outside the release is rejected because it cannot qualify a fresh box. `[inferred]`
 
@@ -751,7 +783,7 @@ The current provisioner vendors Python-oriented source and wheels but omits nati
 
 **Collectors:** RustHound-CE primary and BloodHound CE Python fallback; legacy BloodHound is compatibility-only and outside the 17-capability gate. `[recorded: /srv/share/dev/28julytoolkit/ad-modern/bloodhound-collectors/docs/README.md]` `[inferred]`
 
-**BloodHound CE:** use the pinned official three-service Compose composition selected in §3.9 and finalized by SP0-03. `[inferred]`
+**BloodHound CE:** use the pinned official three-service Compose composition selected in §3.9 and finalized by SP0-03. `[inferred]` SP0-03 finalized it at `v9.9.2`, with the override, readiness, restart and offline-load hand-offs in its record, subject to Deviation 1. `[recorded: pt_provision/docs/decisions/PLAN003-SP0-03-bhce-15NOV2026.md]`
 
 **Deployment form:** retain the provisioner’s bundle model and add pinned base/native/OCI inputs. A prebuilt appliance is rejected initially because the current builder already has build, manifest, unpack, and offline Python reconstruction contracts. `[verified: /srv/share/dev/pt_provision/README.md]` `[inferred]`
 
@@ -780,7 +812,7 @@ The current provisioner vendors Python-oriented source and wheels but omits nati
 | `pt_provision/tests/test-offline-smoke.sh` | Fixture-only smoke regression plus the C7 `--sdk-absent --commands-from-lock` mode below; never a release promotion oracle. `[inferred]` | Smoke harness regression. `[inferred]` | Fixture-only result is confused with real installation. `[inferred]` |
 | `pt_provision/tests/test-manifest.py` | Validate root lock, generated bundle/runtime-manifest fields, and 17-capability mapping. `[inferred]` | Capability and manifest denominator. `[inferred]` | Duplicate capability IDs or missing install-path facts pass. `[inferred]` |
 | `pt_provision/docs/test-strategy/raw/plan003/p0-s3/` | Own `test-deploy.log`, `test-locks.log`, `fixture-smoke.log`, `sdk-absent.json`, and `manifest.json`. `[inferred]` | All sprint test outputs. `[inferred]` | Output references the wrong lock/SHA. `[inferred]` |
-| `pt_provision/docs/decisions/PLAN003-SP0-02-base.md`, `PLAN003-SP0-03-bhce.md` | Own predecessor decisions. `[inferred]` | Implementation inputs. `[inferred]` | Implementation starts before a decision is final. `[inferred]` |
+| `pt_provision/docs/decisions/PLAN003-SP0-02-base-15NOV2026.md`, `PLAN003-SP0-03-bhce-15NOV2026.md` | Own predecessor decisions. `[inferred]` | Implementation inputs. `[inferred]` | Implementation starts before a decision is final. `[inferred]` |
 
 C4 remains represented as:
 
