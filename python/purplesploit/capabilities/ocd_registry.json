@@ -1,510 +1,515 @@
 {
- "schema": "ocd-capability-registry/1",
- "source_commit": "6d16ca0d1434875e0617f2f3cfa825fad0bc7d7e",
- "categories": [
-  {
-   "key": "no_creds",
-   "title": "No Credentials",
-   "subjects": [
-    "Scan network",
-    "Find DC IP",
-    "Zone transfer",
-    "Anonymous & Guest access on SMB shares",
-    "Enumerate LDAP",
-    "Enumerate Users",
-    "Bruteforce users",
-    "Poisoning",
-    "Coerce",
-    "PXE",
-    "TimeRoasting"
-   ],
-   "denominator_capabilities": [
-    "Nmap",
-    "DNS client",
-    "LDAP client",
-    "SMB client",
-    "RPC client",
-    "NetExec",
-    "Kerberos clients",
-    "Impacket"
-   ],
-   "backing_modules": [
-    "recon/nmap",
-    "recon/dns",
-    "recon/aranum",
-    "recon/auto_enum",
-    "network/nxc_smb",
-    "network/nxc_ldap",
-    "ad/kerbrute"
-   ],
-   "missing_modules": [
-    "responder(poison)",
-    "mitm6(induction)",
-    "petitpotam/coercer(rpc-coercion)",
-    "pxethief(pxe)",
-    "timeroast"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "valid_user",
-   "title": "Valid user (no password)",
-   "subjects": [
-    "Password Spray",
-    "ASREPRoast"
-   ],
-   "denominator_capabilities": [
-    "NetExec",
-    "Impacket",
-    "LDAP client",
-    "PowerShell"
-   ],
-   "backing_modules": [
-    "impacket/asreproast",
-    "network/nxc_smb",
-    "ad/kerbrute",
-    "network/nxc_ldap"
-   ],
-   "missing_modules": [
-    "hashcat/john(crack)"
-   ],
-   "module_status": "HAVE",
-   "mapping_verdict": "COVERED"
-  },
-  {
-   "key": "authenticated",
-   "title": "Valid Credentials (cleartext creds, nt hash, kerberos ticket)",
-   "subjects": [
-    "Classic Enumeration (users, shares, ACL, delegation, ...)",
-    "Enumerate ADCS",
-    "Enumerate SCCM",
-    "Scan Auto",
-    "Kerberoasting",
-    "Coerce",
-    "Intra ID Connect",
-    "Can Connect to a computer",
-    "Exploit"
-   ],
-   "denominator_capabilities": [
-    "BloodHound CE",
-    "RustHound-CE",
-    "LDAP client",
-    "NetExec",
-    "Impacket",
-    "Certipy"
-   ],
-   "backing_modules": [
-    "network/nxc_smb",
-    "network/nxc_ldap",
-    "impacket/kerberoast",
-    "recon/aranum"
-   ],
-   "missing_modules": [
-    "bloodhound-ce(CE-compat qualification of nxc -M bloodhound)",
-    "rusthound-ce(collector)",
-    "certipy(adcs-enum)",
-    "sccmhunter(sccm-enum)",
-    "coercer(coerce)"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "low_access",
-   "title": "Low access (Privilege escalation)",
-   "subjects": [
-    "Bypass Applocker",
-    "UAC bypass",
-    "Auto Enum",
-    "Search files",
-    "Exploit",
-    "Webdav",
-    "Kerberos Relay",
-    "From Service account (SEImpersonate)"
-   ],
-   "denominator_capabilities": [
-    "Aranum",
-    "PowerShell"
-   ],
-   "backing_modules": [
-    "recon/aranum",
-    "deploy/script"
-   ],
-   "missing_modules": [
-    "seimpersonate/potato(exploit)",
-    "krbrelayx(kerberos-relay)",
-    "lolbas-execution"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "delegation",
-   "title": "Kerberos Delegation",
-   "subjects": [
-    "Find delegation",
-    "Unconstrained delegation",
-    "Constrained delegation",
-    "Resource-Based Constrained Delegation",
-    "S4U2self abuse"
-   ],
-   "denominator_capabilities": [
-    "Impacket",
-    "BloodHound CE"
-   ],
-   "backing_modules": [
-    "network/nxc_ldap"
-   ],
-   "missing_modules": [
-    "impacket-findDelegation/getST/rbcd/addcomputer(abuse)",
-    "coercion(force-auth)"
-   ],
-   "module_status": "STUB",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "admin",
-   "title": "Admin access",
-   "subjects": [
-    "Extract credentials from LSASS.exe",
-    "Extract credentials from SAM",
-    "Extract credentials from LSA",
-    "Extract credentials from DPAPI",
-    "Impersonate",
-    "Misc"
-   ],
-   "denominator_capabilities": [
-    "NetExec",
-    "Impacket"
-   ],
-   "backing_modules": [
-    "impacket/secretsdump",
-    "network/nxc_smb"
-   ],
-   "missing_modules": [
-    "mimikatz(on-host lsass)",
-    "dpapi-looters"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "dom_admin",
-   "title": "Domain admin",
-   "subjects": [
-    "Dump ntds.dit",
-    "Grab backup Keys"
-   ],
-   "denominator_capabilities": [
-    "Impacket"
-   ],
-   "backing_modules": [
-    "impacket/secretsdump"
-   ],
-   "missing_modules": [
-    "impacket-dpapi-backupkeys(confirm bundled)"
-   ],
-   "module_status": "HAVE",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "low_hanging",
-   "title": "Quick Compromise",
-   "subjects": [
-    "\u26a0\ufe0f Zerologon (unsafe) CVE-2020-1472 @CVE@",
-    "Eternal Blue MS17-010 @CVE@",
-    "Tomcat/Jboss Manager",
-    "Java RMI",
-    "Java Serialiszed port",
-    "Log4shell",
-    "Database",
-    "Exchange",
-    "Veeam",
-    "GLPI",
-    "Weak websites / services"
-   ],
-   "denominator_capabilities": [
-    "Impacket(mssql)",
-    "Nmap",
-    "NetExec"
-   ],
-   "backing_modules": [
-    "recon/nmap",
-    "recon/nuclei",
-    "network/nxc_smb",
-    "network/nxc_mssql",
-    "web/sqlmap",
-    "web/wpscan"
-   ],
-   "missing_modules": [
-    "n-day-pocs(OUT-OF-SCOPE)"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "mitm",
-   "title": "Man In The Middle (Listen and Relay)",
-   "subjects": [
-    "Listen",
-    "NTLM relay",
-    "Kerberos relay"
-   ],
-   "denominator_capabilities": [
-    "Impacket(ntlmrelayx engine)",
-    "NetExec"
-   ],
-   "backing_modules": [],
-   "missing_modules": [
-    "responder(listen)",
-    "ntlmrelayx(module wrapper)",
-    "krbrelayx(kerberos-relay)"
-   ],
-   "module_status": "GAP",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "know_vuln_auth",
-   "title": "Know vulnerabilities authenticated",
-   "subjects": [
-    "MS14-068",
-    "GPP MS14-025",
-    "PrivExchange (CVE-2019-0724, CVE-2019-0686)",
-    "noPac (CVE-2021-42287, CVE-2021-42278)",
-    "PrintNightmare (CVE-2021-1675, CVE-2021-34527)",
-    "Certifried (CVE-2022-26923)",
-    "ProxyNotShell (CVE-2022-41040, CVE-2022-41082)"
-   ],
-   "denominator_capabilities": [
-    "Certipy",
-    "Impacket",
-    "NetExec"
-   ],
-   "backing_modules": [
-    "network/nxc_smb"
-   ],
-   "missing_modules": [
-    "certipy(certifried)",
-    "gpp-cpassword(recovery/decrypt)",
-    "impacket-goldenPac/ms14-068(module)",
-    "nopac/printnightmare(exploit-poc)"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "adcs",
-   "title": "ADCS",
-   "subjects": [
-    "Enumeration",
-    "Web Enrollment Is Up",
-    "Misconfigured Certificate Template",
-    "Misconfigured ACL",
-    "Vulnerable PKI Object access control",
-    "Misconfigured Certificate Authority",
-    "Abuse Certificate Mapping"
-   ],
-   "denominator_capabilities": [
-    "Certipy",
-    "Impacket",
-    "LDAP client"
-   ],
-   "backing_modules": [
-    "network/nxc_ldap"
-   ],
-   "missing_modules": [
-    "certipy(enum+esc1/2/3/9/10/13 paths)",
-    "coercion(esc8/esc11 incoming-auth)"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "lat_move",
-   "title": "Lateral Move",
-   "subjects": [
-    "Clear text Password",
-    "NT Hash",
-    "Kerberos",
-    "Socks (relay)",
-    "Certificate (pfx)",
-    "MSSQL"
-   ],
-   "denominator_capabilities": [
-    "Impacket",
-    "NetExec",
-    "pywinrm",
-    "RDP client",
-    "Certipy"
-   ],
-   "backing_modules": [
-    "impacket/psexec",
-    "impacket/wmiexec",
-    "impacket/smbclient",
-    "network/nxc_smb",
-    "network/nxc_winrm",
-    "network/nxc_rdp",
-    "network/nxc_mssql",
-    "network/nxc_ssh"
-   ],
-   "missing_modules": [
-    "passthecert/getnthash(module)"
-   ],
-   "module_status": "HAVE",
-   "mapping_verdict": "COVERED"
-  },
-  {
-   "key": "trusts",
-   "title": "Trusts",
-   "subjects": [
-    "Enumeration",
-    "Child->Parent",
-    "Parent->Child",
-    "External Trust",
-    "Mssql links"
-   ],
-   "denominator_capabilities": [
-    "Impacket",
-    "BloodHound/RustHound-CE",
-    "PowerShell",
-    "LDAP client"
-   ],
-   "backing_modules": [
-    "impacket/secretsdump",
-    "network/nxc_ldap"
-   ],
-   "missing_modules": [
-    "impacket-raiseChild/ticketer(module)",
-    "mssql-linked-server(enum/traversal)",
-    "bloodhound-ce"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "COVERED"
-  },
-  {
-   "key": "crack_hash",
-   "title": "Crack hash",
-   "subjects": [
-    "LM (299bd128c1101fd6)",
-    "NT (b4b9b02e6f09a9bd760...)",
-    "NTLMv1 (user::85D5BC...)",
-    "NTLMv2 (user::N46iSNek...)",
-    "Kerberos 5 TGS ($krb5tgs$23$...)",
-    "Kerberos 5 TGS AES128 ($krb5tgs$17...)",
-    "Kerberos ASREP ($krb5asrep$23...)",
-    "MSCache 2 (very slow) ($DCC2$10240...)",
-    "Timeroast hash ($sntp-ms$...)",
-    "pxe hash ($sccm$aes128$...)"
-   ],
-   "denominator_capabilities": [],
-   "backing_modules": [],
-   "missing_modules": [
-    "hashcat",
-    "john"
-   ],
-   "module_status": "GAP",
-   "mapping_verdict": "GAP"
-  },
-  {
-   "key": "acl",
-   "title": "ACLs/ACEs permissions",
-   "subjects": [
-    "Dcsync",
-    "can change msDS-KeyCredentialLInk (Generic Write) + ADCS",
-    "On Group",
-    "On Computer",
-    "On User",
-    "On OU",
-    "ReadGMSAPassword",
-    "Get LAPS passwords",
-    "GPO",
-    "DNS Admin"
-   ],
-   "denominator_capabilities": [
-    "BloodHound CE",
-    "Impacket",
-    "NetExec",
-    "Certipy",
-    "PowerShell"
-   ],
-   "backing_modules": [
-    "impacket/secretsdump",
-    "network/nxc_smb",
-    "network/nxc_ldap"
-   ],
-   "missing_modules": [
-    "bloodhound-ce(acl-analysis ingest/query)",
-    "impacket-dacledit(module)",
-    "certipy(shadow-creds)",
-    "laps-retrieval(wrapper)",
-    "gmsa-retrieval(wrapper)",
-    "ouned(gpo)"
-   ],
-   "module_status": "PARTIAL",
-   "mapping_verdict": "PARTIAL"
-  },
-  {
-   "key": "sccm",
-   "title": "SCCM",
-   "subjects": [
-    "recon",
-    "Creds-1 No credentials",
-    "Elevate-1:Relay on site systems Simple user",
-    "Elevate-2:Force client push Simple user",
-    "Elevate-3:Automatic client push Simple user",
-    "CRED-6 Loot creds",
-    "Takeover-1:relay to mssql db Simple user",
-    "Takeover-2:relay to mssql server Simple user",
-    "Creds-2:Policy Request Credentials Simple user",
-    "Creds-3Creds-4 Computer Admin user",
-    "Creds-5 SCCM admin",
-    "EXEC-1/2 SCCM admin",
-    "Cleanup",
-    "Post exploit"
-   ],
-   "denominator_capabilities": [
-    "Impacket",
-    "NetExec"
-   ],
-   "backing_modules": [],
-   "missing_modules": [
-    "sccmhunter/SharpSCCM/sccm-http-looter(LATER PROFILE)"
-   ],
-   "module_status": "GAP",
-   "mapping_verdict": "GAP"
-  },
-  {
-   "key": "persistence",
-   "title": "Persistence",
-   "subjects": [
-    "ADD DA",
-    "Golden ticket",
-    "Silver Ticket",
-    "Directory Service Restore Mode (DSRM)",
-    "Skeleton Key",
-    "Custom SSP",
-    "Golden certificate",
-    "Diamond ticket",
-    "Saphire Ticket",
-    "DC shadow",
-    "ACL manipulation",
-    "..."
-   ],
-   "denominator_capabilities": [
-    "Impacket",
-    "Certipy",
-    "PowerShell"
-   ],
-   "backing_modules": [],
-   "missing_modules": [
-    "impacket-ticketer(module)",
-    "certipy(golden-cert)",
-    "mimikatz(skeleton/ssp/dcshadow/dsrm)"
-   ],
-   "module_status": "STUB",
-   "mapping_verdict": "PARTIAL"
-  }
- ],
- "review": "Sol R1 (codex) FIX-FIRST applied 16NOV2026; see docs/reviews/OCD-REGISTRY-PEER-REVIEW-SOL-R1-16NOV2026.md"
+  "schema": "ocd-capability-registry/1",
+  "source_commit": "6d16ca0d1434875e0617f2f3cfa825fad0bc7d7e",
+  "categories": [
+    {
+      "key": "no_creds",
+      "title": "No Credentials",
+      "subjects": [
+        "Scan network",
+        "Find DC IP",
+        "Zone transfer",
+        "Anonymous & Guest access on SMB shares",
+        "Enumerate LDAP",
+        "Enumerate Users",
+        "Bruteforce users",
+        "Poisoning",
+        "Coerce",
+        "PXE",
+        "TimeRoasting"
+      ],
+      "denominator_capabilities": [
+        "Nmap",
+        "DNS client",
+        "LDAP client",
+        "SMB client",
+        "RPC client",
+        "NetExec",
+        "Kerberos clients",
+        "Impacket"
+      ],
+      "backing_modules": [
+        "recon/nmap",
+        "recon/dns",
+        "recon/aranum",
+        "recon/auto_enum",
+        "network/nxc_smb",
+        "network/nxc_ldap",
+        "ad/kerbrute"
+      ],
+      "missing_modules": [
+        "responder(poison)",
+        "mitm6(induction)",
+        "petitpotam/coercer(rpc-coercion)",
+        "pxethief(pxe)",
+        "timeroast"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "valid_user",
+      "title": "Valid user (no password)",
+      "subjects": [
+        "Password Spray",
+        "ASREPRoast"
+      ],
+      "denominator_capabilities": [
+        "NetExec",
+        "Impacket",
+        "LDAP client",
+        "PowerShell"
+      ],
+      "backing_modules": [
+        "impacket/asreproast",
+        "network/nxc_smb",
+        "ad/kerbrute",
+        "network/nxc_ldap"
+      ],
+      "missing_modules": [
+        "hashcat/john(crack)"
+      ],
+      "module_status": "HAVE",
+      "mapping_verdict": "COVERED"
+    },
+    {
+      "key": "authenticated",
+      "title": "Valid Credentials (cleartext creds, nt hash, kerberos ticket)",
+      "subjects": [
+        "Classic Enumeration (users, shares, ACL, delegation, ...)",
+        "Enumerate ADCS",
+        "Enumerate SCCM",
+        "Scan Auto",
+        "Kerberoasting",
+        "Coerce",
+        "Intra ID Connect",
+        "Can Connect to a computer",
+        "Exploit"
+      ],
+      "denominator_capabilities": [
+        "BloodHound CE",
+        "RustHound-CE",
+        "LDAP client",
+        "NetExec",
+        "Impacket",
+        "Certipy"
+      ],
+      "backing_modules": [
+        "network/nxc_smb",
+        "network/nxc_ldap",
+        "impacket/kerberoast",
+        "recon/aranum"
+      ],
+      "missing_modules": [
+        "bloodhound-ce(CE-compat qualification of nxc -M bloodhound)",
+        "rusthound-ce(collector)",
+        "certipy(adcs-enum)",
+        "sccmhunter(sccm-enum)",
+        "coercer(coerce)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "low_access",
+      "title": "Low access (Privilege escalation)",
+      "subjects": [
+        "Bypass Applocker",
+        "UAC bypass",
+        "Auto Enum",
+        "Search files",
+        "Exploit",
+        "Webdav",
+        "Kerberos Relay",
+        "From Service account (SEImpersonate)"
+      ],
+      "denominator_capabilities": [
+        "Aranum",
+        "PowerShell"
+      ],
+      "backing_modules": [
+        "recon/aranum",
+        "deploy/script"
+      ],
+      "missing_modules": [
+        "seimpersonate/potato(exploit)",
+        "krbrelayx(kerberos-relay)",
+        "lolbas-execution"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "delegation",
+      "title": "Kerberos Delegation",
+      "subjects": [
+        "Find delegation",
+        "Unconstrained delegation",
+        "Constrained delegation",
+        "Resource-Based Constrained Delegation",
+        "S4U2self abuse"
+      ],
+      "denominator_capabilities": [
+        "Impacket",
+        "BloodHound CE"
+      ],
+      "backing_modules": [
+        "network/nxc_ldap",
+        "impacket/finddelegation",
+        "impacket/getst"
+      ],
+      "missing_modules": [
+        "impacket-rbcd/addcomputer(abuse)",
+        "coercion(force-auth)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "admin",
+      "title": "Admin access",
+      "subjects": [
+        "Extract credentials from LSASS.exe",
+        "Extract credentials from SAM",
+        "Extract credentials from LSA",
+        "Extract credentials from DPAPI",
+        "Impersonate",
+        "Misc"
+      ],
+      "denominator_capabilities": [
+        "NetExec",
+        "Impacket"
+      ],
+      "backing_modules": [
+        "impacket/secretsdump",
+        "network/nxc_smb"
+      ],
+      "missing_modules": [
+        "mimikatz(on-host lsass)",
+        "dpapi-looters"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "dom_admin",
+      "title": "Domain admin",
+      "subjects": [
+        "Dump ntds.dit",
+        "Grab backup Keys"
+      ],
+      "denominator_capabilities": [
+        "Impacket"
+      ],
+      "backing_modules": [
+        "impacket/secretsdump"
+      ],
+      "missing_modules": [
+        "impacket-dpapi-backupkeys(confirm bundled)"
+      ],
+      "module_status": "HAVE",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "low_hanging",
+      "title": "Quick Compromise",
+      "subjects": [
+        "\u26a0\ufe0f Zerologon (unsafe) CVE-2020-1472 @CVE@",
+        "Eternal Blue MS17-010 @CVE@",
+        "Tomcat/Jboss Manager",
+        "Java RMI",
+        "Java Serialiszed port",
+        "Log4shell",
+        "Database",
+        "Exchange",
+        "Veeam",
+        "GLPI",
+        "Weak websites / services"
+      ],
+      "denominator_capabilities": [
+        "Impacket(mssql)",
+        "Nmap",
+        "NetExec"
+      ],
+      "backing_modules": [
+        "recon/nmap",
+        "recon/nuclei",
+        "network/nxc_smb",
+        "network/nxc_mssql",
+        "web/sqlmap",
+        "web/wpscan"
+      ],
+      "missing_modules": [
+        "n-day-pocs(OUT-OF-SCOPE)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "mitm",
+      "title": "Man In The Middle (Listen and Relay)",
+      "subjects": [
+        "Listen",
+        "NTLM relay",
+        "Kerberos relay"
+      ],
+      "denominator_capabilities": [
+        "Impacket(ntlmrelayx engine)",
+        "NetExec"
+      ],
+      "backing_modules": [],
+      "missing_modules": [
+        "responder(listen)",
+        "ntlmrelayx(module wrapper)",
+        "krbrelayx(kerberos-relay)"
+      ],
+      "module_status": "GAP",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "know_vuln_auth",
+      "title": "Know vulnerabilities authenticated",
+      "subjects": [
+        "MS14-068",
+        "GPP MS14-025",
+        "PrivExchange (CVE-2019-0724, CVE-2019-0686)",
+        "noPac (CVE-2021-42287, CVE-2021-42278)",
+        "PrintNightmare (CVE-2021-1675, CVE-2021-34527)",
+        "Certifried (CVE-2022-26923)",
+        "ProxyNotShell (CVE-2022-41040, CVE-2022-41082)"
+      ],
+      "denominator_capabilities": [
+        "Certipy",
+        "Impacket",
+        "NetExec"
+      ],
+      "backing_modules": [
+        "network/nxc_smb"
+      ],
+      "missing_modules": [
+        "certipy(certifried)",
+        "gpp-cpassword(recovery/decrypt)",
+        "impacket-goldenPac/ms14-068(module)",
+        "nopac/printnightmare(exploit-poc)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "adcs",
+      "title": "ADCS",
+      "subjects": [
+        "Enumeration",
+        "Web Enrollment Is Up",
+        "Misconfigured Certificate Template",
+        "Misconfigured ACL",
+        "Vulnerable PKI Object access control",
+        "Misconfigured Certificate Authority",
+        "Abuse Certificate Mapping"
+      ],
+      "denominator_capabilities": [
+        "Certipy",
+        "Impacket",
+        "LDAP client"
+      ],
+      "backing_modules": [
+        "network/nxc_ldap"
+      ],
+      "missing_modules": [
+        "certipy(enum+esc1/2/3/9/10/13 paths)",
+        "coercion(esc8/esc11 incoming-auth)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "lat_move",
+      "title": "Lateral Move",
+      "subjects": [
+        "Clear text Password",
+        "NT Hash",
+        "Kerberos",
+        "Socks (relay)",
+        "Certificate (pfx)",
+        "MSSQL"
+      ],
+      "denominator_capabilities": [
+        "Impacket",
+        "NetExec",
+        "pywinrm",
+        "RDP client",
+        "Certipy"
+      ],
+      "backing_modules": [
+        "impacket/psexec",
+        "impacket/wmiexec",
+        "impacket/smbclient",
+        "network/nxc_smb",
+        "network/nxc_winrm",
+        "network/nxc_rdp",
+        "network/nxc_mssql",
+        "network/nxc_ssh"
+      ],
+      "missing_modules": [
+        "passthecert/getnthash(module)"
+      ],
+      "module_status": "HAVE",
+      "mapping_verdict": "COVERED"
+    },
+    {
+      "key": "trusts",
+      "title": "Trusts",
+      "subjects": [
+        "Enumeration",
+        "Child->Parent",
+        "Parent->Child",
+        "External Trust",
+        "Mssql links"
+      ],
+      "denominator_capabilities": [
+        "Impacket",
+        "BloodHound/RustHound-CE",
+        "PowerShell",
+        "LDAP client"
+      ],
+      "backing_modules": [
+        "impacket/secretsdump",
+        "network/nxc_ldap"
+      ],
+      "missing_modules": [
+        "impacket-raiseChild/ticketer(module)",
+        "mssql-linked-server(enum/traversal)",
+        "bloodhound-ce"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "COVERED"
+    },
+    {
+      "key": "crack_hash",
+      "title": "Crack hash",
+      "subjects": [
+        "LM (299bd128c1101fd6)",
+        "NT (b4b9b02e6f09a9bd760...)",
+        "NTLMv1 (user::85D5BC...)",
+        "NTLMv2 (user::N46iSNek...)",
+        "Kerberos 5 TGS ($krb5tgs$23$...)",
+        "Kerberos 5 TGS AES128 ($krb5tgs$17...)",
+        "Kerberos ASREP ($krb5asrep$23...)",
+        "MSCache 2 (very slow) ($DCC2$10240...)",
+        "Timeroast hash ($sntp-ms$...)",
+        "pxe hash ($sccm$aes128$...)"
+      ],
+      "denominator_capabilities": [],
+      "backing_modules": [
+        "crack/hashcat"
+      ],
+      "missing_modules": [
+        "hashcat NOT in provisioning denominator (D-043) \u2014 module inert until bundled",
+        "john(module)"
+      ],
+      "module_status": "GAP",
+      "mapping_verdict": "GAP"
+    },
+    {
+      "key": "acl",
+      "title": "ACLs/ACEs permissions",
+      "subjects": [
+        "Dcsync",
+        "can change msDS-KeyCredentialLInk (Generic Write) + ADCS",
+        "On Group",
+        "On Computer",
+        "On User",
+        "On OU",
+        "ReadGMSAPassword",
+        "Get LAPS passwords",
+        "GPO",
+        "DNS Admin"
+      ],
+      "denominator_capabilities": [
+        "BloodHound CE",
+        "Impacket",
+        "NetExec",
+        "Certipy",
+        "PowerShell"
+      ],
+      "backing_modules": [
+        "impacket/secretsdump",
+        "network/nxc_smb",
+        "network/nxc_ldap"
+      ],
+      "missing_modules": [
+        "bloodhound-ce(acl-analysis ingest/query)",
+        "impacket-dacledit(module)",
+        "certipy(shadow-creds)",
+        "laps-retrieval(wrapper)",
+        "gmsa-retrieval(wrapper)",
+        "ouned(gpo)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    },
+    {
+      "key": "sccm",
+      "title": "SCCM",
+      "subjects": [
+        "recon",
+        "Creds-1 No credentials",
+        "Elevate-1:Relay on site systems Simple user",
+        "Elevate-2:Force client push Simple user",
+        "Elevate-3:Automatic client push Simple user",
+        "CRED-6 Loot creds",
+        "Takeover-1:relay to mssql db Simple user",
+        "Takeover-2:relay to mssql server Simple user",
+        "Creds-2:Policy Request Credentials Simple user",
+        "Creds-3Creds-4 Computer Admin user",
+        "Creds-5 SCCM admin",
+        "EXEC-1/2 SCCM admin",
+        "Cleanup",
+        "Post exploit"
+      ],
+      "denominator_capabilities": [
+        "Impacket",
+        "NetExec"
+      ],
+      "backing_modules": [],
+      "missing_modules": [
+        "sccmhunter/SharpSCCM/sccm-http-looter(LATER PROFILE)"
+      ],
+      "module_status": "GAP",
+      "mapping_verdict": "GAP"
+    },
+    {
+      "key": "persistence",
+      "title": "Persistence",
+      "subjects": [
+        "ADD DA",
+        "Golden ticket",
+        "Silver Ticket",
+        "Directory Service Restore Mode (DSRM)",
+        "Skeleton Key",
+        "Custom SSP",
+        "Golden certificate",
+        "Diamond ticket",
+        "Saphire Ticket",
+        "DC shadow",
+        "ACL manipulation",
+        "..."
+      ],
+      "denominator_capabilities": [
+        "Impacket",
+        "Certipy",
+        "PowerShell"
+      ],
+      "backing_modules": [
+        "impacket/ticketer"
+      ],
+      "missing_modules": [
+        "certipy(golden-cert)",
+        "mimikatz(skeleton/ssp/dcshadow/dsrm)"
+      ],
+      "module_status": "PARTIAL",
+      "mapping_verdict": "PARTIAL"
+    }
+  ],
+  "review": "Sol R1 (codex) FIX-FIRST applied 16NOV2026; see docs/reviews/OCD-REGISTRY-PEER-REVIEW-SOL-R1-16NOV2026.md"
 }

@@ -8,11 +8,14 @@ methodology to the module system.
 Data: ``ocd_registry.json`` (generated from the parsed taxonomy; see
 ``docs/research/OCD-AD-MINDMAP-CAPABILITY-MAPPING-16NOV2026.md``).
 
-``module_status`` per category means (is there code?):
-  HAVE    – one or more backing modules cover the core subjects
+``module_status`` per category — operator-facing: can this run as provisioned?
+  HAVE    – one or more backing modules cover the core subjects, and the
+            denominator tool is in the provisioning bundle
   PARTIAL – core subjects backed, key operations still need a module
   STUB    – the denominator tool exists but no module wraps the OCD operation yet
-  GAP     – no denominator capability at all
+  GAP     – not runnable as provisioned: the denominator tool is absent from the
+            bundle, even if in-repo module code exists (that code is recorded in
+            ``backing_modules`` and the bundling gap in ``missing_modules``)
 """
 
 from __future__ import annotations
