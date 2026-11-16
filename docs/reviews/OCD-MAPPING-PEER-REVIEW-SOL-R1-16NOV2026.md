@@ -1,0 +1,37 @@
+# Peer review — OCD AD mind-map capability mapping (Sol, R1)
+
+- **Artifact reviewed:** `docs/research/OCD-AD-MINDMAP-CAPABILITY-MAPPING-16NOV2026.md` (the DRAFT at review time).
+- **Reviewer:** Sol (codex, bulk tier), read-only, 16NOV2026. Independent family (draft authored by an Opus 5.5 subagent).
+- **Verdict:** FIX-FIRST — 8 findings.
+- **Disposition:** All 8 findings source-verified by the orchestrator against the parsed taxonomy and PLAN-003, and applied to the FINAL mapping. Grade changes: `delegation`, `adcs`, `dom_admin` COVERED→PARTIAL; `low_hanging` GAP→PARTIAL. New recommendation added (subject-level dependency ledger); relay gap split into 5 capabilities; §4 GOAD coverage re-tiered to topology-vs-scenario evidence; P0-S3 acceptance gate preserved (mapping is a ledger, not the oracle).
+- Round 2 not run: every fix was verified against source at integration, per codex-interop rule 8 (ship after fixes are applied and confirmed).
+
+---
+
+## Sol review (verbatim)
+
+VERDICT: FIX-FIRST
+
+1. **HIGH — §5 recommendation 2: changes the plan’s acceptance boundary.** Making this matrix the P0-S3 acceptance oracle conflates two independent denominators: 17 provisioned capabilities and 17 methodology categories. [PLAN-003:172](/srv/share/dev/purplesploit/docs/plans/PLAN-003-14NOV2026-ad-engagement-toolchain.md:172) defines a provisioning exit; P0-S4 qualifies the offline release, and later sprints qualify production workflows. The recommendation supplies no bounded subject set or treatment of deferred categories. Preserve those gates and add the mapping as a coverage ledger with separately defined, profile-specific acceptance criteria.
+
+2. **HIGH — §1 `delegation`; §2b Rubeus equivalence: COVERED is overstated.** The authoritative `delegation.subjects` explicitly includes unconstrained delegation through forced authentication and ticket capture using Rubeus/mimikatz. Impacket’s ticket requests and ticket creation do not replace that capture capability. The draft itself acknowledges both missing prerequisites in §2a. **Grade delegation PARTIAL**, and restrict the Rubeus equivalence to the particular request/roasting operations actually replaced.
+
+3. **HIGH — §2a relay gap; §5 recommendation 3: the gap is both overstated and incompletely remedied.** “No coercion trigger” overlooks the taxonomy’s `authenticated → Coerce` branches using existing NetExec file-based authentication triggers. Those require interaction and suitable permissions, so they do not eliminate the RPC-coercion gap. Conversely, Responder + mitm6 + coercers does **not** close the “entire `mitm` column”: the recommendation omits its explicitly missing Kerberos-relay capability. Separate poisoning/capture, authentication induction, RPC coercion, NTLM relay, and Kerberos relay. **Keep `mitm` PARTIAL**, with its incomplete paths recorded.
+
+4. **HIGH — §1 `adcs`; §2b Certipy equivalence: unqualified executable coverage is unsupported.** The map’s ESC8 and ESC11 branches require incoming authentication. Listing Certipy and ntlmrelayx establishes relay/request primitives; it does not establish the complete path. Existing file-based triggers have prerequisites the mapping never qualifies. **Use PARTIAL for self-contained exercise coverage unless those dependencies are demonstrated**, or explicitly label the grade as primitive coverage. Certipy is a defensible alternative to the mapped Certify workflows, but “all abuse modes” also needs feature-specific version evidence—the taxonomy itself annotates ESC15 with a PR dependency.
+
+5. **HIGH — §1 `low_hanging`; §2c; §4; §5 recommendation 7: the category is incorrectly reduced to n-day exploitation.** Its authoritative subjects also include **Database**, Tomcat/JBoss management, and weak websites/services. The Database branch is MSSQL login enumeration, for which the denominator already supplies relevant MSSQL capabilities. **The attack-box grade should be PARTIAL**, rather than GAP on the stated n-day rationale. Moreover, the draft’s own GOAD MSSQL claims contradict wholesale exclusion for absent services. Exclude specific unsupported CVE/service subjects; do not exclude this entire category under that rationale.
+
+6. **HIGH — §4 GOAD coverage: topology is repeatedly treated as vulnerability or scenario evidence.** AD CS presence does not establish **Certifried** vulnerability; DC presence does not establish **Zerologon** vulnerability. Relaxed SMB signing, even if established, does not establish a source of authentication. The permitted plan evidence also does not substantiate the asserted seeded spraying, delegation, and individual ACL scenarios. Additionally, the topology’s bidirectional external trust cannot qualify the map’s one-way trust cases. Distinguish **topology-supported**, **scenario-qualified**, **conditional**, and **absent** subjects before publishing the aggregate “~13 of 17” claim.
+
+7. **MEDIUM — §2b and `dom_admin`: some replacement claims identify the wrong artifact or capability.**
+   - The taxonomy registers `gettgtpkinit.py`/`getnthash.py` under PKINITtools and `passthecert.py` separately; it references `regsecrets.py` through an Impacket PR. “Impacket” alone does not establish those exact artifacts. Certipy supplies mapped alternatives for several certificate operations, so correct the attribution without automatically inventing additional gaps.
+   - `dom_admin → Grab backup Keys` concerns **DPAPI domain backup keys**. Certipy CA backup is a different capability. The taxonomy places `certsync` under **Dump ntds.dit**, contradicting §2b’s “backup-key path” explanation. The COVERED grade needs a correctly evidenced DPAPI replacement.
+
+8. **MEDIUM — §2c `low_access`; §3/§5 recommendation 5: server-capable gaps are deferred using the wrong boundary.** AppLocker/UAC checks, service-account privilege escalation, file searches, and Kerberos relay are not inherently workstation-only. WS01’s absence therefore does not justify deferring that whole collection of gaps. Likewise, a WinBins repository row does not prove particular binaries or functionality are bundled. **Keep `low_access` PARTIAL**, identify its server-applicable omissions, and require an artifact inventory before crediting WinBins. Separately, remove standalone pyWhisker absence from the ACL gap rationale where Certipy already covers the mapped shadow-credential operation.
+
+The remaining calibration is defensible: **`valid_user` COVERED** can end at the map’s ASREP/hash output, with cracking measured separately; it does not authorize spray automation while C4 remains unset. **`persistence` PARTIAL** is appropriate because ticket/certificate primitives remain available despite missing on-host techniques.
+
+For §2b, NetExec covers the shown spray attempts, and pywinrm covers WinRM command transport; neither statement establishes complete feature parity with sprayhound or evil-winrm interactivity.
+
+Recommendations **1 and 4** are sound with those boundaries. Recommendation **6** should preserve optional later profiles and the already-required WS01 gate. Recommendation **8** may guide prioritization, but must retain exact qualification of every required capability. The critical missing recommendation is a **subject-level dependency ledger** recording tool/version evidence, target prerequisites, and qualification status; category totals alone cannot support acceptance.
