@@ -24,6 +24,7 @@ from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
+    ValidationExecutor, ComposableResult,
 )
 from purplesploit.validation.executors.process_manager import ProcessManager, ProcHandle
 from purplesploit.validation.engine import ChainEngine, ChainReport, default_edges, da_in_minutes
@@ -32,13 +33,25 @@ from purplesploit.validation.engine.chain_engine import OPERATOR_SEED, _StateEnt
 
 # ============================================================ fakes / helpers
 class _EnvRunner(CommandRunner):
-    def __init__(self, script=None):
+    def __init__(self, script=None, save_ccache=True):
         self.script = script or {}
         self.calls: list[tuple[list[str], dict]] = []
+        self.save_ccache = save_ccache
 
     def run(self, argv, *, env=None, timeout=None, cwd=None) -> RunResult:
         self.calls.append((list(argv), dict(env or {})))
-        return self.script.get(Path(argv[0]).name, RunResult(returncode=0, stdout=""))
+        name = Path(argv[0]).name
+        # Simulate certipy 'auth' saving the issued cert's key material in the run
+        # dir, so it lands in whatever ISOLATED output dir the engine gave this
+        # edge (no hard-coded path in the test). Guarded so a pre-seeded path
+        # (e.g. a dir, to force a teardown failure) is left intact.
+        if self.save_ccache and name == "certipy-ad" and "auth" in argv and cwd:
+            d = Path(cwd); d.mkdir(parents=True, exist_ok=True)
+            for fn in ("dc01.pfx", "dc01.ccache"):
+                p = d / fn
+                if not p.exists():
+                    p.write_bytes(b"X")
+        return self.script.get(name, RunResult(returncode=0, stdout=""))
 
     def call_for(self, tool):
         return next((a, e) for a, e in self.calls if Path(a[0]).name == tool)
@@ -82,11 +95,6 @@ def _auth_stdout():
     return ("[*] Using principal: dc01$@north.sevenkingdoms.local\n[*] Got TGT\n"
             "[*] Saved credential cache to 'dc01.ccache'\n"
             "[*] Got hash for 'dc01$': aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0\n")
-
-
-def _issue(tmp_path):
-    (tmp_path / "dc01.pfx").write_bytes(b"PFX")
-    (tmp_path / "dc01.ccache").write_bytes(b"CC")
 
 
 def _adcs_finding():
@@ -136,7 +144,6 @@ def test_da_chain_threads_front_ccache_into_dcsync(tmp_path):
     """The crux: the engine runs ESC8 then DCSync, and DCSync authenticates with
     ESC8's issued ccache (KRB5CCNAME + dc01$), NOT the operator. a1+b1 is REAL."""
     cfg = _cfg()
-    _issue(tmp_path)
     pm = _FakePM(reads=["[*] GOT certificate for 'DC01$' (Base64 certificate: ...)"])
     runner = _EnvRunner({"certipy-ad": RunResult(0, stdout=_auth_stdout()),
                          "impacket-secretsdump": RunResult(0, stdout=_DCSYNC_OK)})
@@ -147,9 +154,10 @@ def test_da_chain_threads_front_ccache_into_dcsync(tmp_path):
     assert isinstance(report, ChainReport)
     assert report.reached is True and report.escalation is True
     assert report.path == ["ESC8", "DCSYNC"]
-    # DCSync consumed the THREADED ccache: KRB5CCNAME set + dc01$ principal.
+    # DCSync consumed the THREADED ccache (from ESC8's ISOLATED output dir):
+    # KRB5CCNAME set + dc01$ principal, NOT the operator user.
     sd_argv, sd_env = runner.call_for("impacket-secretsdump")
-    assert sd_env.get("KRB5CCNAME") == str(tmp_path / "dc01.ccache")
+    assert sd_env.get("KRB5CCNAME") == str(tmp_path / "ESC8" / "dc01.ccache")
     assert "-k" in sd_argv and "-no-pass" in sd_argv
     assert "dc01$" in sd_argv[-1].lower() and "jon.snow" not in sd_argv[-1]
     # two receipts carried for the scorer: the ESC8 front + the DCSYNC terminal.
@@ -159,7 +167,6 @@ def test_da_chain_threads_front_ccache_into_dcsync(tmp_path):
 # ================================================================= H4 deferred verified teardown
 def test_chain_teardown_is_deferred_and_verified(tmp_path):
     cfg = _cfg()
-    _issue(tmp_path)
     pm = _FakePM(reads=["GOT certificate"])
     runner = _EnvRunner({"certipy-ad": RunResult(0, stdout=_auth_stdout()),
                          "impacket-secretsdump": RunResult(0, stdout=_DCSYNC_OK)})
@@ -169,7 +176,8 @@ def test_chain_teardown_is_deferred_and_verified(tmp_path):
     # ESC8's key material was destroyed at CHAIN teardown (not per-edge).
     td = {t["edge"]: t for t in report.teardown}
     assert "ESC8" in td and td["ESC8"]["performed"] and td["ESC8"]["verified"]
-    assert not (tmp_path / "dc01.pfx").exists() and not (tmp_path / "dc01.ccache").exists()
+    assert not (tmp_path / "ESC8" / "dc01.pfx").exists()
+    assert not (tmp_path / "ESC8" / "dc01.ccache").exists()
     # the ESC8 front receipt is reconciled with the chain teardown, so it scores
     # proved+clean standalone (not a dangling "rollback_unverified").
     esc8_rcpt = next(r for r in report.receipts if r["technique"] == "ESC8")
@@ -179,7 +187,9 @@ def test_chain_teardown_is_deferred_and_verified(tmp_path):
 
 def test_chain_reports_not_clean_on_unverified_teardown(tmp_path):
     cfg = _cfg()
-    (tmp_path / "dc01.pfx").mkdir()                        # destruction fails (a dir) -> unverified
+    # Pre-seed ESC8's isolated output dir with dc01.pfx as a DIR so its teardown
+    # unlink fails -> rollback cannot verify. The runner leaves an existing path be.
+    (tmp_path / "ESC8" / "dc01.pfx").mkdir(parents=True)
     pm = _FakePM(reads=["GOT certificate"])
     runner = _EnvRunner({"certipy-ad": RunResult(0, stdout=_auth_stdout()),
                          "impacket-secretsdump": RunResult(0, stdout=_DCSYNC_OK)})
@@ -216,10 +226,9 @@ def test_escalation_detection_distinguishes_produced_from_seed():
 
 def test_given_creds_label_is_not_an_escalation_claim():
     engine = ChainEngine(default_edges())
-    rep = engine._report(reached=True, escalation=False, clean=True,
-                         path=[], receipts=[], teardown_log=[], fail_note="")
-    assert "given creds" in rep.label.lower() and "no escalation" in rep.label.lower()
-    assert rep.escalation is False
+    label = engine._label(reached=True, escalation=False, clean=True).lower()
+    assert "given creds" in label and "no escalation" in label
+    assert "escalation from operator creds" not in label     # not claimed an escalation
 
 
 # ================================================================= honest failure + H6
@@ -245,7 +254,6 @@ def test_no_viable_path_is_honest():
 
 def test_chain_report_has_no_secret_payload(tmp_path):
     cfg = _cfg(password="Ch4inSecret!")
-    _issue(tmp_path)
     pm = _FakePM(reads=["GOT certificate"])
     runner = _EnvRunner({"certipy-ad": RunResult(0, stdout=_auth_stdout()),
                          "impacket-secretsdump": RunResult(0, stdout=_DCSYNC_OK)})
@@ -255,3 +263,90 @@ def test_chain_report_has_no_secret_payload(tmp_path):
     assert "dc01.ccache" not in blob and "dc01.pfx" not in blob   # ccache/pfx PATHS never in report
     assert "KRBTGThash00000000000000000000" not in blob   # krbtgt hash never read in
     assert report.to_dict()["schema"] == "adlab.plan003.chain.v1"
+
+
+# ===================================================== review fixes (HIGH-1/2, MEDIUM-1)
+def test_front_issuing_cert_without_ccache_gives_no_false_da(tmp_path):
+    """HIGH-1: ESC8 issues a cert but PKINIT yields no usable ccache -> it produces
+    no DC_TGT, so DCSync's precondition is NOT established, the path ends, and the
+    terminal NEVER silently runs on operator creds. No false 'escalation'."""
+    cfg = _cfg()
+    pm = _FakePM(reads=["[*] GOT certificate for 'DC01$'"])          # cert IS issued
+    runner = _EnvRunner({"certipy-ad": RunResult(0, stdout="[-] PKINIT failed: KDC_ERR")},
+                        save_ccache=True)                            # ... but auth has no TGT/ccache marker
+    engine = ChainEngine([get_executor("ESC8"), get_executor("DCSYNC")])
+    report = engine.run(_base_ctx(cfg, runner, tmp_path, pm), _finding_for)
+    assert report.reached is False and report.escalation is False    # NO false DA
+    assert "not reached" in report.label.lower()
+    # the terminal DCSync never ran -> no operator-cred fallback masquerading as escalation.
+    assert not any(Path(a[0]).name == "impacket-secretsdump" for a, _ in runner.calls)
+    # the issued cert was still torn down (honest cleanup even on a failed chain).
+    assert report.clean is True
+
+
+class _FakeEdge(ValidationExecutor):
+    """Minimal controllable edge for the engine's clean/escalation accounting."""
+    def __init__(self, technique, pre, eff, *, complete=True, produce=None,
+                 mutated=False, defer_verified=True, inline_verified=None):
+        self.technique = technique
+        self.pre = frozenset(pre)
+        self.eff = frozenset(eff)
+        self.mutating = mutated
+        self._complete, self._produce, self._mutated = complete, produce, mutated
+        self._defer_verified, self._inline_verified = defer_verified, inline_verified
+
+    def param_specs(self, ctx, finding):
+        return []
+
+    def execute(self, ctx, finding, params):
+        return {}
+
+    def run_composable(self, ctx, finding, overrides=None):
+        rollback = {"performed": False, "verified": False, "method": None}
+        obligation = None
+        if self._mutated and self._inline_verified is not None:
+            rollback = {"performed": True, "verified": self._inline_verified, "method": "inline"}
+        elif self._mutated:
+            obligation = {"paths": ["x"]}                            # deferred -> engine calls teardown()
+        receipt = {"technique": self.technique, "class": "fake", "complete": self._complete,
+                   "mutation": {"applied": self._mutated, "rollback": rollback},
+                   "terminal_fact": None, "steps": [], "errors": []}
+        caps = [self._produce] if (self._produce and self._complete) else []
+        return ComposableResult(receipt=receipt, complete=self._complete,
+                                capabilities=caps, teardown_obligation=obligation, executor=self)
+
+    def teardown(self, ctx, obligation):
+        return {"performed": True, "verified": self._defer_verified,
+                "method": "fake-teardown", "note": ""}
+
+
+def _fake_ctx():
+    return ExecutorContext(_cfg(), runner=_EnvRunner(), authorizer=AuthorizedLabProvider(True),
+                           output_dir=Path("/tmp"))
+
+
+def test_inline_rollback_unverified_counts_against_clean():
+    """MEDIUM-1: an edge that rolls back INLINE (no deferred obligation) with an
+    UNVERIFIED result must still make the chain NOT clean -- the engine reads every
+    receipt's mutation.rollback, not only the deferred teardown stack."""
+    edge = _FakeEdge("INLINE_MUT", {states.S0_USER_CREDS}, {states.S_DA},
+                     complete=True, mutated=True, inline_verified=False)
+    report = ChainEngine([edge]).run(_fake_ctx(), lambda e: object())
+    assert report.reached is True and report.clean is False
+    assert report.teardown == []                             # no deferred obligation was registered
+    assert "not clean" in report.label.lower()
+
+
+def test_cross_path_leftover_mutation_is_not_hidden_by_later_clean_path():
+    """HIGH-2: an earlier fallback path that leaves an UNVERIFIED mutation must not
+    be hidden by a later clean path that reaches -- cleanliness is aggregated."""
+    # both mutating so costs tie -> name order (AAA < ZZZ) runs the dirty path first.
+    dirty = _FakeEdge("AAA_DIRTY", {states.S0_USER_CREDS}, {states.S_DA},
+                      complete=False, mutated=True, defer_verified=False)   # mutates, fails, teardown unverified
+    clean = _FakeEdge("ZZZ_CLEAN", {states.S0_USER_CREDS}, {states.S_DA},
+                      complete=True, mutated=True, defer_verified=True)      # reaches, clean teardown
+    report = ChainEngine([dirty, clean]).run(_fake_ctx(), lambda e: object())
+    assert report.reached is True                            # the clean path reached DA
+    assert report.clean is False                             # ... but the earlier leftover makes it NOT clean
+    assert "not clean" in report.label.lower()
+    assert any(t["edge"] == "AAA_DIRTY" and not t["verified"] for t in report.teardown)
