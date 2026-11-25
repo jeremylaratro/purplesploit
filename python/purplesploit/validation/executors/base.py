@@ -27,6 +27,7 @@ from typing import Any, Optional
 
 from ..config import ValidationConfig
 from ..recommend import ParamSpec, ParamValue, resolve_params, params_preview
+from ..predicates import strip_ansi
 from .. import proof
 
 
@@ -121,11 +122,13 @@ class SubprocessRunner(CommandRunner):
                 list(argv), capture_output=True, text=True, cwd=cwd, env=merged,
                 timeout=timeout or self.default_timeout, check=False,
             )
-            return RunResult(returncode=proc.returncode, stdout=proc.stdout or "",
-                             stderr=proc.stderr or "")
+            # Strip ANSI at the boundary so every executor's predicate matches
+            # clean output regardless of the tool's colour/terminal formatting.
+            return RunResult(returncode=proc.returncode,
+                             stdout=strip_ansi(proc.stdout), stderr=strip_ansi(proc.stderr))
         except subprocess.TimeoutExpired as exc:
-            return RunResult(returncode=None, stdout=exc.stdout or "",
-                             stderr=exc.stderr or "", timed_out=True,
+            return RunResult(returncode=None, stdout=strip_ansi(exc.stdout),
+                             stderr=strip_ansi(exc.stderr), timed_out=True,
                              error="timeout")
         except OSError as exc:
             return RunResult(returncode=None, error=f"{type(exc).__name__}: {exc}")
