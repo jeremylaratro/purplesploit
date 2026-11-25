@@ -33,6 +33,7 @@ from . import proof
 from .probes import ProbeResult, run_probes
 from .executors import (ExecutorContext, CommandRunner, SubprocessRunner,
                         AuthorizationProvider, AuthorizedLabProvider, ValidationPlan,
+                        ProcessManager, SubprocessProcessManager,
                         get_executor, is_implemented)
 
 
@@ -183,17 +184,22 @@ class ValidationOrchestrator:
                  authorizer: Optional[AuthorizationProvider] = None,
                  confirmer: Optional[ConfirmationProvider] = None,
                  aranum: Optional[AranumRunner] = None,
-                 scorer: Optional[ProofScorer] = None):
+                 scorer: Optional[ProofScorer] = None,
+                 proc_manager: Optional[ProcessManager] = None):
         self.config = config
         self.runner = runner or SubprocessRunner(default_timeout=config.tool_timeout_s)
         self.authorizer = authorizer or AuthorizedLabProvider(config.authorized)
         self.confirmer = confirmer or (AutoConfirm() if config.auto_confirm else DeclineAll())
         self.aranum = aranum or CliAranumRunner()
         self.scorer = scorer or CliProofScorer()
+        # ADR-001 chassis extension: the shared background listener manager for
+        # the listener-based executors (COERCION, NTLM-RELAY, UNCONSTRAINED-DELEG).
+        self.proc_manager = proc_manager or SubprocessProcessManager()
         self.receipts_dir = config.output_dir / "receipts"
         self.context = ExecutorContext(config=config, runner=self.runner,
                                        authorizer=self.authorizer,
-                                       output_dir=config.output_dir)
+                                       output_dir=config.output_dir,
+                                       proc_manager=self.proc_manager)
 
     # -- step 2 -----------------------------------------------------------
     def enumerate(self) -> list[NormalizedFinding]:

@@ -82,6 +82,10 @@ class ValidationConfig:
     authorized: bool = True                 # engagement/lab is authorized (gate default not_required)
     auto_confirm: bool = False              # accept recommended defaults without prompting
     tool_timeout_s: int = 300
+    # Interval between listener-output polls for the listener-based executors
+    # (ADR-001). Small by default; the total poll is bounded by tool_timeout_s.
+    # Tests inject a tiny/zero interval so the poll loop never actually sleeps.
+    poll_interval_s: float = 2.0
 
     def __post_init__(self) -> None:
         if not self.domain:

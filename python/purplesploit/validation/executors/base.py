@@ -29,6 +29,8 @@ from ..config import ValidationConfig
 from ..recommend import ParamSpec, ParamValue, resolve_params, params_preview
 from ..predicates import strip_ansi
 from .. import proof
+from .process_manager import (ProcessManager, SubprocessProcessManager, ProcHandle,
+                              poll_for_capture)
 
 
 # ------------------------------------------------------------------ command runner
@@ -223,11 +225,19 @@ class AuthorizedLabProvider(AuthorizationProvider):
 # ------------------------------------------------------------------ executor context
 @dataclass
 class ExecutorContext:
-    """Everything an executor needs at run time, assembled by the orchestrator."""
+    """Everything an executor needs at run time, assembled by the orchestrator.
+
+    ``proc_manager`` is the ADR-001 chassis extension: an injected background
+    :class:`ProcessManager` for listener-based executors (COERCION, NTLM-RELAY,
+    UNCONSTRAINED-DELEG). It is additive and optional -- it defaults to a real
+    :class:`SubprocessProcessManager`, so the eight synchronous executors and
+    every existing call site are untouched; tests inject a scripted fake.
+    """
     config: ValidationConfig
     runner: CommandRunner
     authorizer: AuthorizationProvider
     output_dir: Any                      # pathlib.Path for this run's receipts/ccache
+    proc_manager: ProcessManager = field(default_factory=SubprocessProcessManager)
 
 
 # ------------------------------------------------------------------ step / plan records

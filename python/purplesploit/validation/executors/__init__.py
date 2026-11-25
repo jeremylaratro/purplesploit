@@ -1,12 +1,13 @@
 """ValidationExecutor registry: technique -> executor class.
 
-Fully implemented: RBCD (``rbcd.py``), KERBEROAST + ASREP (``roast.py``), LAPS
-(``laps.py``), CONSTRAINED-DELEG-PT (``constrained_deleg.py``), OPENSHARES-WRITE
-(``openshares.py``), SHADOW-CREDS (``shadow_creds.py``), ADCS-ESC1
-(``adcs_esc1.py``). The remaining three techniques are importable stubs
-(``stubs.py``) carrying their #66146 recipe and raising ``StubNotImplemented`` on
-execute. The orchestrator looks executors up here by the technique the finding
-mapper attached.
+Fully implemented (ALL eleven techniques): RBCD (``rbcd.py``), KERBEROAST + ASREP
+(``roast.py``), LAPS (``laps.py``), CONSTRAINED-DELEG-PT (``constrained_deleg.py``),
+OPENSHARES-WRITE (``openshares.py``), SHADOW-CREDS (``shadow_creds.py``), ADCS-ESC1
+(``adcs_esc1.py``), and the listener trio COERCION (``coercion.py``), NTLM-RELAY
+(``ntlm_relay.py``), UNCONSTRAINED-DELEG (``unconstrained_deleg.py``) on the
+``ProcessManager`` chassis (``process_manager.py``, ADR-001). No stubs remain
+(``stubs.py``'s ``STUB_EXECUTORS`` is empty). The orchestrator looks executors up
+here by the technique the finding mapper attached.
 """
 from __future__ import annotations
 
@@ -15,7 +16,9 @@ from typing import Optional
 from .base import (ValidationExecutor, ExecutorContext, CommandRunner,
                    SubprocessRunner, AuthorizationProvider, AuthorizedLabProvider,
                    ValidationPlan, StepRecord, RunResult, StubNotImplemented,
-                   redact_argv, ToolAttempt, first_successful)
+                   redact_argv, ToolAttempt, first_successful,
+                   ProcessManager, SubprocessProcessManager, ProcHandle,
+                   poll_for_capture)
 from .rbcd import RBCDExecutor
 from .roast import KerberoastExecutor, ASREPExecutor
 from .laps import LAPSExecutor
@@ -23,13 +26,16 @@ from .constrained_deleg import ConstrainedDelegExecutor
 from .openshares import OpenSharesExecutor
 from .shadow_creds import ShadowCredsExecutor
 from .adcs_esc1 import ADCSESC1Executor
+from .coercion import CoercionExecutor
+from .ntlm_relay import NTLMRelayExecutor
+from .unconstrained_deleg import UnconstrainedDelegExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
 _FULL: tuple[type[ValidationExecutor], ...] = (
     RBCDExecutor, KerberoastExecutor, ASREPExecutor, LAPSExecutor,
     ConstrainedDelegExecutor, OpenSharesExecutor, ShadowCredsExecutor,
-    ADCSESC1Executor,
+    ADCSESC1Executor, CoercionExecutor, NTLMRelayExecutor, UnconstrainedDelegExecutor,
 )
 
 # Technique -> executor class.
@@ -55,9 +61,11 @@ __all__ = [
     "ValidationExecutor", "ExecutorContext", "CommandRunner", "SubprocessRunner",
     "AuthorizationProvider", "AuthorizedLabProvider", "ValidationPlan", "StepRecord",
     "RunResult", "StubNotImplemented", "redact_argv", "ToolAttempt", "first_successful",
+    "ProcessManager", "SubprocessProcessManager", "ProcHandle", "poll_for_capture",
     "RBCDExecutor",
     "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
-    "ADCSESC1Executor",
+    "ADCSESC1Executor", "CoercionExecutor", "NTLMRelayExecutor",
+    "UnconstrainedDelegExecutor",
     "REGISTRY", "IMPLEMENTED", "get_executor", "is_implemented",
 ]
