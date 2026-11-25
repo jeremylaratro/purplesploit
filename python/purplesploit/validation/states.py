@@ -47,12 +47,32 @@ KRBTGT = "krbtgt"
 # Domain-Admin control achieved -- DCSync's effect.
 S_DA = "S_DA"
 
+# ---- intermediate states the existing 11 fronts traverse (C tranche, H5a) -----
+# A coerced machine account's NTLM auth, captured by a listener (COERCION's eff;
+# the relay/unconstrained fronts' pre).
+S_COERCED_AUTH = "S_coerced_auth"
+
+# Control of a computer account we can write delegation attrs on (RBCD's pre when
+# not satisfied by MachineAccountQuota).
+S_COMPUTER_CONTROL = "S_computer_control"
+
+# A written msDS-AllowedToActOnBehalfOfOtherIdentity (RBCD/relay-ldap eff);
+# feeds the S4U step, NOT S_DA directly.
+S_RBCD_WRITE = "S_rbcd_write"
+
+# A service ticket impersonating a chosen principal to a specific SPN (the S4U /
+# constrained-delegation eff). Lateral/service access, NOT domain replication.
+S_IMPERSONATION_TGT = "S_impersonation_tgt"
+
 # The base (parameter-free) capability states.
 BASE_STATES: frozenset = frozenset({
     S0_USER_CREDS, DC_TGT, DA_CREDS, KRBTGT, S_DA,
+    S_COERCED_AUTH, S_COMPUTER_CONTROL, S_RBCD_WRITE, S_IMPERSONATION_TGT,
 })
 
 _CERT_PREFIX = "cert:"
+_LOCAL_ADMIN_PREFIX = "local_admin:"
+_CRED_PREFIX = "cred:"
 
 
 def cert_for(host: str) -> str:
@@ -66,13 +86,50 @@ def cert_for(host: str) -> str:
     return f"{_CERT_PREFIX}{host or ''}"
 
 
+def local_admin_for(host: str) -> str:
+    """A per-host LOCAL-admin state (``local_admin:<host>``) -- review H5a.
+
+    An NTLM-RELAY ``smb_sam`` dump yields local administrator on the relayed
+    member, NOT domain credentials. This state DELIBERATELY does not feed
+    :data:`S_DA`/:data:`DCSync.pre`, so the search can never mistake a SAM dump
+    for Domain Admin. (A member's local SAM cannot DRSUAPI-replicate.)
+    """
+    return f"{_LOCAL_ADMIN_PREFIX}{host or ''}"
+
+
+def cred_for(principal: str) -> str:
+    """A per-PRINCIPAL recovered-credential state (``cred:<principal>``) -- H5a.
+
+    SHADOW-CREDS recovers a victim principal's NT hash; ADCS-ESC1 yields a cert
+    impersonating a chosen SAN principal. The capability is PRINCIPAL-TYPED: only
+    when the bound principal is a DA/DC equivalent does ``cred_for(principal)``
+    satisfy a :data:`DCSync`/:data:`S_DA` ``pre``. A normal principal yields a
+    lateral credential and never Domain Admin. The engine binds the principal at
+    search time; the static ``eff`` must not collapse to a bare :data:`DC_TGT`.
+    """
+    return f"{_CRED_PREFIX}{principal or ''}"
+
+
+def _is_prefixed(value: str, prefix: str) -> bool:
+    return (isinstance(value, str) and value.startswith(prefix)
+            and len(value) > len(prefix))
+
+
 def is_state(value: str) -> bool:
     """True iff ``value`` is a known capability-state: a base state, or a
-    :func:`cert_for` token (``cert:<host>`` with a non-empty host)."""
+    parametrized token -- :func:`cert_for` (``cert:<host>``),
+    :func:`local_admin_for` (``local_admin:<host>``), or :func:`cred_for`
+    (``cred:<principal>``) -- each with a non-empty argument."""
     if value in BASE_STATES:
         return True
-    return (isinstance(value, str) and value.startswith(_CERT_PREFIX)
-            and len(value) > len(_CERT_PREFIX))
+    return (_is_prefixed(value, _CERT_PREFIX)
+            or _is_prefixed(value, _LOCAL_ADMIN_PREFIX)
+            or _is_prefixed(value, _CRED_PREFIX))
+
+
+def cred_principal(value: str) -> str:
+    """The principal inside a :func:`cred_for` token, or ``""`` if not one."""
+    return value[len(_CRED_PREFIX):] if _is_prefixed(value, _CRED_PREFIX) else ""
 
 
 def all_states(states: Iterable[str]) -> bool:
@@ -83,5 +140,7 @@ def all_states(states: Iterable[str]) -> bool:
 
 __all__ = [
     "S0_USER_CREDS", "DC_TGT", "DA_CREDS", "KRBTGT", "S_DA",
-    "BASE_STATES", "cert_for", "is_state", "all_states",
+    "S_COERCED_AUTH", "S_COMPUTER_CONTROL", "S_RBCD_WRITE", "S_IMPERSONATION_TGT",
+    "BASE_STATES", "cert_for", "local_admin_for", "cred_for", "cred_principal",
+    "is_state", "all_states",
 ]

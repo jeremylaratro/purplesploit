@@ -56,7 +56,7 @@ from ..predicates import file_present_nonempty
 from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, Capability, CAP_CCACHE)
 from .process_manager import poll_for_capture
 from .coercion import COERCION_METHODS, coercion_trigger_argv, machine_account, _short_name
 
@@ -272,13 +272,64 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
                                           victim_dc, "relay_cert_pkinit"),
             extra={"ca_host": _short_name(ca_host), "template": template, "method": method})
 
-        # 5) rollback (ALWAYS, since a cert was issued): destroy the key material.
+        # 5) rollback OR defer (H3/B3). A cert was issued, so key material exists.
+        if ctx.composed and self.mutating:
+            # DEFER: keep the issued .pfx/.ccache alive so a downstream terminal
+            # (e.g. DCSync consuming this DC_TGT) can use it; the engine runs the
+            # destruction at chain teardown via teardown() and VERIFIES it before
+            # calling the chain clean (H4). We do NOT destroy it here.
+            steps.append(StepRecord(
+                name="rollback_deferred", ok=True, argv_display=[], returncode=None,
+                note="rollback DEFERRED to chain teardown (composed front)"))
+            complete = bool(captured and auth_ran)
+            artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+            # Secret paths for the engine's deferred teardown; in-memory products
+            # for threading. Neither reaches the receipt (_receipt_from ignores
+            # both keys) -- H6.
+            artifact["teardown_obligation"] = {
+                "method": "destroy issued-cert key material (.pfx + .ccache)",
+                "paths": [p for p in (pfx, ccache) if p]}
+            artifact["_composed_products"] = {
+                "ccache": ccache, "pfx": pfx, "principal": impersonated}
+            return artifact
+
+        # Standalone: destroy the key material immediately (verified rollback).
         self._rollback(ctx, mutation, steps, errors, pfx, ccache)
         if mutation["applied"]:
             errors.append(f"advisory:rotate_credentials:{impersonated}@{cfg.domain}")
-
         complete = bool(captured and auth_ran and mutation["rollback"]["performed"])
         return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+
+    # ---------------------------------------------------------------- composition (C)
+    def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        """Expose the issued cert's PKINIT ccache as a threadable ``DC_TGT`` (B2):
+        a downstream DCSync authenticates as this machine principal via
+        ``KRB5CCNAME``. The ccache PATH is a secret and stays in-memory only."""
+        prod = artifact.get("_composed_products") or {}
+        ccache = prod.get("ccache")
+        if not ccache:
+            return []
+        return [Capability(state=states.DC_TGT, channel=CAP_CCACHE,
+                           value=ccache, principal=prod.get("principal"))]
+
+    def teardown(self, ctx, obligation) -> dict:
+        """Deferred rollback (B3): destroy the issued key material the engine kept
+        alive for composition -- the same functional rollback as standalone
+        (certipy has no revoke, #66157), run at chain teardown and verified by
+        confirmed file-absence (the ESC1 non-vacuous rule)."""
+        paths = (obligation or {}).get("paths") or []
+        if not paths:
+            return {"performed": False, "verified": True, "method": None,
+                    "note": "no key material to destroy"}
+        if ctx.authorizer.authorize("rollback", {"composed": True}) == "denied":
+            return {"performed": False, "verified": False,
+                    "method": "destroy issued-cert key material (.pfx + .ccache)",
+                    "note": "gate_denied:rollback"}
+        steps: list[StepRecord] = []
+        verified = self._destroy_key_material(paths, steps)
+        return {"performed": True, "verified": verified,
+                "method": "destroy issued-cert key material (.pfx + .ccache)",
+                "note": (steps[-1].note if steps else "")}
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, mutation, steps, errors, pfx, ccache) -> None:

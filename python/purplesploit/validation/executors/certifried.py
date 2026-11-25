@@ -48,7 +48,7 @@ from ..recommend import (ParamSpec, ParamValue, values,
 from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, Capability, CAP_CCACHE)
 from .coercion import machine_account, _short_name
 
 
@@ -261,13 +261,69 @@ class CertifriedExecutor(ValidationExecutor):
                                           "certifried_pkinit"),
             extra={"ca_host": _short_name(ca_host), "ca": ca, "new_computer": f"{new}$"})
 
-        # 4) rollback (ALWAYS, since we created a computer): delete + verify + destroy pfx.
+        # 4) rollback OR defer (H3/B3). We created a computer, so a mutation exists.
+        if ctx.composed and self.mutating:
+            # DEFER: keep the created computer + issued pfx/ccache alive so a
+            # downstream DCSync can use this DC_TGT; the engine deletes the
+            # computer + destroys the pfx at chain teardown and VERIFIES it (H4).
+            steps.append(StepRecord(
+                name="rollback_deferred", ok=True, argv_display=[], returncode=None,
+                note="rollback DEFERRED to chain teardown (composed front)"))
+            complete = bool(issued_ok and auth_ran)
+            artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+            artifact["teardown_obligation"] = {
+                "method": "certipy account delete + LDAP read-back + destroy pfx",
+                "computer": new, "dc_fqdn": dc_fqdn, "pfx": pfx, "ccache": ccache}
+            artifact["_composed_products"] = {
+                "ccache": ccache, "pfx": pfx, "principal": impersonated}
+            return artifact
+
+        # Standalone: delete + verify + destroy pfx immediately.
         self._rollback(ctx, cfg, new, dc_fqdn, op_auth, mutation, steps, errors, pfx, ccache, record)
         if mutation["applied"]:
             errors.append(f"advisory:rotate_credentials:{impersonated}@{cfg.domain}")
-
         complete = bool(issued_ok and auth_ran and mutation["rollback"]["performed"])
         return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+
+    # ---------------------------------------------------------------- composition (C)
+    def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        """Expose the PKINIT ccache (DC-context TGT) as a threadable ``DC_TGT`` (B2);
+        a downstream DCSync authenticates as the spoofed DC via ``KRB5CCNAME``. The
+        ccache PATH is a secret and stays in-memory only."""
+        prod = artifact.get("_composed_products") or {}
+        ccache = prod.get("ccache")
+        if not ccache:
+            return []
+        return [Capability(state=states.DC_TGT, channel=CAP_CCACHE,
+                           value=ccache, principal=prod.get("principal"))]
+
+    def teardown(self, ctx, obligation) -> dict:
+        """Deferred rollback (B3): delete the created computer, positively confirm
+        its absence via LDAP read-back, and destroy the issued pfx -- the same
+        verified rollback as standalone, run at chain teardown."""
+        o = obligation or {}
+        new = o.get("computer")
+        if not new and not o.get("pfx"):
+            return {"performed": False, "verified": True, "method": None,
+                    "note": "nothing to tear down"}
+        cfg = ctx.config
+        op_auth = self._op_auth_argv(cfg)
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        steps: list[StepRecord] = []
+        errors: list[str] = []
+
+        def record(name, argv, res, ok, note=""):
+            steps.append(StepRecord(name=name, ok=ok, argv_display=redact_argv(argv),
+                                    returncode=res.returncode if res else None, note=note))
+
+        self._rollback(ctx, cfg, new, o.get("dc_fqdn") or "", op_auth, mutation,
+                       steps, errors, o.get("pfx"), o.get("ccache"), record)
+        return {"performed": mutation["rollback"]["performed"],
+                "verified": mutation["rollback"]["verified"],
+                "method": mutation["rollback"]["method"],
+                "note": ("; ".join(errors) if errors
+                         else "computer deleted + pfx destroyed (read-back confirmed)")}
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, new, dc_fqdn, op_auth, mutation, steps, errors,

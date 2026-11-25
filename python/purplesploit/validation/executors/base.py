@@ -44,6 +44,49 @@ class RunResult:
     error: Optional[str] = None
 
 
+# ------------------------------------------------------------------ capability output
+# Channels the chaining engine (C) knows how to route into a downstream edge.
+CAP_CCACHE = "ccache"       # a Kerberos credential-cache PATH -> KRB5CCNAME + ccache param
+CAP_NT_HASH = "nt_hash"     # an NT hash (SECRET) -> -hashes, in-memory only
+CAP_AES_KEY = "aes_key"     # an AES key (SECRET) -> -aesKey -k, in-memory only
+CAP_PRINCIPAL = "principal" # the principal a cred acts as (e.g. "dc01$") -> target principal
+CAP_NONE = "none"           # a state established with no machine-consumable artifact
+CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_NONE})
+
+# Channels whose VALUE is a secret and must never be serialized into a receipt /
+# ChainReport. A ccache PATH is project-marked secret too (it names bearer key
+# material on disk), so the engine keeps it in-memory and out of any report (H6).
+_SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE})
+
+
+@dataclass
+class Capability:
+    """A typed, machine-consumable artifact a front produced for a state it
+    established, so the engine can THREAD it into a downstream edge by channel
+    (review B2). Runtime only -- NEVER serialized; the engine routes it in-memory
+    and the proof receipt carries only public identifiers.
+
+    ``state``      -- the capability-state (``states.*``) this satisfies.
+    ``channel``    -- how the engine feeds it downstream (one of ``CAP_*``).
+    ``value``      -- the concrete artifact (a ccache PATH, an NT hash, ...). May
+                      be a SECRET (see :data:`_SECRET_CHANNELS`).
+    ``principal``  -- the principal this credential acts as (e.g. ``dc01$``), so a
+                      downstream DCSync authenticates as the right identity (B1).
+    """
+    state: str
+    channel: str = CAP_NONE
+    value: Optional[str] = None
+    principal: Optional[str] = None
+
+    @property
+    def secret(self) -> bool:
+        return self.channel in _SECRET_CHANNELS
+
+    def __post_init__(self):
+        if self.channel not in CAP_CHANNELS:
+            raise ValueError(f"unknown capability channel: {self.channel!r}")
+
+
 # Flags whose following token is a secret and must be masked in any stored argv.
 # ``-H`` (NetExec/bloodyAD hash) and ``--aesKey`` (NetExec AES key, double-dash
 # camelCase form) are included for the D2 nxc/bloodyAD fallbacks below.
@@ -238,6 +281,12 @@ class ExecutorContext:
     authorizer: AuthorizationProvider
     output_dir: Any                      # pathlib.Path for this run's receipts/ccache
     proc_manager: ProcessManager = field(default_factory=SubprocessProcessManager)
+    # -- composition slots (review B1/B3): empty/False for every standalone run,
+    #    so the 15 executors and every existing call site are untouched. The
+    #    chaining engine (C) populates them per edge when composing a chain.
+    input_caps: dict[str, Any] = field(default_factory=dict)  # threaded creds: ccache/nt_hash/aes_key/principal
+    env: dict[str, str] = field(default_factory=dict)         # extra env (e.g. KRB5CCNAME=<ccache>) forwarded to runner
+    composed: bool = False                                    # True => mutating fronts DEFER rollback to chain teardown
 
 
 # ------------------------------------------------------------------ step / plan records
@@ -283,6 +332,21 @@ class ValidationPlan:
         }
 
 
+@dataclass
+class ComposableResult:
+    """What the chaining engine (C) gets back from one composed edge run.
+
+    Splits the PUBLIC, serializable receipt from the SECRET, engine-only products:
+    ``capabilities`` (typed creds threaded downstream in-memory) and
+    ``teardown_obligation`` (secret key-material paths for the deferred rollback).
+    Neither of the latter two is ever written into a ChainReport (H6)."""
+    receipt: dict
+    complete: bool
+    capabilities: list = field(default_factory=list)   # list[Capability], in-memory only
+    teardown_obligation: Optional[dict] = None          # secret paths, engine-only
+    executor: Optional["ValidationExecutor"] = None     # for the engine to invoke .teardown()
+
+
 class StubNotImplemented(NotImplementedError):
     """Raised by a stub executor's ``execute`` -- the recipe is documented, not wired."""
 
@@ -304,6 +368,11 @@ class ValidationExecutor(ABC):
     mutating: bool = False
     verified_recipe: bool = False
     recipe_ref: str = ""
+    # Capability-state metadata for the chaining engine (C). Default empty so an
+    # un-annotated executor simply never participates in a composed path; the N1
+    # fronts + the C tranche set these over ``states`` constants.
+    pre: frozenset = frozenset()
+    eff: frozenset = frozenset()
 
     # -- interface subclasses implement --------------------------------------
     @abstractmethod
@@ -330,6 +399,24 @@ class ValidationExecutor(ABC):
         """Human-readable step preview for the confirmation screen. Optional."""
         return [self.recipe_ref] if self.recipe_ref else []
 
+    # -- composition hooks (review B2/B3) -- default no-ops -------------------
+    def produced(self, ctx: ExecutorContext, finding,
+                 params: dict[str, ParamValue], artifact: dict) -> list[Capability]:
+        """Typed capabilities this edge established, for the engine to THREAD into
+        a downstream edge (B2). Default: none -- a non-composable executor. A
+        front overrides this to expose its ccache/hash/principal; the engine
+        routes each by channel and keeps secret values in-memory only."""
+        return []
+
+    def teardown(self, ctx: ExecutorContext, obligation: dict) -> dict:
+        """Run the DEFERRED rollback for a composed mutating edge (B3), using the
+        (secret) paths the engine captured in ``obligation`` at mutation time.
+        Default: nothing to tear down. Returns
+        ``{performed, verified, method, note}``; a mutating front overrides it.
+        The engine requires ``verified`` before it reports a chain "clean" (H4)."""
+        return {"performed": False, "verified": True, "method": None,
+                "note": "no teardown obligation (non-mutating edge)"}
+
     # -- shared orchestration -------------------------------------------------
     def plan(self, ctx: ExecutorContext, finding,
              overrides: Optional[dict[str, Any]] = None) -> ValidationPlan:
@@ -344,27 +431,31 @@ class ValidationExecutor(ABC):
             finding_summary=finding.summary(),
         )
 
-    def run(self, ctx: ExecutorContext, finding,
-            overrides: Optional[dict[str, Any]] = None) -> dict:
-        """Full path: resolve params, execute, and return a proof.v1 receipt.
+    def _execute_to_artifact(self, ctx: ExecutorContext, finding,
+                             params: dict[str, ParamValue]) -> dict:
+        """Run ``execute`` fail-closed: any exception becomes an incomplete
+        artifact carrying the error (never a fabricated proof)."""
+        try:
+            return self.execute(ctx, finding, params)
+        except StubNotImplemented as exc:
+            return {"steps": [], "complete": False,
+                    "errors": [f"stub_not_implemented: {exc}"]}
+        except Exception as exc:  # fail closed -> incomplete receipt, never a proof
+            return {"steps": [], "complete": False,
+                    "errors": [f"{type(exc).__name__}: {exc}"]}
 
-        Any exception inside ``execute`` yields an incomplete receipt carrying
-        the error (never a fabricated proof).
-        """
-        params = resolve_params(self.param_specs(ctx, finding), overrides)
+    def _receipt_from(self, ctx: ExecutorContext, finding,
+                      params: dict[str, ParamValue], artifact: dict) -> dict:
+        """Build the ``proof.v1`` receipt from a loose artifact. Shared by ``run``
+        and ``run_composable`` so the receipt (and its secret-scrubbing) is
+        identical on both paths. ``artifact`` keys outside the receipt schema
+        (e.g. ``teardown_obligation``) are ignored here, so engine-only secret
+        paths never reach the receipt (H6)."""
         executor_meta = {"name": type(self).__name__, "technique": self.technique,
                          "verified_recipe": self.verified_recipe}
         candidate = {"finding_id": finding.finding_id, "logical_id": finding.logical_id,
                      "host": finding.host, **{k: v for k, v in finding.entity.items()
                                               if not isinstance(v, (dict, list))}}
-        try:
-            artifact = self.execute(ctx, finding, params)
-        except StubNotImplemented as exc:
-            artifact = {"steps": [], "complete": False,
-                        "errors": [f"stub_not_implemented: {exc}"]}
-        except Exception as exc:  # fail closed -> incomplete receipt, never a proof
-            artifact = {"steps": [], "complete": False,
-                        "errors": [f"{type(exc).__name__}: {exc}"]}
         return proof.build_receipt(
             technique=self.technique, cls=self.technique_class,
             target=self.target_identity(ctx, finding, params),
@@ -373,4 +464,35 @@ class ValidationExecutor(ABC):
             complete=artifact.get("complete", False),
             candidate=candidate, executor=executor_meta,
             errors=artifact.get("errors"),
+        )
+
+    def run(self, ctx: ExecutorContext, finding,
+            overrides: Optional[dict[str, Any]] = None) -> dict:
+        """Full path: resolve params, execute, and return a proof.v1 receipt.
+
+        Any exception inside ``execute`` yields an incomplete receipt carrying
+        the error (never a fabricated proof).
+        """
+        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        artifact = self._execute_to_artifact(ctx, finding, params)
+        return self._receipt_from(ctx, finding, params, artifact)
+
+    def run_composable(self, ctx: ExecutorContext, finding,
+                       overrides: Optional[dict[str, Any]] = None) -> "ComposableResult":
+        """The engine-facing path (C): execute this edge as part of a chain and
+        return the receipt PLUS the machine-consumable products -- the typed
+        capabilities to thread downstream, and the deferred-teardown obligation
+        (secret paths, engine-only, never in the receipt). ``ctx.composed`` tells
+        a mutating front to DEFER its rollback so the key material survives for a
+        downstream terminal (B3)."""
+        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        artifact = self._execute_to_artifact(ctx, finding, params)
+        receipt = self._receipt_from(ctx, finding, params, artifact)
+        caps = self.produced(ctx, finding, params, artifact) if artifact.get("complete") else []
+        return ComposableResult(
+            receipt=receipt,
+            complete=bool(artifact.get("complete")),
+            capabilities=list(caps),
+            teardown_obligation=artifact.get("teardown_obligation"),
+            executor=self,
         )

@@ -16,7 +16,10 @@ from purplesploit.validation.executors import (
 
 def test_base_states_are_distinct_nonempty_strings():
     base = [states.S0_USER_CREDS, states.DC_TGT, states.DA_CREDS,
-            states.KRBTGT, states.S_DA]
+            states.KRBTGT, states.S_DA,
+            # C-tranche intermediate states the existing 11 fronts traverse (H5a).
+            states.S_COERCED_AUTH, states.S_COMPUTER_CONTROL,
+            states.S_RBCD_WRITE, states.S_IMPERSONATION_TGT]
     assert all(isinstance(s, str) and s for s in base)
     assert len(set(base)) == len(base)                   # no collisions
     assert set(base) == set(states.BASE_STATES)
