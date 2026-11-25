@@ -75,6 +75,14 @@ def redact_argv(argv: list[str]) -> list[str]:
                 host = "@" + host
             out.append(f"{head}/{user}:***{host}")
             continue
+        # smbclient/winexe auth value: [DOMAIN\]user%password -> mask the
+        # password after '%'. Excludes flags and anything with a '/' (UNC paths
+        # like //host/share and impacket targets are handled above / left alone).
+        if "%" in token and "/" not in token and not token.startswith("-"):
+            user_part, _, password = token.partition("%")
+            if user_part and password:
+                out.append(f"{user_part}%***")
+                continue
         out.append(token)
     return out
 

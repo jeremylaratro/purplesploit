@@ -17,8 +17,9 @@ C6 constrained-deleg, C7 RBCD, C9 shadow, C11 openshares; C10 LAPS inconclusive
 (lab quirk); C2 relay / C5 unconstrained / C8 coercion recipe-known-not-run.
 
 IMPLEMENTED (no longer stubs): RBCD (``rbcd.py``); KERBEROAST + ASREP
-(``roast.py``); LAPS (``laps.py``) -- T1a. The classes below are the remaining
-seven stubs.
+(``roast.py``); LAPS (``laps.py``) -- T1a; CONSTRAINED-DELEG-PT
+(``constrained_deleg.py``); OPENSHARES-WRITE (``openshares.py``); SHADOW-CREDS
+(``shadow_creds.py``) -- T1b. The classes below are the remaining four stubs.
 """
 from __future__ import annotations
 
@@ -39,19 +40,6 @@ class _Stub(ValidationExecutor):
             f"{self.technique} executor not implemented; recipe: {self.recipe_ref}")
 
 
-class ConstrainedDelegExecutor(_Stub):
-    technique = "CONSTRAINED-DELEG-PT"
-    technique_class = "delegation"
-    terminal_kind = "authn_success"
-    mutating = False
-    verified_recipe = True
-    recipe_ref = ("#66146 CONSTRAINED-DELEG-PT = impacket-getST -spn cifs/<svc> "
-                  "-impersonate <target> <dom>/<deleg-principal>:<pw> (unset "
-                  "KRB5CCNAME) -> nxc smb <t> -k --use-kcache (PROVED jon.snow->Administrator)")
-    # TODO: params -> {impersonate (recommended Administrator / supplied user),
-    # target_spn (recommended cifs/<allowed-host>)}. Non-mutating; no rollback.
-
-
 class ADCSESC1Executor(_Stub):
     technique = "ADCS-ESC1"
     technique_class = "adcs"
@@ -64,32 +52,6 @@ class ADCSESC1Executor(_Stub):
     # TODO: params -> {template (from finding.entity.esc/template), upn/impersonate
     # (recommended Administrator), ca, ca_host}. Mutating (cert issued) -> rollback
     # = certutil -revoke the issued serial; gotcha: -ldap-scheme ldap on Win2016.
-
-
-class ShadowCredsExecutor(_Stub):
-    technique = "SHADOW-CREDS"
-    technique_class = "shadow_creds"
-    terminal_kind = "secret_recovered"
-    mutating = True
-    verified_recipe = True
-    recipe_ref = ("#66146 SHADOW-CREDS = certipy-ad shadow auto -account <computer$> "
-                  "(add KeyCredentialLink -> PKINIT -> hash -> auto-restore) (PROVED braavos$)")
-    # TODO: params -> {account (victim computer$/user from finding.host)}.
-    # `shadow auto` adds+restores msDS-KeyCredentialLink itself; the executor must
-    # still assert rollback.verified from the restore step.
-
-
-class OpenSharesExecutor(_Stub):
-    technique = "OPENSHARES-WRITE"
-    technique_class = "openshares"
-    terminal_kind = "file_write_readback"
-    mutating = True
-    verified_recipe = True
-    recipe_ref = ("#66146 OPENSHARES-WRITE = smbclient //<member>/<share> put/get/del "
-                  "canary (PROVED braavos all)")
-    # TODO: params -> {share (from finding.entity.share), canary_name (recommended
-    # a unique random name)}. Mutating (writes a file) -> rollback = delete the
-    # canary; verify read-back returns not-found.
 
 
 class CoercionExecutor(_Stub):
@@ -130,8 +92,7 @@ class UnconstrainedDelegExecutor(_Stub):
 
 STUB_EXECUTORS: dict[str, type[ValidationExecutor]] = {
     cls.technique: cls for cls in (
-        ConstrainedDelegExecutor, ADCSESC1Executor,
-        ShadowCredsExecutor, OpenSharesExecutor, CoercionExecutor,
+        ADCSESC1Executor, CoercionExecutor,
         NTLMRelayExecutor, UnconstrainedDelegExecutor,
     )
 }
