@@ -512,3 +512,16 @@ def test_orchestrator_no_probe_technique_proceeds_unchanged(tmp_path):
     assert len(plans) == 1
     assert plans[0].finding.technique == "UNCONSTRAINED-DELEG"
     assert plans[0].probe is None and plans[0].skipped_by_probe is False
+
+
+def test_skipped_by_probe_refuses_to_skip_unknown():
+    # Defence-in-depth: skip ONLY on a confident not-viable. A probe that (wrongly)
+    # set viable=False together with unknown=True must still NOT skip -- the
+    # fail-safe cannot depend on a probe honouring "unknown implies viable".
+    from purplesploit.validation.orchestrator import PlannedValidation
+    mk = lambda pr: PlannedValidation(finding=None, executor=None, plan=None,
+                                      implemented=False, probe=pr)
+    assert mk(ProbeResult(viable=False, reason="confident")).skipped_by_probe is True
+    assert mk(ProbeResult(viable=False, reason="unsure", unknown=True)).skipped_by_probe is False
+    assert mk(ProbeResult(viable=True, reason="ok")).skipped_by_probe is False
+    assert mk(None).skipped_by_probe is False

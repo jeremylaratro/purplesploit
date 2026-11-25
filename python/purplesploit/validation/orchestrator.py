@@ -158,8 +158,13 @@ class PlannedValidation:
 
     @property
     def skipped_by_probe(self) -> bool:
-        """A positive not-viable determination -> skip (never for unknown/viable)."""
-        return self.probe is not None and not self.probe.viable
+        """Skip ONLY on a CONFIDENT not-viable determination. An ``unknown`` result
+        (the probe could not determine) NEVER skips -- even if a probe also set
+        ``viable=False`` -- so the fail-safe does not depend on a probe honouring
+        the "unknown implies viable" invariant (defence in depth)."""
+        return (self.probe is not None
+                and not self.probe.viable
+                and not self.probe.unknown)
 
 
 @dataclass
