@@ -1,9 +1,10 @@
 """ValidationExecutor registry: technique -> executor class.
 
-RBCD is fully implemented (the vertical slice, ``rbcd.py``); the other ten
-techniques are importable stubs (``stubs.py``) carrying their #66146 recipe and
-raising ``StubNotImplemented`` on execute. The orchestrator looks executors up
-here by the technique the finding mapper attached.
+Fully implemented: RBCD (``rbcd.py``), KERBEROAST + ASREP (``roast.py``), LAPS
+(``laps.py``). The remaining seven techniques are importable stubs
+(``stubs.py``) carrying their #66146 recipe and raising ``StubNotImplemented`` on
+execute. The orchestrator looks executors up here by the technique the finding
+mapper attached.
 """
 from __future__ import annotations
 
@@ -14,14 +15,22 @@ from .base import (ValidationExecutor, ExecutorContext, CommandRunner,
                    ValidationPlan, StepRecord, RunResult, StubNotImplemented,
                    redact_argv)
 from .rbcd import RBCDExecutor
+from .roast import KerberoastExecutor, ASREPExecutor
+from .laps import LAPSExecutor
 from .stubs import STUB_EXECUTORS
 
-# Technique -> executor class. The full RBCD executor wins over any stub key.
-REGISTRY: dict[str, type[ValidationExecutor]] = {**STUB_EXECUTORS,
-                                                 RBCDExecutor.technique: RBCDExecutor}
+# Full executors win over any stub key of the same technique.
+_FULL: tuple[type[ValidationExecutor], ...] = (
+    RBCDExecutor, KerberoastExecutor, ASREPExecutor, LAPSExecutor,
+)
+
+# Technique -> executor class.
+REGISTRY: dict[str, type[ValidationExecutor]] = {
+    **STUB_EXECUTORS, **{cls.technique: cls for cls in _FULL},
+}
 
 # Techniques whose recipe is fully wired end-to-end (not a stub).
-IMPLEMENTED: frozenset[str] = frozenset({RBCDExecutor.technique})
+IMPLEMENTED: frozenset[str] = frozenset(cls.technique for cls in _FULL)
 
 
 def get_executor(technique: Optional[str]) -> Optional[ValidationExecutor]:
@@ -38,5 +47,6 @@ __all__ = [
     "ValidationExecutor", "ExecutorContext", "CommandRunner", "SubprocessRunner",
     "AuthorizationProvider", "AuthorizedLabProvider", "ValidationPlan", "StepRecord",
     "RunResult", "StubNotImplemented", "redact_argv", "RBCDExecutor",
+    "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "REGISTRY", "IMPLEMENTED", "get_executor", "is_implemented",
 ]

@@ -13,9 +13,12 @@ recommended-default + override params, encode the recipe steps through
 build the terminal fact. Replace the ``execute`` body. TODOs mark each.
 
 Recipe status (#66146): PROVED = C1 ADCS, C3 kerberoast, C4 asrep,
-C6 constrained-deleg, C7 RBCD (done, rbcd.py), C9 shadow, C11 openshares;
-C10 LAPS inconclusive (lab quirk); C2 relay / C5 unconstrained / C8 coercion
-recipe-known-not-run.
+C6 constrained-deleg, C7 RBCD, C9 shadow, C11 openshares; C10 LAPS inconclusive
+(lab quirk); C2 relay / C5 unconstrained / C8 coercion recipe-known-not-run.
+
+IMPLEMENTED (no longer stubs): RBCD (``rbcd.py``); KERBEROAST + ASREP
+(``roast.py``); LAPS (``laps.py``) -- T1a. The classes below are the remaining
+seven stubs.
 """
 from __future__ import annotations
 
@@ -34,29 +37,6 @@ class _Stub(ValidationExecutor):
     def execute(self, ctx: ExecutorContext, finding, params) -> dict:
         raise StubNotImplemented(
             f"{self.technique} executor not implemented; recipe: {self.recipe_ref}")
-
-
-class KerberoastExecutor(_Stub):
-    technique = "KERBEROAST"
-    technique_class = "kerberoast"
-    terminal_kind = "authn_success"
-    mutating = False
-    verified_recipe = True
-    recipe_ref = ("#66146 KERBEROAST = impacket-GetUserSPNs -request -> $krb5tgs$ "
-                  "-> hashcat -m 13100 rockyou -> reauth nxc smb (PROVED jon.snow)")
-    # TODO: params -> {wordlist (recommended rockyou), reauth_target}. Cracking is
-    # opt-in/offline (#66120); terminal = re-auth as the cracked SPN user.
-
-
-class ASREPExecutor(_Stub):
-    technique = "ASREP"
-    technique_class = "asrep"
-    terminal_kind = "authn_success"
-    mutating = False
-    verified_recipe = True
-    recipe_ref = ("#66146 ASREP = impacket-GetNPUsers -request -> hashcat -m 18200 "
-                  "-> reauth (PROVED brandon.stark + missandei)")
-    # TODO: params -> {wordlist, reauth_target}; crack is opt-in/offline.
 
 
 class ConstrainedDelegExecutor(_Stub):
@@ -97,19 +77,6 @@ class ShadowCredsExecutor(_Stub):
     # TODO: params -> {account (victim computer$/user from finding.host)}.
     # `shadow auto` adds+restores msDS-KeyCredentialLink itself; the executor must
     # still assert rollback.verified from the restore step.
-
-
-class LAPSExecutor(_Stub):
-    technique = "LAPS"
-    technique_class = "laps"
-    terminal_kind = "authn_success"
-    mutating = False
-    verified_recipe = False   # PROVED read; login inconclusive (GOAD lab quirk, #66146)
-    recipe_ref = ("#66146 LAPS = impacket-GetLAPSPassword -> login (READ proved braavos; "
-                  "login inconclusive: AD attr not synced to local SAM in GOAD)")
-    # TODO: params -> {target_host (from finding.host), local_admin (recommended
-    # 'administrator')}. ms-Mcs-AdmPwd read was DENIED once by the classifier
-    # (#66119) -> expect a gate; surface it, never work around it.
 
 
 class OpenSharesExecutor(_Stub):
@@ -163,8 +130,8 @@ class UnconstrainedDelegExecutor(_Stub):
 
 STUB_EXECUTORS: dict[str, type[ValidationExecutor]] = {
     cls.technique: cls for cls in (
-        KerberoastExecutor, ASREPExecutor, ConstrainedDelegExecutor, ADCSESC1Executor,
-        ShadowCredsExecutor, LAPSExecutor, OpenSharesExecutor, CoercionExecutor,
+        ConstrainedDelegExecutor, ADCSESC1Executor,
+        ShadowCredsExecutor, OpenSharesExecutor, CoercionExecutor,
         NTLMRelayExecutor, UnconstrainedDelegExecutor,
     )
 }
