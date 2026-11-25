@@ -4,19 +4,19 @@ The technique is driven end-to-end with a scripted fake runner (no lab) and the
 emitted receipt is asserted to be a well-formed ``adlab.plan003.proof.v1`` with
 the shape the harness scorer reads as *proved*: correct schema/technique/class,
 the scoring identity the facet keys on (ADCS-ESC1 {host_id, domain}), all steps
-ok, a verified rollback (the issued cert revoked), a non-negated terminal fact
-``cert_issued_and_used`` with a token, and -- critically -- no issued pfx /
-recovered NT hash / operator password anywhere in the receipt.
+ok, a verified rollback (the issued key material destroyed -- certipy has no
+revoke, #66157), a non-negated terminal fact ``cert_issued_and_used`` with a
+token, and -- critically -- no issued pfx / recovered NT hash / operator password
+anywhere in the receipt.
 
 Failure / gate / unverified-rollback paths assert the honest *non*-proved shape:
-a failed req, a failed PKINIT auth, an unconfirmed revoke or a denied gate yields
-an incomplete receipt (no positive proof), never a fabricated one.
+a failed req, a failed PKINIT auth, an undeletable key artifact or a denied gate
+yields an incomplete receipt (no positive proof), never a fabricated one.
 
-The ADCS fake runner dispatches on the certipy subcommand (req / auth / ca) so
-the real serial/pfx/ccache parsing, the PKINIT + ticket-backed chain and the
-revoke rollback are all exercised distinctly (the shared keyed fake used by the
-other suites keys on tool name only, which cannot tell the three certipy calls
-apart).
+The ADCS fake runner dispatches on the certipy subcommand (req / auth) so the
+real serial/pfx/ccache parsing and the PKINIT + ticket-backed chain are exercised
+distinctly (the shared keyed fake used by the other suites keys on tool name
+only, which cannot tell the certipy calls apart).
 """
 from __future__ import annotations
 
@@ -34,10 +34,10 @@ from purplesploit.validation import proof
 
 # ----------------------------------------------------------------- certipy fake runner
 class _FakeCertipyRunner(CommandRunner):
-    """Scripted stdout keyed on the certipy subcommand (req/auth/ca) and nxc.
+    """Scripted stdout keyed on the certipy subcommand (req/auth) and nxc.
 
-    ``certipy-ad`` is invoked three times (req, auth, ca-revoke); keying on the
-    second argv token distinguishes them. Everything else keys on the tool name.
+    ``certipy-ad`` is invoked twice (req, auth); keying on the second argv token
+    distinguishes them. Everything else keys on the tool name.
     """
 
     def __init__(self, script):
@@ -117,10 +117,6 @@ def _auth_stdout():
             f"[*] Got hash for 'administrator@essos.local': {_FAKE_NT_HASH}\n")
 
 
-def _revoke_stdout():
-    return f"[*] Successfully revoked certificate with serial number {_SERIAL}\n"
-
-
 def _nxc_stdout():
     return "SMB  braavos.essos.local  445  BRAAVOS  [+] essos.local\\Administrator (Pwn3d!)"
 
@@ -129,7 +125,6 @@ def _proved_script():
     return {
         "req": RunResult(0, stdout=_req_stdout()),
         "auth": RunResult(0, stdout=_auth_stdout()),
-        "ca": RunResult(0, stdout=_revoke_stdout()),
         "nxc": RunResult(0, stdout=_nxc_stdout()),
     }
 
@@ -173,6 +168,10 @@ def test_adcs_template_default_falls_back_to_esc1(tmp_path):
 # ================================================================= proved-shaped receipt
 def test_adcs_emits_proved_shaped_receipt(tmp_path):
     cfg = _essos_config()
+    # Simulate certipy having written the issued key material, so the rollback's
+    # destruction step is genuinely exercised (and asserted gone afterward).
+    (tmp_path / "administrator.pfx").write_bytes(b"PFX")
+    (tmp_path / "administrator.ccache").write_bytes(b"CCACHE")
     runner = _FakeCertipyRunner(_proved_script())
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     assert receipt["schema"] == proof.PROOF_SCHEMA
@@ -182,20 +181,23 @@ def test_adcs_emits_proved_shaped_receipt(tmp_path):
     assert receipt["target"].get("domain") == "essos.local"
     assert receipt["complete"] is True
     assert receipt["steps"] and all(s["ok"] for s in receipt["steps"])
-    # The full chain ran: req, auth, nxc, then the revoke rollback.
+    # The full chain ran: req, auth, nxc, then the key-material-destruction rollback.
     assert [s["name"] for s in receipt["steps"]] == [
-        "cert_request", "cert_auth", "nxc_access", "rollback_revoke"]
+        "cert_request", "cert_auth", "nxc_access", "destroy_key_material"]
     assert receipt["mutation"]["applied"] is True
     assert receipt["mutation"]["rollback"]["performed"] is True
     assert receipt["mutation"]["rollback"]["verified"] is True
-    assert receipt["mutation"]["rollback"]["method"] == f"certipy ca revoke-request {_SERIAL}"
+    assert receipt["mutation"]["rollback"]["method"] == "destroy issued-cert key material (.pfx + .ccache)"
     assert "rollback_unverified" not in receipt["errors"]
+    # The rollback actually destroyed the issued key material.
+    assert not (tmp_path / "administrator.pfx").exists()
+    assert not (tmp_path / "administrator.ccache").exists()
     tf = receipt["terminal_fact"]
     assert tf and tf["kind"] == "cert_issued_and_used" and tf["ok"] is True and tf["proof_token"]
     assert tf["impersonated"] == "Administrator"
-    # Certipy was invoked as req, auth, ca(revoke); nxc used the ticket.
+    # certipy was invoked only as req + auth (no revoke -- certipy has none); nxc used the ticket.
     subs = [c[1] for c in runner.calls if Path(c[0]).name == "certipy-ad"]
-    assert subs == ["req", "auth", "ca"]
+    assert subs == ["req", "auth"]
     assert any(Path(c[0]).name == "nxc" and "-k" in c for c in runner.calls)
 
 
@@ -276,29 +278,33 @@ def test_adcs_auth_fails_is_not_proved(tmp_path):
     assert receipt["terminal_fact"]["ok"] is False
     assert "cert_auth_failed" in receipt["errors"]
     assert any(s["name"] == "cert_auth" and s["ok"] is False for s in receipt["steps"])
-    # nxc is skipped when auth fails; rollback still revokes the issued cert.
+    # nxc is skipped when auth fails; rollback still destroys the issued key material.
     assert not any(Path(c[0]).name == "nxc" for c in runner.calls)
     assert receipt["mutation"]["rollback"]["verified"] is True
 
 
 def test_adcs_unverified_rollback_is_inconclusive(tmp_path):
-    # Full chain proved, but the revoke marker is absent -> rollback unverified.
-    script = _proved_script()
-    script["ca"] = RunResult(1, stdout="[-] Failed to revoke certificate")
+    # Full chain proved, but a key-material artifact cannot be destroyed (here the
+    # .pfx path is occupied by a directory, so unlink fails) -> rollback unverified.
+    (tmp_path / "administrator.pfx").mkdir()
     cfg = _essos_config()
-    runner = _FakeCertipyRunner(script)
+    runner = _FakeCertipyRunner(_proved_script())
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     assert receipt["mutation"]["applied"] is True
     assert receipt["mutation"]["rollback"]["performed"] is True
     assert receipt["mutation"]["rollback"]["verified"] is False
     assert "rollback_unverified" in receipt["errors"]
+    assert any(s["name"] == "destroy_key_material" and s["ok"] is False
+               for s in receipt["steps"])
     # The terminal predicate itself is still a (positive) record; the scorer's
     # rollback guard is what turns this into inconclusive.
     assert receipt["terminal_fact"]["ok"] is True
 
 
-def test_adcs_unparsed_serial_rollback_unverified(tmp_path):
-    # Cert issued but no serial/request-id in the output -> cannot revoke; honest.
+def test_adcs_unparsed_serial_does_not_block_rollback(tmp_path):
+    # No serial/request-id in the output: irrelevant to the functional rollback
+    # (key-material destruction needs no serial) -> still verified; only the
+    # serial-based CA-DB follow-up advisory is skipped.
     script = _proved_script()
     script["req"] = RunResult(0, stdout=(
         "[*] Successfully requested certificate\n"
@@ -308,10 +314,11 @@ def test_adcs_unparsed_serial_rollback_unverified(tmp_path):
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     assert receipt["mutation"]["applied"] is True
     assert receipt["mutation"]["rollback"]["performed"] is True
-    assert receipt["mutation"]["rollback"]["verified"] is False
-    assert "rollback_unverified" in receipt["errors"]
-    assert receipt["mutation"]["rollback"]["method"].endswith("<unparsed-serial>")
-    # The revoke command was never issued (no serial to revoke).
+    assert receipt["mutation"]["rollback"]["verified"] is True   # destruction needs no serial
+    assert "rollback_unverified" not in receipt["errors"]
+    assert not any(e.startswith("advisory:ca_db_revocation_followup")
+                   for e in receipt["errors"])
+    assert any(e.startswith("advisory:rotate_credentials") for e in receipt["errors"])
     assert [c[1] for c in runner.calls if Path(c[0]).name == "certipy-ad"] == ["req", "auth"]
 
 
