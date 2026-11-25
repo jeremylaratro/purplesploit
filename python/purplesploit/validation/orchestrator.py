@@ -30,6 +30,7 @@ from typing import Any, Optional
 from .config import ValidationConfig
 from .findings import NormalizedFinding, load_findings, validatable
 from . import proof
+from .probes import ProbeResult, run_probes
 from .executors import (ExecutorContext, CommandRunner, SubprocessRunner,
                         AuthorizationProvider, AuthorizedLabProvider, ValidationPlan,
                         get_executor, is_implemented)
@@ -150,6 +151,15 @@ class PlannedValidation:
     executor: Any
     plan: ValidationPlan
     implemented: bool
+    # ADR-002 D1 precondition-probe verdict (None if no probe registered for the
+    # technique). A probe returning viable=False SKIPS the finding; viable=True and
+    # unknown=True both proceed (unknown carries its reason into the plan).
+    probe: Optional[ProbeResult] = None
+
+    @property
+    def skipped_by_probe(self) -> bool:
+        """A positive not-viable determination -> skip (never for unknown/viable)."""
+        return self.probe is not None and not self.probe.viable
 
 
 @dataclass
@@ -186,10 +196,16 @@ class ValidationOrchestrator:
         path = self.aranum.findings_path(self.config)
         return load_findings(path)
 
-    # -- step 3 -----------------------------------------------------------
+    # -- step 3 (+ ADR-002 D1 precondition probing) -----------------------
     def plan(self, findings: list[NormalizedFinding]) -> list[PlannedValidation]:
-        """Build a plan for every validatable finding that has a registered executor."""
-        plans: list[PlannedValidation] = []
+        """Build a plan for every validatable finding that has a registered executor,
+        and attach its non-destructive precondition-probe verdict (ADR-002 D1).
+
+        Probes run concurrently and independently before planning is returned;
+        ``confirm`` then skips any finding whose probe returned ``viable=False``.
+        ``unknown=True`` and ``viable=True`` both proceed, and a technique with no
+        registered probe proceeds exactly as before (no regression)."""
+        candidates: list[tuple[NormalizedFinding, Any, ValidationPlan]] = []
         for finding in validatable(findings):
             executor = get_executor(finding.technique)
             if executor is None:
@@ -198,16 +214,25 @@ class ValidationOrchestrator:
                 vp = executor.plan(self.context, finding)
             except Exception:
                 continue  # a plan failure must never abort the whole run
-            plans.append(PlannedValidation(
-                finding=finding, executor=executor, plan=vp,
-                implemented=is_implemented(finding.technique)))
-        return plans
+            candidates.append((finding, executor, vp))
+        # Fan out the non-destructive probes concurrently (ADR-002 D1).
+        probe_results = run_probes(self.context, [c[0] for c in candidates])
+        return [PlannedValidation(
+                    finding=finding, executor=executor, plan=vp,
+                    implemented=is_implemented(finding.technique), probe=probe)
+                for (finding, executor, vp), probe in zip(candidates, probe_results)]
 
     # -- step 4 -----------------------------------------------------------
     def confirm(self, plans: list[PlannedValidation]) -> list[tuple[PlannedValidation, Choice]]:
-        """Ask the operator per issue; keep the ones opted-in to validate."""
+        """Ask the operator per issue; keep the ones opted-in to validate.
+
+        A finding whose precondition probe returned ``viable=False`` is SKIPPED
+        here (never offered, never executed) -- it is reported under ``skipped``.
+        ``unknown``/``viable`` findings (and techniques with no probe) proceed."""
         chosen: list[tuple[PlannedValidation, Choice]] = []
         for pv in plans:
+            if pv.skipped_by_probe:
+                continue  # positive not-viable determination -> do not execute
             choice = self.confirmer.confirm(pv.plan)
             if choice.validate:
                 chosen.append((pv, choice))
@@ -244,7 +269,13 @@ class ValidationOrchestrator:
 
     # -- full pipeline ----------------------------------------------------
     def run(self) -> dict:
-        """Run the whole pipeline and return an operator-facing report."""
+        """Run the whole pipeline and return an operator-facing report.
+
+        ``planned`` lists the issues that proceed (probe viable/unknown or no
+        probe), each annotated with its ``probe`` verdict so the operator sees any
+        uncertainty an ``unknown`` probe carries. ``skipped`` lists the issues a
+        precondition probe positively determined non-viable, each with the reason
+        and evidence (ADR-002 D1, "explain every skip")."""
         findings = self.enumerate()
         plans = self.plan(findings)
         chosen = self.confirm(plans)
@@ -254,7 +285,9 @@ class ValidationOrchestrator:
             "config": self.config.redacted(),
             "findings_total": len(findings),
             "validatable": [f.summary() for f in validatable(findings)],
-            "planned": [pv.plan.to_dict() for pv in plans],
+            "planned": [self._planned_entry(pv) for pv in plans
+                        if not pv.skipped_by_probe],
+            "skipped": [self._skip_entry(pv) for pv in plans if pv.skipped_by_probe],
             "executed": [{"technique": o.technique, "finding_id": o.finding_id,
                           "receipt": str(o.receipt_path),
                           "complete": o.receipt.get("complete"),
@@ -262,3 +295,20 @@ class ValidationOrchestrator:
                          for o in outcomes],
             "score": score,
         }
+
+    # -- report helpers ---------------------------------------------------
+    @staticmethod
+    def _planned_entry(pv: PlannedValidation) -> dict:
+        """The plan preview, annotated with the probe verdict (if any)."""
+        entry = pv.plan.to_dict()
+        if pv.probe is not None:
+            entry["probe"] = pv.probe.to_dict()
+        return entry
+
+    @staticmethod
+    def _skip_entry(pv: PlannedValidation) -> dict:
+        """One entry for the run report's ``skipped`` list."""
+        pr = pv.probe
+        return {"technique": pv.finding.technique, "finding_id": pv.finding.finding_id,
+                "reason": pr.reason if pr else "",
+                "evidence": pr.evidence if pr else {}}

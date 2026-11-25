@@ -1,0 +1,618 @@
+"""Precondition-probe layer -- ADR-002 D1 ("detect before you fire").
+
+Per technique, a **non-destructive** CHECK that reads AD / SMB / ADCS state and
+predicts whether the technique can plausibly succeed, so the orchestrator only
+fires what will work and can *explain every skip* (ADR-002 D1, research
+catalog 24NOV2026 section 0.2). A probe returns a :class:`ProbeResult`:
+
+* ``viable=True``  -- a positive determination the technique can plausibly work
+  (it proceeds; the reason may still carry caveats).
+* ``viable=False`` -- a positive determination it will NOT work (e.g. AS-REP with
+  pre-auth required). **Only this skips the technique.**
+* ``unknown=True`` -- the probe COULD NOT determine (tool error, data
+  unavailable, or a genuinely-required fact that is not readable
+  non-destructively, such as an RBCD/shadow-cred write-ACL that needs
+  BloodHound). **Unknown NEVER skips** -- the technique is attempted anyway with
+  the uncertainty flagged, so a real finding is never wrongly dropped.
+
+Probes **fail safe**: a tool error or unparseable output yields ``unknown=True``,
+never a false ``viable=False``. They are **non-destructive reads only**
+(LDAP/SMB/certipy-find style queries) and run through the injected
+``ctx.runner`` exactly like the executors, so they are unit-testable with a
+scripted fake runner and never touch a live lab.
+
+UNVERIFIED ASSUMPTIONS (pin against the real tooling during the lab run,
+mirroring the executors' UNVERIFIED output markers -- these probes are a
+FRAMEWORK build and have not been lab-pinned):
+
+* **LDAP attribute reads** use NetExec::
+
+      nxc ldap <dc> -u <user> (-p <pass> | -H <hash>) --query "<filter>" "<attrs>"
+
+  and parse each attribute from a ``name: value`` / ``name = value`` line; a
+  successful account read is anchored on the echoed ``sAMAccountName`` line (its
+  absence -> the object was not read -> ``unknown``). Attributes read:
+  ``msDS-SupportedEncryptionTypes`` (KERBEROAST), ``userAccountControl``
+  (ASREP / CONSTRAINED-DELEG-PT), ``msDS-AllowedToDelegateTo``
+  (CONSTRAINED-DELEG-PT), ``ms-DS-MachineAccountQuota`` + ``msDS-Behavior-Version``
+  (RBCD, domain NC), ``ms-Mcs-AdmPwd`` / ``msLAPS-Password`` (LAPS).
+* **SMB share-permissions read** uses ``nxc smb <host> <auth> --shares`` and reads
+  the share row's READ/WRITE column -- it NEVER writes a test file.
+* **ADCS reads** use ``certipy-ad find -dc-ip <dc> -stdout [-vulnerable]`` and
+  parse the CA-present / ESC1 / no-vulnerable markers.
+
+If the real wording differs, a probe gets no positive determination and returns
+``unknown=True`` (attempt anyway) -- it never fabricates a ``viable=False`` that
+would wrongly skip a finding.
+
+Stdlib only; no LLM.
+"""
+from __future__ import annotations
+
+import re
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from typing import Any, Optional
+
+from .predicates import strip_ansi
+from .executors.base import ExecutorContext, RunResult
+
+
+# ---------------------------------------------------------------- bit constants
+# userAccountControl flags (MS-ADTS 2.2.16).
+UAC_DONT_REQ_PREAUTH = 0x400000             # AS-REP roastable
+UAC_TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000   # constrained-deleg protocol transition
+UAC_NOT_DELEGATED = 0x100000                # "account is sensitive and cannot be delegated"
+# msDS-SupportedEncryptionTypes bits (MS-KILE 2.2.7).
+ENC_RC4 = 0x4
+ENC_AES128 = 0x8
+ENC_AES256 = 0x10
+# msDS-Behavior-Version: 5 == domain functional level 2012 (RBCD minimum).
+DFL_2012 = 5
+
+
+# ---------------------------------------------------------------- probe result
+@dataclass
+class ProbeResult:
+    """A non-destructive precondition CHECK's verdict for one finding.
+
+    ``viable`` -- can this technique plausibly succeed on this finding?
+    ``reason`` -- human-readable: why viable, or why it will be skipped.
+    ``evidence`` -- the non-secret facts read (e.g. ``{"maq": 10, "enc": "rc4"}``).
+    ``unknown`` -- True if the probe COULD NOT determine (tool error / data
+    unavailable). ``unknown`` NEVER skips -- only ``viable=False`` skips.
+    """
+    viable: bool
+    reason: str
+    evidence: dict = field(default_factory=dict)
+    unknown: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"viable": self.viable, "unknown": self.unknown,
+                "reason": self.reason, "evidence": self.evidence}
+
+
+# ---------------------------------------------------------------- probe ABC
+class PreconditionProbe(ABC):
+    """Base class: read non-destructive state, predict success for one technique."""
+    technique: str = ""
+
+    @abstractmethod
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        """Read preconditions for ``finding`` and return a :class:`ProbeResult`."""
+
+
+# ---------------------------------------------------------------- read helpers
+# A successful NetExec LDAP object read echoes the sAMAccountName anchor; its
+# absence means we did not actually read the object -> unknown (fail safe).
+_RE_ANCHOR = re.compile(r"\bsAMAccountName\b\s*[:=]", re.I)
+
+
+def _tool_errored(res: RunResult) -> bool:
+    """A hard runner failure (OSError / timeout / no return code) -> unreadable."""
+    return bool(res.error) or res.timed_out or res.returncode is None
+
+
+def _text(res: RunResult) -> str:
+    """ANSI-stripped stdout+stderr (strip_ansi is also applied at the live runner
+    boundary; applying it here is harmless and keeps fake-driven parsing robust)."""
+    return strip_ansi((res.stdout or "") + "\n" + (res.stderr or ""))
+
+
+def _extract_attr(text: str, attr: str) -> Optional[str]:
+    """The value on a ``<attr>: value`` / ``<attr> = value`` line (first match).
+
+    Tolerates a leading tool prefix (NetExec prints ``LDAP <ip> <port> <host>
+    attr: value``), matching the attribute anywhere on the line to end-of-line."""
+    pat = re.compile(rf"(?mi){re.escape(attr)}\s*[:=]\s*(\S.*?)\s*$")
+    m = pat.search(text or "")
+    return m.group(1).strip() if m else None
+
+
+def _parse_int(token: Optional[str]) -> Optional[int]:
+    """Parse a decimal (default) or ``0x``-prefixed integer from a token; None if
+    unparseable. AD tools print these attributes in decimal, so decimal wins."""
+    if not token:
+        return None
+    t = token.strip().split()[0]
+    for base in (0, 10, 16):
+        try:
+            return int(t, base)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _nxc_auth(cfg) -> list[str]:
+    """NetExec auth flags from the operator config (password / NT hash)."""
+    argv = ["-u", cfg.username or ""]
+    if cfg.nt_hash:
+        argv += ["-H", cfg.nt_hash]
+    elif cfg.aes_key:
+        argv += ["--aesKey", cfg.aes_key]
+    elif cfg.password is not None:
+        argv += ["-p", cfg.password]
+    return argv
+
+
+def _ldap_query(ctx: ExecutorContext, ldap_filter: str, attributes: list[str]) -> RunResult:
+    """Run a non-destructive ``nxc ldap --query`` read (UNVERIFIED invocation)."""
+    cfg = ctx.config
+    argv = ["nxc", "ldap", cfg.dc_ip, *_nxc_auth(cfg),
+            "--query", ldap_filter, " ".join(attributes)]
+    return ctx.runner.run(argv, timeout=cfg.tool_timeout_s)
+
+
+def _account_read_ok(res: RunResult, text: str) -> bool:
+    """A per-account LDAP read succeeded (not errored and the object was echoed)."""
+    if _tool_errored(res) or not text.strip():
+        return False
+    return bool(_RE_ANCHOR.search(text))
+
+
+def _certipy_find(ctx: ExecutorContext, *, vulnerable: bool = False) -> RunResult:
+    """Run a non-destructive ``certipy-ad find`` ADCS read (UNVERIFIED invocation)."""
+    cfg = ctx.config
+    argv = ["certipy-ad", "find", "-dc-ip", cfg.dc_ip, "-stdout",
+            "-u", f"{cfg.username or ''}@{cfg.domain}"]
+    if cfg.nt_hash:
+        argv += ["-hashes", cfg.nt_hash]
+    elif cfg.password is not None:
+        argv += ["-p", cfg.password]
+    if vulnerable:
+        argv += ["-vulnerable"]
+    return ctx.runner.run(argv, timeout=cfg.tool_timeout_s)
+
+
+# ---- output markers (UNVERIFIED -- see module docstring) ----------------------
+_RE_LAPS_ATTR = re.compile(r"(ms-?Mcs-?AdmPwd|msLAPS-Password)\s*[:=]\s*\S", re.I)
+_RE_LAPS_ABSENT = re.compile(
+    r"(attribute not found|not set|no laps|laps not (configured|present)|"
+    r"0 results|no results|does not have)", re.I)
+_RE_SHARES_TABLE = re.compile(r"(Permissions|\bREAD\b|\bWRITE\b)", re.I)
+_RE_CERTIPY_RAN = re.compile(
+    r"(Certificate Authorities|Certificate Templates|Certipy|Found \d+|Enrollment)", re.I)
+_RE_CA_PRESENT = re.compile(r"(Certificate Authorities|CA Name|DNS Name|Web Enrollment)", re.I)
+_RE_CA_NONE = re.compile(
+    r"(Could not find any (certificate authorities|CAs)|"
+    r"Found 0 certificate authorities|No certificate authorities|"
+    r"0 enabled certificate authorities)", re.I)
+_RE_ESC1 = re.compile(r"\bESC1\b", re.I)
+_RE_NO_VULN = re.compile(
+    r"(Found 0 vulnerable|no vulnerable (certificate )?templates|0 vulnerable)", re.I)
+
+
+def _target_protected(impersonate: Optional[str]) -> Optional[bool]:
+    """Best-effort: is the impersonation target protected from delegation?
+
+    RID-500 Administrator is delegatable even inside Protected Users (research
+    catalog section 3.1), so it returns ``False``. For any other target this is
+    ``None`` (not determinable without a Protected-Users membership read) and is
+    therefore NEVER treated as a skip -- only surfaced as a caveat.
+    """
+    if impersonate and impersonate.strip().lower() in ("administrator", "administrateur"):
+        return False
+    return None
+
+
+def _share_writable(text: str, share: str) -> Optional[bool]:
+    """True/False iff the named share's row shows WRITE / READ-only; None if absent."""
+    if not share:
+        return None
+    for line in text.splitlines():
+        if re.search(rf"(?<![\w$]){re.escape(share)}(?![\w$])", line, re.I):
+            perms = line.upper()
+            if "WRITE" in perms:
+                return True
+            if "READ" in perms:
+                return False
+    return None
+
+
+# ================================================================= the 8 probes
+class KerberoastProbe(PreconditionProbe):
+    """KERBEROAST: the principal must be a user (not computer/MSA -- those carry a
+    120-char machine password and are uncrackable), and its
+    ``msDS-SupportedEncryptionTypes`` predicts crackability (RC4/unset = fast mode
+    13100; AES-only = slow, weak-password-only). The technique is attemptable for
+    any user, so only a computer/MSA principal is a positive ``viable=False``."""
+    technique = "KERBEROAST"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        principal = (finding.entity or {}).get("principal") or ""
+        is_user = bool(principal) and not principal.rstrip().endswith("$")
+        if principal and not is_user:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{principal} is a computer/MSA account (trailing '$'): "
+                        "120-char machine password, not crackable -> skip"),
+                evidence={"is_user": False, "enc_types": None})
+        res = _ldap_query(ctx, f"(sAMAccountName={principal})",
+                          ["sAMAccountName", "msDS-SupportedEncryptionTypes"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read msDS-SupportedEncryptionTypes for "
+                        f"{principal or '(principal)'}; attempting anyway "
+                        "(crackability unknown)"),
+                evidence={"is_user": is_user, "enc_types": None})
+        enc = _parse_int(_extract_attr(text, "msDS-SupportedEncryptionTypes"))
+        if enc is None or enc == 0:
+            return ProbeResult(
+                viable=True,
+                reason=("msDS-SupportedEncryptionTypes unset/0 -> RC4 default: fast "
+                        "crack (hashcat -m 13100)"),
+                evidence={"is_user": is_user, "enc_types": enc, "rc4": True})
+        if enc & ENC_RC4:
+            return ProbeResult(
+                viable=True,
+                reason=(f"RC4 enabled (enc=0x{enc:x}): fast crack (hashcat -m 13100)"),
+                evidence={"is_user": is_user, "enc_types": enc, "rc4": True})
+        return ProbeResult(
+            viable=True,
+            reason=(f"AES-only (enc=0x{enc:x}, no RC4 bit): hash obtainable but slow, "
+                    "weak-password-only crack (hashcat -m 19600/19700)"),
+            evidence={"is_user": is_user, "enc_types": enc, "rc4": False, "aes_only": True})
+
+
+class ASREPProbe(PreconditionProbe):
+    """ASREP: viable iff the principal's ``userAccountControl`` has
+    DONT_REQ_PREAUTH (0x400000). Pre-auth-required -> positive ``viable=False``."""
+    technique = "ASREP"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        principal = (finding.entity or {}).get("principal") or ""
+        res = _ldap_query(ctx, f"(sAMAccountName={principal})",
+                          ["sAMAccountName", "userAccountControl"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=(f"could not read userAccountControl for {principal or '(principal)'}; "
+                        "attempting AS-REP roast anyway (pre-auth state unknown)"),
+                evidence={"uac_dont_req_preauth": None})
+        uac = _parse_int(_extract_attr(text, "userAccountControl"))
+        if uac is None:
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason="read ok but userAccountControl unparsed; attempting anyway",
+                evidence={"uac_dont_req_preauth": None})
+        if uac & UAC_DONT_REQ_PREAUTH:
+            return ProbeResult(
+                viable=True,
+                reason=f"DONT_REQ_PREAUTH set (uac=0x{uac:x}): AS-REP roastable",
+                evidence={"uac_dont_req_preauth": True, "uac": uac})
+        return ProbeResult(
+            viable=False,
+            reason=(f"DONT_REQ_PREAUTH not set (uac=0x{uac:x}): pre-auth required, "
+                    "not AS-REP roastable -> skip"),
+            evidence={"uac_dont_req_preauth": False, "uac": uac})
+
+
+class LapsProbe(PreconditionProbe):
+    """LAPS: re-confirm a readable ms-Mcs-AdmPwd / msLAPS-Password on the host; an
+    explicit "no LAPS attribute" is a positive ``viable=False``. aranum already
+    flagged the finding, so an inconclusive / failed re-confirm passes that marker
+    through as ``unknown`` (attempt anyway), never a false skip."""
+    technique = "LAPS"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        host = finding.host or (finding.entity or {}).get("host") or ""
+        short = host.split(".", 1)[0]
+        res = _ldap_query(ctx, f"(sAMAccountName={short}$)",
+                          ["sAMAccountName", "ms-Mcs-AdmPwd", "msLAPS-Password",
+                           "msLAPS-EncryptedPassword"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not re-confirm LAPS readability on "
+                        f"{host or '(host)'}; aranum LAPS marker passed through "
+                        "-> attempting"),
+                evidence={"laps_readable": None})
+        if _RE_LAPS_ATTR.search(text):
+            return ProbeResult(
+                viable=True,
+                reason=f"LAPS attribute present and readable on {host} (re-confirmed)",
+                evidence={"laps_readable": True})
+        if _RE_LAPS_ABSENT.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("no readable LAPS attribute (ms-Mcs-AdmPwd/msLAPS-Password) on "
+                        f"{host}: nothing to recover -> skip"),
+                evidence={"laps_readable": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("LAPS re-confirm inconclusive on "
+                    f"{host or '(host)'}; aranum marker passed through -> attempting"),
+            evidence={"laps_readable": None})
+
+
+class ConstrainedDelegProbe(PreconditionProbe):
+    """CONSTRAINED-DELEG-PT: the delegation principal (the operator account, per
+    the executor default) must have a non-empty ``msDS-AllowedToDelegateTo``;
+    TRUSTED_TO_AUTH_FOR_DELEGATION set -> full S4U, absent -> viable-with-caveat
+    (needs an RBCD/coercion pivot). An empty msDS-AllowedToDelegateTo on an
+    otherwise-read object is a positive ``viable=False``."""
+    technique = "CONSTRAINED-DELEG-PT"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        principal = ctx.config.username or ""
+        impersonate = "Administrator"  # the executor's recommended default
+        res = _ldap_query(ctx, f"(sAMAccountName={principal})",
+                          ["sAMAccountName", "msDS-AllowedToDelegateTo", "userAccountControl"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read msDS-AllowedToDelegateTo/userAccountControl "
+                        f"for {principal or '(principal)'}; attempting anyway"),
+                evidence={"allowed_to_delegate_to": None, "protocol_transition": None,
+                          "target_protected": None})
+        a2d = _extract_attr(text, "msDS-AllowedToDelegateTo")
+        uac = _parse_int(_extract_attr(text, "userAccountControl"))
+        has_a2d = bool(a2d) and a2d.strip().lower() not in (
+            "", "(not set)", "<not set>", "none", "-", "n/a")
+        tp = _target_protected(impersonate)
+        if not has_a2d:
+            return ProbeResult(
+                viable=False,
+                reason=(f"msDS-AllowedToDelegateTo empty on {principal}: no constrained "
+                        "delegation configured -> skip"),
+                evidence={"allowed_to_delegate_to": None, "protocol_transition": None,
+                          "target_protected": tp})
+        pt = bool(uac is not None and (uac & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION))
+        if pt:
+            reason = (f"msDS-AllowedToDelegateTo set ({a2d}) and protocol transition "
+                      f"(TRUSTED_TO_AUTH_FOR_DELEGATION, uac=0x{uac:x}): full S4U viable")
+        else:
+            reason = (f"msDS-AllowedToDelegateTo set ({a2d}) but no protocol transition "
+                      "(TRUSTED_TO_AUTH_FOR_DELEGATION absent): viable-with-caveat, "
+                      "needs an RBCD/coercion pivot for the initial ticket")
+        if tp is None:
+            reason += "; verify the impersonation target is not Protected Users/sensitive"
+        return ProbeResult(
+            viable=True, reason=reason,
+            evidence={"allowed_to_delegate_to": a2d, "protocol_transition": pt,
+                      "target_protected": tp})
+
+
+class RbcdProbe(PreconditionProbe):
+    """RBCD: the source must be creatable -- read ``ms-DS-MachineAccountQuota``
+    (0 -> positive ``viable=False`` for this executor's addcomputer path) and the
+    domain functional level (< 2012 -> ``viable=False``). The required write-ACL
+    over the target (GenericWrite/WriteDacl/WriteOwner/WriteAccountRestrictions)
+    and the "Add workstations" right are NOT readable without BloodHound, so the
+    viable path is flagged ``unknown`` rather than ever falsely skipped."""
+    technique = "RBCD"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        res = _ldap_query(ctx, "(objectClass=domain)",
+                          ["ms-DS-MachineAccountQuota", "msDS-Behavior-Version"])
+        text = _text(res)
+        maq = _parse_int(_extract_attr(text, "ms-DS-MachineAccountQuota"))
+        dfl = _parse_int(_extract_attr(text, "msDS-Behavior-Version"))
+        if _tool_errored(res) or (maq is None and dfl is None):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read ms-DS-MachineAccountQuota/msDS-Behavior-Version; "
+                        "the RBCD write-ACL is also not readable here -> attempting anyway"),
+                evidence={"maq": maq, "dfl": dfl})
+        if maq is not None and maq <= 0:
+            return ProbeResult(
+                viable=False,
+                reason=("ms-DS-MachineAccountQuota=0: cannot add a computer account for "
+                        "the RBCD source (this executor's addcomputer path) -> skip "
+                        "(owned-computer / SPN-less-U2U workarounds are not auto-validated)"),
+                evidence={"maq": maq, "dfl": dfl})
+        if dfl is not None and dfl < DFL_2012:
+            return ProbeResult(
+                viable=False,
+                reason=(f"domain functional level < 2012 (msDS-Behavior-Version={dfl}): "
+                        "RBCD (msDS-AllowedToActOnBehalfOfOtherIdentity) unsupported -> skip"),
+                evidence={"maq": maq, "dfl": dfl})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"ms-DS-MachineAccountQuota={maq} (>0) and DFL>=2012: the source is "
+                    "creatable, BUT the write-ACL over the target "
+                    "(GenericWrite/WriteDacl/WriteOwner/WriteAccountRestrictions) and the "
+                    "'Add workstations to domain' right are NOT readable without "
+                    "BloodHound -> ASSUMED; attempting with that uncertainty flagged"),
+            evidence={"maq": maq, "dfl": dfl})
+
+
+class OpenSharesProbe(PreconditionProbe):
+    """OPENSHARES-WRITE: confirm the share is writable via a non-destructive
+    ``nxc smb --shares`` read (NO test file is written) -- a READ-only share is a
+    positive ``viable=False``. A failed read or an unlisted share passes the
+    aranum RW-share marker through as ``unknown`` (attempt anyway)."""
+    technique = "OPENSHARES-WRITE"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        host = finding.host or ""
+        share = (finding.entity or {}).get("share") or ""
+        argv = ["nxc", "smb", host, *_nxc_auth(cfg), "--shares"]
+        res = ctx.runner.run(argv, timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_SHARES_TABLE.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=(f"could not read share permissions on {host or '(host)'}; "
+                        "aranum RW-share marker passed through -> attempting"),
+                evidence={"share_rw": None})
+        writable = _share_writable(text, share)
+        if writable is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"share '{share}' shows WRITE in a non-destructive "
+                        "share-permissions read (no test file written)"),
+                evidence={"share_rw": True})
+        if writable is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"share '{share}' is READ-only (no WRITE permission): a "
+                        "write-readback cannot succeed -> skip"),
+                evidence={"share_rw": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"share '{share or '(share)'}' not found in the share listing; "
+                    "aranum marker passed through -> attempting"),
+            evidence={"share_rw": None})
+
+
+class ShadowCredsProbe(PreconditionProbe):
+    """SHADOW-CREDS: PKINIT must be available (an ADCS CA / KDC key-trust surface)
+    -- certipy find reporting no CA is a positive ``viable=False``. The required
+    write-ACL over the target's ``msDS-KeyCredentialLink`` is NOT readable without
+    BloodHound, so the viable path is flagged ``unknown`` rather than skipped."""
+    technique = "SHADOW-CREDS"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        res = _certipy_find(ctx)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read ADCS/PKINIT state via certipy find; the write-ACL "
+                        "over msDS-KeyCredentialLink is also not readable without "
+                        "BloodHound -> attempting anyway"),
+                evidence={"pkinit_available": None})
+        if _RE_CA_NONE.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("no Certificate Authority / PKINIT key-trust surface found: "
+                        "shadow credentials -> PKINIT cannot authenticate -> skip"),
+                evidence={"pkinit_available": False})
+        if _RE_CA_PRESENT.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("ADCS CA present -> PKINIT (key-trust) available, BUT the write-ACL "
+                        "over the target's msDS-KeyCredentialLink is NOT readable without "
+                        "BloodHound -> ASSUMED; attempting with that flagged"),
+                evidence={"pkinit_available": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("ADCS/PKINIT state inconclusive from certipy find; attempting with the "
+                    "write-ACL + PKINIT uncertainty flagged"),
+            evidence={"pkinit_available": None})
+
+
+class ADCSESC1Probe(PreconditionProbe):
+    """ADCS-ESC1: re-confirm an enrollable ESC1 template via a certipy-find style
+    read; certipy reporting no vulnerable template is a positive ``viable=False``.
+    A failed / inconclusive read passes the aranum ESC1 entity through as
+    ``unknown`` (attempt anyway)."""
+    technique = "ADCS-ESC1"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        template = (finding.entity or {}).get("template") or ""
+        res = _certipy_find(ctx, vulnerable=True)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not re-confirm the ESC1 template via certipy find; the "
+                        f"aranum ESC1 entity ({template or 'template'}) is passed through "
+                        "-> attempting"),
+                evidence={"esc1_template": template or None})
+        esc1_here = bool(_RE_ESC1.search(text))
+        tpl_here = (not template) or bool(re.search(re.escape(template), text, re.I))
+        if esc1_here and tpl_here:
+            return ProbeResult(
+                viable=True,
+                reason=("certipy find reports an enrollable ESC1 template"
+                        + (f" ({template})" if template else "") + " -> viable"),
+                evidence={"esc1_template": template or None, "esc1_confirmed": True})
+        if _RE_NO_VULN.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("certipy find reports no vulnerable / ESC1-enrollable template: "
+                        "nothing to enroll -> skip"),
+                evidence={"esc1_template": template or None, "esc1_confirmed": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("ESC1 re-confirm inconclusive; aranum ESC1 entity passed through "
+                    "-> attempting"),
+            evidence={"esc1_template": template or None})
+
+
+# ---------------------------------------------------------------- registry
+_PROBES: tuple[type[PreconditionProbe], ...] = (
+    KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
+    RbcdProbe, OpenSharesProbe, ShadowCredsProbe, ADCSESC1Probe,
+)
+
+# Technique -> probe class.
+PROBE_REGISTRY: dict[str, type[PreconditionProbe]] = {
+    cls.technique: cls for cls in _PROBES
+}
+
+
+def get_probe(technique: Optional[str]) -> Optional[PreconditionProbe]:
+    """Instantiate the probe for ``technique``, or ``None`` if none is registered."""
+    cls = PROBE_REGISTRY.get(technique or "")
+    return cls() if cls is not None else None
+
+
+def probe_finding(ctx: ExecutorContext, finding) -> Optional[ProbeResult]:
+    """Run the probe for ``finding`` (if registered); ``None`` if none.
+
+    A probe that raises is caught and reported as ``unknown`` (attempt anyway) --
+    a probe error must never become a false ``viable=False`` that drops a finding.
+    """
+    probe = get_probe(getattr(finding, "technique", None))
+    if probe is None:
+        return None
+    try:
+        return probe.check(ctx, finding)
+    except Exception as exc:  # fail safe -> unknown, never a false viable=False
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=f"probe error ({type(exc).__name__}: {exc}); attempting anyway",
+            evidence={})
+
+
+def run_probes(ctx: ExecutorContext, findings: list[Any],
+               max_workers: int = 8) -> list[Optional[ProbeResult]]:
+    """Run each finding's probe concurrently and independently (ADR-002 D1).
+
+    Returns a list aligned to ``findings`` (``None`` where no probe is registered).
+    Probes are non-destructive reads with no shared state, so thread concurrency
+    is safe; a probe error degrades to ``unknown`` rather than aborting the batch.
+    """
+    if not findings:
+        return []
+    workers = max(1, min(max_workers, len(findings)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(lambda f: probe_finding(ctx, f), findings))
+
+
+__all__ = [
+    "ProbeResult", "PreconditionProbe", "PROBE_REGISTRY", "get_probe",
+    "probe_finding", "run_probes",
+    "KerberoastProbe", "ASREPProbe", "LapsProbe", "ConstrainedDelegProbe",
+    "RbcdProbe", "OpenSharesProbe", "ShadowCredsProbe", "ADCSESC1Probe",
+]
