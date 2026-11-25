@@ -1,0 +1,50 @@
+---
+title: PLAN-003 capability-state graph — chains to Domain Admin (25NOV2026)
+---
+flowchart LR
+    classDef seed fill:#13293d,stroke:#4a90d9,color:#eaf2fb,font-weight:bold
+    classDef state fill:#26263a,stroke:#8a8aa8,color:#eef
+    classDef da fill:#4a1420,stroke:#e06666,color:#ffe,font-weight:bold
+    classDef term fill:#173b1f,stroke:#6aa84f,color:#eff
+    classDef lateral fill:#3a3320,stroke:#d9a441,color:#fff
+
+    S0(["S0_USER_CREDS<br/>operator creds"]):::seed
+    DAC(["DA_CREDS<br/>operator-given"]):::seed
+
+    %% ============ LIVE DA chains — wired + harness-proved on dc01 ============
+    subgraph WIRED["✅ LIVE DA chains — searched, threaded, harness-proved"]
+        direction LR
+        S0 -->|"ESC8 🔧"| DCT["DC_TGT<br/>DC-context TGT"]:::state
+        S0 -->|"ESC11 🔧"| DCT
+        S0 -->|"CERTIFRIED 🔧"| DCT
+        DCT ==>|"DCSYNC ✓ · reusable terminal b1"| SDA[["S_DA<br/>DOMAIN ADMIN"]]:::da
+    end
+
+    %% DCSync also accepts given DA creds — but that is NOT an escalation
+    DAC -. "DCSYNC = given creds,<br/>engine labels NOT escalation" .-> SDA
+
+    %% standalone monolithic DA edge (coerce+capture+dcsync in one)
+    S0 ==>|"UNCONSTRAINED-DELEG<br/>(monolithic, replication_dump)"| SDA
+
+    %% ============ PLANNED edges — detectable+validatable, chaining next sprint ============
+    subgraph PLANNED["⏳ detect + validate today; graph-annotation = next sprint (dashed)"]
+        direction LR
+        S0 -. "COERCION" .-> COA["S_coerced_auth"]:::state
+        COA -. "NTLM-RELAY ldap_rbcd 🔧" .-> RBW["S_rbcd_write"]:::state
+        COA -. "NTLM-RELAY smb_sam 🔧" .-> LA["S_local_admin<br/>NOT domain — cannot DCSync"]:::lateral
+        S0 -. "RBCD 🔧" .-> RBW
+        RBW -. "S4U" .-> IMP["S_impersonation_tgt"]:::lateral
+        S0 -. "CONSTRAINED-DELEG-PT" .-> IMP
+        S0 -. "SHADOW-CREDS 🔧" .-> CRED["cred_for(principal)<br/>DA-principal ⇒ feeds DCSYNC"]:::state
+        S0 -. "ADCS-ESC1 🔧" .-> CRED
+        S0 -. "KERBEROAST (crack-gated)" .-> CRED
+        S0 -. "ASREP (crack-gated)" .-> CRED
+        S0 -. "LAPS" .-> LA
+        S0 -. "OPENSHARES-WRITE 🔧" .-> FW["file_write_readback<br/>lateral"]:::lateral
+    end
+
+    %% a DA-principal credential also satisfies the DCSYNC terminal
+    CRED -. "if principal is DA/DC-equiv" .-> SDA
+
+    %% legend
+    L["🔧 = mutating (verified rollback required)   ·   ✓ = lab-proven recipe<br/>solid = wired &amp; proved   ·   dashed = planned annotation<br/>local-admin / lateral states deliberately DO NOT reach S_DA (H5a)"]:::lateral

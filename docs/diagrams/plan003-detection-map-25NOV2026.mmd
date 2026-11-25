@@ -1,0 +1,31 @@
+---
+title: PLAN-003 detection + validation map — 15 techniques (25NOV2026)
+---
+mindmap
+  root((PLAN-003 AD toolchain · 15 techniques · 12 with detect-probes))
+    ADCS certs
+      ESC8 🔧 ★DA 👁 · cert_issued · dc01 srv03
+      ESC11 🔧 ★DA 👁 · cert_issued · dc01 srv03
+      CERTIFRIED 🔧 ★DA 👁 · CVE-2022-26923 · srv03
+      ADCS-ESC1 🔧 ✓ 👁 · cert then impersonate · srv03
+    DCSync the DA terminal
+      DCSYNC ✓ ★DA 👁 · replication_dump krbtgt · dc01 dc02 dc03
+    Delegation
+      UNCONSTRAINED-DELEG ★DA · monolithic · no-probe · dc01 dc02 dc03
+      RBCD 🔧 ✓ 👁 · rbcd_access · dc01 dc02
+      CONSTRAINED-DELEG-PT ✓ 👁 · S4U authn · north
+    Relay and coerce listener-trio
+      COERCION · authn · no-probe · dc01 dc02 dc03
+      NTLM-RELAY · replication or rbcd · no-probe · dc01 dc02 dc03 srv02 srv03
+    Credential recovery
+      KERBEROAST ✓ 👁 · crack-gated authn · north essos
+      ASREP ✓ 👁 · crack-gated authn · north essos
+      SHADOW-CREDS 🔧 ✓ 👁 · secret_recovered · north essos
+      LAPS 👁 · local-admin pw readback · srv02 srv03
+    Share abuse
+      OPENSHARES-WRITE 🔧 ✓ 👁 · file_write_readback · srv02 srv03
+    Legend
+      🔧 mutating needs verified rollback
+      ✓ lab-proven recipe
+      ★DA reaches Domain Admin
+      👁 has detect-before-fire probe
