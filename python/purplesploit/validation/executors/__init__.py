@@ -2,10 +2,11 @@
 
 Fully implemented: RBCD (``rbcd.py``), KERBEROAST + ASREP (``roast.py``), LAPS
 (``laps.py``), CONSTRAINED-DELEG-PT (``constrained_deleg.py``), OPENSHARES-WRITE
-(``openshares.py``), SHADOW-CREDS (``shadow_creds.py``). The remaining four
-techniques are importable stubs (``stubs.py``) carrying their #66146 recipe and
-raising ``StubNotImplemented`` on execute. The orchestrator looks executors up
-here by the technique the finding mapper attached.
+(``openshares.py``), SHADOW-CREDS (``shadow_creds.py``), ADCS-ESC1
+(``adcs_esc1.py``). The remaining three techniques are importable stubs
+(``stubs.py``) carrying their #66146 recipe and raising ``StubNotImplemented`` on
+execute. The orchestrator looks executors up here by the technique the finding
+mapper attached.
 """
 from __future__ import annotations
 
@@ -21,12 +22,14 @@ from .laps import LAPSExecutor
 from .constrained_deleg import ConstrainedDelegExecutor
 from .openshares import OpenSharesExecutor
 from .shadow_creds import ShadowCredsExecutor
+from .adcs_esc1 import ADCSESC1Executor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
 _FULL: tuple[type[ValidationExecutor], ...] = (
     RBCDExecutor, KerberoastExecutor, ASREPExecutor, LAPSExecutor,
     ConstrainedDelegExecutor, OpenSharesExecutor, ShadowCredsExecutor,
+    ADCSESC1Executor,
 )
 
 # Technique -> executor class.
@@ -54,5 +57,6 @@ __all__ = [
     "RunResult", "StubNotImplemented", "redact_argv", "RBCDExecutor",
     "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
+    "ADCSESC1Executor",
     "REGISTRY", "IMPLEMENTED", "get_executor", "is_implemented",
 ]

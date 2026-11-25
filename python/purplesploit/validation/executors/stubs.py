@@ -19,7 +19,8 @@ C6 constrained-deleg, C7 RBCD, C9 shadow, C11 openshares; C10 LAPS inconclusive
 IMPLEMENTED (no longer stubs): RBCD (``rbcd.py``); KERBEROAST + ASREP
 (``roast.py``); LAPS (``laps.py``) -- T1a; CONSTRAINED-DELEG-PT
 (``constrained_deleg.py``); OPENSHARES-WRITE (``openshares.py``); SHADOW-CREDS
-(``shadow_creds.py``) -- T1b. The classes below are the remaining four stubs.
+(``shadow_creds.py``) -- T1b; ADCS-ESC1 (``adcs_esc1.py``) -- T1c. The classes
+below are the remaining three stubs (COERCION, NTLM-RELAY, UNCONSTRAINED-DELEG).
 """
 from __future__ import annotations
 
@@ -38,20 +39,6 @@ class _Stub(ValidationExecutor):
     def execute(self, ctx: ExecutorContext, finding, params) -> dict:
         raise StubNotImplemented(
             f"{self.technique} executor not implemented; recipe: {self.recipe_ref}")
-
-
-class ADCSESC1Executor(_Stub):
-    technique = "ADCS-ESC1"
-    technique_class = "adcs"
-    terminal_kind = "cert_issued_and_used"
-    mutating = True
-    verified_recipe = True
-    recipe_ref = ("#66146 ADCS-ESC1 = certipy-ad req -template ESC1 -upn <target>@<dom> "
-                  "-ca <CA> -target <cahost> ; certipy-ad auth -pfx -> PKINIT TGT+NThash ; "
-                  "nxc smb -k ; ROLLBACK certutil -revoke <serial> via PtH (PROVED essos admin)")
-    # TODO: params -> {template (from finding.entity.esc/template), upn/impersonate
-    # (recommended Administrator), ca, ca_host}. Mutating (cert issued) -> rollback
-    # = certutil -revoke the issued serial; gotcha: -ldap-scheme ldap on Win2016.
 
 
 class CoercionExecutor(_Stub):
@@ -92,7 +79,6 @@ class UnconstrainedDelegExecutor(_Stub):
 
 STUB_EXECUTORS: dict[str, type[ValidationExecutor]] = {
     cls.technique: cls for cls in (
-        ADCSESC1Executor, CoercionExecutor,
-        NTLMRelayExecutor, UnconstrainedDelegExecutor,
+        CoercionExecutor, NTLMRelayExecutor, UnconstrainedDelegExecutor,
     )
 }
