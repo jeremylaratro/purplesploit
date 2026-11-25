@@ -23,7 +23,7 @@ from __future__ import annotations
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from ..config import ValidationConfig
 from ..recommend import ParamSpec, ParamValue, resolve_params, params_preview
@@ -43,9 +43,11 @@ class RunResult:
 
 
 # Flags whose following token is a secret and must be masked in any stored argv.
+# ``-H`` (NetExec/bloodyAD hash) and ``--aesKey`` (NetExec AES key, double-dash
+# camelCase form) are included for the D2 nxc/bloodyAD fallbacks below.
 _SECRET_FLAGS = frozenset({
-    "-p", "--password", "-hashes", "-H", "--hash", "-aesKey", "--aes-key",
-    "-computer-pass", "-pfx", "-password",
+    "-p", "--password", "-hashes", "-H", "--hash", "-aesKey", "--aesKey",
+    "--aes-key", "-computer-pass", "-pfx", "-password",
 })
 
 
@@ -132,6 +134,67 @@ class SubprocessRunner(CommandRunner):
                              error="timeout")
         except OSError as exc:
             return RunResult(returncode=None, error=f"{type(exc).__name__}: {exc}")
+
+
+# ------------------------------------------------------------------ D2 tool fallback
+@dataclass
+class ToolAttempt:
+    """One tool candidate in an ordered D2 fallback chain (ADR-002 D2, light).
+
+    ``success`` is a POSITIVE predicate over the :class:`RunResult` -- did this
+    tool actually achieve the step? It is the real success marker (e.g. a hash
+    blob or a write-confirmation), never a bare exit code, so a fallback can
+    never mask a confident negative as success.
+    """
+    tool: str                                       # short label for the step note
+    argv: list[str]
+    success: Callable[[RunResult], bool]            # positive "did it work?" predicate
+    env: Optional[dict] = None
+    cwd: Optional[str] = None
+
+
+# Substrings in ``RunResult.error`` that mean the tool binary was not found.
+_ABSENT_MARKERS = ("filenotfounderror", "no such file", "not found")
+
+
+def _tool_absent(res: RunResult) -> bool:
+    """True iff ``res`` indicates the tool binary was missing (PATH absence)."""
+    err = (res.error or "").lower()
+    return any(marker in err for marker in _ABSENT_MARKERS)
+
+
+def first_successful(runner: CommandRunner, attempts: list[ToolAttempt],
+                     timeout: Optional[int] = None) -> tuple[ToolAttempt, RunResult, bool]:
+    """Light D2 tool fallback. Try each ToolAttempt in order. An attempt whose tool
+    is ABSENT (RunResult.error containing FileNotFoundError / 'No such file' / 'not found')
+    or HUNG (res.timed_out) is skipped to the next in the chain. The first attempt whose
+    success(res) is True wins -> return (att, res, True). If none succeed, return the FIRST
+    attempt that actually RAN (for honest failure reporting) with ok=False; if every tool
+    was absent, return (attempts[0], RunResult(returncode=None, error='no fallback tool available'), False).
+    A clean primary that simply produced no positive result (ran, success False, not absent)
+    is a trusted negative -- but still try the remaining attempts before giving up, since a
+    different tool may succeed where the primary's output format/version differed.
+
+    "Actually RAN" means the attempt was not a tool-absence -- a clean negative OR a
+    hang both count, so the no-fallback sentinel fires *exactly* when every tool was
+    absent (never when a present tool merely hung or returned nothing).
+    """
+    first_ran: Optional[tuple[ToolAttempt, RunResult]] = None
+    for att in attempts:
+        res = runner.run(att.argv, env=att.env, timeout=timeout, cwd=att.cwd)
+        if _tool_absent(res):
+            continue                                 # binary missing -> next in chain
+        if first_ran is None:
+            first_ran = (att, res)                   # honest-failure candidate (ran or hung)
+        if res.timed_out:
+            continue                                 # hung -> next in chain, don't test success
+        if att.success(res):
+            return att, res, True                    # first positive result wins (short-circuit)
+    if first_ran is None:                            # every tool was absent
+        return (attempts[0],
+                RunResult(returncode=None, error="no fallback tool available"), False)
+    att, res = first_ran                             # a trusted negative / hang, honestly reported
+    return att, res, False
 
 
 # ------------------------------------------------------------------ authorization gate

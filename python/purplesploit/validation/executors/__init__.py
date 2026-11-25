@@ -15,7 +15,7 @@ from typing import Optional
 from .base import (ValidationExecutor, ExecutorContext, CommandRunner,
                    SubprocessRunner, AuthorizationProvider, AuthorizedLabProvider,
                    ValidationPlan, StepRecord, RunResult, StubNotImplemented,
-                   redact_argv)
+                   redact_argv, ToolAttempt, first_successful)
 from .rbcd import RBCDExecutor
 from .roast import KerberoastExecutor, ASREPExecutor
 from .laps import LAPSExecutor
@@ -54,7 +54,8 @@ def is_implemented(technique: Optional[str]) -> bool:
 __all__ = [
     "ValidationExecutor", "ExecutorContext", "CommandRunner", "SubprocessRunner",
     "AuthorizationProvider", "AuthorizedLabProvider", "ValidationPlan", "StepRecord",
-    "RunResult", "StubNotImplemented", "redact_argv", "RBCDExecutor",
+    "RunResult", "StubNotImplemented", "redact_argv", "ToolAttempt", "first_successful",
+    "RBCDExecutor",
     "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
     "ADCSESC1Executor",

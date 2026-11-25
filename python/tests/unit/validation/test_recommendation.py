@@ -8,6 +8,7 @@ non-secret terminal fact, no secret leakage).
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from purplesploit.validation.findings import NormalizedFinding, map_finding
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
+    ToolAttempt, first_successful,
 )
 from purplesploit.validation import proof
 
@@ -248,3 +250,134 @@ def test_rbcd_empty_sd_read_is_not_cleared(tmp_path):
     receipt = get_executor("RBCD").run(ctx, _rbcd_finding())
     assert receipt["mutation"]["rollback"]["verified"] is False
     assert "rollback_unverified" in receipt["errors"]
+
+
+# ------------------------------------------ D2 light tool fallback (rbcd_write)
+def test_rbcd_write_primary_tool_wins_no_fallback_invoked(tmp_path):
+    # (a) impacket-rbcd primary present + succeeds -> bloodyAD fallback never runs.
+    cfg = _config()
+    runner = _StubRunner(_proved_script())
+    ctx = ExecutorContext(cfg, runner=runner, authorizer=AuthorizedLabProvider(True),
+                          output_dir=tmp_path)
+    receipt = get_executor("RBCD").run(ctx, _rbcd_finding())
+    assert receipt["complete"] is True
+    assert receipt["steps"] and all(s["ok"] for s in receipt["steps"])
+    write = next(s for s in receipt["steps"] if s["name"] == "rbcd_write")
+    assert write["ok"] is True
+    tools = [Path(c[0]).name for c in runner.calls]
+    assert "impacket-rbcd" in tools and "bloodyAD" not in tools   # positive short-circuit
+
+
+def test_rbcd_write_falls_back_to_bloodyad_when_impacket_absent(tmp_path):
+    # (b) impacket-rbcd write ABSENT -> bloodyAD fallback writes RBCD; chain proves.
+    script = _proved_script()
+    script["impacket-rbcd:write"] = RunResult(
+        returncode=None, error="FileNotFoundError: impacket-rbcd")
+    script["bloodyAD"] = RunResult(
+        0, stdout="[+] winterfell$ can now act on behalf of joe_cmp_delegation$")
+    cfg = _config()
+    runner = _StubRunner(script)
+    ctx = ExecutorContext(cfg, runner=runner, authorizer=AuthorizedLabProvider(True),
+                          output_dir=tmp_path)
+    receipt = get_executor("RBCD").run(ctx, _rbcd_finding())
+    assert receipt["complete"] is True
+    assert receipt["steps"] and all(s["ok"] for s in receipt["steps"])
+    tf = receipt["terminal_fact"]
+    assert tf and tf["kind"] == "rbcd_access" and tf["ok"] is True
+    write = next(s for s in receipt["steps"] if s["name"] == "rbcd_write")
+    assert write["ok"] is True
+    tools = [Path(c[0]).name for c in runner.calls]
+    assert "impacket-rbcd" in tools and "bloodyAD" in tools   # primary tried, then fallback
+    assert "Winter2022!" not in json.dumps(receipt)   # secret never stored
+
+
+def test_rbcd_write_both_tools_no_marker_is_not_proved(tmp_path):
+    # (c) primary clean-negative + bloodyAD clean-negative -> honest rbcd_write_failed.
+    script = _proved_script()
+    script["impacket-rbcd:write"] = RunResult(0, stdout="[-] Could not modify delegation rights")
+    script["bloodyAD"] = RunResult(0, stdout="[-] bloodyAD: write refused")
+    cfg = _config()
+    runner = _StubRunner(script)
+    ctx = ExecutorContext(cfg, runner=runner, authorizer=AuthorizedLabProvider(True),
+                          output_dir=tmp_path)
+    receipt = get_executor("RBCD").run(ctx, _rbcd_finding())
+    assert receipt["complete"] is False
+    assert receipt["terminal_fact"] is None
+    assert "rbcd_write_failed" in receipt["errors"]
+    write = next(s for s in receipt["steps"] if s["name"] == "rbcd_write")
+    assert write["ok"] is False
+    # both tools attempted; the mutating addcomputer applied so rollback still ran.
+    tools = [Path(c[0]).name for c in runner.calls]
+    assert "impacket-rbcd" in tools and "bloodyAD" in tools
+    assert receipt["mutation"]["applied"] is True
+    assert tools.count("impacket-addcomputer") == 2   # create + rollback delete
+
+
+# ------------------------------------------ first_successful helper (unit)
+class _ByToolRunner(CommandRunner):
+    """Return a scripted RunResult keyed on argv[0] (the tool name)."""
+
+    def __init__(self, by_tool: dict[str, RunResult]):
+        self.by_tool = by_tool
+        self.calls: list[list[str]] = []
+
+    def run(self, argv, *, env=None, timeout=None, cwd=None) -> RunResult:
+        self.calls.append(list(argv))
+        return self.by_tool.get(argv[0], RunResult(returncode=0, stdout=""))
+
+
+def _hit(marker: str):
+    return lambda r: marker in (r.stdout or "")
+
+
+def _two_attempts():
+    return [ToolAttempt("primary", ["primary"], success=_hit("OK")),
+            ToolAttempt("fallback", ["fallback"], success=_hit("OK"))]
+
+
+def test_first_successful_skips_hung_primary_and_takes_fallback():
+    runner = _ByToolRunner({
+        "primary": RunResult(returncode=None, timed_out=True, error="timeout"),
+        "fallback": RunResult(0, stdout="OK"),
+    })
+    att, res, ok = first_successful(runner, _two_attempts())
+    assert ok is True and att.tool == "fallback" and res.stdout == "OK"
+    assert [c[0] for c in runner.calls] == ["primary", "fallback"]   # both tried
+
+
+def test_first_successful_all_absent_returns_sentinel():
+    runner = _ByToolRunner({
+        "primary": RunResult(returncode=None, error="FileNotFoundError: primary"),
+        "fallback": RunResult(returncode=None, error="No such file or directory: fallback"),
+    })
+    att, res, ok = first_successful(runner, _two_attempts())
+    assert ok is False and att.tool == "primary"      # attempts[0] per the contract
+    assert res.returncode is None and res.error == "no fallback tool available"
+
+
+def test_first_successful_hung_primary_absent_fallback_reports_the_hang():
+    # NOT "every tool absent" -> the sentinel must not fire; report the first that ran.
+    runner = _ByToolRunner({
+        "primary": RunResult(returncode=None, timed_out=True, error="timeout"),
+        "fallback": RunResult(returncode=None, error="FileNotFoundError: fallback"),
+    })
+    att, res, ok = first_successful(runner, _two_attempts())
+    assert ok is False and att.tool == "primary"
+    assert res.timed_out is True and res.error != "no fallback tool available"
+
+
+def test_first_successful_trusted_primary_negative_still_tries_fallback():
+    runner = _ByToolRunner({
+        "primary": RunResult(0, stdout="nothing positive here"),
+        "fallback": RunResult(0, stdout="OK"),
+    })
+    att, res, ok = first_successful(runner, _two_attempts())
+    assert ok is True and att.tool == "fallback"
+    assert [c[0] for c in runner.calls] == ["primary", "fallback"]
+
+
+def test_first_successful_primary_positive_short_circuits():
+    runner = _ByToolRunner({"primary": RunResult(0, stdout="OK")})
+    att, res, ok = first_successful(runner, _two_attempts())
+    assert ok is True and att.tool == "primary"
+    assert [c[0] for c in runner.calls] == ["primary"]   # fallback never invoked

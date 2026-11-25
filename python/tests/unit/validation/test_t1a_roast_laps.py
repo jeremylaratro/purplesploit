@@ -43,7 +43,14 @@ class _FakeRunner(CommandRunner):
         if tool == "hashcat":
             return "hashcat:show" if "--show" in argv else "hashcat:crack"
         if tool == "nxc":
-            return "nxc:local" if "--local-auth" in argv else "nxc"
+            if "--local-auth" in argv:
+                return "nxc:local"
+            # `nxc ldap ... --kerberoasting/--asreproast` is the D2 roast fallback;
+            # `nxc smb ...` is the re-auth step. Key them apart so a test can script
+            # the fallback without colliding with the re-auth.
+            if len(argv) > 1 and argv[1] == "ldap":
+                return "nxc:roast"
+            return "nxc"
         return tool
 
 
@@ -140,6 +147,88 @@ def test_kerberoast_crack_gate_denied_inconclusive(tmp_path):
         _ctx(cfg, _FakeRunner(_kerb_proved_script()), tmp_path, _Deny(True)), _kerb_finding())
     assert receipt["gate"]["classifier"] == "denied"
     assert receipt["complete"] is False and receipt["terminal_fact"] is None
+
+
+# ------------------------------------------ D2 light tool fallback (roast step)
+def _nxc_roast(stdout: str) -> RunResult:
+    return RunResult(0, stdout=stdout)
+
+
+def test_kerberoast_primary_tool_wins_no_fallback_invoked(tmp_path):
+    # (a) impacket primary present + succeeds -> primary wins, nxc fallback never runs.
+    cfg = _config()
+    runner = _FakeRunner(_kerb_proved_script())
+    receipt = get_executor("KERBEROAST").run(_ctx(cfg, runner, tmp_path), _kerb_finding())
+    assert receipt["complete"] is True
+    roast = next(s for s in receipt["steps"] if s["name"] == "roast")
+    assert roast["ok"] is True
+    # impacket primary was called; the nxc ldap fallback was NOT (positive short-circuit).
+    assert any(Path(c[0]).name == "impacket-GetUserSPNs" for c in runner.calls)
+    assert not any(Path(c[0]).name == "nxc" and len(c) > 1 and c[1] == "ldap"
+                   for c in runner.calls)
+
+
+def test_kerberoast_falls_back_to_nxc_when_impacket_absent(tmp_path):
+    # (b) primary ABSENT -> nxc fallback is invoked and succeeds; chain still proves.
+    script = _kerb_proved_script()
+    script["impacket-GetUserSPNs"] = RunResult(
+        returncode=None, error="FileNotFoundError: impacket-GetUserSPNs")
+    script["nxc:roast"] = _nxc_roast(
+        "LDAP  10.0.0.11  389  WINTERFELL  "
+        "$krb5tgs$23$*jon.snow$NORTH$MSSQLSvc*$abcd$ef0011223344556677")
+    cfg = _config()
+    runner = _FakeRunner(script)
+    receipt = get_executor("KERBEROAST").run(_ctx(cfg, runner, tmp_path), _kerb_finding())
+    assert receipt["complete"] is True
+    assert receipt["steps"] and all(s["ok"] for s in receipt["steps"])
+    tf = receipt["terminal_fact"]
+    assert tf and tf["kind"] == "authn_success" and tf["ok"] is True and tf["proof_token"]
+    # primary attempted first, then the nxc ldap fallback actually ran.
+    assert any(Path(c[0]).name == "impacket-GetUserSPNs" for c in runner.calls)
+    assert any(Path(c[0]).name == "nxc" and len(c) > 1 and c[1] == "ldap"
+               for c in runner.calls)
+    assert "hodorhodor" not in json.dumps(receipt)   # operator secret never stored
+
+
+def test_kerberoast_both_tools_no_hash_is_not_proved(tmp_path):
+    # (c) primary clean-negative + fallback clean-negative -> honest roast_no_hash.
+    script = _kerb_proved_script()
+    script["impacket-GetUserSPNs"] = RunResult(0, stdout="No entries found!")
+    script["nxc:roast"] = _nxc_roast("LDAP  10.0.0.11  389  WINTERFELL  (no roastable accounts)")
+    cfg = _config()
+    runner = _FakeRunner(script)
+    receipt = get_executor("KERBEROAST").run(_ctx(cfg, runner, tmp_path), _kerb_finding())
+    assert receipt["complete"] is False
+    assert receipt["terminal_fact"] is None
+    assert "roast_no_hash" in receipt["errors"]
+    roast = next(s for s in receipt["steps"] if s["name"] == "roast")
+    assert roast["ok"] is False
+    # a trusted primary negative STILL tries the fallback before giving up.
+    assert any(Path(c[0]).name == "impacket-GetUserSPNs" for c in runner.calls)
+    assert any(Path(c[0]).name == "nxc" and len(c) > 1 and c[1] == "ldap"
+               for c in runner.calls)
+
+
+def test_asrep_falls_back_to_nxc_when_impacket_absent(tmp_path):
+    # ASREP shares the roast body: primary absent -> nxc --asreproast fallback proves.
+    cfg = _config()
+    script = {
+        "impacket-GetNPUsers": RunResult(
+            returncode=None, error="FileNotFoundError: impacket-GetNPUsers"),
+        "nxc:roast": _nxc_roast("LDAP  10.0.0.11  389  WINTERFELL  "
+                                "$krb5asrep$23$brandon.stark@NORTH:aa11$bb22ccdd"),
+        "hashcat:crack": RunResult(0, stdout="Recovered: 1/1"),
+        "hashcat:show": RunResult(0, stdout="Summer2021!"),
+        "nxc": RunResult(0, stdout="SMB  10.0.0.11  445  WINTERFELL  [+] north\\brandon.stark"),
+    }
+    runner = _FakeRunner(script)
+    receipt = get_executor("ASREP").run(_ctx(cfg, runner, tmp_path), _asrep_finding())
+    assert receipt["complete"] is True and receipt["terminal_fact"]["ok"] is True
+    # the fallback used the --asreproast flag (not --kerberoasting).
+    nxc_ldap = next(c for c in runner.calls
+                    if Path(c[0]).name == "nxc" and len(c) > 1 and c[1] == "ldap")
+    assert "--asreproast" in nxc_ldap and "--kerberoasting" not in nxc_ldap
+    assert "Summer2021!" not in json.dumps(receipt)
 
 
 # ================================================================= ASREP
