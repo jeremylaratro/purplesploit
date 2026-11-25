@@ -201,6 +201,16 @@ _RE_CA_NONE = re.compile(
 _RE_ESC1 = re.compile(r"\bESC1\b", re.I)
 _RE_NO_VULN = re.compile(
     r"(Found 0 vulnerable|no vulnerable (certificate )?templates|0 vulnerable)", re.I)
+# ESC8: certipy find reports the CA's Web Enrollment endpoint enabled / an ESC8
+# vulnerability marker.
+_RE_ESC8 = re.compile(r"(\bESC8\b|Web Enrollment[^\n]*Enabled)", re.I)
+# ESC11: the ICPR/RPC enrollment interface does NOT enforce request encryption.
+_RE_ESC11 = re.compile(r"(\bESC11\b|Enforce Encryption[^\n]*Disabled)", re.I)
+# Certifried SID-ext oracle: the szOID_NTDS_CA_SECURITY_EXT (Certificate object
+# SID) security extension. PRESENT -> patched (post May-2022); ABSENT -> unpatched.
+_RE_SID_EXT = re.compile(
+    r"(Certificate object SID|szOID_NTDS_CA_SECURITY_EXT|1\.3\.6\.1\.4\.1\.311\.25\.2|"
+    r"SID security extension)", re.I)
 
 
 def _target_protected(impersonate: Optional[str]) -> Optional[bool]:
@@ -559,10 +569,143 @@ class ADCSESC1Probe(PreconditionProbe):
             evidence={"esc1_template": template or None})
 
 
+class Esc8Probe(PreconditionProbe):
+    """ESC8 (N1): re-confirm a relayable Web-Enrollment surface via certipy find --
+    a Web-Enrollment-enabled / ESC8 marker is ``viable``; certipy reporting no CA
+    is a positive ``viable=False`` (nothing to relay to); an unreadable find is
+    ``unknown`` (attempt anyway). Fail-safe (unknown never skips)."""
+    technique = "ESC8"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        res = _certipy_find(ctx)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read ADCS state via certipy find; ESC8 relay "
+                        "surface unknown -> attempting anyway"),
+                evidence={"web_enrollment": None})
+        if _RE_CA_NONE.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("no Certificate Authority found: nothing to relay the coerced "
+                        "auth to -> skip"),
+                evidence={"web_enrollment": False})
+        if _RE_ESC8.search(text):
+            return ProbeResult(
+                viable=True,
+                reason="certipy find reports a Web-Enrollment / ESC8 relay surface -> viable",
+                evidence={"web_enrollment": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("ADCS CA present but Web-Enrollment/ESC8 exposure not confirmed from "
+                    "certipy find -> attempting with that uncertainty flagged"),
+            evidence={"web_enrollment": None})
+
+
+class Esc11Probe(PreconditionProbe):
+    """ESC11 (N1): like ESC8 but the RPC/ICPR enrollment surface -- a
+    "Enforce Encryption for Requests: Disabled" / ESC11 marker is ``viable``;
+    no CA is ``viable=False``; unreadable is ``unknown``. Fail-safe."""
+    technique = "ESC11"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        res = _certipy_find(ctx)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read ADCS state via certipy find; ESC11 relay "
+                        "surface unknown -> attempting anyway"),
+                evidence={"rpc_encryption_enforced": None})
+        if _RE_CA_NONE.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("no Certificate Authority found: nothing to relay the coerced "
+                        "auth to -> skip"),
+                evidence={"rpc_encryption_enforced": None})
+        if _RE_ESC11.search(text):
+            return ProbeResult(
+                viable=True,
+                reason=("certipy find reports the RPC/ICPR enrollment interface does not "
+                        "enforce request encryption (ESC11) -> viable"),
+                evidence={"rpc_encryption_enforced": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("ADCS CA present but ESC11 (RPC encryption not enforced) not confirmed "
+                    "from certipy find -> attempting with that uncertainty flagged"),
+            evidence={"rpc_encryption_enforced": None})
+
+
+class CertifriedProbe(PreconditionProbe):
+    """CERTIFRIED (N1): the SID-extension oracle -- a CA whose issued certs LACK the
+    szOID_NTDS_CA_SECURITY_EXT (Certificate object SID) extension is UNPATCHED
+    (pre-May-2022) -> ``viable``; the extension present -> patched -> positive
+    ``viable=False``. Plus ``ms-DS-MachineAccountQuota`` > 0 (a computer must be
+    creatable); MAQ<=0 -> ``viable=False``. No CA / an unreadable find ->
+    ``unknown`` (attempt anyway). Fail-safe (unknown never skips)."""
+    technique = "CERTIFRIED"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        res = _certipy_find(ctx)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("could not read the CA SID-extension state via certipy find; "
+                        "CA patch level unknown -> attempting anyway"),
+                evidence={"sid_ext_present": None, "maq": None})
+        if _RE_CA_NONE.search(text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=("no CA observed in certipy find (SID-ext oracle inconclusive) -> "
+                        "attempting anyway"),
+                evidence={"sid_ext_present": None, "maq": None})
+        maq_res = _ldap_query(ctx, "(objectClass=domain)", ["ms-DS-MachineAccountQuota"])
+        maq = _parse_int(_extract_attr(_text(maq_res), "ms-DS-MachineAccountQuota"))
+        if maq is not None and maq <= 0:
+            return ProbeResult(
+                viable=False,
+                reason=("ms-DS-MachineAccountQuota=0: cannot create the computer "
+                        "Certifried needs -> skip"),
+                evidence={"sid_ext_present": None, "maq": maq})
+        if _RE_SID_EXT.search(text):
+            return ProbeResult(
+                viable=False,
+                reason=("CA issues certs WITH the SID security extension "
+                        "(szOID_NTDS_CA_SECURITY_EXT): patched (post May-2022), "
+                        "Certifried mitigated -> skip"),
+                evidence={"sid_ext_present": True, "maq": maq})
+        return ProbeResult(
+            viable=True,
+            reason=("no SID security extension observed on a baseline cert (unpatched / "
+                    "pre-May-2022) and MAQ>0 -> Certifried viable"),
+            evidence={"sid_ext_present": False, "maq": maq})
+
+
+class DCSyncProbe(PreconditionProbe):
+    """DCSYNC (N1): standalone, the replication rights (DS-Replication-Get-Changes
+    [-All]) are NOT readable non-destructively (they need a BloodHound ACL read or
+    a DA-equivalent context the chaining engine supplies), so this probe always
+    returns ``unknown`` (attempt anyway) -- NEVER a false ``viable=False`` that
+    would wrongly drop the universal DA terminal. Fail-safe by construction."""
+    technique = "DCSYNC"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("replication rights (DS-Replication-Get-Changes[-All]) are not "
+                    "readable non-destructively standalone; the chaining engine supplies "
+                    "the DA-equivalent context -> attempting anyway"),
+            evidence={"replication_rights": None})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
     RbcdProbe, OpenSharesProbe, ShadowCredsProbe, ADCSESC1Probe,
+    # N1 -- ADCS relay fronts + the DCSync terminal.
+    Esc8Probe, Esc11Probe, CertifriedProbe, DCSyncProbe,
 )
 
 # Technique -> probe class.
@@ -615,4 +758,5 @@ __all__ = [
     "probe_finding", "run_probes",
     "KerberoastProbe", "ASREPProbe", "LapsProbe", "ConstrainedDelegProbe",
     "RbcdProbe", "OpenSharesProbe", "ShadowCredsProbe", "ADCSESC1Probe",
+    "Esc8Probe", "Esc11Probe", "CertifriedProbe", "DCSyncProbe",
 ]

@@ -29,6 +29,10 @@ from .adcs_esc1 import ADCSESC1Executor
 from .coercion import CoercionExecutor
 from .ntlm_relay import NTLMRelayExecutor
 from .unconstrained_deleg import UnconstrainedDelegExecutor
+from .esc8 import ESC8Executor
+from .esc11 import ESC11Executor
+from .certifried import CertifriedExecutor
+from .dcsync import DCSyncExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -36,6 +40,8 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     RBCDExecutor, KerberoastExecutor, ASREPExecutor, LAPSExecutor,
     ConstrainedDelegExecutor, OpenSharesExecutor, ShadowCredsExecutor,
     ADCSESC1Executor, CoercionExecutor, NTLMRelayExecutor, UnconstrainedDelegExecutor,
+    # N1 -- ADCS relay fronts + the reusable DCSync terminal (b1).
+    ESC8Executor, ESC11Executor, CertifriedExecutor, DCSyncExecutor,
 )
 
 # Technique -> executor class.
@@ -67,5 +73,6 @@ __all__ = [
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
     "ADCSESC1Executor", "CoercionExecutor", "NTLMRelayExecutor",
     "UnconstrainedDelegExecutor",
+    "ESC8Executor", "ESC11Executor", "CertifriedExecutor", "DCSyncExecutor",
     "REGISTRY", "IMPLEMENTED", "get_executor", "is_implemented",
 ]

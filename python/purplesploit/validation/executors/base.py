@@ -49,7 +49,7 @@ class RunResult:
 # camelCase form) are included for the D2 nxc/bloodyAD fallbacks below.
 _SECRET_FLAGS = frozenset({
     "-p", "--password", "-hashes", "-H", "--hash", "-aesKey", "--aesKey",
-    "--aes-key", "-computer-pass", "-pfx", "-password",
+    "--aes-key", "-computer-pass", "-pfx", "-password", "-pass",
 })
 
 

@@ -367,10 +367,11 @@ def test_esc1_unknown_on_read_error(tmp_path):
 
 
 # ================================================================= registry / helpers
-def test_registry_covers_all_eight_techniques():
+def test_registry_covers_all_twelve_techniques():
     assert set(probes.PROBE_REGISTRY) == {
         "KERBEROAST", "ASREP", "LAPS", "CONSTRAINED-DELEG-PT",
-        "RBCD", "OPENSHARES-WRITE", "SHADOW-CREDS", "ADCS-ESC1"}
+        "RBCD", "OPENSHARES-WRITE", "SHADOW-CREDS", "ADCS-ESC1",
+        "ESC8", "ESC11", "CERTIFRIED", "DCSYNC"}
 
 
 def test_get_probe_unknown_technique_is_none():
