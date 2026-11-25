@@ -24,7 +24,7 @@ from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
-    ValidationExecutor, ComposableResult,
+    ValidationExecutor, ComposableResult, Capability,
 )
 from purplesploit.validation.executors.process_manager import ProcessManager, ProcHandle
 from purplesploit.validation.engine import ChainEngine, ChainReport, default_edges, da_in_minutes
@@ -350,3 +350,17 @@ def test_cross_path_leftover_mutation_is_not_hidden_by_later_clean_path():
     assert report.clean is False                             # ... but the earlier leftover makes it NOT clean
     assert "not clean" in report.label.lower()
     assert any(t["edge"] == "AAA_DIRTY" and not t["verified"] for t in report.teardown)
+
+
+def test_valueless_produced_capability_does_not_establish_a_precondition():
+    """Round-2 hardening: a front that produces a DC_TGT capability with NO usable
+    value (channel=CAP_NONE) must NOT establish DC_TGT, so a credential-consuming
+    terminal cannot later fall back to operator creds while the state reads as set."""
+    from purplesploit.validation.executors.base import CAP_NONE
+    empty = Capability(state=states.DC_TGT, channel=CAP_NONE, value=None, principal="dc01$")
+    front = _FakeEdge("EMPTY_FRONT", {states.S0_USER_CREDS}, {states.DC_TGT},
+                      complete=True, produce=empty)
+    terminal = _FakeEdge("TERM", {states.DC_TGT}, {states.S_DA}, complete=True)
+    report = ChainEngine([front, terminal]).run(_fake_ctx(), lambda e: object())
+    assert report.reached is False                           # DC_TGT never established -> terminal unreachable
+    assert "not reached" in report.label.lower()

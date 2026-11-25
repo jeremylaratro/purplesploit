@@ -285,7 +285,14 @@ class ChainEngine:
             # capability -- NO blanket marking of eff states. A front that issued a
             # cert but produced no usable DC_TGT does NOT establish DC_TGT, so the
             # terminal's precondition check above fails and the path ends honestly.
+            # Hardening (review round-2): a produced capability must carry a USABLE
+            # credential value -- a CAP_NONE / valueless capability does NOT
+            # establish a threadable precondition, so a future edge that emits a
+            # value-less DC_TGT can never let a terminal fall back to operator creds
+            # while the state reads as "established".
             for cap in result.capabilities:
+                if cap.channel == CAP_NONE or not cap.value:
+                    continue
                 store[cap.state] = _StateEntry(capability=cap, provenance=edge.technique)
 
             if self.goal in edge.eff:
