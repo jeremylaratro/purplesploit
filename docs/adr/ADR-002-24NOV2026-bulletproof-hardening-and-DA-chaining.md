@@ -31,6 +31,10 @@ certipy cannot revoke in any version. Replace the broken `certipy ca -revoke-req
 
 Stateful ESCs (ESC4 template, ESC7 officer/SubCA, ESC9/10/16 UPN+shadow, Certifried machine acct) use certipy-native **checkpoint-before-exploit + guaranteed-restore-on-error**. *Build opportunity (flagged):* a network-native **MS-CSRA `RevokeCertificate` Opnum 10** DCERPC primitive so an ESC7 officer cred can revoke without CA code-exec.
 
+## Decision — D2 scope: light fallbacks now, full Rubeus option deferred (owner, 25NOV2026)
+
+Owner chose the **light-touch D2** for now: a `first_successful` tool-fallback helper plus the clean *Linux* drop-in fallbacks — roasting `impacket-GetUserSPNs`/`GetNPUsers` → `nxc --kerberoasting`/`--asreproast`, and RBCD write `impacket-rbcd` → `bloodyAD add rbcd` — each gated by tool-presence (an absent or hung primary falls through to the alternate; a clean negative from the primary is trusted). **Deferred to the N3 backlog (owner directive 25NOV2026):** a **full Rubeus fallback/option** across the Kerberos techniques (kerberoast / asrep / s4u / monitor). Rubeus is Windows/mono-hosted, so it needs an execution-host abstraction (run-on-a-Windows-foothold), which is future work rather than a Linux drop-in.
+
 ## Decision — safety tiering (D6)
 - **Default frontier (crack-free, deterministic):** ESC1, ESC8, ESC11, Certifried, shadow-creds, RBCD, constrained/unconstrained delegation, noPac → all terminate in non-destructive DCSync.
 - **Opt-in, verified-restore:** destructive/code-exec — **Zerologon** (severe: mandatory recover-original-pw → persist off-box → non-skippable restore → verify-restore → single-DC, per research §3.4), PrintNightmare, CVE-2025-33073.
