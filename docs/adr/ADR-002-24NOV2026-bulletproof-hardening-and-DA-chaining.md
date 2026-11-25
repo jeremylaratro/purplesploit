@@ -61,5 +61,23 @@ Each tranche: precondition probes + robust predicates + fake-runner tests + real
 4. **MS-CSRA revoke primitive:** build the network-native cert-revoke (N3), or rely on `certutil -revoke` via remote-exec in the interim? (Default: interim now, build in N3.)
 5. **DA proof default:** DCSync-krbtgt (non-destructive) as the standing proof, with add-to-Domain-Admins only behind a destructive opt-in? (Default: yes.)
 
+## Review addenda (independent review, 25NOV2026)
+
+A review of the chassis + 8 executors found four HIGH rollback/terminal integrity
+holes (vacuous-verified rollbacks + a benign-phrase terminal match) — all fixed and
+regression-tested (commit `a3fea34`). Two design constraints it raised bind the
+engine build:
+
+- **D4 (ChainEngine):** when racing top-k disjoint chains with early-exit, a losing
+  sibling's mutating edges must be rolled back **and the rollback VERIFIED** (not
+  merely attempted) before the run reports DA-proved-and-clean. "Attempted" rollback
+  is insufficient given how easily a vacuous verify slips through (the four holes).
+- **D2 (ToolAdapter fallback):** a *mutating* adapter that partially applied before
+  the next adapter is tried must roll back its partial mutation before fallback —
+  define rollback-across-fallback, don't just try the next tool.
+- **D3 is the structural fix** for the whole class: artifact predicates / attribute
+  re-reads (a file/CA-DB/CRL/LDAP read that *positively confirms* the end state),
+  never "I couldn't observe it, so assume success." Prioritize D3 in the H tranche.
+
 ## Unverified assumptions to pin in-lab
 Exact tool output markers across versions (ntlmrelayx/certipy/Coercer/krbrelayx) — mitigated by D3 artifact predicates; certipy `relay` vs ntlmrelayx `--adcs` behavior for ESC8/ESC11; StrongCertBinding behavioral fingerprint reliability; whether destroying `.pfx` is accepted as sufficient ESC1 rollback by the harness/owner (D5.1 — flagged for review).
