@@ -5,6 +5,9 @@
 
 Evidence base: `docs/research/ad-attack-robustness-catalog-24NOV2026.md` (§1 ranked paths, §3.2 ADCS, §3.3 coercion+relay), ADR-001 (ProcessManager), ADR-002 (D3 predicates, D4 modularity, D5 ADCS rollback).
 
+## Review (25NOV2026) — VERDICT REVISE, all findings applied below
+Independent Opus review. 5 findings, all accepted + folded in: **H1** Certifried keyed+emitted the DC host but the facet keys the CA host → never proved → **fixed: key+emit the CA host (mirror ESC1)**. **H2** Certifried rollback "LDAP exist re-check" is vacuous (a failed query looks like "gone") → **fixed: positive-confirmation re-check (a control object present AND the computer absent), per rbcd.py's read-back**. **H3** a composed front's per-edge rollback destroys the `.ccache` DCSync `b1` consumes → **fixed: rollback defers to chain-teardown when composed; immediate only standalone**. **H4** `UNCONSTRAINED-DELEG→DCSync` isn't realizable today (it DCSyncs internally) → **fixed: `b1` composes with the NEW fronts in N1; splitting UNCONSTRAINED-DELEG is an N2/C follow-up**. **H5** DCSync-proved = "DA *given* replication creds" → **fixed: C must record BOTH the front receipt and the DCSYNC receipt (a chain can't "prove DA" from pre-supplied DA creds)**. Plus Q2: a shared capability-state constants module (below). The scorer-interaction checks PASSED for all four facet entries (rollback guard double-armed on `cert_issued_and_used`; DCSYNC read needs no rollback; secrets never reach receipts).
+
 ## Scope (4 new edges) + sprint split
 - **Sprint A — ESC8** (the keystone; listener-based, ProcessManager).
 - **Sprint B — ESC11** (ADCS RPC relay; shares ESC8's structure).
@@ -56,9 +59,9 @@ Review question 1: are these terminal/mutating choices + the PENDING vulnerable 
 - Same shape; listener `impacket-ntlmrelayx -t rpc://<ca_host> -rpc-mode ICPR -icpr-ca-name <ca> --adcs -smb2support`. probe: `certipy find` "Enforce Encryption for Requests: Disabled" (ESC11) marker. Same rollback.
 
 ### Certifried (`executors/certifried.py`) — synchronous (no listener), mutating
-- terminal `cert_issued_and_used`; `mutating=True`; target_identity = `{**resolve_target_identity(dc_host), "domain": cfg.domain}`.
-- Flow: `certipy-ad account create -user <new> -dns <dc_fqdn> ...` (needs MAQ>0) → `certipy-ad req -template Machine -ca <ca> -dc-ip <dc>` → `certipy-ad auth -pfx` PKINIT as the DC → terminal ok when the DC-context cert authenticated.
-- **Rollback**: delete the created computer (`certipy account delete` / `impacket-addcomputer -delete`) **verified by an LDAP/exist re-check** + destroy the pfx. mutating → verified rollback.
+- terminal `cert_issued_and_used`; `mutating=True`; **target_identity = `{**resolve_target_identity(ca_host), "domain": cfg.domain}` — the CA host (the unpatched entity), matching the facet key (H1 fix; mirrors ESC1)**; carry a `ca_host` param.
+- Flow: `certipy-ad account create -user <new> -dns <dc_fqdn> ...` (needs MAQ>0) → `certipy-ad req -template Machine -ca <ca> -target <ca_host>` → `certipy-ad auth -pfx` PKINIT as the DC → terminal ok when the DC-context cert authenticated.
+- **Rollback (H2 — positive confirmation, non-vacuous)**: delete the created computer, then re-read via LDAP requiring BOTH a positive read-success marker (a control object the query is known to return is present — the read actually ran) AND the created computer absent (mirror `rbcd.py` `_RE_RBCD_READ_OK` header + principal-absent). A failed/errored query must NOT pass as "deleted". Destroy the pfx with the ESC1 non-vacuous rule (`removed>=1` AND none remain). mutating → verified rollback. **When composed as a front by C, defer rollback to chain teardown (H3).**
 - probe (`CertifriedProbe`): the SID-ext oracle (research §3.2) — a baseline `User` cert LACKS "Certificate object SID" → unpatched → viable; present → patched → not-viable; + MAQ>0 read; unreadable → unknown.
 
 ### DCSync terminal module (`executors/dcsync.py`) — the reusable `b1`, non-mutating
@@ -66,8 +69,8 @@ Review question 1: are these terminal/mutating choices + the PENDING vulnerable 
 - Flow: `impacket-secretsdump -just-dc-user krbtgt -k -no-pass <dom>/<dc>$@<dc>` (or with the supplied creds/hash) → terminal ok when the replication returned the krbtgt object. **The krbtgt hash is a SECRET** → presence-only; proof_token over public parts (DCSYNC, domain, dc, "krbtgt_replicated"). No rollback (read).
 - params: `dc_host` (rec finding.host/dc_ip), `principal`/creds come from `ctx.config` (the DA-equivalent context the chaining engine supplies). This is the module C invokes once a front has produced replication-capable creds.
 
-## Modularity hook (toward C, ADR-002 D4)
-Each new edge declares `pre`/`eff` capability states (add a small `pre`/`eff` attribute or a mapping the engine reads): ESC8/ESC11 `eff = {cert_for(DC)}` → (PKINIT) `{dc_tgt}`; Certifried `eff = {dc_tgt}`; **DCSync `pre = {dc_tgt | da_creds}`, `eff = {krbtgt, S_DA}`**. So `ESC8→DCSync` and `UNCONSTRAINED-DELEG→DCSync` and `Certifried→DCSync` are all valid `a_i + b1` paths — DCSync (`b1`) written once, composed with every front. Review question 2: put `pre`/`eff` on the executor class now (N1) or introduce the capability-state enum in C? (Lean: a minimal `pre`/`eff` tuple on each edge now, so C is pure composition.)
+## Modularity hook (toward C, ADR-002 D4) — revised per review
+Introduce a **shared capability-state constants module** `python/purplesploit/validation/states.py` now (Q2): one source of state names — `S0_user_creds`, `dc_tgt`, `da_creds`, `cert_for(host)`, `krbtgt`, `S_DA` — so C matches one edge's `eff` to another's `pre` by identity, NOT free-form per-executor strings. Each new edge declares a minimal `pre`/`eff` tuple over these: ESC8/ESC11 `eff = {cert_for(DC)}` → (PKINIT) `{dc_tgt}`; Certifried `eff = {dc_tgt}`; **DCSync `pre = {dc_tgt | da_creds}`, `eff = {krbtgt, S_DA}`**. Valid `a_i + b1` paths delivered in N1: **`ESC8→DCSync`, `ESC11→DCSync`, `Certifried→DCSync`** — `b1` written once, composed with every NEW front. **H4: `UNCONSTRAINED-DELEG→DCSync` is NOT a working path today** (it DCSyncs internally); re-pointing it at `b1` means splitting it into a pure front (`eff={dc_tgt}`, drop its internal dump) — an N2/C follow-up, not claimed here. **H3: a front's rollback is CHAIN-LEVEL when composed** — invoked as an edge by C it defers its mutating rollback to chain teardown (so it does not destroy the `.ccache`/`dc_tgt` that `b1.pre` consumes); the immediate per-edge rollback is standalone-only. **H5: the DA claim is the composed pair** — C must record BOTH the front's `cert_issued_and_used` receipt AND the `DCSYNC` `replication_dump` receipt; a DCSYNC receipt alone proves only "DA given replication creds", so C may not hand `b1` pre-supplied DA creds and call it an escalation.
 
 ## Findings-map vs chaining-edge (decision)
 ESC8/ESC11/Certifried/DCSync are primarily **chaining-engine edges** invoked by precondition, not aranum findings. Light `findings.py` additions only where a detector surfaces them (certipy-find ESC8/ESC11 markers → map to the technique); DCSync is never a "finding" — it is the terminal module C invokes. Review question 3: confirm we do NOT force these through the aranum finding-map (they're edges), to avoid false "no finding → skip".
@@ -81,8 +84,8 @@ All mutating (ESC8/ESC11/Certifried) carry a verified rollback (destroy key mate
 ## Benefit (Phase 8)
 After N1: 15 techniques (11 + ESC8/ESC11/Certifried/DCSync), the ESC8 keystone + the reusable DCSync terminal — the minimum for C to demonstrate `coerce→ESC8→DCSync = DA in minutes` as a composed (not scripted) path.
 
-## Open questions for the review
-1. Facet terminal/mutating/key choices + PENDING vulnerable sets (above).
-2. `pre`/`eff` on edges now (N1) vs in C.
-3. Treat ESC8/ESC11/Certifried/DCSync as chaining edges (not forced through the finding-map).
-4. ESC8/ESC11 terminal `cert_issued_and_used` vs modeling the DA as the subsequent DCSync (`replication_dump`) — i.e. is the DC *cert+PKINIT* a sufficient standalone proof, or must the front chain into DCSync to score DA? (Lean: cert_issued_and_used is the front's own proof; DA is the composed front+DCSync — keeps modules small.)
+## Open questions — RESOLVED by the review
+1. Facet terminal/mutating/key + PENDING sets: CONFIRMED (keep `{host_id}`; DCSYNC all-DCs = correct DA semantics); the one fix = CERTIFRIED keys+emits the CA host (H1, applied).
+2. `pre`/`eff` on edges now — YES, plus the shared `states.py` constants module (Q2, applied).
+3. Chaining edges, NOT forced through the finding-map — CONFIRMED; optional certipy-find enrichment only; a missing finding never gates an edge out.
+4. ESC8/ESC11 terminal `cert_issued_and_used` as the front's standalone proof — CONFIRMED, with the DA claim = the composed front+DCSYNC receipt pair (H5) and composed rollback deferred to teardown (H3).
