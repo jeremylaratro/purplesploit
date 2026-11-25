@@ -88,3 +88,47 @@ Fake executors/edges (scripted `CapabilityOutput` + receipts) + a fake scorer, s
 3. **`CapabilityOutput` is right, but must be TYPED + routed per channel (B2),** and consumed via an explicit **input-capability param + `env=` passthrough on the edge's context (B1)** — NOT by mutating a shared `os.environ`/ctx (racy across parallel candidates). A ccache **path** is project-marked secret, so it must stay in-memory and out of the ChainReport (H6); `nt_hash` payloads are in-memory + `redact_argv`-masked, never serialized.
 4. **Weighted-cost with crack/destructive as HARD FILTERS (Q4)** (excluded unless `--allow-crack`/`--allow-destructive`), not multipliers — a multiplier still selects them when they're the only path. **Execute ONE best path for the first C, NOT a top-k race** (H4) — racing multiplies in-flight mutations and opens the cancelled-sibling teardown window; add racing only after cancelled-sibling VERIFIED teardown is proven.
 5. **New `validation/engine/` package** (agree) — not in `orchestrator.py`.
+
+## Phase 6/7/8 — execution + verification record (25NOV2026)
+**Status: DONE — SHIP.** C.0 + C.1 built, reviewed (2 rounds), fixed, verified.
+
+**Commits** (branch `dev/validation-automation`):
+- `8e9f32c` plan (review applied) · `f853f33` C.0 composition refactor · `368b60f` C.1 engine
+  · `1fc1c53` 4 review-fix findings · `b62ffd9` round-2 hardening.
+
+**Phase 6 — independent diff review (Opus, different context from author):**
+- Round 1 VERDICT **FIX-FIRST** — 2 HIGH + 2 MEDIUM, all real, all fixed:
+  - HIGH-1 false escalation / silent operator-cred fallback (a non-produced eff state
+    treated as established) → establish threadable states ONLY from a produced
+    Capability + runtime precondition re-check.
+  - HIGH-2 cross-path cleanliness never aggregated → fold clean+teardown across all
+    attempted fallback paths.
+  - MEDIUM-1 inline rollback escaped `clean` → compute clean from every receipt's
+    `mutation.applied && !rollback.verified`.
+  - MEDIUM-2 shared output_dir → per-technique isolated dirs.
+- Round 2 VERDICT **SHIP** — all 4 confirmed closed, no new BLOCKER/HIGH. One
+  forward-looking gap (a future valueless produced capability) hardened in `b62ffd9`.
+
+**Phase 7 — tests:** validation suite **201 green** (172 base + 29 new: 13 composition
+hooks, 12 engine, 3 fix-regressions, 1 hardening), zero regressions. Each fix has a
+dedicated test that fails on the pre-fix behaviour (false-DA, false-clean, inline-escape,
+valueless-cap).
+
+**Phase 8 — benefit (the acceptance criteria, demonstrated):**
+- `ESC8+DCSync` AND `Certifried+DCSync` both reach a `proved` DA via the SAME reusable
+  `DCSync` terminal, found by graph search over the C.0 capability threading — no
+  hardcoded chain; a newly-annotated edge participates automatically.
+- Cross-checked through the **independent, LLM-free** ad-lab-harness `score_proof.py`:
+  a real engine run (`"DA proved (escalation from operator creds) and clean"`) emits
+  ESC8 + DCSYNC receipts that **both score `proved` on dc01**. The front's chain-teardown
+  rollback is reconciled into its receipt so it is self-consistent standalone.
+
+**Residuals / follow-ups (tracked, not blocking):**
+- The other 11 executors stay un-annotated (empty `pre`/`eff` → non-participating, zero
+  false-DA risk). Annotating them with the H5a-correct principal-typed `eff`
+  (`smb_sam → S_LOCAL_ADMIN`, `shadow/esc1 → cred_for(principal)`, per-mode relay edges)
+  is the next sprint; the `states.py` primitives for it are in place.
+- MEDIUM-2 per-**path-occurrence** isolation (vs per-technique) is latent-only — no N1
+  mutating front recurs across candidate paths; revisit if one ever does.
+- `da_in_minutes` CLI flag wiring (`--goal da`) and lab-pinning the `verified_recipe=False`
+  tool invocations remain for the lab bring-up.
