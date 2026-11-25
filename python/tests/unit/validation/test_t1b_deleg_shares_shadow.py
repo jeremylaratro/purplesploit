@@ -431,3 +431,51 @@ def test_shadow_no_hash_is_not_proved(tmp_path):
     assert receipt["terminal_fact"] is None
     assert "shadow_no_hash" in receipt["errors"]
     assert any(s["name"] == "shadow_auto" and s["ok"] is False for s in receipt["steps"])
+
+
+# ---------------- regression: review-found integrity holes (must stay closed) ----------------
+def test_shadow_inprogress_restore_line_is_not_verified(tmp_path):
+    # certipy prints the in-progress "Restoring the old Key Credentials" line
+    # BEFORE the LDAP restore; if the restore then FAILS (no success line) the
+    # rollback must NOT be reported verified (else a dirty lab reads as clean).
+    stdout = (f"[*] Got hash for 'winterfell$@north.sevenkingdoms.local': {_FAKE_NT_HASH}\n"
+              "[*] Restoring the old Key Credentials for 'winterfell$'\n"
+              "[-] Could not restore the old Key Credentials: insufficient rights\n")
+    cfg = _shadow_config()
+    runner = _FakeRunner({"certipy-ad": RunResult(0, stdout=stdout)})
+    receipt = get_executor("SHADOW-CREDS").run(_ctx(cfg, runner, tmp_path), _shadow_finding())
+    assert receipt["mutation"]["rollback"]["verified"] is False
+    assert "rollback_unverified" in receipt["errors"]
+
+
+def test_shadow_benign_nthash_phrase_is_not_recovery(tmp_path):
+    # A line merely MENTIONING "NT hash" (no recovered value) must not yield a
+    # secret_recovered proof.
+    stdout = ("[-] Could not retrieve the NT hash for the target account\n"
+              "[-] shadow auto failed\n")
+    cfg = _shadow_config()
+    runner = _FakeRunner({"certipy-ad": RunResult(1, stdout=stdout)})
+    receipt = get_executor("SHADOW-CREDS").run(_ctx(cfg, runner, tmp_path), _shadow_finding())
+    assert receipt["complete"] is False
+    assert receipt["terminal_fact"] is None
+    assert "shadow_no_hash" in receipt["errors"]
+
+
+def test_openshares_verify_transport_failure_is_not_verified(tmp_path):
+    # A verify-get that fails to CONNECT (no explicit NT_STATUS not-found token)
+    # must NOT be read as "canary gone" -- rollback stays unverified rather than
+    # falsely reporting a clean share.
+    class _FlakyVerify(_FakeShareRunner):
+        def run(self, argv, *, env=None, timeout=None, cwd=None):
+            if "-c" in argv:
+                parts = shlex.split(argv[argv.index("-c") + 1])
+                if len(parts) >= 3 and parts[0].lower() == "get" and parts[2].endswith(".absent"):
+                    self.calls.append(list(argv))
+                    return RunResult(1, stdout="Connection to srv02 failed (connection refused)")
+            return super().run(argv, env=env, timeout=timeout, cwd=cwd)
+    cfg = _shares_config()
+    runner = _FlakyVerify()
+    receipt = get_executor("OPENSHARES-WRITE").run(_ctx(cfg, runner, tmp_path), _shares_finding())
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
+    assert "rollback_unverified" in receipt["errors"]

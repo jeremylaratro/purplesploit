@@ -233,3 +233,18 @@ def test_rbcd_gate_denied_yields_inconclusive_not_proof(tmp_path):
     assert receipt["gate"]["classifier"] == "denied"
     assert receipt["complete"] is False
     assert receipt["terminal_fact"] is None         # no proof when the gate denied the op
+
+
+def test_rbcd_empty_sd_read_is_not_cleared(tmp_path):
+    # REGRESSION: an empty/errored `-action read` must NOT pass the SD-clear check
+    # vacuously -- without a positive read-header marker, `cleared` is False, so
+    # the rollback is reported unverified rather than a clean SD it never saw.
+    script = _proved_script()
+    script["impacket-rbcd:read"] = RunResult(returncode=1, stdout="[-] LDAP connection failed")
+    cfg = _config()
+    runner = _StubRunner(script)
+    ctx = ExecutorContext(cfg, runner=runner, authorizer=AuthorizedLabProvider(True),
+                          output_dir=tmp_path)
+    receipt = get_executor("RBCD").run(ctx, _rbcd_finding())
+    assert receipt["mutation"]["rollback"]["verified"] is False
+    assert "rollback_unverified" in receipt["errors"]

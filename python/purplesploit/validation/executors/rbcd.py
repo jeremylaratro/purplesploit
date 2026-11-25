@@ -37,6 +37,9 @@ from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
 _RE_ADDCOMPUTER_OK = re.compile(r"Successfully added (machine|computer) account", re.I)
 _RE_RBCD_WRITE_OK = re.compile(r"Delegation rights (modified|updated) successfully", re.I)
 _RE_RBCD_FLUSH_OK = re.compile(r"(Delegation rights flushed|rights (modified|updated) successfully)", re.I)
+# Positive marker that `-action read` actually returned the SD (not an empty/errored
+# read): the impacket-rbcd read output always carries this header on success.
+_RE_RBCD_READ_OK = re.compile(r"allowed to act on behalf|Accounts allowed to act", re.I)
 _RE_ADDCOMPUTER_DEL_OK = re.compile(r"Successfully deleted (machine|computer) account", re.I)
 _RE_GETST_TICKET = re.compile(r"(Saving|Updating) ticket in\s+(\S+)", re.I)
 _RE_NXC_PWNED = re.compile(r"\(Pwn3d!\)", re.I)
@@ -258,8 +261,12 @@ class RBCDExecutor(ValidationExecutor):
         read_argv = ["impacket-rbcd", "-delegate-to", f"{vsam}$", "-action", "read",
                      "-dc-ip", dc, *op_extra, op_target]
         res = ctx.runner.run(read_argv, timeout=ctx.config.tool_timeout_s)
-        # Verified clear: the deleted principal no longer appears in the SD read.
-        cleared = f"{new}$".lower() not in (res.stdout or "").lower()
+        # Verified clear: the SD read actually SUCCEEDED (positive header marker)
+        # AND the deleted principal no longer appears. An empty/errored read must
+        # not pass vacuously (that would report a clean SD it never actually saw).
+        read_out = res.stdout or ""
+        cleared = (bool(_RE_RBCD_READ_OK.search(read_out))
+                   and f"{new}$".lower() not in read_out.lower())
         record("rollback_verify_read", read_argv, res, cleared,
                note="SD cleared" if cleared else "principal still present")
 

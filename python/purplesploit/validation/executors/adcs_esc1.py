@@ -183,8 +183,8 @@ class ADCSESC1Executor(ValidationExecutor):
             "(issue cert -> pfx + serial)",
             f"certipy-ad auth -pfx *** -dc-ip {dc}   (PKINIT -> TGT + NT hash)",
             f"nxc smb {v['target_host']} -k   (ticket-backed access = proof)",
-            f"ROLLBACK: certipy-ad ca -ca {v['ca']} -revoke-request <serial> "
-            f"-u <op>@{ctx.config.domain} -p *** -dc-ip {dc}",
+            "ROLLBACK: destroy issued key material (<impersonate>.pfx + .ccache) "
+            "-- certipy has no revoke; CA-DB Certificate Hold is an N3 follow-up",
         ]
 
     # ---------------------------------------------------------------- auth argv
@@ -350,12 +350,17 @@ class ADCSESC1Executor(ValidationExecutor):
                     removed += 1
             except OSError:
                 pass
+        # Verified ONLY if we actually destroyed >=1 real artifact AND none remain.
+        # Vacuous absence -- the parsed/guessed path never existed -- is NOT proof
+        # the issued credential was destroyed (it may persist at a path we did not
+        # parse). Report unverified (honest) rather than a false clean.
         gone = all(not fp.exists() for fp in targets)
+        verified = gone and removed >= 1
         steps.append(StepRecord(
-            name="destroy_key_material", ok=gone, argv_display=[], returncode=None,
-            note=(f"{removed} artifact(s) destroyed" if gone
-                  else "key material still present")))
-        return gone
+            name="destroy_key_material", ok=verified, argv_display=[], returncode=None,
+            note=(f"{removed} artifact(s) destroyed" if verified
+                  else "key material not confirmed destroyed")))
+        return verified
 
     # ---------------------------------------------------------------- helpers
     @staticmethod

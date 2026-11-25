@@ -246,12 +246,14 @@ class OpenSharesExecutor(ValidationExecutor):
         verify_argv = self._smb_argv(unc, smb_user, f"get {canary_name} {absent_path}")
         res = ctx.runner.run(verify_argv, timeout=ctx.config.tool_timeout_s)
         verify_out = (res.stdout or "") + (res.stderr or "")
-        # Absent = the canary can no longer be fetched (explicit not-found, or no
-        # successful get and no local file written).
-        absent_ok = bool(_RE_NOT_FOUND.search(verify_out)) or (
-            not _RE_GET_OK.search(verify_out) and not Path(absent_path).exists())
+        # Absent ONLY on an EXPLICIT not-found from the verify-get. A transport /
+        # connection failure (which carries no NT_STATUS "not found" token) must
+        # NOT be read as "canary gone" -- doing so would verify a rollback while
+        # the written canary is still on the share. Positive confirmation only.
+        absent_ok = bool(_RE_NOT_FOUND.search(verify_out))
         record("rollback_verify_absent", verify_argv, res, absent_ok,
-               note="canary gone" if absent_ok else "canary still present")
+               note="canary gone (NOT_FOUND confirmed)" if absent_ok
+               else "canary not confirmed gone")
 
         mutation["rollback"]["verified"] = bool(delete_ok and absent_ok)
         if not mutation["rollback"]["verified"]:

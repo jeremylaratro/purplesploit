@@ -271,6 +271,9 @@ def test_adcs_auth_fails_is_not_proved(tmp_path):
     script = _proved_script()
     script["auth"] = RunResult(1, stdout="[-] Got error while trying to authenticate: KDC_ERR")
     cfg = _essos_config()
+    # req issued the cert (wrote the .pfx) before auth failed, so the rollback has
+    # a real artifact to destroy -> verified (non-vacuous).
+    (tmp_path / "administrator.pfx").write_bytes(b"PFX")
     runner = _FakeCertipyRunner(script)
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     # Cert issued (mutating) but PKINIT failed -> negated terminal, not fabricated.
@@ -310,6 +313,9 @@ def test_adcs_unparsed_serial_does_not_block_rollback(tmp_path):
         "[*] Successfully requested certificate\n"
         "[*] Saved certificate and private key to 'administrator.pfx'\n"))
     cfg = _essos_config()
+    # req + auth wrote the key material; destruction has real artifacts to remove.
+    (tmp_path / "administrator.pfx").write_bytes(b"PFX")
+    (tmp_path / "administrator.ccache").write_bytes(b"CCACHE")
     runner = _FakeCertipyRunner(script)
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     assert receipt["mutation"]["applied"] is True
@@ -343,3 +349,18 @@ def test_adcs_target_not_vulnerable_is_not_proved(tmp_path):
     assert receipt["target"].get("domain") == "essos.local"
     # Locally the chain is complete + proved-shaped; truth-matching is the scorer's job.
     assert receipt["complete"] is True and receipt["terminal_fact"]["ok"] is True
+
+
+def test_adcs_vacuous_destruction_is_unverified(tmp_path):
+    # REGRESSION: if the issued .pfx was written to a path we did not parse (so the
+    # guessed path never existed), file-absence is VACUOUS -> rollback must report
+    # unverified, never a false clean. No key-material files are created here, so
+    # destroy removes nothing.
+    cfg = _essos_config()
+    runner = _FakeCertipyRunner(_proved_script())
+    receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
+    assert "rollback_unverified" in receipt["errors"]
+    assert any(s["name"] == "destroy_key_material" and s["ok"] is False
+               for s in receipt["steps"])

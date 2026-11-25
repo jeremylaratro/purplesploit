@@ -42,11 +42,14 @@ from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
 
 # shadow-auto hash-recovery markers (presence only -- the hash is NEVER captured).
 _RE_SHADOW_HASH = re.compile(
-    r"(Got hash for|NT ?hash|[0-9a-f]{32}:[0-9a-f]{32})", re.I)
-# shadow-auto restore markers (the self-rollback step).
+    r"(Got hash for|[0-9a-f]{32}:[0-9a-f]{32})", re.I)
+# shadow-auto restore markers -- PAST-TENSE SUCCESS ONLY. certipy prints the
+# in-progress "Restoring the old Key Credentials" line BEFORE performing the LDAP
+# restore, so matching it would report a verified rollback on a restore that then
+# failed (leaving msDS-KeyCredentialLink modified). Match only confirmed success.
 _RE_SHADOW_RESTORE = re.compile(
-    r"(Restoring the old Key Credentials?|Successfully restored|Restored the "
-    r"old|Key Credentials? restored)", re.I)
+    r"(Successfully restored|Restored the old Key Credentials?|"
+    r"Key Credentials? (were )?restored)", re.I)
 
 
 def _short_name(host: str) -> str:
