@@ -50,7 +50,7 @@ class WriteOwnerExecutor(ValidationExecutor):
     technique_class = "acl"
     terminal_kind = "file_write_readback"
     mutating = True
-    verified_recipe = False
+    verified_recipe = True         # lab-proven on GOAD 26NOV2026 (rickon.stark, owner round-trip, scored proved+clean)
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_ACL_CONTROL})
     recipe_ref = ("T3 WRITE-OWNER = dacledit read (confirm precondition WriteOwner/"

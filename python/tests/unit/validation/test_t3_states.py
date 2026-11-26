@@ -77,10 +77,22 @@ def test_t3_destructive_flags_match_the_plan():
         assert ex.destructive is False, ex.__name__
 
 
+# Lab-proven (scored proved+clean) on GOAD 26NOV2026. FORCE-CHANGE-PASSWORD is
+# included: it is live-proven (authn_success) and the harness certifies it via
+# the reviewed irreversible-technique carve-out (a password reset is IRREVERSIBLE,
+# so no rollback can exist; the scorer accepts it on the facet's `irreversible:
+# true` + the receipt's explicit acknowledgment). GPO-ABUSE is not in the
+# live-prove set (handled separately), so its verified_recipe stays False.
+_T3_LAB_PROVEN = frozenset({
+    "ADD-MEMBER", "GENERIC-ALL", "WRITE-DACL", "WRITE-OWNER", "TARGETED-KERBEROAST",
+    "FORCE-CHANGE-PASSWORD",
+})
+
+
 def test_t3_mutating_and_verified_recipe_flags():
     for ex in _T3_EXECUTORS:
         assert ex.mutating is True, ex.__name__           # every T3 technique mutates AD
-        if ex.technique in ("ADD-MEMBER", "GENERIC-ALL"):
+        if ex.technique in _T3_LAB_PROVEN:
             assert ex.verified_recipe is True, ex.__name__   # lab-proven on GOAD 26NOV2026
         else:
-            assert ex.verified_recipe is False, ex.__name__  # recipe-known, lab proof pending
+            assert ex.verified_recipe is False, ex.__name__  # recipe-known, lab proof pending/not-yet-certified

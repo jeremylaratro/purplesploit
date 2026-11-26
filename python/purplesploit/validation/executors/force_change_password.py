@@ -70,7 +70,9 @@ class ForceChangePasswordExecutor(ValidationExecutor):
     terminal_kind = "authn_success"
     mutating = True
     destructive = True
-    verified_recipe = False
+    verified_recipe = True         # lab-proven on GOAD 26NOV2026 (hodor, authn_success); the harness
+                                   # certifies it via the reviewed irreversible-technique carve-out
+                                   # (rollback is impossible by design; the receipt acknowledges it)
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_ACL_CRED})
     recipe_ref = ("T3 FORCE-CHANGE-PASSWORD = dacledit read (confirm precondition "

@@ -34,9 +34,10 @@ class _FakeRunner(CommandRunner):
         if tool == "impacket-dacledit":
             return "dacledit"
         if tool == "bloodyAD":
-            # ["...", "set", "object", victim, "servicePrincipalName", "-v", value]
-            value = argv[-1]
-            return "bloodyad:clear" if value == "" else "bloodyad:set"
+            # set = ["...", "set", "object", victim, "servicePrincipalName", "-v", <spn>]
+            # clear = the same WITHOUT -v (bloodyAD deletes an attribute when no
+            # value is given; -v "" raises invalidAttributeSyntax live).
+            return "bloodyad:set" if "-v" in argv else "bloodyad:clear"
         if tool == "impacket-GetUserSPNs":
             return "roast"
         if tool == "hashcat":
@@ -164,7 +165,8 @@ def test_targetedkerberoast_offlinecrack_gate_denied_still_rolls_back(tmp_path):
     assert receipt["mutation"]["applied"] is True
     assert receipt["mutation"]["rollback"]["performed"] is True
     assert not any(Path(c[0]).name == "hashcat" for c in runner.calls)
-    assert any(Path(c[0]).name == "bloodyAD" and c[-1] == "" for c in runner.calls)
+    assert any(Path(c[0]).name == "bloodyAD" and "-v" not in c
+               and "servicePrincipalName" in c for c in runner.calls)
 
 
 def test_targetedkerberoast_crack_fails(tmp_path):

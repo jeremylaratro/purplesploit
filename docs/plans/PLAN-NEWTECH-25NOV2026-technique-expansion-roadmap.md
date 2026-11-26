@@ -68,6 +68,20 @@ GOAD before its `verified_recipe` flips.
   SUPERVISES — plans, reviews diffs, runs the gates, proves on GOAD, commits/integrates. Usage-
   conserving (owner directive 25NOV2026: low on Opus usage).
 
+## Progress
+
+- **T3 — ACL / object-takeover edges: COMPLETE (26NOV2026).** All 6 ACL techniques built,
+  probed, and **proved live on GOAD** (north.sevenkingdoms.local, scored `proved` by
+  ad-lab-harness): ADD-MEMBER (Night Watch/catelyn.stark), GENERIC-ALL (essos/jorah.mormont,
+  shadow pivot), WRITE-DACL (robb.stark), WRITE-OWNER (rickon.stark), TARGETED-KERBEROAST
+  (samwell.tarly), FORCE-CHANGE-PASSWORD (hodor). purplesploit `5bd558d` (dev/validation-automation);
+  harness `8b36f41` (dev/validation-proof-scorer) adds the T3 proof-truth facet + the reviewed
+  irreversible-technique carve-out that certifies FORCE-CHANGE-PASSWORD. GPO-ABUSE executor exists
+  but is not in the live-prove set yet (handled separately). Recipe gotchas (impacket 0.13.1
+  connstr/`-ace-type allowed`/multi-line ACE blocks; bloodyAD set/clear) recorded in claude-mem #66214.
+- **Next up: T4 — Kerberos ticket forging** (Golden / Silver / Diamond / Sapphire), per the
+  greenlit order T3 → **T4** → T6 → T2 → T7 → T1 → T8.
+
 ## Open ordering questions for the owner
 1. **Order:** is `T1 (instant-DA) → T2 (ADCS) → T3 (ACL edges) → …` right, or do you want **composition-first** (T3 ACL edges earlier, since they give the chaining engine the most new routes), or **ADCS-first** (T2, since the lab is already ADCS-rich and it's the cheapest)?
 2. **Scope cuts:** any tranche/technique to drop (e.g., T7 trusts or T8 emerging if out of scope for now)?
