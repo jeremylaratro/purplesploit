@@ -129,7 +129,7 @@ class GenericAllExecutor(ValidationExecutor):
     mutating = True
     destructive = True        # conservative class-level flag -- see module docstring
     crack_dependent = True    # ditto (the spn_kerberoast pivot)
-    verified_recipe = False
+    verified_recipe = True        # lab-proven on GOAD 26NOV2026 (shadow_creds pivot, essos/jorah.mormont, scored proved+clean)
     pre = frozenset({states.S0_USER_CREDS, states.S_ACL_CONTROL})
     eff = frozenset({states.S_ACL_CRED, states.S_IMPERSONATION_TGT})
     recipe_ref = ("T3 GENERIC-ALL = dacledit read (confirm precondition GenericAll/"
@@ -171,7 +171,7 @@ class GenericAllExecutor(ValidationExecutor):
                 description="New computer account to create and control "
                             "(the `rbcd` pivot's 'delegate-from' principal). "
                             "Unused by every other pivot.",
-                recommended=delegation_computer(base),
+                recommended=delegation_computer(base)[:20],   # bound to the 20-char sAMAccountName limit
                 rationale="Derived from the operator's own principal, same "
                           "convention as RBCDExecutor.",
                 validator=validate_sam_name, advisory=sam_name_warning,

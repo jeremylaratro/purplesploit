@@ -80,7 +80,7 @@ def test_t3_destructive_flags_match_the_plan():
 def test_t3_mutating_and_verified_recipe_flags():
     for ex in _T3_EXECUTORS:
         assert ex.mutating is True, ex.__name__           # every T3 technique mutates AD
-        if ex.technique == "ADD-MEMBER":
+        if ex.technique in ("ADD-MEMBER", "GENERIC-ALL"):
             assert ex.verified_recipe is True, ex.__name__   # lab-proven on GOAD 26NOV2026
         else:
             assert ex.verified_recipe is False, ex.__name__  # recipe-known, lab proof pending

@@ -42,7 +42,7 @@ from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
 
 # shadow-auto hash-recovery markers (presence only -- the hash is NEVER captured).
 _RE_SHADOW_HASH = re.compile(
-    r"(Got hash for|[0-9a-f]{32}:[0-9a-f]{32})", re.I)
+    r"(Got hash for|NT hash for '[^']+':|[0-9a-f]{32}:[0-9a-f]{32})", re.I)
 # shadow-auto restore markers -- PAST-TENSE SUCCESS ONLY. certipy prints the
 # in-progress "Restoring the old Key Credentials" line BEFORE performing the LDAP
 # restore, so matching it would report a verified rollback on a restore that then
