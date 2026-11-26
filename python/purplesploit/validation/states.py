@@ -64,15 +64,32 @@ S_RBCD_WRITE = "S_rbcd_write"
 # constrained-delegation eff). Lateral/service access, NOT domain replication.
 S_IMPERSONATION_TGT = "S_impersonation_tgt"
 
+# ---- T3 additions -----------------------------------------------------------
+# A principal-typed CONTROL state (an ACE/ownership/group-membership/GPO-link the
+# operator now holds over SOME principal, not yet typed to a specific one -- the
+# coarse SHAPE used for engine eligibility; the precise binding is control_for().
+S_ACL_CONTROL = "S_acl_control"
+
+# A principal-typed CREDENTIAL/control-enabling-impersonation state established
+# via a T3 ACL pivot (reset-password / targeted-kerberoast / shadow-creds) --
+# coarse SHAPE; the precise binding REUSES the EXISTING cred_for(principal)
+# (same semantics: "SHADOW-CREDS recovers a victim principal's NT hash ... only
+# when the bound principal is a DA/DC equivalent does cred_for(principal) satisfy
+# a DCSync/S_DA pre" -- T3's ACL-pivot-recovered credentials are the identical
+# case, so no new factory is needed for this half).
+S_ACL_CRED = "S_acl_cred"
+
 # The base (parameter-free) capability states.
 BASE_STATES: frozenset = frozenset({
     S0_USER_CREDS, DC_TGT, DA_CREDS, KRBTGT, S_DA,
     S_COERCED_AUTH, S_COMPUTER_CONTROL, S_RBCD_WRITE, S_IMPERSONATION_TGT,
+    S_ACL_CONTROL, S_ACL_CRED,
 })
 
 _CERT_PREFIX = "cert:"
 _LOCAL_ADMIN_PREFIX = "local_admin:"
 _CRED_PREFIX = "cred:"
+_CONTROL_PREFIX = "control:"
 
 
 def cert_for(host: str) -> str:
@@ -110,6 +127,21 @@ def cred_for(principal: str) -> str:
     return f"{_CRED_PREFIX}{principal or ''}"
 
 
+def control_for(principal: str) -> str:
+    """A per-PRINCIPAL CONTROL state (``control:<principal>``) -- mirrors cred_for.
+
+    WRITE-DACL's self-granted ACE, WRITE-OWNER's new ownership, ADD-MEMBER's new
+    group membership, and GPO-ABUSE's code-exec-as-SYSTEM on GPO-linked machines
+    each bind this to a SPECIFIC principal (a user/computer, a group, or a set of
+    GPO-linked hosts). PRINCIPAL-TYPED exactly like cred_for: control_for(X) feeds
+    a downstream edge's pre ONLY for that specific X; reaching S_DA requires X
+    itself to be DA-equivalent, decided by the consuming edge/engine, NEVER
+    assumed here. The engine binds the principal at search time (not yet built --
+    see is_state() note below, same forward-looking status as cred_for today).
+    """
+    return f"{_CONTROL_PREFIX}{principal or ''}"
+
+
 def _is_prefixed(value: str, prefix: str) -> bool:
     return (isinstance(value, str) and value.startswith(prefix)
             and len(value) > len(prefix))
@@ -118,13 +150,15 @@ def _is_prefixed(value: str, prefix: str) -> bool:
 def is_state(value: str) -> bool:
     """True iff ``value`` is a known capability-state: a base state, or a
     parametrized token -- :func:`cert_for` (``cert:<host>``),
-    :func:`local_admin_for` (``local_admin:<host>``), or :func:`cred_for`
-    (``cred:<principal>``) -- each with a non-empty argument."""
+    :func:`local_admin_for` (``local_admin:<host>``), :func:`cred_for`
+    (``cred:<principal>``), or :func:`control_for` (``control:<principal>``) --
+    each with a non-empty argument."""
     if value in BASE_STATES:
         return True
     return (_is_prefixed(value, _CERT_PREFIX)
             or _is_prefixed(value, _LOCAL_ADMIN_PREFIX)
-            or _is_prefixed(value, _CRED_PREFIX))
+            or _is_prefixed(value, _CRED_PREFIX)
+            or _is_prefixed(value, _CONTROL_PREFIX))
 
 
 def cred_principal(value: str) -> str:
@@ -141,6 +175,7 @@ def all_states(states: Iterable[str]) -> bool:
 __all__ = [
     "S0_USER_CREDS", "DC_TGT", "DA_CREDS", "KRBTGT", "S_DA",
     "S_COERCED_AUTH", "S_COMPUTER_CONTROL", "S_RBCD_WRITE", "S_IMPERSONATION_TGT",
+    "S_ACL_CONTROL", "S_ACL_CRED",
     "BASE_STATES", "cert_for", "local_admin_for", "cred_for", "cred_principal",
-    "is_state", "all_states",
+    "control_for", "is_state", "all_states",
 ]

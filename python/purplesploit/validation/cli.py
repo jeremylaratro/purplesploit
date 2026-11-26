@@ -88,6 +88,7 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
         authorized=not args.unauthorized,
         auto_confirm=args.yes,
         tool_timeout_s=args.timeout,
+        allow_destructive=args.allow_destructive,
     )
 
 
@@ -116,6 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true",
                    help="accept recommended defaults non-interactively "
                         "(implemented, verified recipes only)")
+    p.add_argument("--allow-destructive", action="store_true",
+                   help="pre-authorize destructive (irreversible/code-exec) ops "
+                        "for a NON-INTERACTIVE (--yes) run; has NO effect on an "
+                        "interactive run (which always gets the press-yes prompt "
+                        "instead). Still prints a loud warning per op -- never a "
+                        "silent bypass.")
     p.add_argument("--timeout", type=int, default=300)
     return p
 

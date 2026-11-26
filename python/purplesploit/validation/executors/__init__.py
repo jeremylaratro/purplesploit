@@ -18,7 +18,9 @@ from .base import (ValidationExecutor, ExecutorContext, CommandRunner,
                    ValidationPlan, StepRecord, RunResult, StubNotImplemented,
                    redact_argv, ToolAttempt, first_successful,
                    ProcessManager, SubprocessProcessManager, ProcHandle,
-                   poll_for_capture)
+                   poll_for_capture,
+                   DestructiveConfirmationProvider, InteractiveDestructiveConfirmer,
+                   NonInteractiveDestructiveConfirmer)
 from .rbcd import RBCDExecutor
 from .roast import KerberoastExecutor, ASREPExecutor
 from .laps import LAPSExecutor
@@ -33,6 +35,13 @@ from .esc8 import ESC8Executor
 from .esc11 import ESC11Executor
 from .certifried import CertifriedExecutor
 from .dcsync import DCSyncExecutor
+from .write_dacl import WriteDaclExecutor
+from .write_owner import WriteOwnerExecutor
+from .add_member import AddMemberExecutor
+from .targeted_kerberoast import TargetedKerberoastExecutor
+from .force_change_password import ForceChangePasswordExecutor
+from .generic_all import GenericAllExecutor
+from .gpo_abuse import GpoAbuseExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -42,6 +51,11 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     ADCSESC1Executor, CoercionExecutor, NTLMRelayExecutor, UnconstrainedDelegExecutor,
     # N1 -- ADCS relay fronts + the reusable DCSync terminal (b1).
     ESC8Executor, ESC11Executor, CertifriedExecutor, DCSyncExecutor,
+    # T3 -- ACL / object-takeover edges. All 7 now real (GPO-ABUSE built last,
+    # per the plan's own implementation order -- it was the most UNVERIFIED).
+    WriteDaclExecutor, WriteOwnerExecutor, AddMemberExecutor,
+    TargetedKerberoastExecutor, ForceChangePasswordExecutor, GenericAllExecutor,
+    GpoAbuseExecutor,
 )
 
 # Technique -> executor class.
@@ -68,11 +82,16 @@ __all__ = [
     "AuthorizationProvider", "AuthorizedLabProvider", "ValidationPlan", "StepRecord",
     "RunResult", "StubNotImplemented", "redact_argv", "ToolAttempt", "first_successful",
     "ProcessManager", "SubprocessProcessManager", "ProcHandle", "poll_for_capture",
+    "DestructiveConfirmationProvider", "InteractiveDestructiveConfirmer",
+    "NonInteractiveDestructiveConfirmer",
     "RBCDExecutor",
     "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
     "ADCSESC1Executor", "CoercionExecutor", "NTLMRelayExecutor",
     "UnconstrainedDelegExecutor",
     "ESC8Executor", "ESC11Executor", "CertifriedExecutor", "DCSyncExecutor",
+    "GenericAllExecutor", "WriteDaclExecutor", "WriteOwnerExecutor",
+    "AddMemberExecutor", "ForceChangePasswordExecutor",
+    "TargetedKerberoastExecutor", "GpoAbuseExecutor",
     "REGISTRY", "IMPLEMENTED", "get_executor", "is_implemented",
 ]

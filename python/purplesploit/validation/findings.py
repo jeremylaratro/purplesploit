@@ -99,6 +99,65 @@ def _extract_host(f: dict) -> dict:
     return {"host": f["host"]} if f.get("host") else {}
 
 
+# T3 (25NOV2026) ACL/object-takeover edges. UNVERIFIED (pin in-lab): the exact
+# aranum rule_id / line wording for a promoted ACL (BloodHound-derived) finding
+# is not pinned here -- see module docstring's "ASSUMED" caveat, same shape as
+# CONSTRAINED-DELEG-PT/OPENSHARES-WRITE. ``target`` is the finding host (the AD
+# object the ACE/ownership grants control over); ``trustee`` is a best-effort
+# pull of the controlling principal named in the line, for the executor's
+# ``trustee`` param default (falls back to ``cfg.username`` if absent).
+_RE_ACL_TRUSTEE = re.compile(r"([A-Za-z0-9_.$-]+)\s+has\s+(WriteDacl|WriteOwner|GenericAll)", re.I)
+_RE_ACL_GROUP = re.compile(
+    r"([A-Za-z0-9_.$-]+)\s+has\s+(Self-?Membership|GenericWrite|GenericAll)\s+over\s+"
+    r"group\s+([A-Za-z0-9_.$ -]+)", re.I)
+
+
+def _extract_acl(f: dict) -> dict:
+    entity = _extract_host(f)
+    m = _RE_ACL_TRUSTEE.search(f.get("line", ""))
+    if m:
+        entity["trustee"] = m.group(1)
+    entity.setdefault("target", entity.get("host", ""))
+    return entity
+
+
+def _extract_acl_group(f: dict) -> dict:
+    entity: dict[str, Any] = {}
+    m = _RE_ACL_GROUP.search(f.get("line", ""))
+    if m:
+        entity["trustee"] = m.group(1)
+        entity["group"] = m.group(3).strip()
+    elif f.get("host"):
+        entity["group"] = f["host"]
+    return entity
+
+
+# GPO-ABUSE: the GPO's own GUID (bare or braced) pulled from the line text;
+# falls back to the finding's host when no GUID-shaped token is present
+# (mirrors `_extract_acl_group`'s own host fallback). `linked_host` is a
+# best-effort pull of an explicitly-stated linked computer -- UNVERIFIED
+# aranum wording (see module docstring's "ASSUMED" caveat); its absence is
+# never an extraction failure, since `GpoAbuseExecutor` itself treats a
+# missing `linked_host` as a narrower, advisory-flagged proof, not a block.
+_RE_GPO_GUID = re.compile(
+    r"\{?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}?")
+_RE_GPO_LINKED = re.compile(r"linked\s+(?:to|host)\s*[:\s]\s*([A-Za-z0-9_.$-]+)", re.I)
+
+
+def _extract_gpo(f: dict) -> dict:
+    entity: dict[str, Any] = {}
+    line = f.get("line", "")
+    m = _RE_GPO_GUID.search(line)
+    if m:
+        entity["gpo_guid"] = m.group(1)
+    elif f.get("host"):
+        entity["gpo_guid"] = f["host"]
+    lm = _RE_GPO_LINKED.search(line)
+    if lm:
+        entity["linked_host"] = lm.group(1)
+    return entity
+
+
 # ------------------------------------------------------------------ mapping table
 @dataclass
 class TechniqueSignal:
@@ -162,6 +221,79 @@ SIGNALS: tuple[TechniqueSignal, ...] = (
                     lambda f: {k: v for k, v in (("host", f.get("host")),
                                                  ("share", _share_name(f))) if v},
                     line_regex=re.compile(r"(writable share|RW share|READ[,/ ]WRITE|non-default RW)", re.I)),
+    # T3 (25NOV2026) -- ACL / object-takeover edges (category "acl", BloodHound-
+    # derived; exact aranum rule_id/wording not pinned here, see _extract_acl).
+    TechniqueSignal("WRITE-DACL", "acl", False, _extract_acl,
+                    categories=("acl",),
+                    line_regex=re.compile(r"WriteDacl", re.I)),
+    TechniqueSignal("WRITE-OWNER", "acl", False, _extract_acl,
+                    categories=("acl",),
+                    line_regex=re.compile(r"WriteOwner", re.I)),
+    # NOTE: ADD-MEMBER's and TARGETED-KERBEROAST's rights markers overlap
+    # (both are plausibly reported via GenericWrite/GenericAll) -- the only
+    # thing that disambiguates a BloodHound-style line is whether the ACE is
+    # held OVER A GROUP (ADD-MEMBER) or over a user/computer (TARGETED-
+    # KERBEROAST). ADD-MEMBER's line_regex therefore requires the "over
+    # group" wording for its Generic* alternative (mirroring its own
+    # _RE_ACL_GROUP extractor exactly); Self-Membership/AddMember are already
+    # group-specific markers and need no such qualifier. Checked FIRST (order
+    # matters -- first match wins), so a plain "... GenericWrite over <user>"
+    # line falls through to TARGETED-KERBEROAST below, never mis-mapped here.
+    TechniqueSignal("ADD-MEMBER", "acl", False, _extract_acl_group,
+                    categories=("acl",),
+                    line_regex=re.compile(
+                        r"(Self-?Membership|AddMember|"
+                        r"(?:GenericWrite|GenericAll)\s+over\s+group)", re.I)),
+    # TARGETED-KERBEROAST shares the same GenericAll/GenericWrite ACL entity
+    # shape as WRITE-DACL/WRITE-OWNER (_extract_acl populates target/trustee;
+    # the executor's own `victim` param reads `entity["principal"]`, so the
+    # extractor additionally mirrors `target` into `principal`).
+    TechniqueSignal("TARGETED-KERBEROAST", "acl", False,
+                    lambda f: {**_extract_acl(f),
+                              "principal": _extract_acl(f).get("target", "")},
+                    categories=("acl",),
+                    line_regex=re.compile(r"GenericWrite", re.I)),
+    # FORCE-CHANGE-PASSWORD: the BloodHound edge name for the
+    # User-Force-Change-Password extended right is distinct ("ForceChangePassword"),
+    # so unlike ADD-MEMBER/TARGETED-KERBEROAST it shares no substring with any
+    # earlier signal's line_regex (WriteDacl/WriteOwner/"... over group"/bare
+    # GenericWrite) -- no ordering hazard here. Same principal-mirroring
+    # extractor shape as TARGETED-KERBEROAST (the executor's `victim` param
+    # reads `entity["principal"]`).
+    TechniqueSignal("FORCE-CHANGE-PASSWORD", "acl", False,
+                    lambda f: {**_extract_acl(f),
+                              "principal": _extract_acl(f).get("target", "")},
+                    categories=("acl",),
+                    line_regex=re.compile(r"ForceChangePassword", re.I)),
+    # GENERIC-ALL: ordered LAST among the ACL signals, deliberately -- a bare
+    # "GenericAll" marker is otherwise unclaimed by every signal above it:
+    # ADD-MEMBER already requires "over group" for its own GenericAll/
+    # GenericWrite alternative (so a group-qualified line is claimed there
+    # first); TARGETED-KERBEROAST's line_regex is the literal "GenericWrite"
+    # only (a bare "GenericAll" line never matches it); WRITE-DACL/WRITE-OWNER
+    # match only the literals "WriteDacl"/"WriteOwner". `_extract_acl` already
+    # populates `target` (GENERIC-ALL's own param reads `entity["target"]`
+    # directly, so no principal-mirror is needed here unlike TARGETED-
+    # KERBEROAST/FORCE-CHANGE-PASSWORD).
+    TechniqueSignal("GENERIC-ALL", "acl", False, _extract_acl,
+                    categories=("acl",),
+                    line_regex=re.compile(r"GenericAll", re.I)),
+    # GPO-ABUSE: ordered LAST, but deliberately NOT via a bare "GenericAll"/
+    # "GenericWrite" marker (unlike every other T3 signal) -- a BloodHound-
+    # style "... GenericAll over GPO {guid}" line would otherwise ALSO match
+    # GENERIC-ALL's own bare "GenericAll" line_regex two entries above, and
+    # since that signal is checked first, it would win the finding (first
+    # match wins). Requiring the literal "WriteGPO"/"GPLink" marker (per the
+    # plan's own suggestion) avoids this entirely: neither literal is a
+    # substring of, nor contains, any earlier signal's own marker (WriteDacl/
+    # WriteOwner/ForceChangePassword/AddMember/Self-Membership/bare
+    # GenericWrite/GenericAll), so there is no ordering hazard in either
+    # direction -- placement here is purely cosmetic (grouped with the other
+    # ACL-edge signals). `target_identity`'s own `gpo_guid` reads
+    # `entity["gpo_guid"]`.
+    TechniqueSignal("GPO-ABUSE", "acl", False, _extract_gpo,
+                    categories=("acl",),
+                    line_regex=re.compile(r"(WriteGPO|GPLink)", re.I)),
 )
 
 

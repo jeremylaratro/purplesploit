@@ -372,7 +372,10 @@ def test_registry_covers_all_fifteen_techniques():
         "KERBEROAST", "ASREP", "LAPS", "CONSTRAINED-DELEG-PT",
         "RBCD", "OPENSHARES-WRITE", "SHADOW-CREDS", "ADCS-ESC1",
         "ESC8", "ESC11", "CERTIFRIED", "DCSYNC",
-        "COERCION", "NTLM-RELAY", "UNCONSTRAINED-DELEG"}      # PP: listener trio added
+        "COERCION", "NTLM-RELAY", "UNCONSTRAINED-DELEG",       # PP: listener trio added
+        "WRITE-DACL", "WRITE-OWNER", "ADD-MEMBER",
+        "TARGETED-KERBEROAST", "FORCE-CHANGE-PASSWORD",
+        "GENERIC-ALL", "GPO-ABUSE"}                              # T3: ACL edges (all 7)
 
 
 def test_get_probe_unknown_technique_is_none():

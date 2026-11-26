@@ -57,6 +57,17 @@ from typing import Any, Optional
 
 from .predicates import strip_ansi
 from .executors.base import ExecutorContext, RunResult
+# Safe despite living in the `executors` package: by the time THIS top-level
+# import line runs, `from .executors.base import ...` above has already forced
+# `executors/__init__.py` to run to completion (importing every T3 executor,
+# including `write_dacl.py` -> `acl_common.py`), so `acl_common` is already a
+# fully-initialized module in `sys.modules` -- no cycle, in either import order
+# (acl_common.py itself never imports FROM probes.py; see its _tool_errored
+# docstring for why that direction specifically is import-order-fragile).
+from .executors.acl_common import (dacledit_read_argv, confirm_ace,
+                                   _RE_ACE_GENERIC_ALL, _RE_ACE_WRITE_DACL,
+                                   _RE_ACE_WRITE_OWNER, _RE_ACE_GENERIC_WRITE,
+                                   _RE_ACE_SELF_MEMBERSHIP, _RE_FORCE_CHANGE_PW_RIGHT)
 
 
 # ---------------------------------------------------------------- bit constants
@@ -844,6 +855,305 @@ class UnconstrainedDelegProbe(PreconditionProbe):
             evidence={"trusted_for_delegation": False, "uac": uac})
 
 
+# ================================================= T3 (25NOV2026) ACL-edge probes
+class WriteDaclProbe(PreconditionProbe):
+    """WRITE-DACL: re-confirm the operator already holds WriteDacl/FullControl/
+    GenericAll over the target via the SAME non-destructive ``confirm_ace`` read
+    the executor's own step 1 uses -- a positively-insufficient ACE is a positive
+    ``viable=False``; an unreadable/unlocated read is ``unknown`` (attempt
+    anyway), matching every other probe's fail-safe tri-state."""
+    technique = "WRITE-DACL"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        target = (finding.entity or {}).get("target") or finding.host or ""
+        trustee = cfg.username or ""
+        res = ctx.runner.run(dacledit_read_argv(cfg, target, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=trustee,
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_WRITE_DACL))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{trustee or '(operator)'} does not hold WriteDacl/FullControl/"
+                        f"GenericAll over {target or '(target)'} (confirmed via dacledit "
+                        "read) -> skip"),
+                evidence={"ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"{trustee} confirmed holding WriteDacl/FullControl/GenericAll "
+                        f"over {target}"),
+                evidence={"ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the WriteDacl/FullControl/GenericAll precondition "
+                    f"on {target or '(target)'} via dacledit read; attempting anyway"),
+            evidence={"ace_confirmed": None})
+
+
+class WriteOwnerProbe(PreconditionProbe):
+    """WRITE-OWNER: re-confirm the operator already holds WriteOwner/FullControl/
+    GenericAll over the target via the same ``confirm_ace`` read; a positively-
+    insufficient ACE is ``viable=False``, an unreadable/unlocated read is
+    ``unknown`` (attempt anyway)."""
+    technique = "WRITE-OWNER"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        target = (finding.entity or {}).get("target") or finding.host or ""
+        trustee = cfg.username or ""
+        res = ctx.runner.run(dacledit_read_argv(cfg, target, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=trustee,
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_WRITE_OWNER))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{trustee or '(operator)'} does not hold WriteOwner/FullControl/"
+                        f"GenericAll over {target or '(target)'} (confirmed via dacledit "
+                        "read) -> skip"),
+                evidence={"ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"{trustee} confirmed holding WriteOwner/FullControl/GenericAll "
+                        f"over {target}"),
+                evidence={"ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the WriteOwner/FullControl/GenericAll precondition "
+                    f"on {target or '(target)'} via dacledit read; attempting anyway"),
+            evidence={"ace_confirmed": None})
+
+
+class AddMemberProbe(PreconditionProbe):
+    """ADD-MEMBER/ADD-SELF: re-confirm Self-Membership/GenericWrite/GenericAll
+    over the GROUP via ``confirm_ace``; PLUS a cheap fail-safe pre-check: if
+    ``member`` is already in the group's membership, ``viable=False`` (nothing
+    to add -- avoids offering a vacuous no-op mutation). Unreadable -> unknown."""
+    technique = "ADD-MEMBER"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        entity = finding.entity or {}
+        group = entity.get("group") or ""
+        member = entity.get("member") or cfg.username or ""
+        res = ctx.runner.run(dacledit_read_argv(cfg, group, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=cfg.username or "",
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE,
+                                          _RE_ACE_SELF_MEMBERSHIP))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{cfg.username or '(operator)'} does not hold Self-Membership/"
+                        f"GenericWrite/GenericAll over {group or '(group)'} (confirmed "
+                        "via dacledit read) -> skip"),
+                evidence={"ace_confirmed": False, "already_member": None})
+        member_short = member.split("@", 1)[0].split("\\")[-1]
+        mem_res = _ldap_query(ctx, f"(sAMAccountName={member_short})",
+                              ["sAMAccountName", "memberOf"])
+        mem_text = _text(mem_res)
+        if _account_read_ok(mem_res, mem_text) and group.lower() in mem_text.lower():
+            return ProbeResult(
+                viable=False,
+                reason=(f"{member} is already a member of {group or '(group)'} -> "
+                        "nothing to add, skip"),
+                evidence={"ace_confirmed": confirmed, "already_member": True})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"{cfg.username} confirmed holding Self-Membership/GenericWrite/"
+                        f"GenericAll over {group}"),
+                evidence={"ace_confirmed": True, "already_member": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the Self-Membership/GenericWrite/GenericAll "
+                    f"precondition on {group or '(group)'} via dacledit read; "
+                    "attempting anyway"),
+            evidence={"ace_confirmed": None, "already_member": False})
+
+
+class TargetedKerberoastProbe(PreconditionProbe):
+    """TARGETED-KERBEROAST: mirrors ``KerberoastProbe`` -- the victim must be a
+    user (not computer/MSA: 120-char machine password, uncrackable) -- PLUS the
+    GenericAll/GenericWrite ACE precondition over the victim via the same
+    ``confirm_ace`` read the executor's own step 1 uses."""
+    technique = "TARGETED-KERBEROAST"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        victim = (finding.entity or {}).get("principal") or ""
+        is_user = bool(victim) and not victim.rstrip().endswith("$")
+        if victim and not is_user:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{victim} is a computer/MSA account (trailing '$'): "
+                        "120-char machine password, not crackable -> skip"),
+                evidence={"is_user": False, "ace_confirmed": None})
+        res = ctx.runner.run(dacledit_read_argv(cfg, victim, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=cfg.username or "",
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{cfg.username or '(operator)'} does not hold GenericAll/"
+                        f"GenericWrite over {victim or '(victim)'} (confirmed via "
+                        "dacledit read) -> skip"),
+                evidence={"is_user": is_user, "ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"{cfg.username} confirmed holding GenericAll/GenericWrite "
+                        f"over {victim}"),
+                evidence={"is_user": is_user, "ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the GenericAll/GenericWrite precondition on "
+                    f"{victim or '(victim)'} via dacledit read; attempting anyway"),
+            evidence={"is_user": is_user, "ace_confirmed": None})
+
+
+class ForceChangePasswordProbe(PreconditionProbe):
+    """FORCE-CHANGE-PASSWORD: re-confirm the User-Force-Change-Password extended
+    right (or GenericAll) over the victim via the same ``confirm_ace`` read the
+    executor's own step 1 uses; PLUS the same computer/MSA exclusion as
+    ``TargetedKerberoastProbe`` (resetting a machine account's password breaks
+    its secure channel for no useful proof -- not the technique's intent)."""
+    technique = "FORCE-CHANGE-PASSWORD"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        victim = (finding.entity or {}).get("principal") or ""
+        is_user = bool(victim) and not victim.rstrip().endswith("$")
+        if victim and not is_user:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{victim} is a computer/MSA account (trailing '$'): "
+                        "resetting its password breaks its secure channel, not "
+                        "a useful authn proof -> skip"),
+                evidence={"is_user": False, "ace_confirmed": None})
+        res = ctx.runner.run(dacledit_read_argv(cfg, victim, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=cfg.username or "",
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_FORCE_CHANGE_PW_RIGHT))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{cfg.username or '(operator)'} does not hold "
+                        f"User-Force-Change-Password/GenericAll over "
+                        f"{victim or '(victim)'} (confirmed via dacledit read) -> skip"),
+                evidence={"is_user": is_user, "ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=(f"{cfg.username} confirmed holding User-Force-Change-Password/"
+                        f"GenericAll over {victim}"),
+                evidence={"is_user": is_user, "ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the User-Force-Change-Password/GenericAll "
+                    f"precondition on {victim or '(victim)'} via dacledit read; "
+                    "attempting anyway"),
+            evidence={"is_user": is_user, "ace_confirmed": None})
+
+
+class GenericAllProbe(PreconditionProbe):
+    """GENERIC-ALL: re-confirm the GenericAll/GenericWrite ACE over ``target``
+    via the same ``confirm_ace`` read every pivot's own step 0 uses. A
+    positively-insufficient ACE is ``viable=False``; an unreadable/unlocated
+    read is ``unknown`` (attempt anyway) -- the pivot choice itself is not this
+    probe's concern (every pivot shares the identical precondition)."""
+    technique = "GENERIC-ALL"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        target = (finding.entity or {}).get("target") or finding.host or ""
+        trustee = cfg.username or ""
+        res = ctx.runner.run(dacledit_read_argv(cfg, target, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=trustee,
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{trustee or '(operator)'} does not hold GenericAll/"
+                        f"GenericWrite over {target or '(target)'} (confirmed via "
+                        "dacledit read) -> skip"),
+                evidence={"ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=f"{trustee} confirmed holding GenericAll/GenericWrite over {target}",
+                evidence={"ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the GenericAll/GenericWrite precondition on "
+                    f"{target or '(target)'} via dacledit read; attempting anyway"),
+            evidence={"ace_confirmed": None})
+
+
+def _gpo_domain_dn(domain: str) -> str:
+    """Local duplicate of ``gpo_abuse.py``'s ``_domain_dn`` -- probes.py never
+    imports from an individual technique's own executor module (only from
+    ``executors.base``/``executors.acl_common``, see the import block above),
+    so this tiny GPO-specific DN helper is re-derived here, same "modest
+    duplication, zero cross-module coupling" convention as every other T3
+    probe/executor pair in this codebase."""
+    return ",".join(f"DC={label}" for label in (domain or "").split(".") if label)
+
+
+def _gpo_object_dn(gpo_guid: str, domain: str) -> str:
+    guid = (gpo_guid or "").strip("{}")
+    return f"CN={{{guid}}},CN=Policies,CN=System,{_gpo_domain_dn(domain)}"
+
+
+class GpoAbuseProbe(PreconditionProbe):
+    """GPO-ABUSE: re-confirm the GenericAll/GenericWrite ACE over the GPO's own
+    AD object via the same ``confirm_ace`` read the executor's own step 1 uses.
+    A positively-insufficient ACE is ``viable=False``; an unreadable/unlocated
+    read is ``unknown`` (attempt anyway) -- whether ``linked_host`` was supplied
+    is not this probe's concern (the executor itself degrades to a narrower,
+    advisory-flagged proof when it is absent, never a precondition failure)."""
+    technique = "GPO-ABUSE"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        gpo_guid = (finding.entity or {}).get("gpo_guid") or ""
+        trustee = cfg.username or ""
+        gpo_dn = _gpo_object_dn(gpo_guid, cfg.domain)
+        res = ctx.runner.run(dacledit_read_argv(cfg, gpo_dn, cfg.dc_ip),
+                             timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        confirmed = confirm_ace(res, text, trustee=trustee,
+                                right_res=(_RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE))
+        if confirmed is False:
+            return ProbeResult(
+                viable=False,
+                reason=(f"{trustee or '(operator)'} does not hold GenericAll/"
+                        f"GenericWrite over GPO {gpo_guid or '(gpo)'} (confirmed via "
+                        "dacledit read) -> skip"),
+                evidence={"ace_confirmed": False})
+        if confirmed is True:
+            return ProbeResult(
+                viable=True,
+                reason=f"{trustee} confirmed holding GenericAll/GenericWrite over GPO {gpo_guid}",
+                evidence={"ace_confirmed": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"could not confirm the GenericAll/GenericWrite precondition on "
+                    f"GPO {gpo_guid or '(gpo)'} via dacledit read; attempting anyway"),
+            evidence={"ace_confirmed": None})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
@@ -852,6 +1162,9 @@ _PROBES: tuple[type[PreconditionProbe], ...] = (
     Esc8Probe, Esc11Probe, CertifriedProbe, DCSyncProbe,
     # PP (25NOV2026) -- the listener trio, completing detect coverage for all 15.
     CoercionProbe, NTLMRelayProbe, UnconstrainedDelegProbe,
+    # T3 (25NOV2026) -- ACL / object-takeover edges. All 7 now registered.
+    WriteDaclProbe, WriteOwnerProbe, AddMemberProbe, TargetedKerberoastProbe,
+    ForceChangePasswordProbe, GenericAllProbe, GpoAbuseProbe,
 )
 
 # Technique -> probe class.
@@ -906,4 +1219,6 @@ __all__ = [
     "RbcdProbe", "OpenSharesProbe", "ShadowCredsProbe", "ADCSESC1Probe",
     "Esc8Probe", "Esc11Probe", "CertifriedProbe", "DCSyncProbe",
     "CoercionProbe", "NTLMRelayProbe", "UnconstrainedDelegProbe",
+    "WriteDaclProbe", "WriteOwnerProbe", "AddMemberProbe", "TargetedKerberoastProbe",
+    "ForceChangePasswordProbe", "GenericAllProbe",
 ]

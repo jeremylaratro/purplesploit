@@ -34,6 +34,8 @@ from .probes import ProbeResult, run_probes
 from .executors import (ExecutorContext, CommandRunner, SubprocessRunner,
                         AuthorizationProvider, AuthorizedLabProvider, ValidationPlan,
                         ProcessManager, SubprocessProcessManager,
+                        DestructiveConfirmationProvider, InteractiveDestructiveConfirmer,
+                        NonInteractiveDestructiveConfirmer,
                         get_executor, is_implemented)
 
 
@@ -185,7 +187,8 @@ class ValidationOrchestrator:
                  confirmer: Optional[ConfirmationProvider] = None,
                  aranum: Optional[AranumRunner] = None,
                  scorer: Optional[ProofScorer] = None,
-                 proc_manager: Optional[ProcessManager] = None):
+                 proc_manager: Optional[ProcessManager] = None,
+                 destructive_confirmer: Optional[DestructiveConfirmationProvider] = None):
         self.config = config
         self.runner = runner or SubprocessRunner(default_timeout=config.tool_timeout_s)
         self.authorizer = authorizer or AuthorizedLabProvider(config.authorized)
@@ -195,11 +198,19 @@ class ValidationOrchestrator:
         # ADR-001 chassis extension: the shared background listener manager for
         # the listener-based executors (COERCION, NTLM-RELAY, UNCONSTRAINED-DELEG).
         self.proc_manager = proc_manager or SubprocessProcessManager()
+        # T3: an INTERACTIVE run (not config.auto_confirm, the human-in-the-loop
+        # default) always gets the press-yes prompt; a NON-INTERACTIVE run
+        # (config.auto_confirm=True, e.g. CI/automation) gets the fail-closed,
+        # explicit-flag-only path -- never a prompt that would hang forever.
+        self.destructive_confirmer = destructive_confirmer or (
+            NonInteractiveDestructiveConfirmer(allowed=config.allow_destructive)
+            if config.auto_confirm else InteractiveDestructiveConfirmer())
         self.receipts_dir = config.output_dir / "receipts"
         self.context = ExecutorContext(config=config, runner=self.runner,
                                        authorizer=self.authorizer,
                                        output_dir=config.output_dir,
-                                       proc_manager=self.proc_manager)
+                                       proc_manager=self.proc_manager,
+                                       destructive_confirmer=self.destructive_confirmer)
 
     # -- step 2 -----------------------------------------------------------
     def enumerate(self) -> list[NormalizedFinding]:

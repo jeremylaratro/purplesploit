@@ -21,6 +21,7 @@ Design points:
 from __future__ import annotations
 
 import subprocess
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
@@ -265,6 +266,62 @@ class AuthorizedLabProvider(AuthorizationProvider):
         return "not_required" if self.authorized else "denied"
 
 
+# ------------------------------------------------------------------ destructive gate
+class DestructiveConfirmationProvider(ABC):
+    """Decides whether a destructive (irreversible / code-exec) op may proceed.
+
+    A *per-call runtime* gate, layered ON TOP OF the chaining engine's static
+    ``destructive``/``crack_dependent`` eligibility filters (``chain_engine.py``'s
+    ``_edge_allowed``) -- the two answer different questions and both apply
+    (T3 plan §4.3): the static filter decides whether an executor CLASS may even
+    be considered by a composed search; this gate decides whether THIS specific,
+    already-resolved invocation (e.g. GENERIC-ALL's ``reset_password`` pivot,
+    FORCE-CHANGE-PASSWORD, GPO-ABUSE's SYSVOL write) may actually fire.
+    """
+
+    @abstractmethod
+    def confirm(self, op: str, detail: dict[str, Any]) -> bool: ...
+
+
+class InteractiveDestructiveConfirmer(DestructiveConfirmationProvider):
+    """Prints a loud warning; blocks on an EXACT 'yes' typed by the operator.
+
+    Fail-closed on EOF (no input available) -- never silently proceeds."""
+
+    def __init__(self, prompt_fn: Callable[[str], str] = input,
+                 warn_fn: Optional[Callable[[str], None]] = None):
+        self.prompt_fn = prompt_fn
+        self.warn_fn = warn_fn or (lambda s: print(s, file=sys.stderr))
+
+    def confirm(self, op: str, detail: dict[str, Any]) -> bool:
+        self.warn_fn(f"\n*** DESTRUCTIVE OPERATION ***\nop: {op}\ndetail: {detail}\n"
+                      "This is IRREVERSIBLE and/or executes code on a live host.\n")
+        try:
+            answer = self.prompt_fn("Type 'yes' to proceed, anything else to abort: ")
+        except EOFError:
+            self.warn_fn(f"[DESTRUCTIVE] {op}: no input available (EOF) -- refusing (fail closed)")
+            return False
+        return answer.strip() == "yes"
+
+
+class NonInteractiveDestructiveConfirmer(DestructiveConfirmationProvider):
+    """For headless/automated runs ONLY. Fail-closed: proceeds iff explicitly
+    pre-authorized via ``config.allow_destructive`` -- never prompts, never
+    silently defaults to True. Always prints the warning (visible in logs/output
+    either way)."""
+
+    def __init__(self, allowed: bool, warn_fn: Optional[Callable[[str], None]] = None):
+        self.allowed = allowed
+        self.warn_fn = warn_fn or (lambda s: print(s, file=sys.stderr))
+
+    def confirm(self, op: str, detail: dict[str, Any]) -> bool:
+        self.warn_fn(
+            f"[DESTRUCTIVE] {op}: {detail} -- non-interactive run; "
+            + ("allow_destructive is set, proceeding" if self.allowed
+               else "allow_destructive NOT set, refusing"))
+        return self.allowed is True
+
+
 # ------------------------------------------------------------------ executor context
 @dataclass
 class ExecutorContext:
@@ -275,18 +332,30 @@ class ExecutorContext:
     UNCONSTRAINED-DELEG). It is additive and optional -- it defaults to a real
     :class:`SubprocessProcessManager`, so the eight synchronous executors and
     every existing call site are untouched; tests inject a scripted fake.
+
+    ``destructive_confirmer`` is the T3 per-call runtime gate (see
+    :class:`DestructiveConfirmationProvider`). ``__post_init__`` defaults it,
+    fail-closed, to a :class:`NonInteractiveDestructiveConfirmer` keyed on
+    ``config.allow_destructive`` -- so a bare ``ExecutorContext`` built with
+    nothing injected (e.g. a unit test) NEVER prompts and NEVER silently allows.
     """
     config: ValidationConfig
     runner: CommandRunner
     authorizer: AuthorizationProvider
     output_dir: Any                      # pathlib.Path for this run's receipts/ccache
     proc_manager: ProcessManager = field(default_factory=SubprocessProcessManager)
+    destructive_confirmer: Optional["DestructiveConfirmationProvider"] = None
     # -- composition slots (review B1/B3): empty/False for every standalone run,
     #    so the 15 executors and every existing call site are untouched. The
     #    chaining engine (C) populates them per edge when composing a chain.
     input_caps: dict[str, Any] = field(default_factory=dict)  # threaded creds: ccache/nt_hash/aes_key/principal
     env: dict[str, str] = field(default_factory=dict)         # extra env (e.g. KRB5CCNAME=<ccache>) forwarded to runner
     composed: bool = False                                    # True => mutating fronts DEFER rollback to chain teardown
+
+    def __post_init__(self) -> None:
+        if self.destructive_confirmer is None:
+            self.destructive_confirmer = NonInteractiveDestructiveConfirmer(
+                allowed=getattr(self.config, "allow_destructive", False))
 
 
 # ------------------------------------------------------------------ step / plan records
@@ -366,6 +435,12 @@ class ValidationExecutor(ABC):
     technique_class: str = ""
     terminal_kind: str = ""
     mutating: bool = False
+    # T3: irreversible / code-exec op -- a STATIC, engine-level eligibility flag
+    # (chain_engine.py's _edge_allowed reads this via getattr; declaring it here
+    # promotes that defensive read to a real, documented attribute every
+    # executor can see and override, same footing as `mutating`). Per-call, the
+    # separate RUNTIME gate is ctx.destructive_confirmer (see base.py above).
+    destructive: bool = False
     verified_recipe: bool = False
     recipe_ref: str = ""
     # Capability-state metadata for the chaining engine (C). Default empty so an

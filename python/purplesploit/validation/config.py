@@ -81,6 +81,12 @@ class ValidationConfig:
     # --- behaviour -------------------------------------------------------
     authorized: bool = True                 # engagement/lab is authorized (gate default not_required)
     auto_confirm: bool = False              # accept recommended defaults without prompting
+    # T3: explicit, operator-set pre-authorization for a NON-INTERACTIVE run's
+    # destructive ops (ChainEngine's own `allow_destructive` kwarg shares this
+    # exact name/meaning -- deliberately one flag, not two similarly-named
+    # things). Never a silent default-on bypass: it only stands in for the
+    # interactive press-yes prompt when there is genuinely no stdin to block on.
+    allow_destructive: bool = False
     tool_timeout_s: int = 300
     # Interval between listener-output polls for the listener-based executors
     # (ADR-001). Small by default; the total poll is bounded by tool_timeout_s.

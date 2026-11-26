@@ -77,3 +77,13 @@ def file_present_nonempty(path: Optional[str]) -> bool:
 def any_present(paths: Iterable[Optional[str]]) -> bool:
     """True iff at least one of ``paths`` is a non-empty file (a loot/artifact set)."""
     return any(file_present_nonempty(p) for p in paths)
+
+
+def positive_absence(bind_ok: bool, haystack: Optional[str], needle: str) -> bool:
+    """Positive-confirmation "is this gone?" check (the T3 ACL-rollback idiom).
+
+    ``bind_ok`` AND ``needle`` not present in ``haystack`` -- never vacuous: an
+    errored/empty read (``bind_ok=False``) is never "absent", it is unverified.
+    Callers supply their own bind-ok determination (e.g. an LDAP read-back
+    actually RAN, per ``_account_read_ok``-style anchors)."""
+    return bool(bind_ok) and needle.lower() not in (haystack or "").lower()
