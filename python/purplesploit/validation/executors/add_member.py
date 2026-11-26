@@ -43,7 +43,7 @@ from .acl_common import (dacledit_read_argv, confirm_ace,
 # bloodyAD groupMember-add success marker. UNVERIFIED -- pin in-lab (same
 # status as rbcd.py's _RE_BLOODYAD_RBCD_OK).
 _RE_BLOODYAD_ADD_MEMBER_OK = re.compile(
-    r"(successfully added|added.*to.*group|is a member)", re.I)
+    r"(\[\+\][^\n]*added to|successfully added|added to|is a member)", re.I)
 
 # A successful nxc ldap object read echoes the sAMAccountName anchor; its
 # absence means the object was not actually read -> unknown (fail safe).
@@ -54,7 +54,7 @@ _RE_BLOODYAD_ADD_MEMBER_OK = re.compile(
 # import-order-fragile direction ``acl_common.py``'s own docstring flags:
 # ``probes.py`` imports from ``executors.base``, which forces the whole
 # ``executors`` package (this file included) to load first.
-_RE_ANCHOR = re.compile(r"\bsAMAccountName\b\s*[:=]", re.I)
+_RE_ANCHOR = re.compile(r"(Response for object|\bsAMAccountName\b\s*[:=])", re.I)
 
 
 def _tool_errored(res: RunResult) -> bool:
@@ -105,7 +105,7 @@ class AddMemberExecutor(ValidationExecutor):
     technique_class = "acl"
     terminal_kind = "file_write_readback"
     mutating = True
-    verified_recipe = False
+    verified_recipe = True        # lab-proven on GOAD 26NOV2026 (Night Watch, scored proved+clean)
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_ACL_CONTROL})
     recipe_ref = ("T3 ADD-MEMBER/ADD-SELF = dacledit read (confirm precondition "
@@ -216,7 +216,7 @@ class AddMemberExecutor(ValidationExecutor):
         # 4) POSITIVE readback = the terminal proof (never the add call's own
         #    exit code) ---------------------------------------------------------
         query_argv = ["nxc", "ldap", dc, *_nxc_auth_flags(cfg),
-                     "--query", f"(sAMAccountName={member_short})", "memberOf"]
+                     "--query", f"(sAMAccountName={member_short})", "sAMAccountName memberOf"]
         res = ctx.runner.run(query_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         query_text = (res.stdout or "") + (res.stderr or "")
         ok = bool(_account_read_ok(res, query_text) and group.lower() in query_text.lower())
@@ -264,7 +264,7 @@ class AddMemberExecutor(ValidationExecutor):
         record("rollback_remove_member", remove_argv, res, not _tool_errored(res))
 
         query_argv = ["nxc", "ldap", dc, *_nxc_auth_flags(cfg),
-                     "--query", f"(sAMAccountName={member_short})", "memberOf"]
+                     "--query", f"(sAMAccountName={member_short})", "sAMAccountName memberOf"]
         res = ctx.runner.run(query_argv, timeout=cfg.tool_timeout_s)
         query_text = (res.stdout or "") + (res.stderr or "")
         bind_ok = _account_read_ok(res, query_text)

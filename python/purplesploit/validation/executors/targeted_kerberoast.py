@@ -60,7 +60,7 @@ _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
 # Deliberately re-declared here rather than imported from ``probes.py`` --
 # same import-order-fragile direction ``acl_common.py``'s own docstring and
 # ``add_member.py``'s identical duplication already flag.
-_RE_ANCHOR = re.compile(r"\bsAMAccountName\b\s*[:=]", re.I)
+_RE_ANCHOR = re.compile(r"(Response for object|\bsAMAccountName\b\s*[:=])", re.I)
 
 
 def _tool_errored(res: RunResult) -> bool:

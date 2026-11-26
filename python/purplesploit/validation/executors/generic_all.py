@@ -61,7 +61,7 @@ _RE_BLOODYAD_SET_OK = re.compile(
 _RE_KRB5TGS = re.compile(r"\$krb5tgs\$[^\s]+")
 _RE_NXC_PWNED = re.compile(r"\(Pwn3d!\)", re.I)
 _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
-_RE_ANCHOR = re.compile(r"\bsAMAccountName\b\s*[:=]", re.I)
+_RE_ANCHOR = re.compile(r"(Response for object|\bsAMAccountName\b\s*[:=])", re.I)
 
 # ---- rbcd pivot markers -- duplicated from rbcd.py inline, per plan §2.1 ----
 _RE_GA_ADDCOMPUTER_OK = re.compile(r"Successfully added (machine|computer) account", re.I)
