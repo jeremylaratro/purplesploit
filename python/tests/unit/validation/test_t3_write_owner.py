@@ -35,14 +35,14 @@ class _FakeRunner(CommandRunner):
         self.calls.append(list(argv))
         tool = Path(argv[0]).name
         action = argv[argv.index("-action") + 1]
-        if tool == "dacledit.py":
+        if tool == "impacket-dacledit":
             if action == "read":
                 return self.dacl_reads.pop(0) if self.dacl_reads else RunResult(0, stdout="")
             if action == "write":
                 return self.ace_write_res
             if action == "remove":
                 return self.remove_res
-        if tool == "owneredit.py":
+        if tool == "impacket-owneredit":
             if action == "read":
                 return self.owner_reads.pop(0) if self.owner_reads else RunResult(0, stdout="")
             if action == "write":
@@ -135,7 +135,7 @@ def test_writeowner_precondition_insufficient_aborts(tmp_path):
     assert receipt["complete"] is False
     assert "write_owner_not_confirmed" in receipt["errors"]
     # owneredit must NEVER have been touched.
-    assert not any(Path(c[0]).name == "owneredit.py" for c in runner.calls)
+    assert not any(Path(c[0]).name == "impacket-owneredit" for c in runner.calls)
 
 
 def test_writeowner_gate_denied_inconclusive(tmp_path):
@@ -152,7 +152,7 @@ def test_writeowner_gate_denied_inconclusive(tmp_path):
     assert receipt["gate"]["classifier"] == "denied"
     assert receipt["complete"] is False and receipt["terminal_fact"] is None
     owner_writes = [c for c in runner.calls
-                    if Path(c[0]).name == "owneredit.py" and c[c.index("-action") + 1] == "write"]
+                    if Path(c[0]).name == "impacket-owneredit" and c[c.index("-action") + 1] == "write"]
     assert owner_writes == []
 
 

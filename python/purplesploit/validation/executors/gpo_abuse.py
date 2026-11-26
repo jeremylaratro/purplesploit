@@ -5,7 +5,7 @@ bump semantics, the Scheduled Tasks Preference XML shape -- are genuinely
 intricate; flagged loudly here, not glossed over, the same honesty flag
 ``certifried.py``/``esc8.py`` already carry for similarly intricate recipes):
 
-    dacledit.py -action read                          (confirm precondition
+    impacket-dacledit -action read                          (confirm precondition
                                                         GenericAll/GenericWrite
                                                         over the GPO AD object)
     ctx.destructive_confirmer.confirm("gpo_abuse_immediate_task", ...)
@@ -225,7 +225,7 @@ class GpoAbuseExecutor(ValidationExecutor):
         gpo_dn = _gpo_dn(v["gpo_guid"], ctx.config.domain)
         unc = _sysvol_tasks_unc(ctx.config.domain, v["gpo_guid"])
         lines = [
-            f"dacledit.py -action read -target '{gpo_dn}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{gpo_dn}' -dc-ip {dc} <auth>  "
             "(confirm precondition GenericAll/GenericWrite over the GPO object)",
             "*** DESTRUCTIVE: warn-press-yes confirmation required (code-exec "
             "side effect) ***",

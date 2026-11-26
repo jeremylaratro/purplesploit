@@ -8,7 +8,7 @@ NEW recipe -- it is ONE class with a ``pivot`` param selecting which of 4
 already-proven shapes to exercise, given a confirmed GenericAll/GenericWrite
 ACE over ``target``:
 
-    dacledit.py -action read                       (shared step 0: confirm the ACE)
+    impacket-dacledit -action read                       (shared step 0: confirm the ACE)
     pivot == "reset_password"  -> bloodyAD set password + nxc reauth (DESTRUCTIVE, no rollback)
     pivot == "spn_kerberoast"  -> write SPN -> roast -> gated crack -> reauth -> rollback clears SPN
     pivot == "shadow_creds"    -> certipy-ad shadow auto (reuses ShadowCredsExecutor's own markers)
@@ -220,7 +220,7 @@ class GenericAllExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         target, pivot = v["target"], v["pivot"]
-        common = [f"dacledit.py -action read -target '{target}' -dc-ip {dc} <auth>  "
+        common = [f"impacket-dacledit -action read -target '{target}' -dc-ip {dc} <auth>  "
                  "(confirm precondition GenericAll/GenericWrite)"]
         if pivot == "reset_password":
             return common + [

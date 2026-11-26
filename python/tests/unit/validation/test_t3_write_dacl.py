@@ -29,7 +29,7 @@ class _FakeRunner(CommandRunner):
     def run(self, argv, *, env=None, timeout=None, cwd=None) -> RunResult:
         self.calls.append(list(argv))
         tool = Path(argv[0]).name
-        if tool != "dacledit.py":
+        if tool != "impacket-dacledit":
             return RunResult(0, stdout="")
         action = argv[argv.index("-action") + 1]
         if action == "read":

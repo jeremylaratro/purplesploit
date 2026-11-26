@@ -53,7 +53,7 @@ class _FakeRunner(CommandRunner):
     def run(self, argv, *, env=None, timeout=None, cwd=None) -> RunResult:
         self.calls.append(list(argv))
         tool = Path(argv[0]).name
-        if tool == "dacledit.py":
+        if tool == "impacket-dacledit":
             return self._dacledit()
         if tool == "bloodyAD":
             return self._bloodyad(argv)

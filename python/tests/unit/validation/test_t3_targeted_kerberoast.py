@@ -31,7 +31,7 @@ class _FakeRunner(CommandRunner):
     @staticmethod
     def _key(argv) -> str:
         tool = Path(argv[0]).name
-        if tool == "dacledit.py":
+        if tool == "impacket-dacledit":
             return "dacledit"
         if tool == "bloodyAD":
             # ["...", "set", "object", victim, "servicePrincipalName", "-v", value]

