@@ -55,6 +55,19 @@ GOAD before its `verified_recipe` flips.
 ### T8 — Emerging
 - **BadSuccessor** (dMSA abuse, Server 2025 — simulate any user via a delegated MSA → DA). Needs a 2025 DC added to GOAD (per owner's "simulate non-included vulns" license). Plus new CVEs as they land.
 
+## Owner decisions (25NOV2026) — GREENLIT
+- **Execution order:** **T3 → T4 → T6 → T2 → T7 → T1 → T8.** (T5 credential-access omitted from the
+  order — PARKED at the end / pending owner confirm; not in the active queue.)
+- **Destructive handling:** every destructive op PRINTS A WARNING and requires the operator to press
+  **yes** to proceed (interactive confirmation gate, not a silent `--allow-destructive`). Applies to
+  T1 Zerologon/PrintNightmare and any mutating step.
+- **Cadence:** per tranche — plan → 1 independent (cross-family) review → build → probe → prove on
+  (re-configurable) GOAD → integrate. One tranche at a time; each opens by reviewing the prior output.
+- **Delegation model:** token-heavy work (executor/test/boilerplate implementation, large reads,
+  verbose drafts) is delegated to **Codex Sol** via `/codex-interop` file-handoff; Claude (Opus)
+  SUPERVISES — plans, reviews diffs, runs the gates, proves on GOAD, commits/integrates. Usage-
+  conserving (owner directive 25NOV2026: low on Opus usage).
+
 ## Open ordering questions for the owner
 1. **Order:** is `T1 (instant-DA) → T2 (ADCS) → T3 (ACL edges) → …` right, or do you want **composition-first** (T3 ACL edges earlier, since they give the chaining engine the most new routes), or **ADCS-first** (T2, since the lab is already ADCS-rich and it's the cheapest)?
 2. **Scope cuts:** any tranche/technique to drop (e.g., T7 trusts or T8 emerging if out of scope for now)?
