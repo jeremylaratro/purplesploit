@@ -367,15 +367,16 @@ def test_esc1_unknown_on_read_error(tmp_path):
 
 
 # ================================================================= registry / helpers
-def test_registry_covers_all_twelve_techniques():
+def test_registry_covers_all_fifteen_techniques():
     assert set(probes.PROBE_REGISTRY) == {
         "KERBEROAST", "ASREP", "LAPS", "CONSTRAINED-DELEG-PT",
         "RBCD", "OPENSHARES-WRITE", "SHADOW-CREDS", "ADCS-ESC1",
-        "ESC8", "ESC11", "CERTIFRIED", "DCSYNC"}
+        "ESC8", "ESC11", "CERTIFRIED", "DCSYNC",
+        "COERCION", "NTLM-RELAY", "UNCONSTRAINED-DELEG"}      # PP: listener trio added
 
 
 def test_get_probe_unknown_technique_is_none():
-    assert get_probe("NTLM-RELAY") is None
+    assert get_probe("BOGUS-TECHNIQUE") is None              # genuinely unregistered
     assert get_probe(None) is None
 
 
@@ -502,8 +503,10 @@ def test_orchestrator_run_report_has_skipped_list_with_reason(tmp_path):
     assert planned["KERBEROAST"]["probe"]["viable"] is True
 
 
-def test_orchestrator_no_probe_technique_proceeds_unchanged(tmp_path):
-    # UNCONSTRAINED-DELEG has no registered probe -> probe None -> proceeds as before.
+def test_orchestrator_unconstrained_now_probed_and_proceeds(tmp_path):
+    # PP: UNCONSTRAINED-DELEG now HAS a probe. With an unscripted router the probe
+    # read errors -> unknown (viable=True) -> the finding still proceeds (never a
+    # false skip), and plans[0].probe is populated (coverage reached the orchestrator).
     raw = {"finding_id": "AR-u1", "host": "srv01.north.sevenkingdoms.local",
            "category": "delegation", "severity": "high",
            "line": "UNCONSTRAINED DELEGATION on srv01"}
@@ -512,7 +515,8 @@ def test_orchestrator_no_probe_technique_proceeds_unchanged(tmp_path):
     plans = orch.plan([map_finding(raw)])
     assert len(plans) == 1
     assert plans[0].finding.technique == "UNCONSTRAINED-DELEG"
-    assert plans[0].probe is None and plans[0].skipped_by_probe is False
+    assert plans[0].probe is not None and plans[0].probe.unknown is True
+    assert plans[0].skipped_by_probe is False
 
 
 def test_skipped_by_probe_refuses_to_skip_unknown():
@@ -526,3 +530,100 @@ def test_skipped_by_probe_refuses_to_skip_unknown():
     assert mk(ProbeResult(viable=False, reason="unsure", unknown=True)).skipped_by_probe is False
     assert mk(ProbeResult(viable=True, reason="ok")).skipped_by_probe is False
     assert mk(None).skipped_by_probe is False
+
+
+# ============================================ PP (25NOV2026) listener-trio probes
+def _mk(host, category="ad"):
+    f = map_finding({"finding_id": "AR-pp", "host": host, "category": category,
+                     "severity": "high", "line": f"x {host}"})
+    f.host = host
+    return f
+
+
+# --- COERCION (PP-1): coercer scan surface, non-destructive -----------------
+def test_coercion_viable_when_method_reachable(tmp_path):
+    out = "[+] [MS-EFSR] EfsRpcOpenFileRaw pipe accessible on dc01\n"
+    r = _Runner(by_tool={"coercer": RunResult(0, stdout=out)})
+    res = probes.CoercionProbe().check(_ctx(_cfg(), r, tmp_path), _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is False and res.evidence["coercion_methods"] is True
+
+
+def test_coercion_unknown_when_no_method_positively_seen(tmp_path):
+    # HIGH-dir MEDIUM-2: a zero-method scan is NOT a reliable negative (auth/collection
+    # failure; DCs are near-universally coercible) -> unknown, never a false skip.
+    r = _Runner(by_tool={"coercer": RunResult(0, stdout="[-] No coercion method available")})
+    res = probes.CoercionProbe().check(_ctx(_cfg(), r, tmp_path), _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True and res.evidence["coercion_methods"] is None
+
+
+def test_coercion_unknown_on_tool_error(tmp_path):
+    res = probes.CoercionProbe().check(_ctx(_cfg(), _Runner(by_tool={"coercer": _ERR}), tmp_path),
+                                       _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True       # fail-safe: never a false skip
+
+
+# --- NTLM-RELAY (PP-2): relay target signing enforcement --------------------
+def test_relay_viable_when_smb_signing_off(tmp_path):
+    r = _Runner(by_tool={"nxc": RunResult(0, stdout="SMB srv02 445 SRV02 [*] signing:False SMBv1:False")})
+    res = probes.NTLMRelayProbe().check(_ctx(_cfg(), r, tmp_path), _mk("srv02.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is False and res.evidence["smb_signing"] is False
+
+
+def test_relay_unknown_when_smb_enforced_and_no_ldap_surface(tmp_path):
+    # HIGH-1: SMB signing enforced + no positive LDAP surface -> UNKNOWN, never a
+    # skip (a DC LDAP / web-enroll relay may still work). Fail-safe.
+    r = _Runner(by_tool={"nxc": RunResult(0, stdout="signing:True")})
+    res = probes.NTLMRelayProbe().check(_ctx(_cfg(), r, tmp_path), _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True and res.evidence["ldap_relayable"] is None
+
+
+def test_relay_viable_via_ldap_when_smb_enforced(tmp_path):
+    class _Dual(CommandRunner):
+        def run(self, argv, *, env=None, timeout=None, cwd=None):
+            svc = argv[1] if len(argv) > 1 else ""
+            return (RunResult(0, stdout="signing:True") if svc == "smb"
+                    else RunResult(0, stdout="LDAP dc01 389 [*] channel binding: None"))
+    res = probes.NTLMRelayProbe().check(_ctx(_cfg(), _Dual(), tmp_path),
+                                        _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.evidence.get("ldap_relayable") is True
+
+
+def test_relay_unknown_on_tool_error(tmp_path):
+    res = probes.NTLMRelayProbe().check(_ctx(_cfg(), _Runner(by_tool={"nxc": _ERR}), tmp_path),
+                                        _mk("srv02.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True
+
+
+# --- UNCONSTRAINED-DELEG (PP-3): UAC TRUSTED_FOR_DELEGATION 0x80000 ----------
+def test_unconstrained_viable_when_trusted_for_deleg(tmp_path):
+    out = ("LDAP dc01 389 DC01 sAMAccountName: DC01$\n"
+           "LDAP dc01 389 DC01 userAccountControl: 532480")   # 0x82000 = SERVER_TRUST + TRUSTED_FOR_DELEG
+    r = _Runner(by_tool={"nxc": RunResult(0, stdout=out)})
+    res = probes.UnconstrainedDelegProbe().check(_ctx(_cfg(), r, tmp_path),
+                                                 _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True and res.evidence["trusted_for_delegation"] is True
+
+
+def test_unconstrained_not_viable_without_bit(tmp_path):
+    out = ("LDAP ws 389 WS01 sAMAccountName: WS01$\n"
+           "LDAP ws 389 WS01 userAccountControl: 4096")       # 0x1000 workstation, no 0x80000
+    r = _Runner(by_tool={"nxc": RunResult(0, stdout=out)})
+    res = probes.UnconstrainedDelegProbe().check(_ctx(_cfg(), r, tmp_path),
+                                                 _mk("ws01.north.sevenkingdoms.local"))
+    assert res.viable is False and res.evidence["trusted_for_delegation"] is False
+
+
+def test_unconstrained_unknown_on_unread(tmp_path):
+    res = probes.UnconstrainedDelegProbe().check(_ctx(_cfg(), _Runner(by_tool={"nxc": _ERR}), tmp_path),
+                                                 _mk("dc01.north.sevenkingdoms.local"))
+    assert res.viable is True and res.unknown is True
+
+
+def test_pp_probes_registered_all_15_covered():
+    from purplesploit.validation.probes import get_probe, PROBE_REGISTRY
+    from purplesploit.validation.executors import IMPLEMENTED
+    assert type(get_probe("COERCION")).__name__ == "CoercionProbe"
+    assert type(get_probe("NTLM-RELAY")).__name__ == "NTLMRelayProbe"
+    assert type(get_probe("UNCONSTRAINED-DELEG")).__name__ == "UnconstrainedDelegProbe"
+    # every implemented technique now has a detect-before-fire probe.
+    assert IMPLEMENTED <= set(PROBE_REGISTRY)

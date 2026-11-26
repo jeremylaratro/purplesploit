@@ -1,6 +1,6 @@
 # PLAN-PP (25NOV2026) — probe-and-prove completeness
 
-**Status:** DRAFT → 1 independent review (Opus) → execute → verify → notify owner.
+**Status:** DRAFT → 1 independent review (Opus, VERDICT REVISE) → **resolutions applied (see Review section)** → execute → verify → notify owner.
 **Owner directive (25NOV2026):** "all non-probed reach the probed bar, then all probed reach
 the proven bar; notify me when finished, then we add new pathways." New techniques are a
 SEPARATE later effort — this plan only raises the EXISTING 15 to fully-probed + fully-proven.
@@ -11,6 +11,45 @@ Every one of the 15 implemented techniques is BOTH:
 2. **Proven** — `verified_recipe=True`, earned by a live GOAD run whose receipt the independent
    ad-lab-harness `score_proof.py` grades `proved` (or honestly `inconclusive` with the blocker
    named — never a flag flipped by assertion).
+
+## Review (25NOV2026) — VERDICT REVISE; resolutions applied
+Independent Opus review. The flip-rule integrity was confirmed sound (the scorer makes a
+`proved` verdict structurally imply a verified rollback for any mutating chain, and terminal
+`ok` reflects real PKINIT — so there is NO path to a false `proved`). Findings + resolutions:
+- **HIGH-1 (PP-2 fail-safe) — APPLIED in code.** `NTLMRelayProbe` no longer returns
+  `viable=False` on signing: SMB-signing-True does not rule the technique out (it also relays
+  over LDAP/`ldap_rbcd`, and DCs — which require SMB signing — are prime LDAP-relay targets per
+  the GOAD truth). Now only a POSITIVE surface (SMB off, or LDAP channel-binding/signing not
+  enforced) → `viable`; anything else → `unknown`. Mirrors Rbcd/ShadowCreds.
+- **HIGH-2 (PROVE mechanism source) — pinned.** The reviewer read ad-lab-harness `main`; the
+  scorer + truth live on the branch, not main. CORRECTION (verified THIS session): the scorer
+  `adlab/score_proof.py` and the reviewed truth facet `truth/GOAD-proof.json`
+  (schema `adlab.plan003.proof-truth.v1`, enumerating all 7 techniques' GOAD host_ids:
+  COERCION/UNCONSTRAINED dc01/02/03, LAPS/relay srv02/03 + DCs, CERTIFRIED `{srv03, essos.local}`,
+  ESC8/ESC11 dc01/srv03) EXIST and WORK on the `dev/validation-proof-scorer` worktree — I scored
+  real composed receipts `proved` on dc01 with them earlier today. So PP-4..10 CAN score
+  `proved`. **This plan pins that worktree's scorer + facet as the PROVE oracle**; each flip
+  cites a `proved` score result from it. Prereqs before the live runs: (a) confirm each
+  executor's `target_identity` resolves to the truth host_id (ESC8/ESC11/Certifried→CA host;
+  coercion/unconstrained→DC); (b) merging the scorer+facet into harness `main` is a tracked
+  follow-up, NOT a blocker (the worktree oracle is authoritative for this effort).
+- **MEDIUM-1 (PP-3 host-anchoring) — already correct in code; prose fixed.** The IMPLEMENTATION
+  anchors to the host: `(sAMAccountName=<host>$)` then checks `uac & 0x80000` on that object (not
+  the domain-wide filter the draft prose showed). Keeps `viable=False` only on a confident
+  host-anchored read with the bit clear (the aranum finding names the carrier).
+- **MEDIUM-2 (PP-1) — APPLIED.** `coercer scan` is NON-MUTATING but ACTIVE (sends RPC
+  enumeration; it does not coerce to an external listener) — prose corrected. The probe no longer
+  returns `viable=False` (a zero-method scan is not a reliable negative; DCs are near-universally
+  coercible) → `viable` on a positive method, else `unknown`. Binary pinned LOWERCASE `coercer`
+  in BOTH probe and executor (executor `coercion.py` had `"Coercer"`, which does not exist on
+  kali-vr — fixed; was an execution-blocking bug). PP-1 live-verify runs from **kali-vr** (coercer
+  is there, not net0srv).
+- **MEDIUM-3 (artifact secret-leak) — folded into the live-run protocol.** NTLM-RELAY SAM loot
+  (`*_samhashes.sam`) and UNCONSTRAINED-DELEG `<DC>$.ccache` (a usable DC TGT) are written to
+  `out_dir` and NEVER deleted (both non-mutating, no rollback). The Stage-2 driver therefore MUST:
+  copy back ONLY the single scrubbed receipt JSON (never `out_dir`), and `shred`/`rm -rf` the
+  per-run `out_dir` (ccache/pfx/sam/loot) on kali-vr immediately after extracting the receipt. A
+  usable TGT or SAM dump must never leave the lab box or persist on kali-vr.
 
 ## Current ladder (measured 25NOV2026)
 - **Non-probed (3):** `COERCION`, `NTLM-RELAY`, `UNCONSTRAINED-DELEG` (the listener trio).
@@ -45,27 +84,35 @@ Every one of the 15 implemented techniques is BOTH:
 Three `PreconditionProbe` subclasses in `probes.py`, registered in `_PROBES`, each mirroring the
 existing pattern (non-destructive read via `ctx.runner`; `viable`/`viable=False`/`unknown`;
 fail-safe unknown never skips). Add `UAC_TRUSTED_FOR_DELEGATION = 0x80000`.
-- **PP-1 Coercion:** `coercer scan -u <u> <auth> -t <victim_dc> -d <domain>` (non-destructive
-  enumeration — scan mode does not trigger). ≥1 method listed → viable; explicit none → viable=False;
-  tool-error/unparsed → unknown. Mirror markers UNVERIFIED, pin in lab.
-- **PP-2 NTLM-RELAY:** `nxc smb <target>` banner `signing:False` → relayable (viable); all
-  candidate targets `signing:True` → viable=False; also read `nxc ldap <dc>` channel-binding where
-  available. The coerced victim + a signing-off target is the real precondition; the victim side is
-  flagged `unknown`.
-- **PP-3 UNCONSTRAINED-DELEG:** `nxc ldap <dc> --query
-  "(userAccountControl:1.2.840.113556.1.4.803:=524288)" "sAMAccountName userAccountControl"` →
-  the target host's TRUSTED_FOR_DELEGATION bit. Set → viable (control-to-capture flagged `unknown`,
-  mirroring RBCD's ACL-not-readable path); not set → viable=False.
-- **Tests:** unit (scripted fake runner, RED→GREEN per probe: viable / viable=False / unknown /
-  tool-error). Then **live-verify** each against GOAD from net0srv (nxc/coercer present) — read-only,
-  safe — and record the real markers, pinning the UNVERIFIED regexes.
+- **PP-1 Coercion:** `coercer` (lowercase) `scan -u <u> <auth> -t <victim_dc> -d <domain>` —
+  NON-MUTATING but ACTIVE (sends RPC enumeration; does not coerce to an external listener). ≥1
+  reachable method → viable; anything else → **unknown** (a zero-method scan is not a reliable
+  negative; DCs are near-universally coercible). NEVER viable=False. Markers UNVERIFIED, pin in lab.
+- **PP-2 NTLM-RELAY:** `nxc smb <target>` banner `signing:False` → relayable (viable); else read
+  `nxc ldap <target>` — channel-binding/signing not enforced → viable (ldap_rbcd). SMB-signing-True
+  NEVER yields viable=False (the LDAP/`ldap_rbcd` and web-enroll paths are independent of SMB
+  signing, and DCs are prime LDAP targets) → **unknown**. Fail-safe.
+- **PP-3 UNCONSTRAINED-DELEG:** host-anchored `nxc ldap <dc> --query "(sAMAccountName=<host>$)"
+  "sAMAccountName userAccountControl"`, then check `uac & 0x80000` (TRUSTED_FOR_DELEGATION) on
+  THAT object (not a domain-wide filter). Bit set → viable (control-to-capture flagged `unknown`,
+  mirroring RBCD); bit clear on a confident host read → viable=False (the aranum finding names the
+  carrier). Combined filter `(&(sAMAccountName=<host>$)(userAccountControl:...:=524288))` optional.
+- **Tests:** unit (scripted fake runner, RED→GREEN per probe: viable / viable=False where it
+  applies / unknown / tool-error). Then **live-verify each from kali-vr** against GOAD (coercer +
+  the working nxc are there; net0srv's nxc is flaky non-interactively) — read-only, safe — and
+  record the real markers, pinning the UNVERIFIED regexes.
 - **Exit:** `PROBE_REGISTRY` has all 15; suite green; live-verify evidence recorded.
 
 ## Sprint B — Stage 2 setup + non-relay proofs (PP-4, PP-5)
-- **Stage the package into kali-vr** (copy the worktree tree in, or a volume mount; no repo secrets).
-  A thin `drive_validation.py` runs ONE executor via `run()` against the live lab and prints the
-  receipt JSON; receipts copied back to net0srv for harness scoring. GOAD creds supplied via env
-  on kali-vr only — NEVER written to the repo/receipts/memory/this plan.
+- **Stage the package into kali-vr — DONE** (via `docker cp` to `/opt/ps-validation`, with an
+  empty `purplesploit/__init__.py` shim so the import skips the heavy `core.framework`; verified
+  importing 15 probes + 15 executors). A thin `drive_validation.py` runs ONE executor via `run()`
+  against the live lab, writes the receipt JSON to a path OUTSIDE `out_dir`, and prints it.
+  **Secret-artifact protocol (review MEDIUM-3):** copy back to net0srv ONLY the single scrubbed
+  receipt JSON — NEVER `out_dir`. Immediately after extracting the receipt, `shred -u` / `rm -rf`
+  the per-run `out_dir` on kali-vr (it holds the un-deleted `<DC>$.ccache` TGT, issued `*.pfx`, and
+  `*_samhashes.sam` loot). GOAD creds supplied via env on kali-vr only — NEVER written to the
+  repo/receipts/memory/this plan.
 - **PP-4 LAPS** (srv02/srv03): read ms-Mcs-AdmPwd/msLAPS-Password, log in as the local admin,
   capture `authn_success`. Non-mutating. Fix the login-lab quirk that set verified_recipe=False.
 - **PP-5 CERTIFRIED** (srv03/ESSOS-CA): create computer (MAQ>0), spoof dNSHostName, request Machine

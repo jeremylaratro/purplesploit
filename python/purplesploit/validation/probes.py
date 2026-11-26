@@ -62,6 +62,7 @@ from .executors.base import ExecutorContext, RunResult
 # ---------------------------------------------------------------- bit constants
 # userAccountControl flags (MS-ADTS 2.2.16).
 UAC_DONT_REQ_PREAUTH = 0x400000             # AS-REP roastable
+UAC_TRUSTED_FOR_DELEGATION = 0x80000        # UNCONSTRAINED delegation (not 0x1000000)
 UAC_TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000   # constrained-deleg protocol transition
 UAC_NOT_DELEGATED = 0x100000                # "account is sensitive and cannot be delegated"
 # msDS-SupportedEncryptionTypes bits (MS-KILE 2.2.7).
@@ -211,6 +212,19 @@ _RE_ESC11 = re.compile(r"(\bESC11\b|Enforce Encryption[^\n]*Disabled)", re.I)
 _RE_SID_EXT = re.compile(
     r"(Certificate object SID|szOID_NTDS_CA_SECURITY_EXT|1\.3\.6\.1\.4\.1\.311\.25\.2|"
     r"SID security extension)", re.I)
+# SMB signing enforcement in an nxc smb banner: "signing:True" = required (relay
+# to SMB blocked); "signing:False" = not required (relayable). UNVERIFIED wording.
+_RE_SMB_SIGNING_OFF = re.compile(r"signing\s*[:=]\s*False", re.I)
+_RE_SMB_SIGNING_ON = re.compile(r"signing\s*[:=]\s*True", re.I)
+# LDAP relay surface: channel binding / signing NOT enforced on the DC. nxc ldap
+# reports an LDAP-signing / channel-binding state; "None"/"not enforced" = relayable.
+_RE_LDAP_RELAYABLE = re.compile(
+    r"(channel\s*binding[^\n]*(no|none|not|disabled)|"
+    r"ldap\s*signing[^\n]*(none|not|disabled|no)|signing\s*[:=]\s*None)", re.I)
+# Coercer scan: a coercion method is reachable / the pipe is exposed on the victim.
+_RE_COERCE_METHOD = re.compile(
+    r"(\[\+\][^\n]*(MS-RPRN|MS-EFSR|MS-DFSNM|MS-FSRVP|EfsRpc|RpcRemoteFindFirstPrinterChangeNotification)|"
+    r"\bVULNERABLE\b|pipe[^\n]*(accessible|reachable|exists))", re.I)
 
 
 def _target_protected(impersonate: Optional[str]) -> Optional[bool]:
@@ -700,12 +714,144 @@ class DCSyncProbe(PreconditionProbe):
             evidence={"replication_rights": None})
 
 
+# ================================================= listener-trio probes (PP-1..3)
+class CoercionProbe(PreconditionProbe):
+    """COERCION: enumerate the victim DC's coercion surface with ``coercer scan``.
+    Scan mode is NON-MUTATING but ACTIVE -- it sends the coercion RPC calls to
+    detect which methods answer (it does not complete a coercion to an external
+    listener). A positively-reachable method -> ``viable``; EVERYTHING else ->
+    ``unknown`` (attempt anyway), NEVER ``viable=False``: a zero-method scan is
+    commonly an auth/collection failure, and a DC is near-universally coercible
+    (MS-RPRN/printerbug is on by default), so "no method seen" is not a reliable
+    positive "won't work" (review MEDIUM-2). UNVERIFIED markers, pin in-lab."""
+    technique = "COERCION"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        victim = finding.host or (finding.entity or {}).get("host") or cfg.dc_ip
+        argv = ["coercer", "scan", "-u", cfg.username or "", "-d", cfg.domain, "-t", victim]
+        if cfg.nt_hash:
+            argv += ["--hashes", cfg.nt_hash]
+        elif cfg.password is not None:
+            argv += ["-p", cfg.password]
+        res = ctx.runner.run(argv, timeout=cfg.tool_timeout_s)
+        text = _text(res)
+        if not _tool_errored(res) and _RE_COERCE_METHOD.search(text):
+            return ProbeResult(
+                viable=True,
+                reason=f"coercer scan reports a reachable coercion method on {victim}",
+                evidence={"coercion_methods": True})
+        # No positively-reachable method (unreadable, unauth, or an ambiguous
+        # zero-method scan) -> UNKNOWN, never a skip (fail-safe).
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"coercion surface on {victim or '(dc)'} not positively confirmed via "
+                    "coercer scan (a zero-method/unauthenticated scan is not a reliable "
+                    "negative; DCs are near-universally coercible) -> attempting anyway"),
+            evidence={"coercion_methods": None})
+
+
+class NTLMRelayProbe(PreconditionProbe):
+    """NTLM-RELAY: a relay needs a target that does NOT enforce signing. Read the
+    finding's relay target non-destructively: ``nxc smb`` banner ``signing:False``
+    confirms the SMB (smb_sam) relay is viable; otherwise re-read ``nxc ldap`` for
+    an un-enforced channel-binding/LDAP-signing surface (the ldap_rbcd path).
+
+    Review HIGH-1: this probe NEVER returns ``viable=False`` on signing alone.
+    SMB-signing-True does NOT rule the technique out -- the executor also relays
+    over LDAP (ntlm_relay ldap_rbcd), and DCs (which REQUIRE SMB signing) are the
+    prime LDAP/relay targets (GOAD truth: DCs via LDAP). So a positive signal
+    (SMB off, or LDAP channel-binding/signing not enforced) -> ``viable``; anything
+    else (signing enforced / unread) -> ``unknown`` (attempt anyway), so a real
+    relay path is never wrongly skipped."""
+    technique = "NTLM-RELAY"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        target = ((finding.entity or {}).get("relay_target") or finding.host
+                  or (finding.entity or {}).get("host") or "")
+        smb = ctx.runner.run(["nxc", "smb", target, *_nxc_auth(cfg)],
+                             timeout=cfg.tool_timeout_s) if target else None
+        smb_text = _text(smb) if smb else ""
+        smb_signing: Optional[bool] = None
+        if smb and not _tool_errored(smb):
+            if _RE_SMB_SIGNING_OFF.search(smb_text):
+                return ProbeResult(
+                    viable=True,
+                    reason=(f"SMB signing not required on {target} (signing:False): "
+                            "relayable (smb_sam -> SAM dump)"),
+                    evidence={"smb_signing": False})
+            if _RE_SMB_SIGNING_ON.search(smb_text):
+                smb_signing = True
+        # SMB signing enforced or unread -> the SMB path is blocked, but LDAP
+        # (ldap_rbcd) or an HTTP web-enroll relay may still work. Check LDAP; a
+        # relayable LDAP surface is viable, otherwise UNKNOWN (never a skip).
+        ldap = ctx.runner.run(["nxc", "ldap", target or cfg.dc_ip, *_nxc_auth(cfg)],
+                              timeout=cfg.tool_timeout_s)
+        if not _tool_errored(ldap) and _RE_LDAP_RELAYABLE.search(_text(ldap)):
+            return ProbeResult(
+                viable=True,
+                reason=(f"LDAP channel binding/signing not enforced on {target or cfg.dc_ip}: "
+                        "relayable (ldap_rbcd -> RBCD write)"),
+                evidence={"smb_signing": smb_signing, "ldap_relayable": True})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=(f"no relay surface positively confirmed on {target or '(target)'} "
+                    "(SMB signing enforced/unread; LDAP relay surface unread/enforced); a DC "
+                    "LDAP or web-enroll relay may still work -> attempting anyway"),
+            evidence={"smb_signing": smb_signing, "ldap_relayable": None})
+
+
+class UnconstrainedDelegProbe(PreconditionProbe):
+    """UNCONSTRAINED-DELEG: the finding host must be TRUSTED FOR (unconstrained)
+    DELEGATION -- ``userAccountControl & 0x80000`` (NOT 0x1000000, which is
+    protocol-transition/constrained). Bit set -> ``viable`` (the onward need, a
+    CONTROLLED unconstrained host to capture the coerced TGT, is not readable
+    non-destructively, so it is flagged ``unknown`` like RBCD's write-ACL). A
+    read-ok host WITHOUT the bit -> positive ``viable=False``; an unread/unparsed
+    UAC -> ``unknown`` (attempt anyway)."""
+    technique = "UNCONSTRAINED-DELEG"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        host = finding.host or (finding.entity or {}).get("host") or ""
+        short = host.split(".", 1)[0]
+        res = _ldap_query(ctx, f"(sAMAccountName={short}$)",
+                          ["sAMAccountName", "userAccountControl"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=(f"could not read userAccountControl for {host or '(host)'}; "
+                        "attempting anyway (unconstrained-trust state unknown)"),
+                evidence={"trusted_for_delegation": None})
+        uac = _parse_int(_extract_attr(text, "userAccountControl"))
+        if uac is None:
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason="read ok but userAccountControl unparsed; attempting anyway",
+                evidence={"trusted_for_delegation": None})
+        if uac & UAC_TRUSTED_FOR_DELEGATION:
+            return ProbeResult(
+                viable=True, unknown=True,
+                reason=(f"TRUSTED_FOR_DELEGATION set on {host} (uac=0x{uac:x}): its coerced "
+                        "TGT is capturable, BUT a CONTROLLED unconstrained host to capture it "
+                        "is not readable here -> ASSUMED; attempting with that flagged"),
+                evidence={"trusted_for_delegation": True, "uac": uac})
+        return ProbeResult(
+            viable=False,
+            reason=(f"TRUSTED_FOR_DELEGATION not set on {host} (uac=0x{uac:x}): not trusted "
+                    "for unconstrained delegation, no onward TGT to capture -> skip"),
+            evidence={"trusted_for_delegation": False, "uac": uac})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
     RbcdProbe, OpenSharesProbe, ShadowCredsProbe, ADCSESC1Probe,
     # N1 -- ADCS relay fronts + the DCSync terminal.
     Esc8Probe, Esc11Probe, CertifriedProbe, DCSyncProbe,
+    # PP (25NOV2026) -- the listener trio, completing detect coverage for all 15.
+    CoercionProbe, NTLMRelayProbe, UnconstrainedDelegProbe,
 )
 
 # Technique -> probe class.
@@ -759,4 +905,5 @@ __all__ = [
     "KerberoastProbe", "ASREPProbe", "LapsProbe", "ConstrainedDelegProbe",
     "RbcdProbe", "OpenSharesProbe", "ShadowCredsProbe", "ADCSESC1Probe",
     "Esc8Probe", "Esc11Probe", "CertifriedProbe", "DCSyncProbe",
+    "CoercionProbe", "NTLMRelayProbe", "UnconstrainedDelegProbe",
 ]

@@ -191,7 +191,7 @@ def test_coercion_proved_shaped_receipt(tmp_path):
     assert tf and tf["kind"] == "authn_success" and tf["ok"] is True and tf["proof_token"]
     # listener was started AND stopped, and the trigger fired.
     assert pm.started and pm.stopped
-    assert any(Path(c[0]).name == "Coercer" for c in runner.calls)
+    assert any(Path(c[0]).name == "coercer" for c in runner.calls)   # lowercase Kali binary
 
 
 def test_coercion_no_capture_is_inconclusive(tmp_path):

