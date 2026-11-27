@@ -32,6 +32,8 @@ TARGET_PARAM = {
     # SHARE-LOOT: --target is the host scope to enumerate shares on (comma-separated
     # for several, or repeat via --param hosts=h1,h2). Discovery/crawl, not a principal.
     "SHARE-LOOT": "hosts",
+    # T6 delegation extras: --target is the host accessed with the impersonation ticket.
+    "BRONZE-BIT": "target_host", "S4U2SELF": "self_host",
 }
 
 # Param -> finding entity aliases used by existing executors' defaults/identity.
@@ -39,7 +41,7 @@ ENTITY_ALIAS = {"account": "victim", "delegate_to": "host", "dc_host": "host"}
 PUBLIC_ENTITY = frozenset({
     "target", "trustee", "rights", "group", "member", "victim", "principal",
     "spn", "pivot", "host", "ca_host", "ca", "template", "gpo_guid", "linked_host",
-    "share", "hosts", "account", "target_host", "victim_dc", "relay_target",
+    "share", "hosts", "account", "target_host", "self_host", "victim_dc", "relay_target",
     # T4 ticket-forging public params (never the signing key).
     "reauth_target", "service_host", "forged_user", "groups", "user_id",
     "domain_sid", "impersonate",
