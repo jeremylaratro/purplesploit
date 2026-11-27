@@ -110,3 +110,24 @@ no canary written).
 ## Delegation (codex-interop, ~60/40)
 Plan: Claude. **Plan review (Phase 5 gate): Codex Sol.** S1 impl: Claude → Codex reviews diff.
 Live proof: Claude (GOAD).
+
+## Plan-review resolutions (Codex Sol r1, 27NOV2026 — FIX-FIRST, 2 BLOCKER + 5 HIGH)
+Review: `docs/reviews/PLAN-SHARELOOT-27NOV2026-codex-sol-plan-review-r1.md`. All verified against code
+and the NetExec/smbclient docs. The review reshaped S1's design — the safe design below replaces the
+draft above.
+
+| # | Finding (verified) | Resolution |
+|---|--------------------|-----------|
+| 1 BLOCKER | `nxc smb --shares` CREATES+DELETES a write-probe file/dir unless `--no-write-check` — bare discovery would VIOLATE read-only. The argv invariant test stays GREEN while nxc mutates internally. | **Discovery is read-only by construction:** enumerate shares with `smbclient -L` (lists, never writes); read-perm is inferred from a read-only `ls` attempt. If NetExec is ever used it MUST carry `--no-write-check` behind a verified-version gate (fail closed otherwise). A live read-only assertion (seed a canary on the share out-of-band; confirm it is unchanged + no new files after a run) backstops the argv test. |
+| 2 BLOCKER | Interpolating server-controlled filenames into `smbclient -c 'get <file> <local>'` crosses smbclient's `;`-separated command parser → command injection; mount `-o ro` does not confine symlink targets. | **Crawl via a PROGRAMMATIC SMB client** (impacket `SMBConnection` list/read) — no `smbclient -c` string, so no shell/command-parser interpolation. Local destinations are **opaque content-addressed names** (never server names). Mount mode walks with `follow_symlinks=False` + realpath-containment (reject any entry resolving outside the mountpoint). No remote delete, ever. |
+| 3 HIGH | `umount` in `finally` isn't enough (EBUSY, timeouts, cleanup exceptions); never recursively shred an attached mount; cleanup failure must block clean-success. | Track mount ownership; verify unmount (re-check `/proc/mounts`); **scratch cleanup is independent of unmount** and runs regardless; shred targets ONLY the scratch dir after confirming it is not (and does not contain) the mountpoint; any cleanup/unmount failure → the run is `inconclusive`, not clean-success. |
+| 4 HIGH | Bounds don't bound real consumption (aggregate bytes, entry count, listing size, whole-run deadline; empty-dir farm; file grows between list↔fetch; cycles). | Enforce limits **during** traversal/transfer: aggregate scratch-byte cap, entry-count cap, per-read byte cap (stop mid-file at the cap), max depth, cycle/visited-inode detection, and a **whole-run deadline**. Hitting any bound → an explicit `partial` result, never a silent truncation. |
+| 5 HIGH | A filename/path can CONTAIN a secret; the proof scrubber filters field NAMES not path VALUES — raw paths in receipts/tokens/diagnostics would leak. | **Opaque location IDs** in receipts/proof-tokens/diagnostics: each finding carries a stable ID (e.g. `loc:<rand>`); the raw host/share/path→ID map lives ONLY in the operator's protected out-of-band store. A path is never a proof-token input. Applies to diagnostics + tool logs. |
+| 6 HIGH | `shares_enumerated` is not an accepted `terminal_kind` (dropped); the base adapter discards an inventory returned as an extra artifact field; discovery ≠ credential recovery. | Add a dedicated terminal kind (e.g. `share_inventory`) to `proof.py` accepted kinds + a result adapter so the (opaque-ID) inventory persists; coordinate the harness scorer/truth facet. Discovery is its own result type, never a `cred:*`. |
+| 7 HIGH | "one readable share crawled = success" is existential, not exhaustive; hides denied/unreachable/truncated hosts. | Record **per-host/per-share outcomes** (listed-ok / denied / unreachable / malformed / truncated); separate *observed access* from *coverage completeness*; a mixed or bounded run is `partial`/`inconclusive` for completeness. Fixtures: mixed success/denial, root-readable+child-denied, malformed output, each truncation reason. |
+
+**Net effect on S1:** crawl uses a programmatic SMB client (impacket), discovery uses `smbclient -L`
+(read-only), receipts use opaque location IDs + a new `share_inventory` terminal kind with a result
+adapter, bounds + cleanup + exhaustiveness are first-class. This is a larger, security-critical S1
+than the draft; it is the correct scope. Build proceeds from this resolved design (a short r2 verify
+of the revised plan precedes implementation).
