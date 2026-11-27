@@ -59,6 +59,12 @@ def _mnt_id(fd: int) -> Optional[str]:
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 _PIN_FLAGS = os.O_PATH | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
+# Bound on entries SCANNED per directory (not just retained): a hostile network fs can
+# stream an endless directory of skip-able entries (symlinks/specials) that never grow
+# the retained cap, so the per-dir cap alone does not bound the work. Generous vs any
+# real directory; skipped entries beyond this truncate the listing instead of hanging.
+_SCAN_SLACK = 8192
+
 
 class _ContainedDir:
     """Descriptor-anchored read-only walker pinned beneath ``root_path``. Usable over
@@ -66,14 +72,18 @@ class _ContainedDir:
 
     def __init__(self, root_path: str):
         root_fd = os.open(root_path, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0))
-        self._root_mnt = _mnt_id(root_fd)
-        if self._root_mnt is None:                     # cannot pin identity -> fail closed
+        try:
+            self._root_mnt = _mnt_id(root_fd)
+            if self._root_mnt is None:                 # cannot pin identity -> fail closed
+                raise _Contained(f"cannot read mnt_id for {root_path!r} (fail closed)")
+            self._root_dev = os.fstat(root_fd).st_dev
+        except BaseException:                          # any construction failure must not leak the fd
             os.close(root_fd)
-            raise _Contained(f"cannot read mnt_id for {root_path!r} (fail closed)")
-        self._root_dev = os.fstat(root_fd).st_dev
+            raise
         self._dirfds: dict[str, int] = {"": root_fd}   # relpath -> readable dir fd (anchor + scandir)
         self.symlinks_skipped = 0
         self.special_skipped = 0
+        self.scan_truncated = False
 
     def _verify(self, fd: int) -> None:
         """Every opened fd must stay on the pinned mount (mnt_id + st_dev)."""
@@ -111,8 +121,13 @@ class _ContainedDir:
         dfd = self._resolve_dir(relpath)
         cap = max(0, int(limit))
         out: list = []
+        scanned = 0
         with os.scandir(dfd) as it:                    # readable dir fd (O_PATH would EBADF)
             for e in it:
+                scanned += 1
+                if scanned > cap + _SCAN_SLACK:        # hostile endless/huge dir -> bound total work
+                    self.scan_truncated = True
+                    break
                 if e.name in (".", ".."):
                     continue
                 if e.is_symlink():                     # never follow a symlink -> skip + count
@@ -181,11 +196,15 @@ def _write_cred(cfg) -> str:
     """A ``0600`` ``mount.cifs`` credentials file (``mkstemp`` is ``O_EXCL`` + ``0600``).
     Keeps the password OUT of argv (the process list); unlinked right after the mount."""
     fd, path = tempfile.mkstemp(prefix="sl-cred-")
-    with os.fdopen(fd, "w") as fh:
-        fh.write(f"username={cfg.username or ''}\n")
-        fh.write(f"password={cfg.password or ''}\n")
-        if cfg.domain:
-            fh.write(f"domain={cfg.domain}\n")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(f"username={cfg.username or ''}\n")
+            fh.write(f"password={cfg.password or ''}\n")
+            if cfg.domain:
+                fh.write(f"domain={cfg.domain}\n")
+    except BaseException:                              # a partial write still wrote the secret -> shred
+        _shred_unlink(path)
+        raise
     return path
 
 
@@ -263,11 +282,11 @@ class MountReader:
         mp = tempfile.mkdtemp(prefix="sl-mnt-")       # 0700
         entry = {"mp": mp, "fs": None, "mounted": False, "cred": None}
         self._mounts[share] = entry                   # REGISTER before mount (crash/partial cleanup)
-        mounted = False
         try:
             mounted = self._do_mount(share, mp)
-        except Exception:
-            mounted = os.path.ismount(mp)             # a late/partial mount still needs teardown
+        except BaseException:                         # incl. KeyboardInterrupt: reconcile then re-raise
+            entry["mounted"] = os.path.ismount(mp)    # a late/partial mount still needs teardown
+            raise
         entry["mounted"] = mounted
         if not mounted:
             raise OSError(f"mount {share!r} failed")
@@ -301,18 +320,22 @@ class MountReader:
                     fs.close()                        # close ALL fds FIRST (unbusy the mount)
                 except Exception:
                     pass
-            if entry.get("mounted"):
+            try:                                      # source of truth = the REAL mount state, not just
+                really_mounted = entry.get("mounted") or os.path.ismount(entry["mp"])
+            except OSError:
+                really_mounted = bool(entry.get("mounted"))  # the stored flag (set before an interrupt)
+            if really_mounted:
                 try:
                     self._umount(entry["mp"])
                 except Exception:
                     pass
             if entry.get("cred"):
                 _shred_unlink(entry["cred"])
-            if not os.path.ismount(entry["mp"]):      # rmdir only if confirmed unmounted
-                try:
+            try:
+                if not os.path.ismount(entry["mp"]):  # rmdir only if confirmed unmounted
                     os.rmdir(entry["mp"])
-                except OSError:
-                    pass
+            except OSError:
+                pass
         self._mounts.clear()
         try:
             self._discovery.close()
