@@ -44,11 +44,12 @@ class _FakeReader(ShareReader):
             raise PermissionError("STATUS_ACCESS_DENIED")
         return list(self.shares)
 
-    def list_dir(self, share, path):
+    def list_dir(self, share, path, limit=10**9):
         self.calls.append(("list_dir", share, path.strip("/\\")))
         if (share, path.strip("/\\")) in self.deny_dirs:
             raise PermissionError("STATUS_ACCESS_DENIED")
-        return list(self.tree.get((share, path.strip("/\\")), []))
+        entries = list(self.tree.get((share, path.strip("/\\")), []))
+        return entries[: max(0, int(limit)) + 1]      # honor the per-dir cap (limit+1 overflow)
 
     def close(self):
         self.calls.append(("close",))
@@ -157,6 +158,36 @@ def test_deadline_bound_yields_partial(tmp_path):
     cov = r["terminal_fact"]["coverage"]
     assert cov["deadline_hit"] is True and "partial:deadline" in r["errors"]
     assert r["complete"] is False
+
+
+def test_expired_deadline_does_not_fabricate_observed_access(tmp_path):
+    # S1-review #5: a deadline that expired before the first listing must NOT report
+    # terminal ok=True, and must not even call list_dir.
+    reader = _FakeReader(["SYSVOL"], _tree())
+    r = _run(_cfg(share_crawl_deadline_s=0), tmp_path, reader)
+    assert r["terminal_fact"]["ok"] is False
+    assert not any(c[0] == "list_dir" for c in reader.calls)
+
+
+def test_child_subtree_denial_makes_share_partial_not_complete(tmp_path):
+    # S1-review #3: root lists but a child dir is denied -> share 'partial', coverage
+    # incomplete, yet terminal ok=True (the root WAS listed = observed access).
+    reader = _FakeReader(["SYSVOL"], _tree(), deny_dirs=[("SYSVOL", "policies")])
+    r = _run(_cfg(), tmp_path, reader)
+    tf = r["terminal_fact"]
+    assert tf["ok"] is True                                   # observed access at the root
+    assert any(p["share"] == "SYSVOL" and p["outcome"] == "partial" for p in tf["per_share"])
+    assert tf["coverage"]["complete"] is False and r["complete"] is False
+    assert "partial:subtree_denied" in r["errors"]
+
+
+def test_share_cap_omission_is_incomplete(tmp_path):
+    # S1-review #4: discovering more shares than the cap must mark coverage incomplete.
+    reader = _FakeReader(["SYSVOL", "NETLOGON", "C$"], _tree())
+    r = _run(_cfg(share_max_shares=1), tmp_path, reader)
+    cov = r["terminal_fact"]["coverage"]
+    assert cov["shares_omitted"] == 2 and cov["complete"] is False
+    assert "partial:share_cap" in r["errors"] and r["complete"] is False
 
 
 def test_directory_cycle_does_not_hang(tmp_path):
