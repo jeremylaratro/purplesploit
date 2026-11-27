@@ -69,6 +69,7 @@ problem distinct from an honest "remote file absent."
 executor).
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 import secrets
@@ -125,14 +126,7 @@ def _sysvol_tasks_unc(domain: str, gpo_guid: str) -> str:
 
 
 def _nxc_auth_flags(cfg) -> list[str]:
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    return netresolve.nxc_auth_flags(cfg)
 
 
 def _bloodyad_auth_argv(cfg, dc: str) -> list[str]:

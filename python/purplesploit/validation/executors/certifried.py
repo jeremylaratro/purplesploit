@@ -37,6 +37,7 @@ certipy account-create/req/auth/delete markers, the issued-pfx path, and the
 ``nxc ldap`` read-back bind-OK marker.
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 import secrets
@@ -168,14 +169,7 @@ class CertifriedExecutor(ValidationExecutor):
 
     def _nxc_auth(self, cfg) -> list[str]:
         """NetExec operator-auth flags for the LDAP read-back (secrets masked)."""
-        argv = ["-u", cfg.username or ""]
-        if cfg.nt_hash:
-            argv += ["-H", cfg.nt_hash]
-        elif cfg.aes_key:
-            argv += ["--aesKey", cfg.aes_key]
-        elif cfg.password is not None:
-            argv += ["-p", cfg.password]
-        return argv
+        return netresolve.nxc_auth_flags(cfg)
 
     # ---------------------------------------------------------------- execute
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
