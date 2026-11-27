@@ -39,6 +39,7 @@ from typing import Any
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .. import states
+from .. import netresolve
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_AES_KEY, CAP_NT_HASH)
 from .coercion import _short_name
@@ -82,9 +83,9 @@ def _krbtgt_target(cfg) -> str:
     ``ERROR_DS_NAME_ERROR_NOT_UNIQUE`` through the GC (impacket itself tells you to
     use the NetBIOS form). Harmless in a single domain, so it is always used.
     NetBIOS defaults to the FQDN's first label (the usual case); override via
-    ``cfg.netbios_domain`` on the rare domain whose NetBIOS name differs."""
-    netbios = (getattr(cfg, "netbios_domain", None) or (cfg.domain or "").split(".", 1)[0]).strip()
-    return f"{netbios.upper()}/krbtgt" if netbios else "krbtgt"
+    ``cfg.netbios_domain`` on the rare domain whose NetBIOS name differs. Delegates
+    to the canonical :func:`netresolve.gc_qualify` (G3)."""
+    return netresolve.gc_qualify(cfg, "krbtgt")
 
 
 class DCSyncExecutor(ValidationExecutor):

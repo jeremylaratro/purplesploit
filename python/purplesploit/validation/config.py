@@ -16,6 +16,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Optional
 
+from . import netresolve   # dependency-free leaf (duck-typed cfg) -> one-way import, no cycle
+
 
 _SAFE_LABEL = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -55,6 +57,13 @@ class ValidationConfig:
     # NetBIOS name differs from its first DNS label (used to disambiguate names
     # like krbtgt in a multi-domain forest).
     netbios_domain: Optional[str] = None
+    # DNSHARDEN name-resolution surface (all optional, non-secret, runtime). ``kdc_host``
+    # names the KDC for Kerberos discovery (defaults to dc_ip) -- always safe to pass.
+    # ``dns_server`` is OPT-IN: when set, tools are told to resolve via it; when None,
+    # the tool's system/``/etc/hosts`` resolver is left intact (forcing --dns-server
+    # would bypass it). No host-pinning.
+    kdc_host: Optional[str] = None
+    dns_server: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
     nt_hash: Optional[str] = None           # 'LM:NT', ':NT', or bare NT
@@ -128,8 +137,10 @@ class ValidationConfig:
 
     @property
     def netbios(self) -> str:
-        """The leftmost domain label, upper-cased (best-effort NetBIOS name)."""
-        return (self.domain.split(".", 1)[0] or self.domain).upper()
+        """Canonical NetBIOS short name -- delegates to :mod:`netresolve` so the
+        ``netbios_domain`` override is honored (this property previously ignored
+        it) and the whole codebase shares one definition."""
+        return netresolve.netbios(self)
 
     def has_credentials(self) -> bool:
         return bool(self.password or self.nt_hash or self.aes_key)
