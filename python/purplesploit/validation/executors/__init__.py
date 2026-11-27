@@ -47,6 +47,8 @@ from .silver_ticket import SilverTicketExecutor
 from .diamond_ticket import DiamondTicketExecutor
 from .sapphire_ticket import SapphireTicketExecutor
 from .share_loot import ShareLootExecutor
+from .bronze_bit import BronzeBitExecutor
+from .s4u2self import S4U2SelfExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -66,6 +68,9 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     GoldenTicketExecutor, SilverTicketExecutor, DiamondTicketExecutor, SapphireTicketExecutor,
     # SHARELOOT S1 -- read-only SMB share discovery + crawl (first joint Win/Linux module).
     ShareLootExecutor,
+    # T6 -- delegation extras. BRONZE-BIT (CVE-2020-17049; classifies exploited/kdc_patched)
+    # + S4U2SELF (self-ticket -> local admin). Both reuse the getST S4U machinery.
+    BronzeBitExecutor, S4U2SelfExecutor,
 )
 
 # Technique -> executor class.

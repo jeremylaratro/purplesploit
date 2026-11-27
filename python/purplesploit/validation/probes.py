@@ -1212,6 +1212,75 @@ class ShareLootProbe(PreconditionProbe):
             evidence={"has_creds": False})
 
 
+class BronzeBitProbe(PreconditionProbe):
+    """BRONZE-BIT (CVE-2020-17049): the service account (operator default) should hold
+    ``msDS-AllowedToDelegateTo``; the no-protocol-transition case is Bronze Bit's
+    target (with protocol transition, CONSTRAINED-DELEG-PT is the simpler fit).
+    Exploitation ALSO needs an unpatched KDC -- the executor classifies that at run
+    time (``kdc_patched`` on an enforcing KDC), so this stays a config-only check."""
+    technique = "BRONZE-BIT"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        principal = ctx.config.username or ""
+        res = _ldap_query(ctx, f"(sAMAccountName={principal})",
+                          ["sAMAccountName", "msDS-AllowedToDelegateTo", "userAccountControl"])
+        text = _text(res)
+        if not _account_read_ok(res, text):
+            return ProbeResult(viable=True, unknown=True,
+                reason=f"could not read delegation attrs for {principal or '(principal)'}; attempting anyway",
+                evidence={"allowed_to_delegate_to": None, "protocol_transition": None})
+        a2d = _extract_attr(text, "msDS-AllowedToDelegateTo")
+        uac = _parse_int(_extract_attr(text, "userAccountControl"))
+        has_a2d = bool(a2d) and a2d.strip().lower() not in (
+            "", "(not set)", "<not set>", "none", "-", "n/a")
+        if not has_a2d:
+            return ProbeResult(viable=False,
+                reason=f"msDS-AllowedToDelegateTo empty on {principal}: no constrained delegation -> skip",
+                evidence={"allowed_to_delegate_to": None, "protocol_transition": None})
+        pt = bool(uac is not None and (uac & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION))
+        reason = (f"msDS-AllowedToDelegateTo set ({a2d}); "
+                  + ("protocol transition present -> CONSTRAINED-DELEG-PT is simpler, Bronze Bit still applies"
+                     if pt else "no protocol transition -> Bronze Bit's target case")
+                  + "; exploitation also requires an unpatched KDC (classified at run time)")
+        return ProbeResult(viable=True, reason=reason,
+            evidence={"allowed_to_delegate_to": a2d, "protocol_transition": pt})
+
+
+class S4U2SelfProbe(PreconditionProbe):
+    """S4U2SELF: viable when the operator controls a computer/service account (one with
+    a ``servicePrincipalName``, or a computer account ending ``$``) whose key they hold
+    -- S4U2self needs a service identity to request a ticket to itself."""
+    technique = "S4U2SELF"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        if not (cfg.username and cfg.has_credentials()):
+            return ProbeResult(viable=False,
+                reason="no credential for the controlled computer/service account",
+                evidence={"has_creds": False})
+        principal = cfg.username
+        res = _ldap_query(ctx, f"(sAMAccountName={principal})",
+                          ["sAMAccountName", "servicePrincipalName"])
+        text = _text(res)
+        is_computer = principal.endswith("$")
+        if not _account_read_ok(res, text):
+            return ProbeResult(viable=True, unknown=True,
+                reason=f"could not read servicePrincipalName for {principal}; attempting anyway"
+                       + (" (computer account)" if is_computer else ""),
+                evidence={"has_spn": None, "is_computer": is_computer})
+        spn = _extract_attr(text, "servicePrincipalName")
+        has_spn = bool(spn) and spn.strip().lower() not in (
+            "", "(not set)", "<not set>", "none", "-", "n/a")
+        if has_spn or is_computer:
+            return ProbeResult(viable=True,
+                reason=f"{principal} is a service/computer account (SPN={has_spn}, computer={is_computer}): "
+                       "S4U2self applicable",
+                evidence={"has_spn": has_spn, "is_computer": is_computer})
+        return ProbeResult(viable=False,
+            reason=f"{principal} has no SPN and is not a computer account: S4U2self needs a service identity",
+            evidence={"has_spn": False, "is_computer": False})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
@@ -1227,6 +1296,8 @@ _PROBES: tuple[type[PreconditionProbe], ...] = (
     GoldenTicketProbe, SilverTicketProbe, DiamondTicketProbe, SapphireTicketProbe,
     # SHARELOOT S1 (27NOV2026) -- read-only SMB share discovery + crawl.
     ShareLootProbe,
+    # T6 (27NOV2026) -- delegation extras (config-only applicability checks).
+    BronzeBitProbe, S4U2SelfProbe,
 )
 
 # Technique -> probe class.
