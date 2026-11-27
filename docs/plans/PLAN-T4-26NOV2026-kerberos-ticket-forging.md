@@ -119,3 +119,53 @@ alone with an empty store; B2 nxc predicate is the generic `SMB…[+]`).
 | B3 | engine reaches a base-state goal from `eff` alone (no capability/terminal) | `S_PERSISTENCE` is a CAPABILITY-BACKED goal: the goal-reached check must require the produced capability in the store for it (like `cred:`/`control:`), and `produced()` emits it ONLY on reauth success. `S_DA` (terminal, reached by a completing DCSYNC) keeps its current semantics. | T4b |
 | H4 | `pre={KRBTGT,S0}` is OR → seed-runnable; `accepts_*` isn't auto-wired | `chain_pre={KRBTGT}` only; the live requester cred (Diamond/Sapphire) is validated separately at EXECUTION (deferred, not a pre-resolved required param); wire key acceptance into `_consume`/execute (channel + key format + placeholder rejection + principal/domain binding); composed exec never substitutes an operator key for an absent/invalid produced key. | T4b |
 | H5 | live escalation needs a front; no special DCSYNC→GOLDEN planning link | the distinct `S_PERSISTENCE` goal makes DCSYNC→GOLDEN discoverable already. Prove a real FRONT→DCSYNC→GOLDEN from the default seed; add a given-key control (no escalation provenance) + a missing-product control (GOLDEN never runs despite an operator key). | T4b |
+
+## Execution record (T4a + T4b) — 27NOV2026
+
+**T4a (individual forging).** All four executors built (GOLDEN/SILVER/DIAMOND/SAPPHIRE) +
+`forge_common` shared infra. Built by the supervisor (delegate models were unavailable: Codex
+Sol's content gate blocked operational forging-code *generation* in this context; a Sonnet
+subagent declined). Proven live on the owned GOAD lab via `validate run` (forge + forged-ccache
+reauth) and scored **proved** by ad-lab-harness, secret-clean. Commits: purplesploit `148242d`,
+harness facet (`truth/GOAD-proof.json`, 4 `kerberos_forge` entries) `5b65d12`.
+
+**T4a code review (Codex Sol r1 on the diff) — 2 findings, both fixed (`d684dd5`).**
+- **BLOCKER** `forge_common` — `forged = ccache.exists()` could reuse a STALE ccache from an
+  interrupted run (no-op/failed forge → false `complete=True`); no returncode check; login
+  identity unverified. **Fix:** forge in a dedicated `.forge-<user>` scratch dir cleared first +
+  removed after; `forged` now requires returncode 0 **and** a freshly-written cache in that dir;
+  the reauth is bound to the forged principal (`_reauth_identity_ok`).
+- **HIGH** `_shred()` wiped EVERY file in `out_dir`, which standalone is the operator's output
+  root (`--output .` would destroy project files). **Fix:** all forge file ops confined to the
+  `.forge-<user>` scratch dir; cleanup never touches the output root.
+- Regression tests added (non-vacuous): nonzero-returncode-is-not-a-forge, stale-ccache-not-reused,
+  cleanup-confined-to-scratch (a sibling report/key survives), different-principal-login-rejected.
+
+**T4b (DCSync → forge chain).** DCSync now threads the recovered krbtgt signing key IN-MEMORY to a
+downstream forging edge: on the **composed path only**, it extracts the krbtgt key (AES256 pref.,
+NT fallback) into an engine-only artifact field (`_receipt_from` drops it) and `produced()` emits a
+`KRBTGT` capability on a SECRET channel (`CAP_AES_KEY`/`CAP_NT_HASH`) the engine keeps in-memory and
+never serializes. GOLDEN's `accepts_key` validates it; `_thread_caps` routes it into the forge;
+`S_persistence` is capability-backed (reached only via GOLDEN's produced cap). **Standalone DCSync is
+unchanged (presence-only, never captures the key).** Commit `87fb7a3`. Tests `test_chain_t4_forging`:
+FRONT→DCSYNC→GOLDEN reaches `S_persistence` and forges with the recovered key; the ChainReport carries
+no krbtgt key / NT hash / operator password; fail-closed controls (no front → GOLDEN unreachable;
+failed forge/DCSync → goal not reached).
+
+**Live re-proof after the fixes (27NOV2026, GOAD north.sevenkingdoms.local, reauth winterfell).**
+krbtgt (NetBIOS-qualified `NORTH/krbtgt`) + `WINTERFELL$` service keys derived live (DA operator,
+kept in container tmpfs, shredded after). All four forge+reauth **complete + terminal_ok, 0 secret
+leaks**, and scored **proved** by ad-lab-harness with the tightened identity predicate:
+
+| technique | key source | reauth identity | verdict |
+|---|---|---|---|
+| GOLDEN | `NORTH/krbtgt` AES256 | Administrator | proved |
+| SILVER | `WINTERFELL$` AES256 (cifs/winterfell) | Administrator | proved |
+| DIAMOND | `NORTH/krbtgt` AES256 + requester | Administrator | proved |
+| SAPPHIRE | `NORTH/krbtgt` AES256+NT + requester | Administrator (impersonated) | proved |
+
+Receipts copied to host (receipt JSON only); container keyfiles/ccaches/out-dirs shredded.
+
+**Status:** T4a + T4b individual + composable automation proven live and operator-ready via
+purplesploit. Remaining before T4 close-out: round-2 review verification, merge both repos, T4
+portability audit. 365/365 validation unit tests green.
