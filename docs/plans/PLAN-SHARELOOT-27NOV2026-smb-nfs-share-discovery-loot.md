@@ -196,3 +196,28 @@ Proven live on GOAD (winterfell): the crawl found 11 real items (web.config + pa
 in WinSxS) with no false positives on template configs; **a planted canary secret was found**
 (private_key_block + suggestive_name), its token present in the `0600` store but **NOT in the
 receipt**, and the canary was deleted (lab restored). 423/423 validation tests green (416 base + 7).
+
+## S4 build + live proof (27NOV2026) — dual-mode: looted credentials -> composable capability
+S4 shipped: usable-credential extraction (GPP `cpassword` AES-decrypt via whatever crypto backend is
+present; parses Groups/Services/ScheduledTasks/DataSources XML, either attribute order) ->
+`loot_rules.extract_credentials`. The executor gains `eff={S_looted_creds}` and `produced()` emits an
+in-memory SECRET `Capability(S_looted_creds, CAP_PASSWORD, value, principal)` per usable credential
+(new `CAP_PASSWORD` channel in `_SECRET_CHANNELS`; new `S_looted_creds` capability-backed state).
+
+Receipt semantics refined: `complete` now means the EDGE OBSERVED ACCESS (so a bounded/partial crawl
+still yields its loot + capabilities); EXHAUSTIVE COVERAGE stays a separate dimension
+(`coverage.complete` + the `partial:*` errors). The receipt carries a `usable_credentials` PRESENCE
+COUNT only -- the (principal, secret) pairs live in the in-memory capability + the `0600` operator
+store, never a receipt.
+
+**Proven live on GOAD (end-to-end dual-mode):** a seeded GPP `Groups.xml` (cpassword encrypting a real
+account's password) was crawled read-only, decrypted to a usable credential (`vagrant`), produced as a
+secret `S_looted_creds`/`CAP_PASSWORD` capability (value NOT in the receipt), and that LOOTED credential
+**authenticated downstream** -> `WINTERFELL [+] …\vagrant:vagrant (Pwn3d!)`. The GPP canary was deleted
+(lab restored). 425/425 validation tests green (416 baseline + 9).
+
+## Status
+S1 (SMB discover+crawl) merged; S3 (loot engine) + S4 (dual-mode creds) built + live-proven on this
+branch. Remaining: S2 (NFS, multi-method discovery -- NOT showmount-only; nmap rpcinfo/nfs-showmount +
+pyNfsClient portmap/NFSv4, programmatic read); S1b (mount mode, openat2). The owner's "don't rely only
+on showmount" directive is recorded for S2.

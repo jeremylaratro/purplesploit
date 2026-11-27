@@ -82,16 +82,21 @@ S_ACL_CRED = "S_acl_cred"
 # ticket's lifetime + the signing-key (krbtgt) validity -- not "survives resets".
 S_PERSISTENCE = "S_persistence"
 
+# SHARELOOT S4: a USABLE credential recovered from share loot (e.g. a GPP cpassword
+# decrypted to a named account's password). Capability-backed -- reaching it requires
+# the produced looted-credential capability in the store, never a declared eff alone.
+S_LOOTED_CREDS = "S_looted_creds"
+
 # The base (parameter-free) capability states.
 BASE_STATES: frozenset = frozenset({
     S0_USER_CREDS, DC_TGT, DA_CREDS, KRBTGT, S_DA,
     S_COERCED_AUTH, S_COMPUTER_CONTROL, S_RBCD_WRITE, S_IMPERSONATION_TGT,
-    S_ACL_CONTROL, S_ACL_CRED, S_PERSISTENCE,
+    S_ACL_CONTROL, S_ACL_CRED, S_PERSISTENCE, S_LOOTED_CREDS,
 })
 
 # Capability-backed base-state goals: reaching one requires the produced
 # capability to be in the store (the engine must not accept a declared eff alone).
-CAPABILITY_BACKED_BASE_STATES: frozenset = frozenset({S_PERSISTENCE})
+CAPABILITY_BACKED_BASE_STATES: frozenset = frozenset({S_PERSISTENCE, S_LOOTED_CREDS})
 
 _CERT_PREFIX = "cert:"
 _LOCAL_ADMIN_PREFIX = "local_admin:"
@@ -175,7 +180,7 @@ def all_states(states: Iterable[str]) -> bool:
 __all__ = [
     "S0_USER_CREDS", "DC_TGT", "DA_CREDS", "KRBTGT", "S_DA",
     "S_COERCED_AUTH", "S_COMPUTER_CONTROL", "S_RBCD_WRITE", "S_IMPERSONATION_TGT",
-    "S_ACL_CONTROL", "S_ACL_CRED", "S_PERSISTENCE",
+    "S_ACL_CONTROL", "S_ACL_CRED", "S_PERSISTENCE", "S_LOOTED_CREDS",
     "BASE_STATES", "CAPABILITY_BACKED_BASE_STATES",
     "cert_for", "local_admin_for", "cred_for", "cred_principal",
     "control_for", "is_state", "all_states",
