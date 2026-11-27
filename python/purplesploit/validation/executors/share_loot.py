@@ -44,6 +44,7 @@ from typing import Any, Callable, Optional
 
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof, states
+from . import loot_rules
 from .base import (ValidationExecutor, ExecutorContext, StepRecord)
 
 
@@ -64,6 +65,10 @@ class ShareReader:
         raise NotImplementedError
 
     def list_dir(self, share: str, path: str, limit: int) -> list[_Entry]:  # pragma: no cover
+        raise NotImplementedError
+
+    def read_file(self, share: str, path: str, max_bytes: int) -> bytes:  # pragma: no cover
+        """Read AT MOST ``max_bytes`` of a file (stop mid-file at the cap). Read-only."""
         raise NotImplementedError
 
     def close(self) -> None:                       # pragma: no cover - interface
@@ -95,6 +100,26 @@ class _ImpacketReader(ShareReader):
             if len(out) > max(0, int(limit)):      # retain at most limit+1 (overflow detectable)
                 break
         return out
+
+    def read_file(self, share: str, path: str, max_bytes: int) -> bytes:
+        cap = max(0, int(max_bytes))
+        buf = bytearray()
+
+        class _Stop(Exception):
+            pass
+
+        def _cb(data: bytes):
+            buf.extend(data)
+            if len(buf) >= cap:
+                raise _Stop()                      # bounded: stop mid-file at the cap
+
+        try:
+            self._c.getFile(share, path.replace("/", "\\"), _cb)   # read-only transfer
+        except _Stop:
+            pass
+        except Exception:
+            return b""
+        return bytes(buf[:cap])
 
     def close(self) -> None:
         try:
@@ -234,7 +259,7 @@ class ShareLootExecutor(ValidationExecutor):
         try:
             fd = os.open(str(store_ref), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as fh:
-                json.dump(crawler.locmap, fh, indent=2)
+                json.dump(crawler.store, fh, indent=2)   # raw paths + loot detail (values) -> operator only
         except OSError as exc:
             ctx._private_errors.append(f"store write: {exc}")
             errors.append("loot_store_unwritable")
@@ -259,7 +284,13 @@ class ShareLootExecutor(ValidationExecutor):
             proof_token=proof.proof_token("SHARE-LOOT", cfg.domain, ",".join(sorted(hosts)),
                                           "listed" if any_listed else "none"),
             extra={"coverage": coverage, "per_share": per_share,
-                   "store_ref": str(store_ref), "access_mode": "crawl"},
+                   "store_ref": str(store_ref), "access_mode": "crawl",
+                   # LOOT summary: PRESENCE + CATEGORY + opaque loc_ids only. No
+                   # values, no raw paths -- the loot itself is in the operator store.
+                   "loot": {"findings": crawler.loot_findings,
+                            "by_category": crawler.loot_by_category,
+                            "fetched_files": crawler.fetched_files,
+                            "hits": crawler.loot_hits[:200]}},
         )
         return self._artifact(steps, gate, terminal, bool(complete), errors)
 
@@ -282,7 +313,7 @@ class _Crawler:
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.locmap: dict[str, dict] = {}
+        self.store: dict[str, dict] = {}          # operator out-of-band map: loc_id -> {path,...,findings}
         self.files = 0
         self.dirs = 0
         self.entries = 0
@@ -291,6 +322,12 @@ class _Crawler:
         self.truncated = False
         self.any_dir_listed = False
         self.shares_omitted = 0
+        # S3 loot
+        self.loot_findings = 0
+        self.loot_by_category: dict[str, int] = {}
+        self.loot_hits: list[str] = []            # opaque loc_ids with findings (receipt-safe)
+        self.fetched_files = 0
+        self.fetched_bytes = 0
 
     def past_deadline(self) -> bool:
         if time.monotonic() >= self.deadline:
@@ -313,10 +350,40 @@ class _Crawler:
             return True
         return False
 
-    def _loc(self, host, share, path, is_dir, size) -> None:
+    def _loc(self, host, share, path, is_dir, size) -> str:
         lid = "loc:" + secrets.token_hex(8)
-        self.locmap[lid] = {"host": host, "share": share, "path": path,
-                            "is_dir": bool(is_dir), "size": int(size or 0)}
+        self.store[lid] = {"host": host, "share": share, "path": path,
+                           "is_dir": bool(is_dir), "size": int(size or 0)}
+        return lid
+
+    def _loot_file(self, reader: ShareReader, share: str, path: str, size: int, lid: str) -> None:
+        """Scan a crawled FILE for loot: filename rules always; fetch + content rules
+        when worthwhile and within the fetch budget + deadline. Findings-with-detail
+        (possible secret context) go to the STORE entry (operator), never a receipt;
+        only public category counts + the opaque loc_id surface in the receipt."""
+        if not getattr(self.cfg, "loot_enabled", True):
+            return
+        findings = loot_rules.filename_findings(path)
+        if (loot_rules.should_fetch(path, size, self.cfg.loot_max_file_bytes)
+                and self.fetched_files < self.cfg.loot_max_fetch_files
+                and self.fetched_bytes < self.cfg.loot_max_fetch_bytes_total
+                and not self.past_deadline()):
+            cap = min(self.cfg.loot_max_file_bytes,
+                      self.cfg.loot_max_fetch_bytes_total - self.fetched_bytes)
+            try:
+                data = reader.read_file(share, path, cap)
+            except Exception:
+                data = b""
+            self.fetched_files += 1
+            self.fetched_bytes += len(data)
+            findings += loot_rules.content_findings(data)
+        if findings:
+            self.store[lid]["findings"] = [{"category": f.category, "match_type": f.match_type,
+                                            "detail": f.detail} for f in findings]
+            self.loot_findings += len(findings)
+            self.loot_hits.append(lid)
+            for f in findings:
+                self.loot_by_category[f.category] = self.loot_by_category.get(f.category, 0) + 1
 
     def crawl_share(self, reader: ShareReader, host: str, share: str) -> dict:
         res = {"host": host, "share": share, "outcome": "listed",
@@ -362,7 +429,7 @@ class _Crawler:
                     break
                 self.entries += 1
                 child = (path.rstrip("/\\") + "/" + e.name) if path else e.name
-                self._loc(host, share, child, e.is_dir, e.size)
+                lid = self._loc(host, share, child, e.is_dir, e.size)
                 if e.is_dir:
                     self.dirs += 1
                     res["dirs"] += 1
@@ -375,6 +442,7 @@ class _Crawler:
                     self.files += 1
                     res["files"] += 1
                     res["bytes"] += int(e.size or 0)
+                    self._loot_file(reader, share, child, e.size, lid)    # S3 loot scan
         if res["outcome"] == "listed" and incomplete:
             res["outcome"] = "partial"                 # listed something but not fully covered
         return res
