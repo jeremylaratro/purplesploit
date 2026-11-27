@@ -1,0 +1,3 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — [probes.py:164](/srv/share/dev/purplesploit/.claude/worktrees/dnsharden-s1/python/purplesploit/validation/probes.py:164):** Missed implicit Kerberos calls. `_nxc_auth` still emits `--aesKey` without discovery flags; its four callers cover LDAP queries, share enumeration, and SMB/LDAP relay probes. Reproduced with explicit `cfg.kdc_host` and `cfg.dns_server`: neither reaches these argv. Without realm DNS/carrier entries, probes still fail KDC discovery and return unknown preconditions despite configured resolution. Delegate this seventh helper to `netresolve.nxc_auth_flags` and cover its callers.
