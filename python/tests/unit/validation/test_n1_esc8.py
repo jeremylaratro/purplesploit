@@ -209,7 +209,8 @@ def test_esc8_operator_override_method_and_listener(tmp_path):
     runner = _KeyRunner({"certipy-ad": RunResult(0, stdout=_auth_stdout())})
     get_executor("ESC8").run(_ctx(cfg, runner, tmp_path, pm), _esc8_finding(),
                              overrides={"method": "petitpotam", "listener_host": "10.0.0.250"})
-    trig = next(c for c in runner.calls if Path(c[0]).name == "PetitPotam.py")
+    trig = next(c for c in runner.calls if Path(c[0]).name == "coercer")
+    assert trig[trig.index("--filter-method-name") + 1] == "EfsRpcOpenFileRaw"
     assert "10.0.0.250" in trig                             # coercion points at the operator listener
 
 
