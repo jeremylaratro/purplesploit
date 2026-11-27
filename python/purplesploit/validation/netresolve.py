@@ -67,6 +67,25 @@ def nxc_kerberos_flags(cfg) -> list[str]:
     return flags
 
 
+def nxc_auth_flags(cfg) -> list[str]:
+    """THE canonical NetExec auth flags from ``cfg``: ``-u <user>`` then
+    ``-H <nthash>`` / ``--aesKey <key>`` / ``-p <pass>`` by mode (replaces 6 identical
+    per-executor copies). When the mode is **Kerberos** (``--aesKey``), ALSO appends
+    the Kerberos discovery flags (``--kdcHost``, opt-in ``--dns-server``) so
+    realm→KDC resolution works without a carrier ``/etc/hosts``. NTLM modes
+    (``-H``/``-p``) connect to the host/IP and get NO discovery flags. The secret
+    (hash/key/password) rides a flag that ``redact_argv`` masks."""
+    argv = ["-u", getattr(cfg, "username", None) or ""]
+    if getattr(cfg, "nt_hash", None):
+        argv += ["-H", cfg.nt_hash]                       # NTLM pass-the-hash (no KDC)
+    elif getattr(cfg, "aes_key", None):
+        argv += ["--aesKey", cfg.aes_key]                 # Kerberos -> needs discovery
+        argv += nxc_kerberos_flags(cfg)
+    elif getattr(cfg, "password", None) is not None:
+        argv += ["-p", cfg.password]                      # NTLM password (no KDC)
+    return argv
+
+
 # ------------------------------------------------- post-hoc failure classifier
 # Signatures of a NAME-RESOLUTION / KDC-DISCOVERY failure (not an auth failure).
 # Conservative by design — tuned against the real nxc/impacket output in S2's live

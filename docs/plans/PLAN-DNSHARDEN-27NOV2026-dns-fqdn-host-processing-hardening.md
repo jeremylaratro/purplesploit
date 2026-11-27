@@ -158,3 +158,18 @@ reported, not massaged.
   above). Plan verify r2: Codex Sol.
 - S1/S2 implementation: Claude (touches many call-sites) → **Codex Sol reviews each diff**.
 - Live proofs: Claude (GOAD/kali-vr). Tally so far — Claude: plan+impl (60); Codex: reviews (40).
+
+## Phase 8 — Benefit RESULT (measured live on GOAD, 27NOV2026)
+**G2 fix demonstrated at the tool level** (the exact scenario the 5 wired sites faced). With the
+realm `/etc/hosts` lines removed (winterfell host line kept) and a forged golden ticket:
+
+| condition | nxc Kerberos reauth result |
+|-----------|----------------------------|
+| **baseline** (`-k --use-kcache`, NO `--kdcHost`) | `[-] … Connection error (NORTH.SEVENKINGDOMS.LOCAL:88) … Temporary failure in name resolution` — KDC discovery FAILS |
+| **hardened** (`+ --kdcHost --dns-server`) | `[+] NORTH.SEVENKINGDOMS.LOCAL\Administrator from ccache (Pwn3d!)` — SUCCESS |
+
+So a never-before-seen AD system with no realm carrier entry now works via the derived `--kdcHost`.
+**Forge re-proof (r2 #3):** `forge_common` routed through the helper (opt-in `--dns-server`) — all four
+forges re-proven live (`complete + terminal_ok`, 0 leaks) and scored **proved** by ad-lab-harness,
+confirming the change did not break the carrier path. `/etc/hosts` restored; ticket + keys shredded.
+390/390 validation unit tests green (361 baseline + 29 new), zero regressions (manifest-diffed).

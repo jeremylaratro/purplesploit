@@ -25,6 +25,7 @@ gate -- the two are independent, same two-layer pattern as ``destructive``).
 bloodyAD/impacket-dacledit human-readable wording (see ``acl_common.py``).
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 from pathlib import Path
@@ -76,14 +77,7 @@ def _account_read_ok(res: RunResult, text: str) -> bool:
 
 def _nxc_auth_flags(cfg) -> list[str]:
     """NetExec auth flags (mirrors probes._nxc_auth / roast.py's own copy)."""
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    return netresolve.nxc_auth_flags(cfg)
 
 
 def _bloodyad_auth_argv(cfg, dc: str) -> list[str]:

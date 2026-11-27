@@ -59,6 +59,7 @@ serial and honestly reports not-proved / inconclusive -- it never fabricates an
 issuance. The serial is still parsed for the audit advisory + the N3 revoke.
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 from pathlib import Path
@@ -269,7 +270,8 @@ class ADCSESC1Executor(ValidationExecutor):
         # 3) ticket-backed access = the terminal proof ----------------------
         nxc_ok = False
         if auth_ok:
-            nxc_argv = ["nxc", "smb", target_host, "-k"]
+            nxc_argv = ["nxc", "smb", target_host, "-k",
+                        *netresolve.nxc_kerberos_flags(cfg)]
             res = ctx.runner.run(nxc_argv, timeout=cfg.tool_timeout_s,
                                  env={"KRB5CCNAME": ccache} if ccache else None,
                                  cwd=str(out_dir))
@@ -280,6 +282,10 @@ class ADCSESC1Executor(ValidationExecutor):
                    else "access failed")
             if not nxc_ok:
                 errors.append("nxc_access_failed")
+                diag = netresolve.classify_resolution_failure(
+                    cfg, target_host, nxc_out + "\n" + (res.stderr or ""))
+                if diag:
+                    errors.append(diag)
 
         # terminal: cert issued AND PKINIT auth succeeded AND access ok.
         cert_used_ok = issued_ok and auth_ok and nxc_ok

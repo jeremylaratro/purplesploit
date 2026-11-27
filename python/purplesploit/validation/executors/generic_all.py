@@ -31,6 +31,7 @@ orchestration-glue duplication, not novel logic" -- the same §1.1 rationale
 every other T3 file already applies).
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 import secrets
@@ -85,14 +86,7 @@ def _account_read_ok(res: RunResult, text: str) -> bool:
 
 
 def _nxc_auth_flags(cfg) -> list[str]:
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    return netresolve.nxc_auth_flags(cfg)
 
 
 def _bloodyad_auth_argv(cfg, dc: str) -> list[str]:
@@ -664,13 +658,19 @@ class GenericAllExecutor(ValidationExecutor):
         # 4) ticket-backed access = the terminal proof ----------------------
         terminal_fact: Optional[dict] = None
         if getst_ok:
-            nxc_argv = ["nxc", "smb", target, "-k", "--use-kcache"]
+            nxc_argv = ["nxc", "smb", target, "-k", "--use-kcache",
+                        *netresolve.nxc_kerberos_flags(cfg)]
             res = ctx.runner.run(nxc_argv, timeout=cfg.tool_timeout_s,
                                  env={"KRB5CCNAME": ticket}, cwd=str(out_dir))
             out = res.stdout or ""
             nxc_ok = bool(_RE_NXC_PWNED.search(out) or _RE_NXC_AUTH_OK.search(out))
             record("nxc_access", nxc_argv, res, nxc_ok,
                    note="pwn3d" if _RE_NXC_PWNED.search(out) else "auth" if nxc_ok else "")
+            if not nxc_ok:
+                diag = netresolve.classify_resolution_failure(
+                    cfg, target, out + "\n" + (res.stderr or ""))
+                if diag:
+                    errors.append(diag)
             terminal_fact = proof.build_terminal_fact(
                 "rbcd_access", ok=nxc_ok, impersonated=impersonate,
                 predicate=(f"impersonated {impersonate} to {spn} via RBCD on "

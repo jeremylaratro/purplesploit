@@ -24,6 +24,7 @@ ASREP keys on ``{domain}`` (domain-level anchor). The ``target_identity`` of eac
 subclass produces exactly those attributes.
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 from pathlib import Path
@@ -42,14 +43,7 @@ DEFAULT_WORDLIST = "/usr/share/wordlists/rockyou.txt"
 def _nxc_auth_flags(cfg) -> list[str]:
     """NetExec auth flags from the operator config (mirrors probes._nxc_auth):
     ``-u <user>`` then ``-H <nthash>`` / ``--aesKey <key>`` / ``-p <pass>``."""
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    return netresolve.nxc_auth_flags(cfg)
 
 
 # nxc re-auth success markers (domain creds accepted by the DC).

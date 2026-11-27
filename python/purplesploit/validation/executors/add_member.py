@@ -24,6 +24,7 @@ bloodyAD/impacket-dacledit human-readable wording (see ``acl_common.py``'s modul
 docstring and this module's own markers below).
 """
 from __future__ import annotations
+from .. import netresolve
 
 import re
 from pathlib import Path
@@ -70,14 +71,7 @@ def _account_read_ok(res: RunResult, text: str) -> bool:
 def _nxc_auth_flags(cfg) -> list[str]:
     """NetExec auth flags from the operator config (mirrors probes._nxc_auth
     and roast.py's _nxc_auth_flags -- same modest duplication rationale)."""
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    return netresolve.nxc_auth_flags(cfg)
 
 
 def _bloodyad_auth_argv(cfg, dc: str) -> list[str]:
