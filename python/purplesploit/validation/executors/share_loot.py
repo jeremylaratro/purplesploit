@@ -1,14 +1,19 @@
-"""SHARE-LOOT validation executor -- S1: SMB share discovery + read-only crawl.
+"""SHARE-LOOT validation executor -- SMB (S1) + NFS (S2) share discovery + crawl.
 
-The first joint Windows/Linux module (S1 = SMB; NFS = S2). READ-ONLY by
-construction, injection-safe by construction, secret-safe by construction:
+The first joint Windows/Linux module (S1 = SMB; S2 = NFS). The crawl + loot engine
+below is transport-agnostic (``_Crawler`` / ``loot_rules``); the transport is chosen
+by ``config.share_protocol`` and only discovery + the read-only reader differ (SMB:
+impacket here; NFS: :mod:`nfs_reader`). READ-ONLY by construction, injection-safe by
+construction, secret-safe by construction:
 
-- **Discovery + crawl use a PROGRAMMATIC SMB client** (impacket ``SMBConnection``)
-  through a narrow read-only interface (:class:`ShareReader`: ``list_shares`` /
-  ``list_dir`` / ``close`` only). There is NO ``smbclient -c`` command string, so
-  no shell / command-parser injection (plan review r1 #2); and no local mount /
-  ``os.walk``, so no TOCTOU / symlink-escape (r2 #2/#3 -- that is the DEFERRED
-  mount mode, S1b).
+- **Discovery + crawl use a PROGRAMMATIC client** -- impacket ``SMBConnection`` (SMB)
+  or pyNfsClient NFSv3 (NFS) -- through a narrow read-only interface
+  (:class:`ShareReader`: ``list_shares`` / ``list_dir`` / ``read_file`` / ``close``
+  only). There is NO ``smbclient -c`` command string, so no shell / command-parser
+  injection (plan review r1 #2); and no local mount / ``os.walk``, so no TOCTOU /
+  symlink-escape (r2 #2/#3 -- that is the DEFERRED mount mode, S1b). NFS export
+  discovery is MULTI-METHOD (programmatic + showmount + nmap + rpcinfo), each CLI
+  method an argv list (no shell string), so showmount alone cannot hide an export.
 - **Opaque location IDs** (r1 #5): a file/dir path can CONTAIN a secret, so a raw
   path NEVER enters a receipt. Each crawled path gets ``loc:<rand>``; the raw
   ``id -> {host,share,path,size,...}`` map goes ONLY to the operator's out-of-band
@@ -44,7 +49,7 @@ from typing import Any, Callable, Optional
 
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof, states
-from . import loot_rules
+from . import loot_rules, nfs_reader
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, Capability, CAP_PASSWORD)
 
 
@@ -153,10 +158,28 @@ class ShareLootExecutor(ValidationExecutor):
     verified_recipe = False                       # until lab-proven on an owned share
     pre = frozenset({states.S0_USER_CREDS})
     eff = frozenset({states.S_LOOTED_CREDS})      # S4: may produce usable looted credentials
-    recipe_ref = ("SHARE-LOOT = impacket SMBConnection listShares + recursive listPath "
-                  "(read-only, bounded, opaque IDs) + loot search + GPP-cpassword creds")
+    recipe_ref = ("SHARE-LOOT = SMB (impacket listShares+listPath) or NFS (pyNfsClient "
+                  "multi-method export discovery + readdirplus) -- read-only, bounded, "
+                  "opaque IDs + loot search + GPP-cpassword creds")
 
     reader_factory = staticmethod(_impacket_reader)   # test seam (ctx.share_reader_factory overrides)
+
+    def _default_factory(self, protocol: str) -> Callable:
+        """The read-only reader factory for this transport (NFS adds S2)."""
+        if protocol == "nfs":
+            return nfs_reader.nfs_reader_factory
+        return type(self).reader_factory
+
+    def _discover(self, ctx, cfg, protocol, reader, host, crawler, discovery_log) -> list[str]:
+        """Enumerate shares/exports. SMB: one programmatic listShares. NFS: the
+        multi-method UNION (programmatic export + showmount + nmap + rpcinfo), so a
+        single wrong source cannot hide an export (owner directive)."""
+        if protocol == "nfs":
+            exports, methods = nfs_reader.nfs_discover(
+                ctx.runner, reader, host, crawler.op_timeout(cfg.tool_timeout_s))
+            discovery_log.append({"host": host, "methods": methods})
+            return exports
+        return reader.list_shares()
 
     def param_specs(self, ctx: ExecutorContext, finding) -> list[ParamSpec]:
         e = finding.entity or {}
@@ -173,6 +196,10 @@ class ShareLootExecutor(ValidationExecutor):
         return dict(ctx.config.resolve_target_identity(host)) if host else dict(finding.entity)
 
     def steps_preview(self, ctx, finding, params) -> list[str]:
+        if getattr(ctx.config, "share_protocol", "smb") == "nfs":
+            return ["multi-method NFS export discovery (Mount.export + showmount + nmap + rpcinfo)",
+                    "pyNfsClient readdirplus/lookup/read crawl with bounds -> opaque-ID inventory",
+                    "raw path map -> operator out-of-band store; receipt carries opaque IDs only"]
         return ["impacket SMBConnection.listShares() per host (read-only)",
                 "recursive listPath() with bounds -> opaque-ID inventory (no content fetched)",
                 "raw path map -> operator out-of-band store; receipt carries opaque IDs only"]
@@ -209,7 +236,10 @@ class ShareLootExecutor(ValidationExecutor):
             errors.append("no_target_hosts")
             return self._artifact(steps, gate, None, False, errors)
 
-        factory: Callable = getattr(ctx, "share_reader_factory", None) or type(self).reader_factory
+        protocol = getattr(cfg, "share_protocol", "smb")
+        discovery_log: list[dict] = []
+        factory: Callable = (getattr(ctx, "share_reader_factory", None)
+                             or self._default_factory(protocol))
         out_dir = Path(ctx.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         store_dir = Path(getattr(cfg, "loot_store_dir", None) or (out_dir / "loot-store"))
@@ -236,7 +266,8 @@ class ShareLootExecutor(ValidationExecutor):
                     per_share.append({"host": host, "share": None, "outcome": "not_crawled"})
                     continue
                 try:
-                    all_shares = reader.list_shares()
+                    all_shares = self._discover(ctx, cfg, protocol, reader, host,
+                                                crawler, discovery_log)
                 except Exception as exc:
                     ctx._private_errors.append(f"{host} list_shares: {exc}")
                     per_share.append({"host": host, "share": None, "outcome": "denied"})
@@ -282,13 +313,15 @@ class ShareLootExecutor(ValidationExecutor):
 
         terminal = proof.build_terminal_fact(
             self.terminal_kind, ok=bool(any_listed),
-            predicate=(f"read-only SMB share discovery + crawl over {len(hosts)} host(s); "
-                       f"{coverage['files']} files / {coverage['dirs']} dirs inventoried "
+            predicate=(f"read-only {protocol.upper()} share discovery + crawl over "
+                       f"{len(hosts)} host(s); {coverage['files']} files / "
+                       f"{coverage['dirs']} dirs inventoried "
                        f"({'complete' if complete else 'partial'})"),
             proof_token=proof.proof_token("SHARE-LOOT", cfg.domain, ",".join(sorted(hosts)),
                                           "listed" if any_listed else "none"),
             extra={"coverage": coverage, "per_share": per_share,
                    "store_ref": str(store_ref), "access_mode": "crawl",
+                   "protocol": protocol, "discovery": discovery_log,
                    # LOOT summary: PRESENCE + CATEGORY + opaque loc_ids only. No
                    # values, no raw paths -- the loot itself is in the operator store.
                    "loot": {"findings": crawler.loot_findings,

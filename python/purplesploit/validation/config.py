@@ -121,6 +121,10 @@ class ValidationConfig:
     # inconclusive:mount_mode_deferred -- it needs descriptor-anchored (openat2)
     # containment the crawl path does not require.
     share_access_mode: str = "crawl"
+    # SHARE-LOOT transport: 'smb' (S1, impacket) or 'nfs' (S2, pyNfsClient NFSv3).
+    # The crawl/loot engine is transport-agnostic; only discovery + the read-only
+    # reader differ. Per-run (no host pin); 'auto' per-host probing is a follow-up.
+    share_protocol: str = "smb"
     # Operator out-of-band store for the raw host/share/path -> opaque-location-ID
     # map (paths can contain secrets, so they NEVER go in a receipt). None -> a
     # per-run file under output_dir. The map is the operator's; receipts carry IDs.
@@ -155,6 +159,8 @@ class ValidationConfig:
             self.proof_truth = Path(self.proof_truth)
         if not isinstance(self.extra_targets, list):
             raise ValueError("extra_targets must be a list")
+        if self.share_protocol not in ("smb", "nfs"):
+            raise ValueError("share_protocol must be 'smb' or 'nfs'")
 
     # --- derived helpers -------------------------------------------------
     @property

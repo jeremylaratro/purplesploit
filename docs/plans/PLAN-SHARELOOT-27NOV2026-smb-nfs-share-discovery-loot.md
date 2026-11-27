@@ -216,8 +216,43 @@ secret `S_looted_creds`/`CAP_PASSWORD` capability (value NOT in the receipt), an
 **authenticated downstream** -> `WINTERFELL [+] …\vagrant:vagrant (Pwn3d!)`. The GPP canary was deleted
 (lab restored). 425/425 validation tests green (416 baseline + 9).
 
+## S2 build + live proof (27NOV2026) — NFS (NFSv3) transport + multi-method discovery
+S2 shipped: a transport split so the crawl + loot engine are protocol-agnostic and only discovery +
+the read-only reader differ by `config.share_protocol` ('smb' | 'nfs'). New `nfs_reader.py`:
+
+- **`_NfsReader`** — a read-only `ShareReader` over **pyNfsClient (NFSv3)**: `Mount.export`/`mnt` +
+  `NFSv3.readdirplus` (cookie-paged linked list) / `lookup` / `read` only — never write/create/remove,
+  so the READ-ONLY invariant holds by construction, same as the impacket SMB reader. Per-export root
+  handle mounted lazily; child handles discovered during `readdirplus` are cached by full relative
+  path, so the crawler's descend/read walk needs no extra `lookup` round-trips. Per-dir cap retains
+  `limit`+1 (overflow detectable); `read_file` is offset-looped and byte-bounded.
+- **`nfs_discover`** — UNIONS four independent methods so **showmount alone cannot hide an export**
+  (owner directive "do not only rely on showmount, it is wrong sometimes"): (1) programmatic
+  `Mount.export()`, (2) `showmount -e`, (3) `nmap --script nfs-showmount`, (4) `rpcinfo` liveness.
+  Every CLI method runs through the injected `CommandRunner` as an argv **list** (no shell string →
+  no command injection); a missing tool degrades that one method to `ran=False` and never aborts. The
+  receipt records per-method `ran`/`found`/`new` — receipt-safe proof multi-method discovery happened.
+
+Export PATHS are the NFS access-control catalog (analogue of SMB share names) and surface in the
+receipt under the justified safe-name policy; file/dir paths beneath an export stay opaque
+(`loc:<rand>`) exactly as on SMB. Config gains `share_protocol` (validated ∈ {smb, nfs}).
+
+**Proven live (real executor, real server):** against an `nfs-kernel-server` export `/export` seeded
+with cross-FS loot. All four discovery methods ran (`mount.export`/`showmount`/`nmap` found `/export`;
+`rpcinfo` nfs_up=True). The read-only crawl inventoried **7 files / 9 dirs (complete)** and DETECTED
+every seeded secret: `home/svc/.ssh/id_rsa` (ssh_private_key + private_key_block), `configs/web.config`
+(**UTF-16LE** → dotnet_config + db_connection_string + password_assignment), `sysvol/Policies/Groups.xml`
+(gpp_cpassword, usable credential with the **exact non-ASCII principal `NORTH\José`**), `app/.env`
+(dotenv); both case-variant dirs `admin/` + `Admin/` crawled. Secret-safety verified: no secret /
+private-key / principal / raw crawl path in the receipt; operator store `0o600`. The same executor runs
+identically against a faithful fake pyNfsClient backend (unit tests). Per the owner's **detection-only**
+directive, the proof stops at DETECTION (no downstream auth demo). 452/452 validation tests green
+(432 baseline `0076eff` + 20); multi-method "showmount-miss recovery" + read-only invariant gates
+mutation-proven RED.
+
 ## Status
-S1 (SMB discover+crawl) merged; S3 (loot engine) + S4 (dual-mode creds) built + live-proven on this
-branch. Remaining: S2 (NFS, multi-method discovery -- NOT showmount-only; nmap rpcinfo/nfs-showmount +
-pyNfsClient portmap/NFSv4, programmatic read); S1b (mount mode, openat2). The owner's "don't rely only
-on showmount" directive is recorded for S2.
+S1 (SMB discover+crawl) merged; S3 (loot engine) + S4 (dual-mode creds) built + live-proven; **S2 (NFS
+transport + multi-method discovery) built + live-proven on this branch.** The first joint Windows/Linux
+module is feature-complete for SMB + NFS. Remaining: S1b (mount mode, openat2 descriptor-anchored
+containment); optional `share_protocol='auto'` per-host probing. The owner's "don't rely only on
+showmount" and "detection only" directives are both satisfied by S2.
