@@ -16,15 +16,24 @@ SAFETY (plan-reviewed):
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+# certipy-ad find CA classification. A CA is CONFIRMED present only on CA *details*
+# (a bare "Certificate Authorities" header prints even with 0 CAs); CONFIRMED absent only
+# on an explicit 0/none marker from a clean run; anything else (error/inconclusive) -> None.
+_CA_PRESENT = re.compile(r"(CA Name\s*:|DNS Name\s*:|Web Enrollment)", re.I)
+_CA_ABSENT = re.compile(r"(found 0\b|0 (enabled )?certificate authorit|no certificate authorit)", re.I)
+_CERTIPY_ERR = re.compile(
+    r"(got error|traceback|could not|connection (failed|refused|timed out)|\[-\]|exception|denied)", re.I)
 
 from .findings import NormalizedFinding
 from .executors import IMPLEMENTED, get_executor, is_implemented
 from .executors.base import ExecutorContext
 from . import probes as probes_mod
 from .probes import (_ldap_query, _certipy_find, _extract_attr, _account_read_ok,
-                     _text, _tool_errored, _RE_CA_PRESENT)
+                     _text, _tool_errored)
 
 # A viability probe is a cheap read; bound its per-op time so one slow/hanging read
 # cannot stall a whole-fleet discovery scan (the default tool timeout is minutes).
@@ -155,8 +164,14 @@ def recon(ctx) -> _Recon:
     try:
         res = _certipy_find(ctx)
         text = _text(res)
-        if text.strip() and not _tool_errored(res):
-            has_ca = bool(_RE_CA_PRESENT.search(text))
+        rc = getattr(res, "returncode", None)
+        clean = (text.strip() and not _tool_errored(res) and rc in (0, None)
+                 and not _CERTIPY_ERR.search(text))
+        if _CA_PRESENT.search(text):
+            has_ca = True                                   # CA details -> CONFIRMED present
+        elif clean and _CA_ABSENT.search(text):
+            has_ca = False                                  # clean run + explicit 0/none -> CONFIRMED absent
+        # else -> None: a failed / errored / inconclusive read NEVER gates ADCS (fail-safe)
     except Exception:
         pass
     return _Recon(has_delegation=has_del, has_spn=has_spn, is_computer=is_computer,
