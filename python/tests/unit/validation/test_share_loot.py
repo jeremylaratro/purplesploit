@@ -441,3 +441,19 @@ def test_crlf_and_lf_both_scan():
     from purplesploit.validation.executors import loot_rules as lr
     assert any(f.category == "password_assignment" for f in lr.content_findings(b"password = x9\r\n"))
     assert any(f.category == "password_assignment" for f in lr.content_findings(b"password = x9\n"))
+
+
+def test_non_ascii_principal_preserved_across_encodings():
+    # review HIGH: de-NUL + utf-8-ignore corrupted "DOM\Jose" accented names -> wrong
+    # account. Proper decoding must preserve the EXACT Unicode principal (LE/BE/UTF-8).
+    from purplesploit.validation.executors import loot_rules as lr
+    user = "NORTH\\José"              # DOM\José
+    xml = f'<Groups><Properties userName="{user}" cpassword="{GPP_CPW}"/></Groups>'
+    for enc in ("utf-8", "utf-16-le", "utf-16-be"):
+        creds = lr.extract_credentials("x/Groups.xml", xml.encode(enc))
+        assert creds and creds[0].principal == user, (enc, creds)
+        assert creds[0].secret == GPP_PLAINTEXT
+    # BOM-prefixed too
+    for bom, enc in ((b"\xff\xfe", "utf-16-le"), (b"\xfe\xff", "utf-16-be"), (b"\xef\xbb\xbf", "utf-8")):
+        creds = lr.extract_credentials("x/Groups.xml", bom + xml.encode(enc))
+        assert creds and creds[0].principal == user, (enc, "bom")

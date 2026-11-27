@@ -88,6 +88,40 @@ _GPP_KEY = bytes.fromhex("4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09
 _RE_GPP_CRED = re.compile(
     rb'(?:userName|accountName|runAs)="([^"]*)"[^>]{0,400}?cpassword="([^"]+)"'
     rb'|cpassword="([^"]+)"[^>]{0,400}?(?:userName|accountName|runAs)="([^"]*)"', re.I)
+# STRING form -- used on PROPERLY DECODED text so non-ASCII principals (e.g. "DOM\Jose")
+# survive exactly (de-NUL'ing + utf-8-ignore would corrupt them -> wrong account).
+_RE_GPP_CRED_STR = re.compile(
+    r'(?:userName|accountName|runAs)="([^"]*)"[^>]{0,400}?cpassword="([^"]+)"'
+    r'|cpassword="([^"]+)"[^>]{0,400}?(?:userName|accountName|runAs)="([^"]*)"', re.I)
+
+
+def _decoded_text_views(data: bytes) -> list[str]:
+    """Decode bytes to TEXT with the right codec (BOM, else UTF-16 LE/BE heuristic,
+    else UTF-8/latin-1) so credential principals survive EXACTLY across Windows
+    (UTF-16LE/BE/UTF-8-BOM) and Linux (UTF-8). Returns the candidate decodings."""
+    views: list[str] = []
+
+    def _try(enc: str, buf: bytes):
+        try:
+            t = buf.decode(enc)
+            if t not in views:
+                views.append(t)
+        except Exception:
+            pass
+
+    if data[:3] == b"\xef\xbb\xbf":
+        _try("utf-8", data[3:])
+    elif data[:2] == b"\xff\xfe":
+        _try("utf-16-le", data[2:])
+    elif data[:2] == b"\xfe\xff":
+        _try("utf-16-be", data[2:])
+    _try("utf-8", data)
+    if b"\x00" in data[:8192]:                        # BOM-less UTF-16 -> try both byte orders
+        _try("utf-16-le", data)
+        _try("utf-16-be", data)
+    if not views:
+        views.append(data.decode("latin-1", "replace"))
+    return views
 
 
 def _aes_cbc_decrypt(key: bytes, iv: bytes, ct: bytes):
@@ -157,11 +191,12 @@ def extract_credentials(path: str, data: bytes) -> list[Credential]:
     OPERATOR-STORE / in-memory ONLY; it never reaches a receipt."""
     out: list[Credential] = []
     seen: set = set()
-    for view in _scan_views(data or b""):            # ASCII + de-NUL'd UTF-16 (Windows GPP XML)
-        for m in _RE_GPP_CRED.finditer(view):
-            user = (m.group(1) or m.group(4) or b"").decode("utf-8", "ignore").strip()
-            cpw = (m.group(2) or m.group(3) or b"").decode("utf-8", "ignore").strip()
-            if (user, cpw) in seen:
+    # Decode to TEXT first (exact Unicode principals), then match with the str regex.
+    for view in _decoded_text_views(data or b""):
+        for m in _RE_GPP_CRED_STR.finditer(view):
+            user = (m.group(1) or m.group(4) or "").strip()
+            cpw = (m.group(2) or m.group(3) or "").strip()
+            if not cpw or (user, cpw) in seen:
                 continue
             seen.add((user, cpw))
             pw = gpp_decrypt(cpw)
