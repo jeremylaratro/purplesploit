@@ -139,13 +139,19 @@ def _text(res: RunResult) -> str:
 
 def _extract_attr(text: str, attr: str) -> Optional[str]:
     """The value on a ``<attr>: value`` / ``<attr> = value`` / ``<attr>   value`` line
-    (first match).
+    (first match), read ONLY from result rows.
 
     Tolerates a leading tool prefix (NetExec prints ``LDAP <ip> <port> <host>
     attr<sep>value``) and the real ``nxc ldap --query`` format, which separates the
     attribute from its value with WHITESPACE (``attr    value``), not a colon/equals --
-    so the separator is a colon/equals (with optional spaces) OR one-or-more spaces."""
-    pat = re.compile(rf"(?mi){re.escape(attr)}(?:[ \t]*[:=][ \t]*|[ \t]+)(\S.*?)[ \t]*$")
+    so the separator is a colon/equals (with optional spaces) OR one-or-more spaces.
+
+    SECURITY: a line with an nxc status marker (``[+]``/``[-]``/``[*]``) -- e.g. the
+    ``[+] domain\\user:PASSWORD`` auth banner -- is EXCLUDED, so a password/argv that
+    happens to contain an attribute-name substring can never be captured as a value
+    (the leading ``(?!.*\\[[-+*]\\])`` negative lookahead)."""
+    pat = re.compile(
+        rf"(?mi)^(?!.*\[[-+*]\]).*?{re.escape(attr)}(?:[ \t]*[:=][ \t]*|[ \t]+)(\S.*?)[ \t]*$")
     m = pat.search(text or "")
     return m.group(1).strip() if m else None
 

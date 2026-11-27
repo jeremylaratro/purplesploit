@@ -1,0 +1,3 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — Credential text enters public LDAP evidence.** [probes.py:148](/srv/share/dev/purplesploit/.claude/worktrees/capscan/python/purplesploit/validation/probes.py:148): the new whitespace alternative matches anywhere in a line, including nxc authentication banners. With password `prefix msDS-AllowedToDelegateTo CanarySecret123!`, plain `discover` publishes `CanarySecret123!` in BRONZE-BIT and CONSTRAINED-DELEG-PT reasons and evidence. It also marks CONSTRAINED-DELEG-PT eligible despite an absent delegation attribute. Reproduced through `ValidationOrchestrator.discover()`. Parse attributes only from validated LDAP result rows; crafted reason text does not sanitize a credential captured as an attribute.
