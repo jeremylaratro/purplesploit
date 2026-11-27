@@ -88,7 +88,9 @@ def test_dcsync_proved_shaped_receipt(tmp_path):
     assert receipt["target"].get("host_id") == "dc01"        # facet keys on {host_id}
     assert receipt["complete"] is True
     assert receipt["steps"] and all(s["ok"] for s in receipt["steps"])
-    assert [s["name"] for s in receipt["steps"]] == ["dcsync"]
+    # DCSync now resolves the real NetBIOS name first (rpcclient/lookupsid; falls
+    # to the heuristic here since the fake runner returns nothing), then DCSyncs.
+    assert [s["name"] for s in receipt["steps"]] == ["resolve_netbios", "dcsync"]
     assert receipt["mutation"]["applied"] is False           # read-only: no rollback
     tf = receipt["terminal_fact"]
     assert tf and tf["kind"] == "replication_dump" and tf["ok"] is True and tf["proof_token"]
