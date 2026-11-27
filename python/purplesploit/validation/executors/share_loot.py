@@ -7,22 +7,31 @@ construction, injection-safe by construction, secret-safe by construction:
   through a narrow read-only interface (:class:`ShareReader`: ``list_shares`` /
   ``list_dir`` / ``close`` only). There is NO ``smbclient -c`` command string, so
   no shell / command-parser injection (plan review r1 #2); and no local mount /
-  ``os.walk``, so no TOCTOU / symlink-escape (r2 #2/#3 -- those are the DEFERRED
+  ``os.walk``, so no TOCTOU / symlink-escape (r2 #2/#3 -- that is the DEFERRED
   mount mode, S1b).
 - **Opaque location IDs** (r1 #5): a file/dir path can CONTAIN a secret, so a raw
   path NEVER enters a receipt. Each crawled path gets ``loc:<rand>``; the raw
   ``id -> {host,share,path,size,...}`` map goes ONLY to the operator's out-of-band
-  store. Share NAMES (the SMB access-control catalog, admin-defined) are reported
-  as the justified safe-name policy the review allowed.
-- **Bounds enforced DURING traversal** (r2 #4): depth, total entries, files, shares,
-  and a whole-run wall-clock deadline -- a bound hit yields an explicit ``partial``
+  store (created ``O_EXCL`` mode ``0600``). Share NAMES (the SMB access-control
+  catalog) are the justified safe-name policy the review allowed.
+- **Bounds enforced DURING traversal** (r2 #4): a per-directory retained-entry cap,
+  total entries / files / shares, max depth, and a whole-run wall-clock deadline
+  checked before EVERY network op -- a bound hit yields an explicit ``partial``
   outcome, never a silent truncation. A ``(share, path)`` visited-set breaks cycles.
-- **Exhaustiveness** (r1 #7): per-host/share outcome (``listed`` / ``denied`` /
-  ``unreachable`` / ``truncated``); *observed access* is separate from *coverage
-  completeness* -- a mixed/bounded run is ``complete=False`` (partial).
+- **Honest, exhaustive coverage** (r1 #7, S1-review): per-host/share outcome
+  (``listed`` fully / ``partial`` / ``denied`` / ``unreachable`` / ``not_crawled``);
+  a denied SUBTREE or an omitted share makes coverage incomplete; terminal ``ok``
+  (observed access) is True ONLY when a directory was actually listed -- a budget
+  that expired before the first listing is NOT a success.
 
-Terminal: ``share_inventory`` (ok = at least one share listed read-only). This is a
+Terminal: ``share_inventory`` (ok = at least one directory listed read-only). A
 DISCOVERY result, never a credential capability. ``mutating=False``; no rollback.
+
+Known residual (documented): impacket ``listPath`` materializes one directory's
+entries as a list before returning; a per-directory cap bounds what is RETAINED,
+and the whole-run deadline bounds wall-clock, but a single pathologically huge
+directory's transient listing is bounded by the deadline rather than streamed. A
+paged-listing follow-up is tracked (S1b).
 """
 from __future__ import annotations
 
@@ -54,7 +63,7 @@ class ShareReader:
     def list_shares(self) -> list[str]:            # pragma: no cover - interface
         raise NotImplementedError
 
-    def list_dir(self, share: str, path: str) -> list[_Entry]:  # pragma: no cover
+    def list_dir(self, share: str, path: str, limit: int) -> list[_Entry]:  # pragma: no cover
         raise NotImplementedError
 
     def close(self) -> None:                       # pragma: no cover - interface
@@ -75,7 +84,7 @@ class _ImpacketReader(ShareReader):
             out.append(name)
         return out
 
-    def list_dir(self, share: str, path: str) -> list[_Entry]:
+    def list_dir(self, share: str, path: str, limit: int) -> list[_Entry]:
         spec = (path.rstrip("/\\") + "/*") if path not in ("", "/", "\\") else "*"
         out: list[_Entry] = []
         for f in self._c.listPath(share, spec):
@@ -83,6 +92,8 @@ class _ImpacketReader(ShareReader):
             if n in (".", ".."):
                 continue
             out.append(_Entry(n, f.is_directory() != 0, f.get_filesize()))
+            if len(out) > max(0, int(limit)):      # retain at most limit+1 (overflow detectable)
+                break
         return out
 
     def close(self) -> None:
@@ -120,9 +131,7 @@ class ShareLootExecutor(ValidationExecutor):
     recipe_ref = ("SHARE-LOOT S1 = impacket SMBConnection listShares + recursive listPath "
                   "(read-only, bounded, opaque location IDs); inventory receipt")
 
-    # Test seam: ``(cfg, host, timeout) -> ShareReader``. Overridden via
-    # ``ctx.share_reader_factory`` in tests; defaults to the impacket reader.
-    reader_factory = staticmethod(_impacket_reader)
+    reader_factory = staticmethod(_impacket_reader)   # test seam (ctx.share_reader_factory overrides)
 
     def param_specs(self, ctx: ExecutorContext, finding) -> list[ParamSpec]:
         e = finding.entity or {}
@@ -143,7 +152,6 @@ class ShareLootExecutor(ValidationExecutor):
                 "recursive listPath() with bounds -> opaque-ID inventory (no content fetched)",
                 "raw path map -> operator out-of-band store; receipt carries opaque IDs only"]
 
-    # --------------------------------------------------------------- scope
     def _hosts(self, ctx, finding, params) -> list[str]:
         v = values(params)
         raw = (v.get("hosts") or "").strip()
@@ -165,9 +173,8 @@ class ShareLootExecutor(ValidationExecutor):
         def rec(name, ok, note=""):
             steps.append(StepRecord(name=name, ok=ok, argv_display=[], returncode=None, note=note))
 
-        # mount mode is DEFERRED (S1b) -- fail closed, never a fabricated result.
         mode = getattr(cfg, "share_access_mode", "crawl")
-        if mode != "crawl":
+        if mode != "crawl":                       # mount mode DEFERRED (S1b) -- fail closed
             errors.append("inconclusive:mount_mode_deferred")
             rec("access_mode", False, f"mode={mode} deferred to S1b (crawl only in S1)")
             return self._artifact(steps, gate, None, False, errors)
@@ -185,8 +192,12 @@ class ShareLootExecutor(ValidationExecutor):
 
         crawler = _Crawler(cfg)
         per_share: list[dict] = []
-        any_listed = False
+        hosts_skipped = 0
         for host in hosts:
+            if crawler.past_deadline():            # deadline bounds network work (r2 #2) -- stop connecting
+                hosts_skipped += 1
+                per_share.append({"host": host, "share": None, "outcome": "not_crawled"})
+                continue
             reader = None
             try:
                 reader = factory(cfg, host, cfg.tool_timeout_s)
@@ -196,63 +207,64 @@ class ShareLootExecutor(ValidationExecutor):
                 rec("connect", False, f"{host}: unreachable")
                 continue
             try:
+                if crawler.past_deadline():
+                    per_share.append({"host": host, "share": None, "outcome": "not_crawled"})
+                    continue
                 try:
-                    shares = reader.list_shares()[: cfg.share_max_shares]
+                    all_shares = reader.list_shares()
                 except Exception as exc:
                     ctx._private_errors.append(f"{host} list_shares: {exc}")
                     per_share.append({"host": host, "share": None, "outcome": "denied"})
                     rec("list_shares", False, f"{host}: share enum denied")
                     continue
-                rec("list_shares", True, f"{host}: {len(shares)} shares")
+                shares = all_shares[: cfg.share_max_shares]
+                if len(all_shares) > len(shares):          # share cap omitted some (r1-review #4)
+                    crawler.shares_omitted += len(all_shares) - len(shares)
+                rec("list_shares", True, f"{host}: {len(all_shares)} shares"
+                    + (f" ({crawler.shares_omitted} over cap)" if crawler.shares_omitted else ""))
                 for share in shares:
-                    outcome = crawler.crawl_share(reader, host, share)
-                    per_share.append(outcome)
-                    if outcome["outcome"] in ("listed", "truncated"):
-                        any_listed = True
+                    per_share.append(crawler.crawl_share(reader, host, share))
             finally:
                 if reader is not None:
                     reader.close()
 
-        # Persist the raw opaque-ID -> path map to the OPERATOR store ONLY.
+        # Persist the raw opaque-ID -> path map to the OPERATOR store ONLY, created
+        # EXCLUSIVELY with mode 0600 (no 0644 window -- r1-review #6).
         store_ref = store_dir / f"share-loot-{secrets.token_hex(6)}.json"
         try:
-            store_ref.write_text(json.dumps(crawler.locmap, indent=2))
-            os.chmod(store_ref, 0o600)
+            fd = os.open(str(store_ref), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                json.dump(crawler.locmap, fh, indent=2)
         except OSError as exc:
             ctx._private_errors.append(f"store write: {exc}")
             errors.append("loot_store_unwritable")
 
-        coverage = crawler.coverage(per_share)
+        coverage = crawler.coverage(per_share, hosts_skipped)
+        any_listed = crawler.any_dir_listed            # OBSERVED ACCESS = a real listing (r1-review #5)
         complete = coverage["complete"] and any_listed
         if coverage["truncated"]:
             errors.append("partial:bounds_reached")
         if coverage["deadline_hit"]:
             errors.append("partial:deadline")
+        if coverage["shares_omitted"]:
+            errors.append("partial:share_cap")
+        if coverage["incomplete_subtrees"]:
+            errors.append("partial:subtree_denied")
 
         terminal = proof.build_terminal_fact(
-            self.terminal_kind, ok=any_listed,
+            self.terminal_kind, ok=bool(any_listed),
             predicate=(f"read-only SMB share discovery + crawl over {len(hosts)} host(s); "
                        f"{coverage['files']} files / {coverage['dirs']} dirs inventoried "
                        f"({'complete' if complete else 'partial'})"),
             proof_token=proof.proof_token("SHARE-LOOT", cfg.domain, ",".join(sorted(hosts)),
                                           "listed" if any_listed else "none"),
-            extra={
-                "coverage": coverage,
-                # per-share: host + SHARE NAME (public catalog) + outcome + public counts.
-                # NO raw file/dir paths -- those live only as opaque IDs in the store.
-                "per_share": per_share,
-                "store_ref": str(store_ref),      # operator's own path to the raw map
-                "access_mode": "crawl",
-            },
+            extra={"coverage": coverage, "per_share": per_share,
+                   "store_ref": str(store_ref), "access_mode": "crawl"},
         )
-        # terminal `ok` reflects OBSERVED ACCESS (any share listed); the receipt's
-        # `complete` reflects COVERAGE COMPLETENESS (nothing truncated/denied) -- a
-        # bounded or mixed run is complete=False even though access was observed.
         return self._artifact(steps, gate, terminal, bool(complete), errors)
 
     def produced(self, ctx, finding, params, artifact) -> list:
-        # Discovery produces NO credential/capability (review r1 #6).
-        return []
+        return []                                      # discovery produces NO capability (r1 #6)
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors) -> dict:
@@ -264,8 +276,9 @@ class ShareLootExecutor(ValidationExecutor):
 
 # ------------------------------------------------------------------- the crawler
 class _Crawler:
-    """Bounded, cycle-safe recursive lister. Enforces every bound DURING traversal
-    (not after), tracks opaque location IDs, and records per-share outcomes."""
+    """Bounded, cycle-safe recursive lister. Every bound is enforced DURING
+    traversal (before each network op), outcomes distinguish full/partial/denied,
+    and observed access (`any_dir_listed`) is tracked separately from truncation."""
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -276,88 +289,107 @@ class _Crawler:
         self.deadline = time.monotonic() + max(0, int(getattr(cfg, "share_crawl_deadline_s", 300)))
         self.deadline_hit = False
         self.truncated = False
+        self.any_dir_listed = False
+        self.shares_omitted = 0
 
-    def _over_budget(self) -> bool:
+    def past_deadline(self) -> bool:
         if time.monotonic() >= self.deadline:
             self.deadline_hit = True
+            return True
+        return False
+
+    def _over_budget(self) -> bool:
+        if self.past_deadline():
             return True
         if self.entries >= self.cfg.share_max_entries or self.files >= self.cfg.share_max_files:
             self.truncated = True
             return True
         return False
 
-    def _loc(self, host, share, path, is_dir, size) -> str:
+    def _loc(self, host, share, path, is_dir, size) -> None:
         lid = "loc:" + secrets.token_hex(8)
         self.locmap[lid] = {"host": host, "share": share, "path": path,
                             "is_dir": bool(is_dir), "size": int(size or 0)}
-        return lid
 
     def crawl_share(self, reader: ShareReader, host: str, share: str) -> dict:
         res = {"host": host, "share": share, "outcome": "listed",
                "files": 0, "dirs": 0, "bytes": 0}
-        if self._over_budget():
-            res["outcome"] = "truncated"
+        if self._over_budget():                        # budget spent BEFORE this share -> no access
+            res["outcome"] = "not_crawled"
             return res
         visited: set = set()
-        stack: list[tuple[str, int]] = [("", 0)]        # (path, depth)
-        listed_any = False
-        try:
-            while stack:
+        stack: list[tuple[str, int]] = [("", 0)]
+        root_ok = False
+        incomplete = False                             # a denied subtree / bound hit here
+        while stack:
+            if self._over_budget():
+                incomplete = True
+                break
+            path, depth = stack.pop()
+            key = path.strip("/\\").lower()
+            if key in visited:
+                continue
+            visited.add(key)
+            remaining = max(0, self.cfg.share_max_entries - self.entries)
+            try:
+                entries = reader.list_dir(share, path, remaining)
+            except Exception:
+                if path == "" and not root_ok:
+                    res["outcome"] = "denied"          # root unreadable -> whole share denied
+                    return res
+                incomplete = True                      # a child subtree is denied -> partial (r1-review #3)
+                continue
+            if path == "":
+                root_ok = True
+            self.any_dir_listed = True                 # a REAL listing happened (observed access)
+            if len(entries) > remaining:               # per-dir cap overflowed -> partial (r1-review #1)
+                entries = entries[:remaining]
+                incomplete = True
+                self.truncated = True
+            for e in entries:
                 if self._over_budget():
-                    res["outcome"] = "truncated"
+                    incomplete = True
                     break
-                path, depth = stack.pop()
-                key = path.strip("/\\").lower()
-                if key in visited:
-                    continue                            # cycle / repeat guard
-                visited.add(key)
-                try:
-                    entries = reader.list_dir(share, path)
-                except Exception:
-                    # a denied/failed subdir doesn't fail the whole share
-                    if not listed_any and not path:
-                        res["outcome"] = "denied"
-                    continue
-                listed_any = True
-                for e in entries:
-                    self.entries += 1
-                    if self._over_budget():
-                        res["outcome"] = "truncated"
-                        break
-                    child = (path.rstrip("/\\") + "/" + e.name) if path else e.name
-                    self._loc(host, share, child, e.is_dir, e.size)
-                    if e.is_dir:
-                        self.dirs += 1
-                        res["dirs"] += 1
-                        if depth + 1 <= self.cfg.share_max_depth:
-                            stack.append((child, depth + 1))
-                        else:
-                            self.truncated = True
-                            res["outcome"] = "truncated"
+                self.entries += 1
+                child = (path.rstrip("/\\") + "/" + e.name) if path else e.name
+                self._loc(host, share, child, e.is_dir, e.size)
+                if e.is_dir:
+                    self.dirs += 1
+                    res["dirs"] += 1
+                    if depth + 1 <= self.cfg.share_max_depth:
+                        stack.append((child, depth + 1))
                     else:
-                        self.files += 1
-                        res["files"] += 1
-                        res["bytes"] += int(e.size or 0)
-        except Exception:
-            if not listed_any:
-                res["outcome"] = "denied"
+                        incomplete = True
+                        self.truncated = True
+                else:
+                    self.files += 1
+                    res["files"] += 1
+                    res["bytes"] += int(e.size or 0)
+        if res["outcome"] == "listed" and incomplete:
+            res["outcome"] = "partial"                 # listed something but not fully covered
         return res
 
-    def coverage(self, per_share: list[dict]) -> dict:
+    def coverage(self, per_share: list[dict], hosts_skipped: int) -> dict:
         outcomes = [p["outcome"] for p in per_share]
+        incomplete_subtrees = outcomes.count("partial")
+        # coverage is COMPLETE only when nothing was truncated/deadlined, no share was
+        # omitted by the cap, no host was skipped, and EVERY share fully listed (a
+        # denied/unreachable/not_crawled/partial share makes it incomplete).
+        complete = (not self.truncated and not self.deadline_hit and self.shares_omitted == 0
+                    and hosts_skipped == 0 and bool(outcomes)
+                    and all(o == "listed" for o in outcomes))
         return {
             "hosts": len({p["host"] for p in per_share}),
             "shares_total": sum(1 for p in per_share if p.get("share") is not None),
             "shares_listed": outcomes.count("listed"),
+            "shares_partial": incomplete_subtrees,
             "shares_denied": outcomes.count("denied"),
             "shares_unreachable": outcomes.count("unreachable"),
-            "shares_truncated": outcomes.count("truncated"),
+            "shares_not_crawled": outcomes.count("not_crawled"),
+            "shares_omitted": self.shares_omitted,
+            "hosts_skipped_deadline": hosts_skipped,
             "files": self.files, "dirs": self.dirs, "entries_visited": self.entries,
             "truncated": self.truncated, "deadline_hit": self.deadline_hit,
-            # coverage is COMPLETE only if nothing was truncated/deadlined and no
-            # share was denied/unreachable (observed access != full coverage).
-            "complete": (not self.truncated and not self.deadline_hit
-                         and outcomes.count("denied") == 0
-                         and outcomes.count("unreachable") == 0
-                         and outcomes.count("truncated") == 0),
+            "incomplete_subtrees": incomplete_subtrees,
+            "complete": complete,
         }
