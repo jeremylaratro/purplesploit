@@ -31,7 +31,7 @@ from .base import ValidationExecutor, ExecutorContext, StepRecord, redact_argv
 
 _RE_SMB_SIGNING = re.compile(r"\(signing:(True|False)\)", re.I)        # nxc smb
 _RE_LDAP_SIGNING = re.compile(r"\(signing:(\w+)\)", re.I)              # nxc ldap (None|Required|...)
-_RE_CHANNEL = re.compile(r"channel binding:(\w+)", re.I)              # nxc ldap
+_RE_CHANNEL = re.compile(r"channel binding:([^)]+)", re.I)            # nxc ldap (Never|When Supported|Always)
 
 
 class SigningRelayExecutor(ValidationExecutor):
@@ -113,14 +113,24 @@ class SigningRelayExecutor(ValidationExecutor):
             text = res.stdout or ""
             ms, mc = _RE_LDAP_SIGNING.search(text), _RE_CHANNEL.search(text)
             if ms:
-                h["reachable"] = True
-                h["ldap_signing_required"] = (ms.group(1).lower() != "none")
-                h["channel_binding"] = (mc.group(1).lower() if mc else None)
-                # Only "Always" is full channel-binding enforcement; "Never"/"When Supported"
-                # are bypassable, so an LDAP relay remains applicable.
-                cb_enforced = h["channel_binding"] in ("always", "required")
-                if h["ldap_signing_required"] is False or not cb_enforced:
-                    h["exposure"].append("ldap_relay")      # LDAP relay (signing/CB not enforced)
+                # Recognise EXPLICIT values only: nxc emits "Unknown" / "No TLS cert" on a
+                # failed read, which must stay INCONCLUSIVE (None), never "not enforced".
+                sval = ms.group(1).lower()
+                if sval == "none":
+                    h["ldap_signing_required"] = False      # explicitly not required
+                elif sval in ("required", "enforced", "yes", "true"):
+                    h["ldap_signing_required"] = True        # explicitly required
+                else:
+                    h["ldap_signing_required"] = None        # unknown/failed -> inconclusive
+                cbv = (mc.group(1).strip().lower() if mc else None)
+                h["channel_binding"] = cbv
+                cb_bypassable = cbv in ("never", "when supported")       # EXPLICIT bypassable only
+                # reachable only on a recognised LDAP reading (not a failed "Unknown").
+                if h["ldap_signing_required"] is not None or cb_bypassable:
+                    h["reachable"] = True
+                # ldap_relay only on an EXPLICIT non-enforcement reading.
+                if h["ldap_signing_required"] is False or cb_bypassable:
+                    h["exposure"].append("ldap_relay")
             rec("nxc_ldap_signing", ldap_argv, res,
                 h["ldap_signing_required"] is not None,
                 note=f"{host}: ldap signing={h['ldap_signing_required']} cb={h['channel_binding']}")
