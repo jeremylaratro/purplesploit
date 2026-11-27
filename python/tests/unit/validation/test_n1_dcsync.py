@@ -94,7 +94,9 @@ def test_dcsync_proved_shaped_receipt(tmp_path):
     assert tf and tf["kind"] == "replication_dump" and tf["ok"] is True and tf["proof_token"]
     # secretsdump requested just the krbtgt replication object.
     sd = next(c for c in runner.calls if Path(c[0]).name == "impacket-secretsdump")
-    assert "-just-dc-user" in sd and "krbtgt" in sd
+    # krbtgt is NetBIOS-domain-qualified (NORTH/krbtgt) so name translation is
+    # unambiguous in a multi-domain forest; never the bare "krbtgt".
+    assert "-just-dc-user" in sd and "NORTH/krbtgt" in sd and "krbtgt" not in sd
 
 
 def test_dcsync_no_replication_is_not_proved(tmp_path):
