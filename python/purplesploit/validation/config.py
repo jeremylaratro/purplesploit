@@ -132,6 +132,14 @@ class ValidationConfig:
     share_max_entries: int = 50000      # total dir entries visited per run
     share_max_files: int = 20000        # files recorded in the inventory per run
     share_crawl_deadline_s: int = 300   # whole-run wall-clock deadline for the crawl
+    # SHARELOOT S3 loot search: fetch candidate files (matched by the curated
+    # secrets-first rule pack) read-only and scan for credentials/keys. Findings are
+    # PRESENCE+LOCATION (opaque) in the receipt; recovered values go ONLY to the
+    # operator store. Bounds cap the fetch work; a hit never fabricates a receipt.
+    loot_enabled: bool = True
+    loot_max_fetch_files: int = 2000    # files fetched for content scanning per run
+    loot_max_file_bytes: int = 2_000_000   # per-file fetch cap (stop mid-file at the cap)
+    loot_max_fetch_bytes_total: int = 200_000_000  # aggregate fetch cap per run
 
     def __post_init__(self) -> None:
         if not self.domain:

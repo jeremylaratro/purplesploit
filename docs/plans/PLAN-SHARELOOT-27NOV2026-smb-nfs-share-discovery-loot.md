@@ -182,3 +182,17 @@ Scratch + loot-store shredded after the run.
 Remaining for the module: harness `proof_adapters` mirror of `share_inventory`; diff review + merge S1;
 then **S1b** (mount mode, deferred OS-safety), **S2** (NFS), **S3** (loot search engine), **S4**
 (dual-mode + full proof).
+
+## S3 build + live proof (27NOV2026) — the loot search engine
+S3 shipped: a curated secrets-first rule pack (`loot_rules.py`) + bounded content fetch wired into
+the crawler. Filename rules (id_rsa/.ppk/.kdbx/.pfx/unattend.xml/web.config/.env/Groups.xml/.aws+vcs
+creds/suggestive names) mark fetch-worthy files; content rules (PRIVATE KEY blocks, GPP cpassword,
+AWS keys, DB connection strings, API tokens, Slack tokens, password assignments incl. prefixed
+fields) scan the fetched bytes. Findings are **PRESENCE + CATEGORY + opaque loc_id** in the receipt;
+the recovered secret VALUE/context goes ONLY to the operator `0600` store. Fetch bounded
+(loot_max_fetch_files / per-file / aggregate caps; binaries skipped; deadline-gated).
+
+Proven live on GOAD (winterfell): the crawl found 11 real items (web.config + password-named files
+in WinSxS) with no false positives on template configs; **a planted canary secret was found**
+(private_key_block + suggestive_name), its token present in the `0600` store but **NOT in the
+receipt**, and the canary was deleted (lab restored). 423/423 validation tests green (416 base + 7).

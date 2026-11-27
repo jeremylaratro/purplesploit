@@ -31,12 +31,18 @@ SECRET_NAME = "domain_admin_password_backup.txt"      # a secret-BEARING filenam
 class _FakeReader(ShareReader):
     """Scripted read-only reader. `tree` maps (share, relpath) -> [_Entry]. Records
     EVERY method call so a test can prove no write method is ever used."""
-    def __init__(self, shares, tree, *, deny_share_enum=False, deny_dirs=()):
+    def __init__(self, shares, tree, *, deny_share_enum=False, deny_dirs=(), contents=None):
         self.shares = list(shares)
         self.tree = {(s, p.strip("/\\")): list(v) for (s, p), v in tree.items()}
         self.deny_share_enum = deny_share_enum
         self.deny_dirs = {(s, p.strip("/\\")) for s, p in deny_dirs}
+        self.contents = {(s, p.strip("/\\")): v for (s, p), v in (contents or {}).items()}
         self.calls: list[tuple] = []
+
+    def read_file(self, share, path, max_bytes):
+        self.calls.append(("read_file", share, path.strip("/\\")))
+        data = self.contents.get((share, path.strip("/\\")), b"")
+        return data[: max(0, int(max_bytes))]
 
     def list_shares(self):
         self.calls.append(("list_shares",))
@@ -111,7 +117,7 @@ def test_read_only_invariant_only_read_methods_called(tmp_path):
     reader = _FakeReader(["SYSVOL"], _tree())
     _run(_cfg(), tmp_path, reader)
     used = {c[0] for c in reader.calls}
-    assert used <= {"list_shares", "list_dir", "close"}      # NEVER a write/delete/mkdir
+    assert used <= {"list_shares", "list_dir", "read_file", "close"}   # all READ ops; no write/delete/mkdir
     # and the interface itself exposes no write verb
     assert not any(hasattr(ShareReader, m) for m in ("put_file", "write", "delete", "mkdir", "rename"))
 
@@ -248,3 +254,88 @@ def test_mount_mode_is_deferred_inconclusive(tmp_path):
     assert r["complete"] is False and r["terminal_fact"] is None
     assert "inconclusive:mount_mode_deferred" in r["errors"]
     assert reader.calls == []                                # never even connected
+
+
+# ===================================================================== S3 loot
+
+SECRET_PW = "S3cr3t!Admin#Pass2026"       # a real secret VALUE that must stay out of the receipt
+
+
+def _loot_tree():
+    return {("DATA", ""): [_Entry("id_rsa", False, 1400), _Entry("web.config", False, 600),
+                           _Entry("notes.txt", False, 50), _Entry("big.pem", False, 99999999)]}
+
+
+def _loot_contents():
+    return {
+        ("DATA", "id_rsa"): b"-----BEGIN OPENSSH PRIVATE KEY-----\n" + SECRET_PW.encode() + b"\n",
+        ("DATA", "web.config"): b'<connectionStrings><add connectionString="Data Source=x;Password=' + SECRET_PW.encode() + b'"/></connectionStrings>',
+        ("DATA", "notes.txt"): b"nothing interesting here",
+    }
+
+
+def test_loot_finds_content_secrets_presence_only_in_receipt(tmp_path):
+    reader = _FakeReader(["DATA"], _loot_tree(), contents=_loot_contents())
+    r = _run(_cfg(), tmp_path, reader)
+    loot = r["terminal_fact"]["loot"]
+    cats = loot["by_category"]
+    assert loot["findings"] >= 2
+    assert "private_key_block" in cats and "db_connection_string" in cats  # content rules fired
+    assert "ssh_private_key" in cats                                       # filename rule fired
+    # the SECRET VALUE and raw paths NEVER appear in the receipt
+    blob = json.dumps(r)
+    assert SECRET_PW not in blob and "id_rsa" not in blob and "web.config" not in blob
+    assert all(h.startswith("loc:") for h in loot["hits"])                 # opaque only
+
+
+def test_loot_values_and_paths_are_in_the_operator_store(tmp_path):
+    reader = _FakeReader(["DATA"], _loot_tree(), contents=_loot_contents())
+    r = _run(_cfg(), tmp_path, reader)
+    store = json.loads(Path(r["terminal_fact"]["store_ref"]).read_text())
+    # the store (0600, operator-only) holds the raw path + the matched secret context
+    hit = next(v for v in store.values() if v["path"].endswith("id_rsa"))
+    assert "findings" in hit and any(f["category"] == "private_key_block" for f in hit["findings"])
+    assert any(SECRET_PW in f["detail"] for v in store.values() for f in v.get("findings", []))
+
+
+def test_loot_oversize_file_is_not_fetched_but_still_name_flagged(tmp_path):
+    # big.pem (99MB) exceeds loot_max_file_bytes -> NOT fetched, but the .pem name is flagged
+    reader = _FakeReader(["DATA"], _loot_tree(), contents=_loot_contents())
+    r = _run(_cfg(loot_max_file_bytes=10000), tmp_path, reader)
+    assert not any(c[0] == "read_file" and c[2] == "big.pem" for c in reader.calls)   # never fetched
+    assert "private_key_file" in r["terminal_fact"]["loot"]["by_category"]            # name flagged
+
+
+def test_loot_fetch_file_cap_is_bounded(tmp_path):
+    reader = _FakeReader(["DATA"], _loot_tree(), contents=_loot_contents())
+    _run(_cfg(loot_max_fetch_files=1), tmp_path, reader)
+    assert sum(1 for c in reader.calls if c[0] == "read_file") <= 1     # fetch count bounded
+
+
+def test_loot_disabled_does_no_fetch(tmp_path):
+    reader = _FakeReader(["DATA"], _loot_tree(), contents=_loot_contents())
+    r = _run(_cfg(loot_enabled=False), tmp_path, reader)
+    assert not any(c[0] == "read_file" for c in reader.calls)
+    assert r["terminal_fact"]["loot"]["findings"] == 0
+
+
+def test_clean_share_has_no_loot(tmp_path):
+    reader = _FakeReader(["SYSVOL"], _tree())    # the S1 tree has a 'password' filename -> 1 name hit
+    r = _run(_cfg(), tmp_path, reader)
+    # only the suggestive-name finding from the S1 tree's secret filename; no content findings
+    assert all(f == "suggestive_name" for f in r["terminal_fact"]["loot"]["by_category"])
+
+
+def test_loot_rules_unit():
+    from purplesploit.validation.executors import loot_rules as lr
+    # prefixed password field now matches (db_password=, user_passwd:)
+    assert any(f.category == "password_assignment" for f in lr.content_findings(b"db_password = hunter2x"))
+    assert any(f.category == "password_assignment" for f in lr.content_findings(b"user_passwd: s3cr3tval"))
+    # a bare placeholder is NOT a hit (value too short)
+    assert not any(f.category == "password_assignment" for f in lr.content_findings(b"password="))
+    # filename rules + should_fetch
+    assert any(f.category == "ssh_private_key" for f in lr.filename_findings("home/user/.ssh/id_rsa"))
+    assert lr.should_fetch("a/id_rsa", 1000, 2_000_000) is True
+    assert lr.should_fetch("a/big.exe", 1000, 2_000_000) is False      # binary not fetched
+    assert lr.should_fetch("a/id_rsa", 9_999_999, 2_000_000) is False  # over the per-file cap
+    assert lr.content_findings(b"ordinary text, no secrets here") == []
