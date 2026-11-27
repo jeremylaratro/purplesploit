@@ -106,33 +106,72 @@ def resolve_domain_sid(ctx, override: Optional[str]) -> Optional[str]:
     return m.group(0) if m else None
 
 
+def _slug(name: str) -> str:
+    """A filesystem-safe slug for an isolated scratch-dir name (no traversal)."""
+    s = re.sub(r"[^A-Za-z0-9._-]", "_", str(name or "forge"))
+    return (s[:64] or "forge").lstrip(".") or "forge"
+
+
+def _reauth_identity_ok(output: str, expect_principal: Optional[str]) -> bool:
+    """A cache-backed login line that ALSO names the principal we forged for, so a
+    stray cached ticket for a different identity can never satisfy the proof. When
+    no principal is supplied, the precise predicate alone decides."""
+    short = ""
+    if expect_principal:
+        short = expect_principal.split("\\")[-1].split("/")[-1].split("@")[0].strip().lower()
+    for line in output.splitlines():
+        if _RE_FORGE_REAUTH_OK.search(line) and (not short or short in line.lower()):
+            return True
+    return False
+
+
 def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target: str,
-                     out_dir: Path) -> tuple[bool, list[StepRecord], list[str]]:
-    """Forge (KRB5CCNAME UNSET, fresh dir) then re-authenticate THROUGH the forged
-    ccache only. Returns ``(ok, steps, errors)`` where ``ok`` is the PRECISE
-    cache-backed login predicate. The ccache is shredded on every path.
+                     out_dir: Path, expect_principal: Optional[str] = None
+                     ) -> tuple[bool, list[StepRecord], list[str]]:
+    """Forge (KRB5CCNAME UNSET, fresh ISOLATED scratch dir) then re-authenticate
+    THROUGH the forged ccache only. Returns ``(ok, steps, errors)`` where ``ok`` is
+    the PRECISE cache-backed login predicate bound to the forged principal.
+
+    Robustness (review r1): the forge happens in a dedicated ``.forge-<user>``
+    subdirectory of ``out_dir`` that is cleared first and removed after -- so (a)
+    ``forged`` proves THIS invocation created the cache (a stale cache from an
+    interrupted run can never mask a failed forge), and (b) cleanup can only ever
+    touch our own scratch dir, never the operator's output root. ``forged`` also
+    requires the forge tool to have SUCCEEDED (returncode 0), not merely that a
+    file is present.
     """
     steps: list[StepRecord] = []
     errors: list[str] = []
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ccache = out_dir / f"{ccache_name}.ccache"
+    # Dedicated scratch dir: cleared before, removed after. Confines every file op.
+    forge_dir = Path(out_dir) / f".forge-{_slug(ccache_name)}"
+    _shred(forge_dir)                     # clear any stale cache so existence == freshly forged
+    try:
+        forge_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        errors.append("forge_dir_unavailable")
+        return False, steps, errors
+    ccache = forge_dir / f"{ccache_name}.ccache"
 
     # 1) forge -- KRB5CCNAME explicitly UNSET so a stale inherited ticket cannot be
-    #    cloned/reused; fresh isolated out_dir.
+    #    cloned/reused; fresh isolated scratch dir.
     res = ctx.runner.run(forge_argv, env={"KRB5CCNAME": None},
-                         timeout=ctx.config.tool_timeout_s, cwd=str(out_dir))
+                         timeout=ctx.config.tool_timeout_s, cwd=str(forge_dir))
     forge_out = (res.stdout or "") + (res.stderr or "")
     m = _RE_CCACHE_SAVED.search(forge_out)
     if m:
         cand = Path(m.group(1))
-        ccache = cand if cand.is_absolute() else (out_dir / cand.name)
-    forged = ccache.exists()
+        ccache = cand if cand.is_absolute() else (forge_dir / cand.name)
+    # forged IFF the tool succeeded AND wrote the cache in THIS cleared dir -- never
+    # a stale cache, never a non-zero/timed-out/errored forge.
+    forged = bool(res.returncode == 0 and not res.error and not res.timed_out
+                  and ccache.exists())
     steps.append(StepRecord(name="forge", ok=forged, argv_display=redact_argv(forge_argv),
                             returncode=res.returncode,
                             note="ticket forged" if forged else "no ccache produced"))
     if not forged:
         errors.append("forge_failed")
-        _shred(out_dir)
+        _shred(forge_dir)
+        _rmdir(forge_dir)
         return False, steps, errors
 
     # 2) re-authenticate THROUGH the forged ccache only (no operator creds). The
@@ -142,19 +181,21 @@ def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target
     res = ctx.runner.run(reauth_argv, env={"KRB5CCNAME": str(ccache)},
                          timeout=ctx.config.tool_timeout_s)
     reauth_out = res.stdout or ""
-    ok = bool(_RE_FORGE_REAUTH_OK.search(reauth_out))
+    ok = _reauth_identity_ok(reauth_out, expect_principal)
     steps.append(StepRecord(name="reauth", ok=ok, argv_display=redact_argv(reauth_argv),
                             returncode=res.returncode,
                             note="authenticated via forged ccache (Pwn3d!)" if ok
-                                 else "forged ticket did not authenticate"))
+                                 else "forged ticket did not authenticate as the forged principal"))
     if not ok:
         errors.append("reauth_failed")
-    _shred(out_dir)
+    _shred(forge_dir)
+    _rmdir(forge_dir)
     return ok, steps, errors
 
 
 def _shred(out_dir: Path) -> None:
-    """Shred every ccache/pfx/cache artifact in the forge dir (secrets)."""
+    """Shred every file in the given (forge-scratch) dir -- secrets. Only ever
+    called on our own ``.forge-<user>`` scratch dir, never the operator's root."""
     try:
         for p in out_dir.glob("*"):
             if p.is_file():
@@ -171,5 +212,13 @@ def _shred(out_dir: Path) -> None:
                     p.unlink()
                 except OSError:
                     pass
+    except OSError:
+        pass
+
+
+def _rmdir(d: Path) -> None:
+    """Remove the (now-empty) forge-scratch dir. Best-effort."""
+    try:
+        d.rmdir()
     except OSError:
         pass
