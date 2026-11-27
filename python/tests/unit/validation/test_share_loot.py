@@ -392,3 +392,52 @@ def test_malformed_cpassword_is_rejected_not_fabricated(tmp_path):
     assert not any(c.state == st.S_LOOTED_CREDS for c in res.capabilities)   # no fabricated capability
     # ... and the real vector still decrypts (regression)
     assert lr.gpp_decrypt(GPP_CPW) == GPP_PLAINTEXT
+
+
+# ================================================ cross-FS robustness (Win/Linux NFS+SMB)
+
+def test_case_sensitive_distinct_dirs_are_both_crawled(tmp_path):
+    # Linux Samba/NFS is case-SENSITIVE: "Admin" and "admin" are DIFFERENT dirs. The
+    # cycle guard must not collapse them (lower-casing would skip one -> missed loot).
+    tree = {("S", ""): [_Entry("Admin", True, 0), _Entry("admin", True, 0)],
+            ("S", "Admin"): [_Entry("fileA.txt", False, 10)],
+            ("S", "admin"): [_Entry("fileB.txt", False, 10)]}
+    reader = _FakeReader(["S"], tree)
+    r = _run(_cfg(), tmp_path, reader)
+    store = json.loads(Path(r["terminal_fact"]["store_ref"]).read_text())
+    paths = {v["path"] for v in store.values()}
+    assert "Admin/fileA.txt" in paths and "admin/fileB.txt" in paths   # BOTH crawled
+    assert r["terminal_fact"]["coverage"]["files"] == 2
+
+
+def test_utf16le_windows_config_secret_is_detected(tmp_path):
+    # Windows files are often UTF-16LE -> ASCII byte regexes would evade them.
+    body = ('<connectionStrings><add connectionString="Data Source=db;Password='
+            + SECRET_PW + '"/></connectionStrings>').encode("utf-16-le")
+    tree = {("C", ""): [_Entry("web.config", False, len(body))]}
+    reader = _FakeReader(["C"], tree, contents={("C", "web.config"): body})
+    r = _run(_cfg(), tmp_path, reader)
+    cats = r["terminal_fact"]["loot"]["by_category"]
+    assert "db_connection_string" in cats or "password_assignment" in cats   # UTF-16 content found
+    assert SECRET_PW not in json.dumps(r)                                     # value still not in receipt
+
+
+def test_utf16_gpp_cpassword_yields_capability(tmp_path):
+    from purplesploit.validation import states as st
+    xml = (f'<Groups><User><Properties userName="{GPP_USER}" cpassword="{GPP_CPW}"/></User></Groups>').encode("utf-16-le")
+    tree = {("SYSVOL", ""): [_Entry("Groups.xml", False, len(xml))]}
+    reader = _FakeReader(["SYSVOL"], tree, contents={("SYSVOL", "Groups.xml"): xml})
+    res = get_executor("SHARE-LOOT").run_composable(_ctx(_cfg(), tmp_path, reader), _finding())
+    assert any(c.state == st.S_LOOTED_CREDS and c.value == GPP_PLAINTEXT for c in res.capabilities)
+
+
+def test_filename_rules_match_both_path_separators():
+    from purplesploit.validation.executors import loot_rules as lr
+    for p in ("home/user/.ssh/id_rsa", "C:\\Users\\u\\.ssh\\id_rsa", "share\\sub/web.config"):
+        assert lr.filename_findings(p), p
+
+
+def test_crlf_and_lf_both_scan():
+    from purplesploit.validation.executors import loot_rules as lr
+    assert any(f.category == "password_assignment" for f in lr.content_findings(b"password = x9\r\n"))
+    assert any(f.category == "password_assignment" for f in lr.content_findings(b"password = x9\n"))

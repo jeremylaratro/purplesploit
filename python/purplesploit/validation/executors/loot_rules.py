@@ -156,30 +156,51 @@ def extract_credentials(path: str, data: bytes) -> list[Credential]:
     GPP ``cpassword`` case (decryptable to a named account's password). The secret is
     OPERATOR-STORE / in-memory ONLY; it never reaches a receipt."""
     out: list[Credential] = []
-    for m in _RE_GPP_CRED.finditer(data or b""):
-        user = (m.group(1) or m.group(4) or b"").decode("utf-8", "ignore").strip()
-        cpw = (m.group(2) or m.group(3) or b"").decode("utf-8", "ignore").strip()
-        pw = gpp_decrypt(cpw)
-        if pw:
-            out.append(Credential(user or "(unknown)", pw, "gpp_cpassword"))
+    seen: set = set()
+    for view in _scan_views(data or b""):            # ASCII + de-NUL'd UTF-16 (Windows GPP XML)
+        for m in _RE_GPP_CRED.finditer(view):
+            user = (m.group(1) or m.group(4) or b"").decode("utf-8", "ignore").strip()
+            cpw = (m.group(2) or m.group(3) or b"").decode("utf-8", "ignore").strip()
+            if (user, cpw) in seen:
+                continue
+            seen.add((user, cpw))
+            pw = gpp_decrypt(cpw)
+            if pw:
+                out.append(Credential(user or "(unknown)", pw, "gpp_cpassword"))
     return out
 
 
+def _scan_views(data: bytes) -> list[bytes]:
+    """Byte views to run the ASCII content/credential rules over. Adds a de-NUL'd
+    view when the data looks UTF-16/UTF-32 (ASCII bytes interleaved with NULs) so a
+    Windows UTF-16LE config's ``password=`` / key block / ``cpassword`` still matches
+    -- the byte regexes would otherwise evade it entirely (cross-FS robustness)."""
+    views = [data]
+    if b"\x00" in data[:8192]:
+        stripped = data.replace(b"\x00", b"")
+        if stripped and stripped != data:
+            views.append(stripped)
+    return views
+
+
 def content_findings(data: bytes) -> list[Finding]:
-    """Content findings over fetched bytes. ``detail`` is a SHORT redacted context
-    for the operator store -- it may contain secret material and must NEVER reach a
-    receipt. Capped per match so a huge blob can't bloat the store."""
+    """Content findings over fetched bytes (ASCII + a de-NUL'd UTF-16 view). ``detail``
+    is a SHORT redacted context for the operator store -- it may contain secret
+    material and must NEVER reach a receipt. One finding per category; capped per
+    match so a huge blob can't bloat the store."""
     out: list[Finding] = []
     if not data:
         return out
     for rx, cat in _CONTENT_RULES:
-        m = rx.search(data)
-        if m:
-            start = max(0, m.start() - 24)
-            ctx = data[start:m.end() + 96]            # enough context to carry the value for the operator
-            try:
-                detail = ctx.decode("utf-8", "replace")
-            except Exception:
-                detail = repr(ctx[:160])
-            out.append(Finding(cat, "content", detail=detail[:256]))
+        for view in _scan_views(data):
+            m = rx.search(view)
+            if m:
+                start = max(0, m.start() - 24)
+                ctx = view[start:m.end() + 96]        # enough context to carry the value for the operator
+                try:
+                    detail = ctx.decode("utf-8", "replace")
+                except Exception:
+                    detail = repr(ctx[:160])
+                out.append(Finding(cat, "content", detail=detail[:256]))
+                break                                 # one finding per category (don't double-count views)
     return out
