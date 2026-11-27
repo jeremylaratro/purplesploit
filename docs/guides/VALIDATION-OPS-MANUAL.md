@@ -551,10 +551,12 @@ in argv / a preview:
 --forge-key-nt-file <file>    # the krbtgt NT hash (Sapphire needs both AES + NT)
 ```
 
-In a chain, the signing key is threaded from an upstream KRBTGT-producing edge
-rather than a file. <!-- VERIFY: exact engine wiring that threads a krbtgt key into
-a forge edge in `chain` mode (forge edges declare pre={S0_user_creds}; the
-`--forge-key-file` standalone path is confirmed from cli.py/config.py). -->
+In a chain, the signing key is threaded from an upstream KRBTGT-producing edge (e.g.
+DCSYNC) rather than a file: `forge_common.signing_key(ctx)` reads
+`ctx.input_caps["aes_key"]` (kind `aes`) or `ctx.input_caps["nt_hash"]` (kind `nt`) first,
+and falls back to `config.forge_key` (`--forge-key-file`) only for a standalone run. If
+neither is present it returns `(None, None)` and the edge **fails closed** — an operator
+key is never substituted for an absent or invalid threaded key.
 
 ### GOLDEN-TICKET (class `kerberos_forge`, terminal `authn_success`, non-mutating, verified)
 
@@ -662,9 +664,19 @@ secret-safe by construction** — recovered values never enter the receipt.
   share names) and surface in the receipt under the safe-name policy; file/dir paths
   beneath an export stay opaque.
 
-**Access mode (`config.share_access_mode`):** `crawl` (default — programmatic client
-reads to a scratch dir, no OS mount, no privilege, portable). `mount` is **deferred
-(S1b)** and currently returns `inconclusive:mount_mode_deferred`.
+**Access mode (`config.share_access_mode`):**
+
+- **`crawl` (default):** programmatic client reads, no OS mount, no privilege, portable.
+- **`mount` (S1b):** the kernel SMB/NFS client mounts each discovered share **read-only**
+  (`ro,nosuid,nodev,noexec`) and the mounted, attacker-controlled tree is crawled with a
+  **descriptor-anchored containment walk** (`mount_reader._ContainedDir`): `mnt_id`-pinned
+  `openat` traversal (`O_NOFOLLOW` dir fds; `O_PATH` file pins reopened via `/proc/self/fd`)
+  so a symlink / `..` / cross-mount inside the share can never escape the mount root; symlink
+  and non-regular entries are skipped. Needs `CAP_SYS_ADMIN`; SMB creds go in a `0600` file
+  (never argv); a mount failure is a per-share `denied`; if **nothing** can be mounted the
+  terminal is `inconclusive:mount_unavailable` (never a false success); teardown always
+  unmounts. Use `mount` when the programmatic client can't speak the dialect (SMB3
+  encryption, Kerberos-auth mounts, NFSv4, DFS); otherwise `crawl` is the safer default.
 
 **Bounds (all `config`, enforced during traversal; a bound hit → an explicit
 `partial` outcome, never silent truncation):** `share_max_shares` (64),
@@ -740,11 +752,13 @@ finding = NormalizedFinding(
 receipt = edge.run(ctx, finding)
 ```
 
-<!-- VERIFY: the exact ValidationConfig/ExecutorContext/NormalizedFinding fields of
-the as-run live-proof harness (the fields above are the public API as read from
-config.py / base.py / findings.py; a canonical example script is not checked into the
-repo). Also VERIFY whether a CLI `run SHARE-LOOT` path is intended to be wired
-(add SHARE-LOOT to inputs.TARGET_PARAM) — today it errors. -->
+> **Known limitation (operator-readiness gap).** SHARE-LOOT has no `run`/`chain`/`pipeline`
+> CLI path yet — it needs a `validation/inputs.py::TARGET_PARAM` entry, and the CLI's
+> `build_config` does not surface `share_protocol` / `share_access_mode` / the bounds / the
+> loot caps as flags. Until that is wired, SHARE-LOOT (and SMB/NFS/mount/bound tuning) is
+> driven through the Python API above. The field names in the example are the real
+> `ValidationConfig` / `ExecutorContext` / `NormalizedFinding` members (verified against
+> `config.py` / `base.py` / `findings.py`).
 
 ---
 
