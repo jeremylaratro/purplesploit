@@ -55,6 +55,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from . import netresolve
 from .predicates import strip_ansi
 from .executors.base import ExecutorContext, RunResult
 # Safe despite living in the `executors` package: by the time THIS top-level
@@ -157,15 +158,10 @@ def _parse_int(token: Optional[str]) -> Optional[int]:
 
 
 def _nxc_auth(cfg) -> list[str]:
-    """NetExec auth flags from the operator config (password / NT hash)."""
-    argv = ["-u", cfg.username or ""]
-    if cfg.nt_hash:
-        argv += ["-H", cfg.nt_hash]
-    elif cfg.aes_key:
-        argv += ["--aesKey", cfg.aes_key]
-    elif cfg.password is not None:
-        argv += ["-p", cfg.password]
-    return argv
+    """NetExec auth flags from the operator config -- delegates to the canonical
+    :func:`netresolve.nxc_auth_flags` (adds Kerberos discovery flags when the mode
+    is ``--aesKey``, so probe KDC discovery works without a carrier ``/etc/hosts``)."""
+    return netresolve.nxc_auth_flags(cfg)
 
 
 def _ldap_query(ctx: ExecutorContext, ldap_filter: str, attributes: list[str]) -> RunResult:

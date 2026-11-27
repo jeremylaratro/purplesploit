@@ -126,11 +126,12 @@ def test_all_kerberos_sites_wire_discovery_flags():
         assert "nxc_kerberos_flags" in (base / fn).read_text(), f"{fn} lost its discovery wiring"
 
 
-def test_the_six_auth_helpers_delegate_to_canonical():
-    base = Path(netresolve.__file__).parent / "executors"
-    for fn in ("add_member.py", "gpo_abuse.py", "roast.py", "generic_all.py",
-               "targeted_kerberoast.py", "certifried.py"):
-        src = (base / fn).read_text()
-        assert "netresolve.nxc_auth_flags(cfg)" in src, f"{fn} did not delegate its auth helper"
+def test_all_seven_auth_helpers_delegate_to_canonical():
+    root = Path(netresolve.__file__).parent
+    for rel in ("executors/add_member.py", "executors/gpo_abuse.py", "executors/roast.py",
+                "executors/generic_all.py", "executors/targeted_kerberoast.py",
+                "executors/certifried.py", "probes.py"):   # probes.py is the 7th (S2-review r1)
+        src = (root / rel).read_text()
+        assert "netresolve.nxc_auth_flags(cfg)" in src, f"{rel} did not delegate its auth helper"
         # the old duplicated body must be gone
-        assert 'argv += ["--aesKey", cfg.aes_key]' not in src, f"{fn} still has a duplicated helper body"
+        assert 'argv += ["--aesKey", cfg.aes_key]' not in src, f"{rel} still has a duplicated helper body"
