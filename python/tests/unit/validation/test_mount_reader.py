@@ -18,6 +18,7 @@ import json
 import os
 import shutil
 import stat
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -282,3 +283,55 @@ def test_executor_mount_unavailable_is_inconclusive(tmp_path):
 def test_config_rejects_unknown_access_mode():
     with pytest.raises(ValueError):
         ValidationConfig(domain="d", dc_ip="1.2.3.4", share_access_mode="fuse")
+
+
+# ------------------------------------------------- diff-review r1 fixes (adversarial)
+def test_close_unmounts_when_flag_unset_but_really_mounted(tmp_path, monkeypatch):
+    # review HIGH: an interrupt can leave entry["mounted"] False while the mount is really
+    # installed; close() must use the REAL mount state (os.path.ismount) as source of truth.
+    runner = _FakeRunner()
+    mr = MountReader(_cfg(), "fs01", "smb", _FakeDiscovery([]), runner)
+    mr._mounts["X"] = {"mp": str(tmp_path), "fs": None, "mounted": False, "cred": None}
+    monkeypatch.setattr(os.path, "ismount", lambda p: True)   # the mount IS actually present
+    mr.close()
+    assert any(c[:1] == ["umount"] for c in runner.calls)     # unmounted despite the False flag
+
+
+def test_contained_dir_construction_failure_closes_root_fd(tmp_path, monkeypatch):
+    # review HIGH: a post-open fstat failure must not leak the root fd.
+    before = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(mount_reader.os, "fstat", lambda fd: (_ for _ in ()).throw(OSError("ESTALE")))
+    with pytest.raises(OSError):
+        _ContainedDir(str(tmp_path))
+    assert len(os.listdir("/proc/self/fd")) <= before         # no descriptor leaked
+
+
+def test_list_dir_bounds_hostile_enumeration(tmp_path, monkeypatch):
+    # review HIGH: skipped entries (symlinks/specials) bypass the retained cap; a bound on
+    # ENTRIES SCANNED stops an endless hostile directory instead of hanging.
+    for i in range(6):
+        os.symlink("/etc/passwd", str(tmp_path / f"s{i}"))    # all skipped (symlinks)
+    monkeypatch.setattr(mount_reader, "_SCAN_SLACK", 2)
+    cd = _ContainedDir(str(tmp_path))
+    cd.list_dir("", 0)                                        # cap 0 + slack 2 -> truncates at scan 3
+    assert cd.scan_truncated is True
+    cd.close()
+
+
+def test_write_cred_cleans_up_on_write_failure(monkeypatch):
+    # review HIGH: a partial creds write (e.g. ENOSPC) still wrote the secret -> must shred.
+    import glob
+    tmpdir = tempfile.gettempdir()
+    before = set(glob.glob(os.path.join(tmpdir, "sl-cred-*")))
+
+    class _BoomFile:
+        def __init__(self, fd): self._fd = fd
+        def __enter__(self): return self
+        def __exit__(self, *a): os.close(self._fd); return False
+        def write(self, *a): raise OSError("ENOSPC")
+
+    monkeypatch.setattr(mount_reader.os, "fdopen", lambda fd, mode: _BoomFile(fd))
+    with pytest.raises(OSError):
+        mount_reader._write_cred(_cfg())
+    after = set(glob.glob(os.path.join(tmpdir, "sl-cred-*")))
+    assert after <= before                                   # no leaked plaintext creds file
