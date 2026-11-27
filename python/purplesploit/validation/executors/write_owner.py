@@ -36,7 +36,7 @@ from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv, Capability, CAP_NONE)
+                   redact_argv, Capability, CAP_CONTROL, ControlGrant)
 from .acl_common import (dacledit_read_argv, dacledit_write_argv, dacledit_remove_argv,
                          owneredit_read_argv, owneredit_write_argv,
                          confirm_ace, dacl_read_bind_ok, owner_read_bind_ok,
@@ -175,6 +175,8 @@ class WriteOwnerExecutor(ValidationExecutor):
             errors.append("write_owner_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
+        if ctx.composed:
+            ctx._pending_teardown = {"args": (target, trustee, original_owner,)}
 
         # 5) as the new owner, self-grant FullControl (modest duplication of
         #    WRITE-DACL's write, same rationale as acl_common.py's docstring) --
@@ -206,22 +208,39 @@ class WriteOwnerExecutor(ValidationExecutor):
         )
 
         # 7) rollback: TWO sub-steps, BOTH required for verified=True ----------
-        self._rollback(ctx, cfg, target, trustee, original_owner, mutation, steps, errors, record)
+        if not ctx.composed:
+            self._rollback(ctx, cfg, target, trustee, original_owner, mutation, steps, errors, record)
 
         # `complete` tracks the TECHNIQUE's own proof (ok) + that rollback was
         # attempted -- same pattern as every existing mutating executor
         # (rbcd.py/openshares.py: `performed`, not `verified`, gates completeness;
         # an unverified rollback is reported via `rollback_unverified` separately,
         # never silently folded into a false-negative `complete`).
-        complete = bool(ok and mutation["rollback"]["performed"])
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        complete = bool(ok and (ctx.composed or mutation["rollback"]["performed"]))
+        artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        if ctx.composed and mutation["applied"]:
+            artifact["teardown_obligation"] = {"args": (target, trustee, original_owner,)}
+        return artifact
 
     # ---------------------------------------------------------------- composition (C)
+    def chain_eff(self, ctx, finding) -> frozenset:
+        return frozenset({states.control_for(self._params(ctx, finding)["target"].value)})
+
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
-        target = params["target"].value or ""
-        if not artifact.get("complete"):
+        if not ctx.composed or not artifact.get("complete") or not artifact.get("teardown_obligation"):
             return []
-        return [Capability(state=states.control_for(target), channel=CAP_NONE, principal=target)]
+        target = params["target"].value
+        actor = params["trustee"].value
+        right = "FullControl"
+        return [Capability(state=states.control_for(target), channel=CAP_CONTROL,
+                           value=ControlGrant(actor, target, right), principal=actor)]
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True, "rollback": {"performed": False, "verified": False,
+                                                   "method": None}}
+        self._rollback(ctx, ctx.config, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, target, trustee, original_owner, mutation,

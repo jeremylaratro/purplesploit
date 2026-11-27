@@ -285,7 +285,8 @@ class ValidationOrchestrator:
         try:
             result = self.scorer.score(self.config, receipt_paths, result_path)
         except Exception as exc:
-            return {"scored": False, "reason": f"{type(exc).__name__}: {exc}",
+            self.context._private_errors.append(str(exc))
+            return {"scored": False, "reason": "scoring_error",
                     "receipts": [str(p) for p in receipt_paths]}
         return {"scored": True, "result_path": str(result_path), "result": result}
 

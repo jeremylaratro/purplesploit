@@ -28,7 +28,7 @@ from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv, Capability, CAP_NONE)
+                   redact_argv, Capability, CAP_CONTROL, ControlGrant)
 from .acl_common import (dacledit_read_argv, dacledit_write_argv, dacledit_remove_argv,
                          confirm_ace, dacl_read_bind_ok, _RE_ACE_GENERIC_ALL,
                          _RE_ACE_WRITE_DACL, _RE_DACL_WRITE_OK, _RE_DACL_REMOVE_OK)
@@ -152,6 +152,8 @@ class WriteDaclExecutor(ValidationExecutor):
             errors.append("write_dacl_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
+        if ctx.composed:
+            ctx._pending_teardown = {"args": (target, trustee, rights,)}
 
         # 4) POSITIVE readback = the terminal proof (never the write call's own
         #    exit code) ---------------------------------------------------------
@@ -173,17 +175,34 @@ class WriteDaclExecutor(ValidationExecutor):
         )
 
         # 5) rollback: remove the ACE, verify non-vacuously --------------------
-        self._rollback(ctx, cfg, target, trustee, rights, mutation, steps, errors, record)
+        if not ctx.composed:
+            self._rollback(ctx, cfg, target, trustee, rights, mutation, steps, errors, record)
 
-        complete = bool(ok and mutation["rollback"]["performed"])
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        complete = bool(ok and (ctx.composed or mutation["rollback"]["performed"]))
+        artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        if ctx.composed and mutation["applied"]:
+            artifact["teardown_obligation"] = {"args": (target, trustee, rights,)}
+        return artifact
 
     # ---------------------------------------------------------------- composition (C)
+    def chain_eff(self, ctx, finding) -> frozenset:
+        return frozenset({states.control_for(self._params(ctx, finding)["target"].value)})
+
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
-        target = params["target"].value or ""
-        if not artifact.get("complete"):
+        if not ctx.composed or not artifact.get("complete") or not artifact.get("teardown_obligation"):
             return []
-        return [Capability(state=states.control_for(target), channel=CAP_NONE, principal=target)]
+        target = params["target"].value
+        actor = params["trustee"].value
+        right = params["rights"].value
+        return [Capability(state=states.control_for(target), channel=CAP_CONTROL,
+                           value=ControlGrant(actor, target, right), principal=actor)]
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True, "rollback": {"performed": False, "verified": False,
+                                                   "method": None}}
+        self._rollback(ctx, ctx.config, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, target, trustee, rights, mutation, steps, errors, record) -> None:

@@ -51,8 +51,9 @@ CAP_CCACHE = "ccache"       # a Kerberos credential-cache PATH -> KRB5CCNAME + c
 CAP_NT_HASH = "nt_hash"     # an NT hash (SECRET) -> -hashes, in-memory only
 CAP_AES_KEY = "aes_key"     # an AES key (SECRET) -> -aesKey -k, in-memory only
 CAP_PRINCIPAL = "principal" # the principal a cred acts as (e.g. "dc01$") -> target principal
+CAP_CONTROL = "control"   # a typed, object/right-bound grant, never an auth credential
 CAP_NONE = "none"           # a state established with no machine-consumable artifact
-CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_NONE})
+CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_CONTROL, CAP_NONE})
 
 # Channels whose VALUE is a secret and must never be serialized into a receipt /
 # ChainReport. A ccache PATH is project-marked secret too (it names bearer key
@@ -60,7 +61,15 @@ CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, C
 _SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE})
 
 
-@dataclass
+@dataclass(frozen=True)
+class ControlGrant:
+    actor: str
+    object: str
+    right: str
+    lifetime: str = "until teardown"
+
+
+@dataclass(frozen=True)
 class Capability:
     """A typed, machine-consumable artifact a front produced for a state it
     established, so the engine can THREAD it into a downstream edge by channel
@@ -76,8 +85,9 @@ class Capability:
     """
     state: str
     channel: str = CAP_NONE
-    value: Optional[str] = None
+    value: Any = None
     principal: Optional[str] = None
+    provenance: tuple[str, ...] = ()  # assigned once by the engine; aliases retain it
 
     @property
     def secret(self) -> bool:
@@ -352,6 +362,9 @@ class ExecutorContext:
     env: dict[str, str] = field(default_factory=dict)         # extra env (e.g. KRB5CCNAME=<ccache>) forwarded to runner
     composed: bool = False                                    # True => mutating fronts DEFER rollback to chain teardown
 
+    _private_errors: list[str] = field(default_factory=list, repr=False)
+    _pending_teardown: Optional[dict] = field(default=None, repr=False)
+
     def __post_init__(self) -> None:
         if self.destructive_confirmer is None:
             self.destructive_confirmer = NonInteractiveDestructiveConfirmer(
@@ -492,11 +505,22 @@ class ValidationExecutor(ABC):
         return {"performed": False, "verified": True, "method": None,
                 "note": "no teardown obligation (non-mutating edge)"}
 
+    def chain_pre(self, ctx, finding) -> frozenset:
+        return self.pre
+
+    def chain_eff(self, ctx, finding) -> frozenset:
+        return self.eff
+
+    def _params(self, ctx, finding, overrides=None):
+        bound = dict(getattr(finding, "_overrides", {}))
+        bound.update(overrides or {})
+        return resolve_params(self.param_specs(ctx, finding), bound)
+
     # -- shared orchestration -------------------------------------------------
     def plan(self, ctx: ExecutorContext, finding,
              overrides: Optional[dict[str, Any]] = None) -> ValidationPlan:
         """Resolve params (with any overrides) and build a non-executing preview."""
-        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        params = self._params(ctx, finding, overrides)
         return ValidationPlan(
             technique=self.technique, technique_class=self.technique_class,
             target=self.target_identity(ctx, finding, params),
@@ -510,14 +534,19 @@ class ValidationExecutor(ABC):
                              params: dict[str, ParamValue]) -> dict:
         """Run ``execute`` fail-closed: any exception becomes an incomplete
         artifact carrying the error (never a fabricated proof)."""
+        ctx._pending_teardown = None
         try:
             return self.execute(ctx, finding, params)
         except StubNotImplemented as exc:
-            return {"steps": [], "complete": False,
-                    "errors": [f"stub_not_implemented: {exc}"]}
+            ctx._private_errors.append(str(exc))
+            return {"steps": [], "complete": False, "errors": ["stub_not_implemented"]}
         except Exception as exc:  # fail closed -> incomplete receipt, never a proof
-            return {"steps": [], "complete": False,
-                    "errors": [f"{type(exc).__name__}: {exc}"]}
+            ctx._private_errors.append(str(exc))
+            artifact = {"steps": [], "complete": False, "errors": ["executor_exception"]}
+            if ctx._pending_teardown:
+                artifact["mutation"] = {"applied": True}
+                artifact["teardown_obligation"] = ctx._pending_teardown
+            return artifact
 
     def _receipt_from(self, ctx: ExecutorContext, finding,
                       params: dict[str, ParamValue], artifact: dict) -> dict:
@@ -548,7 +577,7 @@ class ValidationExecutor(ABC):
         Any exception inside ``execute`` yields an incomplete receipt carrying
         the error (never a fabricated proof).
         """
-        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        params = self._params(ctx, finding, overrides)
         artifact = self._execute_to_artifact(ctx, finding, params)
         return self._receipt_from(ctx, finding, params, artifact)
 
@@ -560,7 +589,7 @@ class ValidationExecutor(ABC):
         (secret paths, engine-only, never in the receipt). ``ctx.composed`` tells
         a mutating front to DEFER its rollback so the key material survives for a
         downstream terminal (B3)."""
-        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        params = self._params(ctx, finding, overrides)
         artifact = self._execute_to_artifact(ctx, finding, params)
         receipt = self._receipt_from(ctx, finding, params, artifact)
         caps = self.produced(ctx, finding, params, artifact) if artifact.get("complete") else []

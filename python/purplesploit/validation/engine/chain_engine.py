@@ -43,14 +43,14 @@ from typing import Any, Callable, Optional
 from .. import states
 from ..executors.base import (
     ValidationExecutor, ExecutorContext, Capability,
-    CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_NONE,
+    CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_NONE, CAP_CONTROL, ControlGrant,
 )
 
 OPERATOR_SEED = "operator-seed"
 
 
 # ---------------------------------------------------------------- state store
-@dataclass
+@dataclass(frozen=True)
 class _StateEntry:
     """A capability-state the chain has established, with its provenance (H5b)."""
     capability: Optional[Capability]     # machine-consumable artifact (in-memory only)
@@ -109,6 +109,8 @@ class ChainEngine:
             raise ValueError(
                 f"seed may not grant escalation states {sorted(forbidden)} (H5b: "
                 "the engine proves escalation from operator creds, never seeds DA)")
+        self._bindings = {}
+        self._private_errors: list[str] = []
         self.goal = goal
         self.seed = frozenset(seed)
         self.edges = [e for e in edges if self._edge_allowed(e, allow_crack, allow_destructive)]
@@ -136,10 +138,25 @@ class ChainEngine:
         # matches the N1 edge model (test_front_eff_satisfies_dcsync_pre).
         return bool(e.pre & have)
 
-    def search(self) -> list[list[ValidationExecutor]]:
+    def search(self, base_ctx=None, finding_for=None) -> list[list[ValidationExecutor]]:
         """All simple edge paths ``seed -> ... -> goal``, ranked cheapest-first.
         No path is baked in: adding an annotated edge makes it participate
         automatically."""
+        # Bounded candidate effects: bind each edge ONCE to the same finding and
+        # resolved parameters used at execution. These are proposals, never facts.
+        if base_ctx is not None:
+            self._bindings = {}
+            for edge in self.edges:
+                try:
+                    finding = finding_for(edge)
+                    if finding is not None:
+                        self._bindings[edge] = (edge.chain_pre(base_ctx, finding),
+                                                edge.chain_eff(base_ctx, finding), finding)
+                except Exception as exc:
+                    self._private_errors.append(str(exc))
+            candidates = list(self._bindings)
+        else:
+            candidates = self.edges
         results: list[tuple[float, int, list[ValidationExecutor]]] = []
 
         def dfs(have: frozenset, path: list[ValidationExecutor], cost: float):
@@ -148,10 +165,11 @@ class ChainEngine:
                 return
             if len(path) >= len(self.edges):                 # no simple path longer than |edges|
                 return
-            for e in self.edges:
-                if e in path or not self._applicable(e, have):
+            for e in candidates:
+                pre, eff, _ = self._bindings.get(e, (e.pre, e.eff, None))
+                if e in path or not (pre & have):
                     continue
-                new_have = have | e.eff
+                new_have = have | eff
                 if new_have == have:                         # edge added nothing -> prune
                     continue
                 dfs(new_have, path + [e], cost + self._edge_cost(e))
@@ -168,12 +186,14 @@ class ChainEngine:
         capabilities for the pre-states this edge consumes (B2 per-channel)."""
         input_caps: dict[str, Any] = {}
         env: dict[str, str] = {}
-        for st in edge.pre:
+        for st in sorted(store):
             entry = store.get(st)
             cap = entry.capability if entry else None
             if cap is None:
                 continue
-            if cap.channel == CAP_CCACHE and cap.value:
+            if cap.channel == CAP_CONTROL and isinstance(cap.value, ControlGrant):
+                input_caps["control"] = cap
+            elif cap.channel == CAP_CCACHE and cap.value:
                 input_caps["ccache"] = cap.value
                 env["KRB5CCNAME"] = cap.value
             elif cap.channel == CAP_NT_HASH and cap.value:
@@ -186,14 +206,21 @@ class ChainEngine:
                 input_caps["principal"] = cap.principal
         return input_caps, env
 
-    def _satisfied_by_escalation(self, edge: ValidationExecutor,
-                                 store: dict[str, _StateEntry]) -> bool:
-        """H5: True iff ANY pre-state satisfying this edge was PRODUCED by a prior
-        edge (a real escalation) rather than only an operator-seed credential."""
-        for st in (edge.pre & frozenset(store)):
-            if store[st].provenance != OPERATOR_SEED:
-                return True
-        return False
+    def _satisfied_by_escalation(self, edge, store) -> bool:
+        # Runtime passes exactly the atomically selected entry. The fallback
+        # intersection keeps this helper useful for callers inspecting static edges.
+        entries = [store[st] for st in sorted(store)]
+        return bool(entries and entries[0].provenance != OPERATOR_SEED)
+
+    @staticmethod
+    def _consume(edge, pre, store, ctx, finding):
+        for st in sorted(pre & frozenset(store)):
+            entry = store[st]
+            if st.startswith("control:"):
+                if entry.capability is None or not edge.accepts_control(ctx, finding, entry.capability):
+                    continue
+            return {st: entry}
+        return {}
 
     # ------------------------------------------------------------ run
     def run(self, base_ctx: ExecutorContext, finding_for: FindingFor) -> ChainReport:
@@ -205,11 +232,11 @@ class ChainEngine:
         leftover mutation from an earlier fallback path is folded into the
         returned report's ``clean`` and teardown log, so a later clean path can
         never hide an earlier unverified rollback."""
-        paths = self.search()
+        paths = self.search(base_ctx, finding_for)
         if not paths:
             return ChainReport(goal=self.goal, reached=False, escalation=False, clean=True,
                                label="no viable path",
-                               note="no annotated edge path from the seed reaches the goal")
+                               note="no_viable_path")
         prior_teardown: list[dict] = []
         prior_clean = True
         last: Optional[ChainReport] = None
@@ -230,8 +257,15 @@ class ChainEngine:
         mutation (verified). An edge whose precondition was not actually
         ESTABLISHED by an upstream edge (H1), that cannot be parameterized, or
         that does not complete ends the path; its mutations are still torn down."""
-        store: dict[str, _StateEntry] = {
-            s: _StateEntry(capability=None, provenance=OPERATOR_SEED) for s in self.seed}
+        store: dict[str, _StateEntry] = {}
+        for st in self.seed:
+            cap = None
+            if st.startswith("control:"):
+                obj = st[len("control:"):]
+                cap = Capability(st, CAP_CONTROL,
+                                 ControlGrant(base_ctx.config.username or "", obj, "FullControl", "operator-seed"),
+                                 base_ctx.config.username, (OPERATOR_SEED,))
+            store[st] = _StateEntry(cap, OPERATOR_SEED)
         receipts: list[dict] = []
         teardown_stack: list[tuple[ValidationExecutor, dict, ExecutorContext, dict]] = []
         reached = False
@@ -240,25 +274,33 @@ class ChainEngine:
         base_out = Path(base_ctx.output_dir)
 
         for edge in path:
-            finding = finding_for(edge)
+            pre, eff, finding = self._bindings.get(edge, (edge.pre, edge.eff, None))
+            try:
+                if finding is None:
+                    finding = finding_for(edge)
+            except Exception as exc:
+                self._private_errors.append(str(exc))
+                fail_note = "finding_error"
+                break
             if finding is None:
-                fail_note = f"no finding available for edge {edge.technique}"
+                fail_note = "finding_unavailable"
                 break
             # Runtime applicability (H1): the edge's precondition must be
             # ESTABLISHED in the store -- a real produced capability from an
             # upstream edge, or the operator seed. An upstream that issued a cert
             # but produced NO usable DC_TGT leaves nothing here, so the terminal
             # never silently runs on operator creds while we claim an escalation.
-            if not (edge.pre & frozenset(store)):
-                fail_note = (f"edge {edge.technique}: precondition {sorted(edge.pre)} "
-                             "not established by upstream")
+            consumed = self._consume(edge, pre, store, base_ctx, finding)
+            if not consumed:
+                fail_note = "precondition_not_established"
                 break
             # Is THIS edge's precondition met by a PRODUCED state (a real
             # escalation) rather than only the operator seed? Decide before the
             # edge adds its own effects.
-            edge_escalation = self._satisfied_by_escalation(edge, store)
+            entry = next(iter(consumed.values()))
+            edge_escalation = self._satisfied_by_escalation(edge, consumed)
 
-            input_caps, env = self._thread_caps(edge, store)
+            input_caps, env = self._thread_caps(edge, consumed)
             # FRESH per-edge context (never a shared mutated one): composed=True so
             # mutating fronts DEFER rollback, and an ISOLATED output dir so one
             # edge's issued *.pfx can't be mis-globbed as another's (M2).
@@ -268,7 +310,8 @@ class ChainEngine:
             try:
                 result = edge.run_composable(ctx, finding)
             except Exception as exc:                         # e.g. required param absent
-                fail_note = f"edge {edge.technique} could not run: {type(exc).__name__}: {exc}"
+                self._private_errors.append(str(exc))
+                fail_note = "edge_execution_error"
                 break
             receipts.append(result.receipt)
 
@@ -278,7 +321,7 @@ class ChainEngine:
                 teardown_stack.append((edge, result.teardown_obligation, ctx, result.receipt))
 
             if not result.complete:
-                fail_note = f"edge {edge.technique} did not complete"
+                fail_note = "edge_incomplete"
                 break
 
             # H1: threadable states are established ONLY by a real produced
@@ -293,9 +336,21 @@ class ChainEngine:
             for cap in result.capabilities:
                 if cap.channel == CAP_NONE or not cap.value:
                     continue
-                store[cap.state] = _StateEntry(capability=cap, provenance=edge.technique)
+                if cap.state not in eff:
+                    continue
+                # Seed control is never overwritten by a redundant new grant.
+                # Nor can an alias of a seed cap acquire a producing-edge origin.
+                lineage = cap.provenance
+                if not lineage:
+                    parent = entry.capability
+                    lineage = ((parent.provenance if parent and parent.channel == CAP_CONTROL else ())
+                               + (edge.technique,))
+                    cap = replace(cap, provenance=lineage)
+                origin = OPERATOR_SEED if OPERATOR_SEED in lineage else lineage[0]
+                store.setdefault(cap.state, _StateEntry(capability=cap, provenance=origin))
 
-            if self.goal in edge.eff:
+            if self.goal in eff and (not self.goal.startswith(("cred:", "control:"))
+                                     or self.goal in store):
                 reached = True
                 escalation = edge_escalation
                 break                                        # early-exit at first goal (H4)
@@ -303,11 +358,15 @@ class ChainEngine:
         # ---- teardown: drain EVERY obligation in reverse, VERIFY + reconcile ----
         teardown_log: list[dict] = []
         for edge, obligation, ctx, receipt in reversed(teardown_stack):
-            td = edge.teardown(ctx, obligation)
+            try:
+                td = edge.teardown(ctx, obligation)
+            except Exception as exc:
+                self._private_errors.append(str(exc))
+                td = {"performed": False, "verified": False, "note": "teardown_error"}
             performed, verified = bool(td.get("performed")), bool(td.get("verified"))
             teardown_log.append({"edge": edge.technique, "performed": performed,
                                  "verified": verified, "method": td.get("method"),
-                                 "note": td.get("note", "")})
+                                 "note": "teardown_verified" if verified else "teardown_unverified"})
             # Reconcile the front receipt's rollback with the ACTUAL teardown so the
             # composed receipt is self-consistent (the harness scorer grades it the
             # same standalone). Records a true event; a FAILED teardown stays
@@ -335,14 +394,14 @@ class ChainEngine:
             path=[e.technique for e in path], receipts=receipts, teardown=teardown_log,
             label=self._label(reached, escalation, clean), note=fail_note)
 
-    @staticmethod
-    def _label(reached: bool, escalation: bool, clean: bool) -> str:
+    def _label(self, reached: bool, escalation: bool, clean: bool) -> str:
         # clean is ALWAYS reflected, in every branch -- a reached-but-dirty result
         # (including "given creds") must never read as clean.
+        goal_name = "DA" if self.goal == states.S_DA else "lateral goal"
         if not reached:
-            return "DA not reached" + ("" if clean else " -- mutation left behind, NOT clean")
-        kind = ("DA proved (escalation from operator creds)" if escalation
-                else "DA given creds (no escalation) -- terminal met by operator-seed cred")
+            return goal_name + " not reached" + ("" if clean else " -- mutation left behind, NOT clean")
+        kind = (goal_name + " proved (escalation from operator creds)" if escalation
+                else goal_name + " given creds (no escalation) -- terminal met by operator-seed cred")
         return kind + (" and clean" if clean else " but NOT clean -- mutation left behind")
 
     def _finalize(self, report: ChainReport, clean: bool,

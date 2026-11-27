@@ -45,7 +45,7 @@ from .. import proof
 from .. import states
 from .base import (ValidationExecutor, ExecutorContext, ValidationPlan, StepRecord,
                    RunResult, redact_argv, ToolAttempt, first_successful,
-                   Capability, CAP_NONE)
+                   Capability, CAP_NONE, CAP_NT_HASH, CAP_CONTROL, ControlGrant)
 from .acl_common import dacledit_read_argv, confirm_ace, _RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE
 from .shadow_creds import _RE_SHADOW_HASH, _RE_SHADOW_RESTORE
 from .roast import DEFAULT_WORDLIST
@@ -139,6 +139,26 @@ class GenericAllExecutor(ValidationExecutor):
 
     _PIVOT_TERMINAL = {"reset_password": "authn_success", "spn_kerberoast": "authn_success",
                        "shadow_creds": "secret_recovered", "rbcd": "rbcd_access"}
+
+    def chain_pre(self, ctx, finding) -> frozenset:
+        # Composed execution needs control of THIS object. S0 is deliberately
+        # absent: knowing the target is not evidence that the operator controls it.
+        return frozenset({states.control_for(self._params(ctx, finding)["target"].value)})
+
+    def chain_eff(self, ctx, finding) -> frozenset:
+        params = self._params(ctx, finding)
+        if params["pivot"].value == "rbcd":
+            return frozenset({states.S_IMPERSONATION_TGT})
+        return frozenset({states.cred_for(params["target"].value)})
+
+    def accepts_control(self, ctx, finding, cap) -> bool:
+        target = self._params(ctx, finding)["target"].value
+        grant = cap.value
+        return (cap.channel == CAP_CONTROL and isinstance(grant, ControlGrant)
+                and cap.state == states.control_for(target) and grant.object == target
+                and grant.actor == ctx.config.username
+                and grant.right in {"FullControl", "GenericAll", "GenericWrite"}
+                and grant.lifetime in {"until teardown", "operator-seed"})
 
     # ---------------------------------------------------------------- params
     def param_specs(self, ctx: ExecutorContext, finding) -> list[ParamSpec]:
@@ -263,7 +283,7 @@ class GenericAllExecutor(ValidationExecutor):
     # with no params in scope at that point (plan §2.1).
     def plan(self, ctx: ExecutorContext, finding,
             overrides: Optional[dict[str, Any]] = None) -> ValidationPlan:
-        params = resolve_params(self.param_specs(ctx, finding), overrides)
+        params = self._params(ctx, finding, overrides)
         pivot = params["pivot"].value
         return ValidationPlan(
             technique=self.technique, technique_class=self.technique_class,
@@ -325,6 +345,9 @@ class GenericAllExecutor(ValidationExecutor):
         def record(name, argv, res, ok, note=""):
             steps.append(StepRecord(name=name, ok=ok, argv_display=redact_argv(argv),
                                     returncode=res.returncode, note=note))
+
+        if ctx.composed and not self.accepts_control(ctx, finding, ctx.input_caps.get("control", Capability(""))):
+            return self._artifact(steps, gate, mutation, None, False, ["control_not_established"])
 
         # 0) confirm the PRECONDITION ACE over the target -- shared by all pivots
         read_argv = dacledit_read_argv(cfg, target, dc)
@@ -560,7 +583,13 @@ class GenericAllExecutor(ValidationExecutor):
             extra={"target": target},
         )
         complete = hash_ok
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        recovered = re.search(
+            r"(?:Got hash for|NT hash for)\s+['\"]?" + re.escape(target)
+            + r"['\"]?:\s*(?:[0-9a-f]{32}:)?([0-9a-f]{32})(?![0-9a-f])", out, re.I)
+        if recovered:
+            artifact["_recovered_hash"] = recovered.group(1)
+        return artifact
 
     # ---------------------------------------------------------------- pivot: rbcd
     def _run_rbcd(self, ctx, cfg, target, v, dc, out_dir, steps, errors, gate,
@@ -721,13 +750,19 @@ class GenericAllExecutor(ValidationExecutor):
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
         if not artifact.get("complete"):
             return []
-        target = params["target"].value or ""
-        pivot = params["pivot"].value
-        if pivot == "rbcd":
-            impersonate = params["impersonate"].value or ""
+        # The rbcd pivot yields an impersonation state (no threadable credential
+        # VALUE here -- CAP_NONE, exactly as before; the engine does not thread it).
+        if params["pivot"].value == "rbcd":
             return [Capability(state=states.S_IMPERSONATION_TGT, channel=CAP_NONE,
-                               principal=impersonate)]
-        return [Capability(state=states.cred_for(target), channel=CAP_NONE, principal=target)]
+                               principal=params["impersonate"].value or "")]
+        # A presence marker alone proves no threadable credential: only an actual
+        # NT hash recovered by THIS invocation establishes a usable cred_for(X).
+        recovered = artifact.get("_recovered_hash")
+        if not recovered:
+            return []
+        target = params["target"].value
+        return [Capability(state=states.cred_for(target), channel=CAP_NT_HASH,
+                           value=recovered, principal=target)]
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

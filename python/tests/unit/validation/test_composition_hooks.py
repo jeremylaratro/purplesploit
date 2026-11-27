@@ -85,7 +85,7 @@ def _cfg(host_aliases=None, **kw) -> ValidationConfig:
 _DC = "dc01.north.sevenkingdoms.local"
 _ALIAS = {_DC: {"host_id": "dc01"}}
 _DCSYNC_OK = ("[*] Dumping Domain Credentials\n"
-              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:KRBTGThash0000000000000000000000:::\n")
+              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:0123456789abcdef0123456789abcdef:::\n")
 _FAKE_NT_HASH = "aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
 
 

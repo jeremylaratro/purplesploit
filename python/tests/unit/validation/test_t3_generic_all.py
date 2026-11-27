@@ -392,11 +392,19 @@ def test_genericall_produced_per_pivot(tmp_path):
     cfg = _cfg()
     ex = get_executor("GENERIC-ALL")
     ctx = _ctx(cfg, _FakeRunner({}), tmp_path)
+    _hash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+    # A cred pivot establishes cred_for(X) ONLY with a real recovered NT hash
+    # (a USABLE capability -- CAP_NT_HASH + value), never on `complete` alone.
     for pivot in ("reset_password", "spn_kerberoast", "shadow_creds"):
         params = {"target": type("V", (), {"value": "arya.stark"})(),
                  "pivot": type("V", (), {"value": pivot})()}
-        caps = ex.produced(ctx, _finding(), params, {"complete": True})
+        caps = ex.produced(ctx, _finding(), params,
+                           {"complete": True, "_recovered_hash": _hash})
         assert len(caps) == 1 and caps[0].state == states.cred_for("arya.stark")
+        assert caps[0].channel == "nt_hash" and caps[0].value == _hash
+        # complete but NO recovered value -> nothing threadable (B3 guard)
+        assert ex.produced(ctx, _finding(), params, {"complete": True}) == []
+    # rbcd yields an impersonation state (no threadable credential value)
     params = {"target": type("V", (), {"value": "winterfell"})(),
              "pivot": type("V", (), {"value": "rbcd"})(),
              "impersonate": type("V", (), {"value": "Administrator"})()}
@@ -405,7 +413,8 @@ def test_genericall_produced_per_pivot(tmp_path):
     assert caps[0].principal == "Administrator"
     # incomplete -> nothing produced, for every pivot
     params["pivot"] = type("V", (), {"value": "shadow_creds"})()
-    assert ex.produced(ctx, _finding(), params, {"complete": False}) == []
+    assert ex.produced(ctx, _finding(), params,
+                       {"complete": False, "_recovered_hash": _hash}) == []
 
 
 # ======================================================================= probe

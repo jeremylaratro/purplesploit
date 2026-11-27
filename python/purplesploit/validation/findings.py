@@ -48,6 +48,8 @@ class NormalizedFinding:
     verified_signal: bool = True           # mapping confidence (see module docstring)
     entity: dict[str, Any] = field(default_factory=dict)  # principal/template/spn/share/esc...
 
+    _overrides: dict[str, Any] = field(default_factory=dict, repr=False)
+
     @property
     def validatable(self) -> bool:
         return self.technique is not None

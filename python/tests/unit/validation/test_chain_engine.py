@@ -88,7 +88,7 @@ def _cfg(**kw) -> ValidationConfig:
 
 _DC = "dc01.north.sevenkingdoms.local"
 _DCSYNC_OK = ("[*] Dumping Domain Credentials\n"
-              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:KRBTGThash00000000000000000000:::\n")
+              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:0123456789abcdef0123456789abcdef:::\n")
 
 
 def _auth_stdout():
@@ -261,7 +261,7 @@ def test_chain_report_has_no_secret_payload(tmp_path):
     blob = json.dumps(report.to_dict())
     assert "Ch4inSecret!" not in blob                      # operator password never stored
     assert "dc01.ccache" not in blob and "dc01.pfx" not in blob   # ccache/pfx PATHS never in report
-    assert "KRBTGThash00000000000000000000" not in blob   # krbtgt hash never read in
+    assert "0123456789abcdef0123456789abcdef" not in blob   # krbtgt hash never read in
     assert report.to_dict()["schema"] == "adlab.plan003.chain.v1"
 
 

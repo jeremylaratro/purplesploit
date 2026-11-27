@@ -70,13 +70,8 @@ S_IMPERSONATION_TGT = "S_impersonation_tgt"
 # coarse SHAPE used for engine eligibility; the precise binding is control_for().
 S_ACL_CONTROL = "S_acl_control"
 
-# A principal-typed CREDENTIAL/control-enabling-impersonation state established
-# via a T3 ACL pivot (reset-password / targeted-kerberoast / shadow-creds) --
-# coarse SHAPE; the precise binding REUSES the EXISTING cred_for(principal)
-# (same semantics: "SHADOW-CREDS recovers a victim principal's NT hash ... only
-# when the bound principal is a DA/DC equivalent does cred_for(principal) satisfy
-# a DCSync/S_DA pre" -- T3's ACL-pivot-recovered credentials are the identical
-# case, so no new factory is needed for this half).
+# Coarse shape only; the lateral engine binds cred_for(X). No recovered lateral
+# credential is promoted to DA_CREDS or DC_TGT in this sprint.
 S_ACL_CRED = "S_acl_cred"
 
 # The base (parameter-free) capability states.
@@ -117,12 +112,9 @@ def local_admin_for(host: str) -> str:
 def cred_for(principal: str) -> str:
     """A per-PRINCIPAL recovered-credential state (``cred:<principal>``) -- H5a.
 
-    SHADOW-CREDS recovers a victim principal's NT hash; ADCS-ESC1 yields a cert
-    impersonating a chosen SAN principal. The capability is PRINCIPAL-TYPED: only
-    when the bound principal is a DA/DC equivalent does ``cred_for(principal)``
-    satisfy a :data:`DCSync`/:data:`S_DA` ``pre``. A normal principal yields a
-    lateral credential and never Domain Admin. The engine binds the principal at
-    search time; the static ``eff`` must not collapse to a bare :data:`DC_TGT`.
+    A lateral credential NEVER satisfies DA_CREDS, DC_TGT or S_DA in this
+    sprint. DA-equivalence and terminal credential-usability authority are
+    deferred; there is no principal-name based DA promotion.
     """
     return f"{_CRED_PREFIX}{principal or ''}"
 
@@ -130,14 +122,10 @@ def cred_for(principal: str) -> str:
 def control_for(principal: str) -> str:
     """A per-PRINCIPAL CONTROL state (``control:<principal>``) -- mirrors cred_for.
 
-    WRITE-DACL's self-granted ACE, WRITE-OWNER's new ownership, ADD-MEMBER's new
-    group membership, and GPO-ABUSE's code-exec-as-SYSTEM on GPO-linked machines
-    each bind this to a SPECIFIC principal (a user/computer, a group, or a set of
-    GPO-linked hosts). PRINCIPAL-TYPED exactly like cred_for: control_for(X) feeds
-    a downstream edge's pre ONLY for that specific X; reaching S_DA requires X
-    itself to be DA-equivalent, decided by the consuming edge/engine, NEVER
-    assumed here. The engine binds the principal at search time (not yet built --
-    see is_state() note below, same forward-looking status as cred_for today).
+    Composed ACL producers bind a typed actor/object/right/lifetime grant.
+    Finding-bound planning links it only to a consumer of this exact object;
+    runtime applicability additionally requires the actual produced capability.
+    Broader principal escalation to DA is not yet built.
     """
     return f"{_CONTROL_PREFIX}{principal or ''}"
 

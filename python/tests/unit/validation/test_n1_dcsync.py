@@ -58,7 +58,7 @@ _DC = "dc01.north.sevenkingdoms.local"
 _ALIAS = {_DC: {"host_id": "dc01"}}
 # The krbtgt hash in the dump is a SECRET -- it must NEVER reach the receipt.
 _DCSYNC_OK = ("[*] Dumping Domain Credentials (domain\\uid:rid:lmhash:nthash)\n"
-              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:KRBTGTsecretnthash0000000000000:::\n")
+              "krbtgt:502:aad3b435b51404eeaad3b435b51404ee:0123456789abcdef0123456789abcdef:::\n")
 
 
 def _dcsync_finding(host=_DC):
@@ -106,6 +106,22 @@ def test_dcsync_no_replication_is_not_proved(tmp_path):
     assert any(s["name"] == "dcsync" and s["ok"] is False for s in receipt["steps"])
 
 
+def test_dcsync_banner_without_krbtgt_line_is_not_proved(tmp_path):
+    # BLOCKER-4 falsifier: a run that exits 0 and prints the dump BANNER (and even
+    # a "Kerberos keys grabbed" summary) but NO complete krbtgt:<rid>:<lm>:<nt>:::
+    # replication line must be not-proved. The old marker accepted the banner
+    # alone -> a false Domain Admin. Only real replication evidence counts now.
+    cfg = _cfg(host_aliases=_ALIAS)
+    banner = ("[*] Dumping Domain Credentials (domain\\uid:rid:lmhash:nthash)\n"
+              "[*] Using the DRSUAPI method to get NTDS.DIT secrets\n"
+              "[*] Kerberos keys grabbed\n"
+              "[-] DRSGetNCChanges failed: access denied\n")
+    runner = _KeyRunner({"impacket-secretsdump": RunResult(0, stdout=banner)})
+    receipt = get_executor("DCSYNC").run(_ctx(cfg, runner, tmp_path), _dcsync_finding())
+    assert receipt["complete"] is False and receipt["terminal_fact"] is None
+    assert "dcsync_failed" in receipt["errors"]
+
+
 def test_dcsync_gate_denied_inconclusive(tmp_path):
     cfg = _cfg(host_aliases=_ALIAS)
     runner = _KeyRunner({"impacket-secretsdump": RunResult(0, stdout=_DCSYNC_OK)})
@@ -122,7 +138,7 @@ def test_dcsync_no_secret_in_receipt(tmp_path):
     receipt = get_executor("DCSYNC").run(_ctx(cfg, runner, tmp_path), _dcsync_finding())
     blob = json.dumps(receipt)
     assert "DCSyncP@ss!" not in blob                          # operator password never stored
-    assert "KRBTGTsecretnthash0000000000000" not in blob      # krbtgt hash never read in
+    assert "0123456789abcdef0123456789abcdef" not in blob      # krbtgt hash never read in
 
 
 def test_dcsync_hash_auth_wiring(tmp_path):

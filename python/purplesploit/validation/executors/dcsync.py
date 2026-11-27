@@ -27,10 +27,8 @@ satisfies it -- a DC-context TGT from a front, OR pre-supplied DA creds),
 replication creds"; C may NOT hand this module pre-supplied ``DA_CREDS`` and call
 it an escalation -- the DA claim is the composed front+DCSYNC receipt pair.
 
-UNVERIFIED ASSUMPTION (pin in-lab, mirroring unconstrained_deleg.py): the
-secretsdump DCSync success marker (``krbtgt:<rid>`` / "Dumping Domain
-Credentials" / a ``:::`` hash line). If the real wording differs the chain gets
-no positive marker and honestly reports not-proved -- it never fabricates a dump.
+The terminal requires a complete krbtgt:<rid>:<lm>:<nt>::: replication line.
+Banners and summaries are insufficient; the match is presence-only.
 """
 from __future__ import annotations
 
@@ -46,13 +44,11 @@ from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
 from .coercion import _short_name
 
 
-# ---- UNVERIFIED DCSync success marker (see module docstring) ------------------
-# Replication returned the krbtgt object: a krbtgt entry, the dump banner, or a
-# secretsdump hash line. Presence only -- the matched content (a real secret) is
-# NEVER captured into a variable or the receipt.
+# Only a complete krbtgt NT-hash replication record from this invocation counts.
+# Banners, other accounts and Kerberos-key summaries prove no krbtgt replication.
 _RE_DCSYNC_KRBTGT = re.compile(
-    r"(krbtgt:\d|Dumping Domain Credentials|Kerberos keys grabbed|"
-    r"krbtgt:[0-9a-f]{32}|[^\s:]+:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::)", re.I)
+    r"^\s*(?:[^\s:]+[\\/])?krbtgt:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::\s*$",
+    re.I | re.M)
 
 
 class DCSyncExecutor(ValidationExecutor):
@@ -185,7 +181,8 @@ class DCSyncExecutor(ValidationExecutor):
         run_env = dict(ctx.env) if ctx.env else None
         res = ctx.runner.run(dcsync_argv, env=run_env,
                              timeout=cfg.tool_timeout_s, cwd=str(out_dir))
-        dcsync_ok = bool(_RE_DCSYNC_KRBTGT.search((res.stdout or "") + (res.stderr or "")))
+        dcsync_ok = bool(res.returncode == 0 and not res.error and not res.timed_out
+                         and _RE_DCSYNC_KRBTGT.search((res.stdout or "") + "\n" + (res.stderr or "")))
         record("dcsync", dcsync_argv, res, dcsync_ok,
                note="krbtgt replicated" if dcsync_ok else "no replication data")
         if not dcsync_ok:
