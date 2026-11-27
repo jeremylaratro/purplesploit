@@ -112,7 +112,8 @@ class GoldenTicketExecutor(ValidationExecutor):
         forge_argv = ["impacket-ticketer", key_flag(kind), key, "-domain-sid", sid,
                       "-domain", cfg.domain, "-user-id", v["user_id"],
                       "-groups", v["groups"], forged]
-        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, v["reauth_target"], out_dir)
+        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, v["reauth_target"], out_dir,
+                                               expect_principal=forged)
         steps += fsteps
         errors += ferrors
 

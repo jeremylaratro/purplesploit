@@ -56,10 +56,13 @@ class _ForgeFake(CommandRunner):
         ``'fail'``    : a ``[-]`` line.
     """
 
-    def __init__(self, *, make_ccache=True, reauth_mode="precise", domain_sid=SID):
+    def __init__(self, *, make_ccache=True, reauth_mode="precise", domain_sid=SID,
+                 forge_rc=0, login_principal="Administrator"):
         self.make_ccache = make_ccache
         self.reauth_mode = reauth_mode
         self.domain_sid = domain_sid
+        self.forge_rc = forge_rc
+        self.login_principal = login_principal
         self.calls: list[list[str]] = []
         self.reauth_env: dict = {}
 
@@ -74,15 +77,15 @@ class _ForgeFake(CommandRunner):
                 p = Path(cwd) / f"{user}.ccache"
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_bytes(b"FORGED-CCACHE-BYTES")
-                return RunResult(0, stdout=f"[*] Saving ticket in {user}.ccache\n")
-            return RunResult(0, stdout="[*] Creating basic skeleton ticket...\n")
+                return RunResult(self.forge_rc, stdout=f"[*] Saving ticket in {user}.ccache\n")
+            return RunResult(self.forge_rc, stdout="[*] Creating basic skeleton ticket...\n")
         if tool == "nxc":
             self.reauth_env = dict(env or {})
             cc = (env or {}).get("KRB5CCNAME")
             has_cache = bool(cc) and Path(cc).exists()
             if self.reauth_mode == "precise" and has_cache:
                 return RunResult(0, stdout="SMB  winterfell  445  WS  "
-                                 "[+] NORTH\\Administrator from ccache (Pwn3d!)\n")
+                                 f"[+] NORTH\\{self.login_principal} from ccache (Pwn3d!)\n")
             if self.reauth_mode == "generic":
                 # a plausible but WRONG success: a generic [+] with no ccache clause
                 return RunResult(0, stdout="SMB  winterfell  445  WS  [+] NORTH\\guest \n")
@@ -309,7 +312,7 @@ def test_diamond_positive_requests_then_resigns(tmp_path):
                username="jon.snow", password=REQ_PW)
     receipt = get_executor("DIAMOND-TICKET").run(
         _ctx(cfg, runner, tmp_path), _finding(),
-        overrides={"reauth_target": HOST, "domain_sid": SID})
+        overrides={"forged_user": "Administrator", "reauth_target": HOST, "domain_sid": SID})
     assert receipt["complete"] is True
     argv = runner.ticketer_argv()
     assert "-request" in argv and "-user" in argv       # a REAL TGT is requested
@@ -407,3 +410,61 @@ def test_sapphire_noop_forge_fails(tmp_path):
         _ctx(cfg, runner, tmp_path), _finding(),
         overrides={"reauth_target": HOST, "domain_sid": SID})
     assert receipt["complete"] is False and "forge_failed" in receipt["errors"]
+
+
+# =============================================== robustness (cross-review r1 fixes)
+
+def test_nonzero_forge_returncode_is_not_a_forge(tmp_path):
+    # The tool wrote a file but FAILED (returncode!=0) -> not a forge (no fabricated
+    # success from a half-written cache).
+    runner = _ForgeFake(forge_rc=1)
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is False and "forge_failed" in receipt["errors"]
+    assert not runner.called("nxc")
+
+
+def test_stale_ccache_cannot_mask_a_failed_forge(tmp_path):
+    # A cache left by a PRIOR run must not let a no-op forge pass: the scratch dir
+    # is cleared first, so a stale cache is gone before the forge runs.
+    stale = Path(tmp_path) / ".forge-Administrator" / "Administrator.ccache"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"STALE-VALID-TICKET-FROM-A-PRIOR-RUN")
+    runner = _ForgeFake(make_ccache=False)              # this run forges nothing
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is False and "forge_failed" in receipt["errors"]
+    assert not runner.called("nxc")                     # the stale cache was not reused
+
+
+def test_cleanup_is_confined_to_the_forge_scratch_dir(tmp_path):
+    # Standalone out_dir is the operator's output root: a sibling report/key file
+    # there MUST survive the forge's shred (only the .forge-* scratch dir is wiped).
+    sibling = Path(tmp_path) / "report.json"
+    sibling.write_text('{"keep":"me"}')
+    keyfile = Path(tmp_path) / "krbtgt.aes.key"
+    keyfile.write_text(AES_KEY)
+    runner = _ForgeFake()
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is True
+    assert sibling.exists() and sibling.read_text() == '{"keep":"me"}'   # NOT shredded
+    assert keyfile.exists() and keyfile.read_text() == AES_KEY           # NOT shredded
+    assert not (Path(tmp_path) / ".forge-Administrator").exists()        # scratch removed
+
+
+def test_login_as_a_different_principal_is_rejected(tmp_path):
+    # A cache-backed [+] (Pwn3d!) for a DIFFERENT principal than the one we forged
+    # must NOT satisfy the proof (identity binding).
+    runner = _ForgeFake(login_principal="guest")        # forged Administrator, logged in as guest
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"forged_user": "Administrator", "reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is False and "reauth_failed" in receipt["errors"]

