@@ -47,89 +47,104 @@ for missing optional deps (`fastapi`, …) — environmental, unrelated.
 rewriting the tools themselves; IPv6 edge cases; WINS/mDNS; anything beyond AD name resolution
 (DNS/KDC/GC/SPN/FQDN-vs-IP). Deliberate constants are features.
 
-## Phase 3 — Sprint split (3 sprints, each shippable/testable/revertable)
+## Plan-review resolutions (Codex Sol r1, 27NOV2026 — FIX-FIRST, 9 HIGH)
+Review: `docs/reviews/PLAN-DNSHARDEN-27NOV2026-codex-sol-plan-review-r1.md`. Every finding verified
+by the supervisor against code. The plan is **re-scoped to the safe, high-value core** (realm/KDC +
+GC + actionable diagnostics) and explicitly **defers** the large/risky parts the review surfaced.
 
-- **S1 — the resolution layer + config surface (G3, G4).** New `netresolve.py` with canonical
-  helpers; new config fields; replace the 3 NetBIOS copies. Pure addition + DRY refactor, **no
-  change to emitted tool argv yet** except NetBIOS now flows through one function. Branch
-  `dev/dnsharden-s1`.
-- **S2 — wire Kerberos discovery into executors (G2, portability).** Every `-k`/`--use-kcache`
-  and forge-reauth call passes derived `--kdcHost`/`--dns-server`; impacket calls get consistent
-  `-dc-ip` via the layer. Fixes the fresh-host bug. Branch from S1 tip.
-- **S3 — up-front resolution preflight + diagnostics (G1, G5).** A preflight the executors call
-  that validates FQDN/realm reachability and returns a clear actionable diagnostic / `inconclusive`
-  on failure (never a fabricated success, never blamed on the technique). Branch from S2 tip.
+| # | Finding (verified) | Resolution |
+|---|--------------------|-----------|
+| 1 | G2 coverage undercounts: `rbcd.py:253`, `adcs_esc1.py:272` also omit flags; **implicit Kerberos via `--aesKey`** (roast/add_member/targeted_kerberoast/generic_all/gpo_abuse/certifried) is missed by a `-k` grep. | S2 is driven by an **explicit nxc call-site + auth-mode inventory** (not a grep). Every Kerberos-mode call (`-k`, `--use-kcache`, `--aesKey`) gets discovery flags; NTLM modes (`-p`/`-H`) do not. |
+| 2 | NetBIOS copies are NOT identical (config ignores override; forge_common no-trim; dcsync trims + `/krbtgt`). The equivalence test contract was wrong. | Canonical `netbios(cfg)` = trim + upper, honoring `netbios_domain`. `gc_qualify(cfg,sam)="{netbios}/{sam}"`. Test asserts **`dcsync._krbtgt_target(cfg) == gc_qualify(cfg,"krbtgt")`** (not `== netbios`). `config.netbios` (no callers) delegates → now honors the override (latent-bug fix, recorded). |
+| 3 | Unconditional `--dns-server` **bypasses nxc's system/`/etc/hosts` resolver** → breaks the carrier path (reproduced). "Additive" claim is false. | **`--dns-server` is OPT-IN** (emitted only when `cfg.dns_server` is explicitly set). Default run is byte-for-byte unchanged (system/hosts resolution preserved). `--kdcHost` IS safe-additive (it sets the KDC location only; it does not touch host resolution) and is always derived. |
+| 4 | Scripted-runner tests prove fragments, not resolution; flag-presence permits wrong/dup values; Phase-8 must count scored `proved`/terminal, not `complete` (constrained_deleg/generic_all set `complete=getst_ok`, True even when SMB auth fails). | Tests assert **exact** flag values + no duplicates + the carrier (no-`dns_server`) argv is unchanged. Phase-8 counts **`terminal_ok` / harness-scored `proved`**, never `complete`. The `complete=getst_ok` gap is logged as pre-existing item **PX-1** (out of scope, noted). |
+| 5a | Flags wire discovery but not `HostResolution.ip`; nxc replaces the resolved transport addr with the hostname for Kerberos → IP substitution would break the SPN. | **No IP substitution.** The FQDN stays the connection + auth target; we only add `--kdcHost`/opt-in `--dns-server`. This sidesteps transport-vs-auth entirely. `host_map` is **dropped** (no safe consumer without IP substitution). |
+| 5b | Executor-level blanket preflight → false `inconclusive` (Silver w/ usable ticket needs no KDC; AD-account "targets" in GenericAll/ShadowCreds aren't endpoints). | **No blanket preflight.** S3 is a **post-hoc failure classifier**: it only runs on an **already-failed** tool call and labels the cause. It can never pre-reject a working path. |
+| 5c | SPN/LDAP/LDAPS/DC-vs-GC unspecified; `use_gc` has no consumer. | `use_gc` **dropped**. SPN/LDAP-scheme/GC-routing explicitly **DEFERRED** (follow-up backlog), with the existing `adcs_esc1` LDAP-scheme override left intact. |
+| 5d | A diagnostic in an arbitrary artifact field / step note is **dropped** by `_receipt_from` / `proof.normalize_steps` (keeps only `{name,ok}`). | The diagnostic is written to **`errors`** (a persisted receipt field — confirmed: T4 receipts carry `errors`) as `resolution_failed:<which>`, and S3 tests assert it is present **in the final receipt**. |
+| 6 | Import-cycle risk: `config→netresolve` + `netresolve→config`. | `netresolve` imports **nothing** from the package (operates on a duck-typed `cfg`). `config` imports `netresolve` one-way. A **cold-import test** covers config / netresolve / the executor registry. |
 
-## Phase 4/5 — Design
+**Deferred to a follow-up backlog (review 5a/5c)** — too large/risky for this gardening pass:
+`host_map`→IP transport substitution, auth-mode/pivot-aware up-front preflight, SPN resolution,
+LDAP-vs-LDAPS routing, DC-vs-GC selection. The core observed pain (realm→KDC resolution, GC
+account-name ambiguity, opaque resolution failures) is fully covered by S1–S2 below.
 
-### `netresolve.py` (new shared module — the single resolution authority)
-Plain functions + a small dataclass (mirrors `forge_common`/`acl_common` style). No host-pinning;
-every value derives from `cfg` or an explicit operator field.
+## Phase 3 — Sprint split (2 sprints, re-scoped)
 
-- `netbios(cfg) -> str` — THE canonical NetBIOS short name (explicit `cfg.netbios_domain`, else the
-  FQDN's first label, upper-cased). `config.netbios()`, `forge_common.netbios()`, and
-  `dcsync._krbtgt_target()` all delegate here (G3).
-- `gc_qualify(cfg, sam) -> str` — NetBIOS-qualify a possibly-GC-ambiguous account name
-  (`<NETBIOS>/<sam>`), the generalization of `dcsync._krbtgt_target` (G3).
-- `kdc_host(cfg) -> str` — `cfg.kdc_host` or `cfg.dc_ip` (G4).
-- `dns_server(cfg) -> str` — `cfg.dns_server` or `cfg.dc_ip` (G4).
-- `kerberos_flags(cfg) -> list[str]` — `["--kdcHost", kdc_host(cfg), "--dns-server", dns_server(cfg)]`
-  for nxc Kerberos calls (G2). (impacket uses `-dc-ip`; add `dc_ip_flags(cfg)` for symmetry.)
-- `resolve_host(cfg, fqdn) -> HostResolution` — resolve an FQDN to an IP, trying in order: the
-  operator `host_map` (FQDN→IP), then `cfg.dns_server`/DC-as-resolver, then system resolver; return
-  a dataclass `{fqdn, ip|None, via, ok, diagnostic}` — presence-only, never fabricated (G1/G5).
-- `realm_kdc_reachable(cfg) -> HostResolution` — can the realm's KDC (`kdc_host(cfg):88`) be reached?
-  (G1).
+- **S1 — `netresolve` layer + config + NetBIOS consolidation (G3, G4-core).** New dependency-free
+  `netresolve.py`; config fields `kdc_host` / `dns_server` (both `Optional`, non-secret); collapse the
+  3 NetBIOS sites to the canonical helper (correct contract); import hygiene. **No change to emitted
+  tool argv** (NetBIOS now flows through one function; config.netbios gains the override fix).
+  Branch `dev/dnsharden-s1`.
+- **S2 — wire `--kdcHost` to all Kerberos-mode nxc calls + persisted resolution diagnostics
+  (G2, G1-core, G5).** Auth-mode inventory → append `netresolve.nxc_kerberos_flags(cfg)` to every
+  Kerberos-mode nxc call; `--dns-server` opt-in only; keep the FQDN target. On a failed Kerberos/
+  remote call, classify the cause into an `errors` `resolution_failed:<which>` diagnostic. Prove live
+  on GOAD (realm `/etc/hosts` removed, `kdc_host` set). Branch from S1 tip.
 
-### `ValidationConfig` new fields (G4) — all optional, runtime, no host-pinning
-`kdc_host: Optional[str]`, `dns_server: Optional[str]`, `host_map: dict[str,str]` (FQDN→IP),
-`use_gc: bool=False`. None of these are secrets (not added to `redacted()`'s secret set).
+## Phase 4/5 — Design (re-scoped)
 
-### S2 wiring (G2)
-`constrained_deleg` nxc argv, `generic_all` nxc argv, and (confirm) `forge_common` reauth all append
-`netresolve.kerberos_flags(cfg)`. Any `-dc-ip` built inline is routed through `dc_ip_flags`.
-**Behavior change is ADDITIVE** (extra discovery flags) — must not regress the carrier-/etc/hosts path.
+### `netresolve.py` — new, **dependency-free** (duck-typed `cfg`, imports nothing from the package)
+- `netbios(cfg) -> str` — `(cfg.netbios_domain or cfg.domain.split(".",1)[0] or "").strip().upper()`.
+- `gc_qualify(cfg, sam) -> str` — `f"{netbios(cfg)}/{sam}"` (the generalization of `_krbtgt_target`).
+- `kdc_host(cfg) -> str` — `cfg.kdc_host or cfg.dc_ip`.
+- `dns_server(cfg) -> Optional[str]` — `cfg.dns_server or None` (**opt-in**; None ⇒ flag omitted).
+- `nxc_kerberos_flags(cfg) -> list[str]` — `["--kdcHost", kdc_host(cfg)]` **+** `["--dns-server", dns_server(cfg)]` only when `cfg.dns_server` is set.
+- `classify_resolution_failure(text) -> Optional[str]` — maps a FAILED tool's combined stdout/stderr
+  to `resolution_failed:realm_kdc` (`<REALM>:88` / KDC not found), `:fqdn` (name resolution / NXDOMAIN
+  for the target), or `:dns` (generic resolver failure); `None` when no resolution-shaped error is
+  present. **Classifier only — never decides success.**
 
-### S3 preflight (G1/G5)
-A reusable `preflight_target(ctx, host)` the executors can call before the first remote call:
-resolves the target + checks realm→KDC; on failure returns a structured `inconclusive` artifact
-(`resolution_failed:<which>`), never a `complete` receipt. Opt-in per executor (start with the
-Kerberos-dependent ones), so it is additive and does not change a passing path.
+### `ValidationConfig` (G4-core)
+Add `kdc_host: Optional[str] = None`, `dns_server: Optional[str] = None` (non-secret; not in the
+`redacted()` secret set). `netbios` property delegates to `netresolve.netbios(self)` (import one-way).
 
-### Alternatives weighed (material decisions)
-- **One shared module vs per-executor helpers.** Chosen: one module (`netresolve`) — G3 is literally
-  3 copies diverging; centralizing is the point. Rejected per-executor: perpetuates the drift.
-  Flip if a single module forced an import cycle (it will not — leaf module, imports only `config`).
-- **Preflight: always-on vs opt-in.** Chosen: opt-in per executor (S3), so it never changes a
-  currently-passing path without that executor explicitly adopting it. Rejected always-on: a
-  blanket preflight could turn a working run `inconclusive` on a benign resolver quirk.
-- **Derive `--dns-server` from `dc_ip` vs require explicit.** Chosen: derive (DC is a DNS server in
-  AD) with an explicit `cfg.dns_server` override — matches how forge_common already works and keeps
-  zero-config operation on a standard AD.
+### S2 wiring (G2) — driven by the auth-mode inventory
+For each nxc call-site: if its auth mode is Kerberos (`-k`, `--use-kcache`, or `--aesKey`), append
+`netresolve.nxc_kerberos_flags(cfg)`. Confirmed sites to wire: `constrained_deleg`, `generic_all`,
+`rbcd`, `adcs_esc1`, and the `--aesKey` paths in `roast`/`add_member`/`targeted_kerberoast`/
+`gpo_abuse`/`certifried` (the S2 implementation re-derives the full list from a fresh inventory and
+records it). `forge_common`/silver/golden/diamond already pass `--kdcHost` (leave, or route through
+the helper for consistency — no value change). NTLM-mode calls untouched.
+
+### S3 diagnostic (folded into S2) — post-hoc, persisted
+After a Kerberos/remote call that did NOT succeed, call `classify_resolution_failure` on its output;
+if it returns a label, append it to `errors` (persisted) and to the step note. Never changes a
+success path; never fabricates. Opt-in per wired call-site.
 
 ## Phase 7 — Test plan (per sprint, non-vacuous)
-- **S1:** `netbios`/`gc_qualify`/`kdc_host`/`dns_server`/`kerberos_flags` unit tests (explicit
-  override wins; derived fallback; GC-qualify shape). A test that the 3 former NetBIOS call-sites now
-  return identical results to `netresolve.netbios`. `resolve_host` host_map hit / miss / unresolvable
-  → diagnostic (fake resolver; no live DNS). RED proof: a mutant that drops the override must fail
-  the "override wins" test.
-- **S2:** each wired executor's built argv CONTAINS `--kdcHost`/`--dns-server` (scripted-runner argv
-  assertion); the carrier path still works (existing executor tests stay green). RED: remove the
-  flag append → the argv assertion fails.
-- **S3:** `preflight_target` returns `inconclusive` with `resolution_failed:*` on an unresolvable
-  host/unreachable KDC, and passes through on a resolvable one; an executor using it never emits
-  `complete` on a resolution failure. RED: a mutant that returns `complete` on failure fails the gate.
+- **S1:** `netbios` (override wins + trimmed + upper; empty-domain safe); `gc_qualify` shape;
+  **`dcsync._krbtgt_target(cfg) == gc_qualify(cfg,"krbtgt")`** across default + custom (whitespace)
+  override; `kdc_host`/`dns_server` default vs explicit; `nxc_kerberos_flags` = exactly
+  `["--kdcHost", <dc>]` with no `dns_server`, and exactly `[...,"--dns-server",<v>]` with it (no dup,
+  right values); `classify_resolution_failure` on sample realm/FQDN/DNS error strings + a success
+  string (→ None); **cold-import** of config/netresolve/registry. RED: drop the override in `netbios`
+  → "override wins" fails; a mutant that emits `--dns-server` unconditionally → the "carrier argv
+  unchanged" test fails.
+- **S2:** for each wired executor, the built nxc argv **contains `--kdcHost <dc>`** and, with no
+  `cfg.dns_server`, **does NOT contain `--dns-server`** (carrier path byte-identical); a failed call
+  with a realm-resolution error string yields `errors` ⊇ `{resolution_failed:realm_kdc}` **in the
+  final receipt**; a success yields none. RED: remove the flag append → argv assertion fails; return
+  `complete` on a resolution failure → diagnostic-in-receipt test fails. Existing executor tests stay
+  green (NTLM paths unchanged).
 
-## Phase 8 — Benefit (pre-registered metric)
-**Metric:** number of Kerberos-dependent executors that succeed on GOAD **with the carrier
-`/etc/hosts` realm entries removed** (explicit discovery flags only). Baseline (base `3e5931b`,
-G2 present): the `-k --use-kcache` executors FAIL realm resolution without `/etc/hosts`. Target:
-they succeed via derived `--kdcHost`/`--dns-server`. Measured live on kali-vr by temporarily
-masking the realm `/etc/hosts` lines in an isolated run. (A clean control: restore `/etc/hosts`.)
+## Phase 8 — Benefit (pre-registered, rigorous per r1 #4)
+**Metric:** count of Kerberos-mode executors whose **terminal succeeds** (harness-scored `proved`, or
+`terminal_ok=True` where no facet) on GOAD with the **realm `/etc/hosts` lines removed** and
+`cfg.kdc_host` set — vs the baseline (same removal, base code) where realm→KDC resolution fails.
+**Controls (all four cells):** {baseline, hardened} × {carrier realm lines present, absent}, fresh
+per-run ticket state, pinned tool versions (impacket 0.13.1 / installed nxc), the exact removed lines
+recorded. Count **`terminal_ok`/`proved`, never `complete`** (PX-1). A null/!=expected result is
+reported, not massaged.
 
-## Delegation split (codex-interop, ~60/40)
-- Plan (this doc): Claude (Opus). **Plan review (Phase 5 gate): Codex Sol** (bulk, read-only).
-- S1/S2 implementation: Claude (context-heavy, touches many call-sites) → **Codex Sol reviews each
-  diff**. S3 preflight: candidate to hand to Codex Sol to implement against this design, Claude
-  reviews. Keep the 60/40 tally here.
-- Live proofs on GOAD (kali-vr): Claude.
+## Pre-existing items found (noted, not adopted — out of scope)
+- **PX-1:** `constrained_deleg` (`complete=getst_ok`, c.190) and `generic_all`
+  (`complete=getst_ok and rollback`, c.691) report `complete=True` even when the SMB terminal fails.
+  Semantic inconsistency vs the forging executors (complete requires the terminal). Logged for a
+  future correctness pass; the DNS-harden Phase-8 metric avoids it by counting `terminal_ok`.
+
+## Delegation split (codex-interop, ~60/40 — running tally)
+- Plan (this doc): Claude. **Plan review r1: Codex Sol** (FIX-FIRST, 9 HIGH — all addressed/deferred
+  above). Plan verify r2: Codex Sol.
+- S1/S2 implementation: Claude (touches many call-sites) → **Codex Sol reviews each diff**.
+- Live proofs: Claude (GOAD/kali-vr). Tally so far — Claude: plan+impl (60); Codex: reviews (40).
