@@ -190,6 +190,25 @@ def test_share_cap_omission_is_incomplete(tmp_path):
     assert "partial:share_cap" in r["errors"] and r["complete"] is False
 
 
+def test_listing_that_overruns_the_deadline_is_recorded_incomplete(tmp_path, monkeypatch):
+    # S1-review r2 #2: a single blocking listing that OVERRUNS the deadline must be
+    # caught (post-op recheck), not reported complete. Fake clock: list_dir "takes" 5s.
+    import purplesploit.validation.executors.share_loot as sl
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(sl.time, "monotonic", lambda: clock["t"])
+
+    class _SlowReader(_FakeReader):
+        def list_dir(self, share, path, limit=10**9):
+            clock["t"] += 5.0                                # the listing overruns the 2s budget
+            return super().list_dir(share, path, limit)
+
+    reader = _SlowReader(["SYSVOL"], _tree())
+    r = _run(_cfg(share_crawl_deadline_s=2), tmp_path, reader)   # deadline = 1000 + 2 = 1002
+    cov = r["terminal_fact"]["coverage"]
+    assert cov["deadline_hit"] is True and r["complete"] is False
+    assert r["terminal_fact"]["ok"] is True                     # root WAS listed before the overrun
+
+
 def test_directory_cycle_does_not_hang(tmp_path):
     # a dir that lists itself as a child would loop without the visited guard
     cyc = {("S", ""): [_Entry("loop", True, 0)], ("S", "loop"): [_Entry("loop", True, 0)]}
