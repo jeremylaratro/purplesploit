@@ -200,7 +200,7 @@ class ShareLootExecutor(ValidationExecutor):
                 continue
             reader = None
             try:
-                reader = factory(cfg, host, cfg.tool_timeout_s)
+                reader = factory(cfg, host, crawler.op_timeout(cfg.tool_timeout_s))
             except Exception as exc:
                 ctx._private_errors.append(f"{host}: {exc}")
                 per_share.append({"host": host, "share": None, "outcome": "unreachable"})
@@ -298,6 +298,13 @@ class _Crawler:
             return True
         return False
 
+    def op_timeout(self, default: int) -> int:
+        """Bound a single blocking op's timeout to the REMAINING wall-clock budget
+        (capped by ``default``), so one slow network op cannot overrun the whole-run
+        deadline (S1-review r2 #2)."""
+        remaining = int(self.deadline - time.monotonic())
+        return max(1, min(int(default), remaining)) if remaining > 0 else 1
+
     def _over_budget(self) -> bool:
         if self.past_deadline():
             return True
@@ -342,6 +349,9 @@ class _Crawler:
             if path == "":
                 root_ok = True
             self.any_dir_listed = True                 # a REAL listing happened (observed access)
+            if self.past_deadline():                   # the listing itself may have OVERRUN (r2 #2)
+                incomplete = True
+                break
             if len(entries) > remaining:               # per-dir cap overflowed -> partial (r1-review #1)
                 entries = entries[:remaining]
                 incomplete = True
