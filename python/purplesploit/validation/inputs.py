@@ -34,6 +34,8 @@ TARGET_PARAM = {
     "SHARE-LOOT": "hosts",
     # T6 delegation extras: --target is the host accessed with the impersonation ticket.
     "BRONZE-BIT": "target_host", "S4U2SELF": "self_host",
+    # SIGNING-RELAY: --target is the host scope to assess signing posture on (like SHARE-LOOT).
+    "SIGNING-RELAY": "hosts",
 }
 
 # Param -> finding entity aliases used by existing executors' defaults/identity.

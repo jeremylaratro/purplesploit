@@ -1294,6 +1294,22 @@ class S4U2SelfProbe(PreconditionProbe):
             evidence={"has_spn": False, "is_computer": False})
 
 
+class SigningRelayProbe(PreconditionProbe):
+    """SIGNING-RELAY: read SMB/LDAP signing posture. Viable whenever the operator can
+    authenticate an nxc read (the posture itself is the finding); no special right needed."""
+    technique = "SIGNING-RELAY"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        if cfg.username and cfg.has_credentials():
+            return ProbeResult(viable=True,
+                reason="credentials present; SMB/LDAP signing posture is readable",
+                evidence={"has_creds": True})
+        return ProbeResult(viable=False,
+            reason="no credentials to authenticate the nxc signing-posture read",
+            evidence={"has_creds": False})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
@@ -1311,6 +1327,8 @@ _PROBES: tuple[type[PreconditionProbe], ...] = (
     ShareLootProbe,
     # T6 (27NOV2026) -- delegation extras (config-only applicability checks).
     BronzeBitProbe, S4U2SelfProbe,
+    # SIGNING-RELAY (27NOV2026) -- SMB/LDAP signing-posture read.
+    SigningRelayProbe,
 )
 
 # Technique -> probe class.

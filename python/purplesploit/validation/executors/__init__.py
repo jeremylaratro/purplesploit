@@ -49,6 +49,7 @@ from .sapphire_ticket import SapphireTicketExecutor
 from .share_loot import ShareLootExecutor
 from .bronze_bit import BronzeBitExecutor
 from .s4u2self import S4U2SelfExecutor
+from .signing_relay import SigningRelayExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -71,6 +72,9 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     # T6 -- delegation extras. BRONZE-BIT (CVE-2020-17049; classifies exploited/kdc_patched)
     # + S4U2SELF (self-ticket -> local admin). Both reuse the getST S4U machinery.
     BronzeBitExecutor, S4U2SelfExecutor,
+    # SIGNING-RELAY -- SMB/LDAP signing-posture + relay/reflection exposure (CVE-2025-33073 /
+    # -54918 surface). Read-only detection of where signing is not enforced (relayable).
+    SigningRelayExecutor,
 )
 
 # Technique -> executor class.
