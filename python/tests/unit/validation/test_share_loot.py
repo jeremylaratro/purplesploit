@@ -375,3 +375,20 @@ def test_looted_credential_becomes_capability_not_in_receipt(tmp_path):
     # but the operator store has the usable credential (the loot)
     store = json.loads(Path(res.receipt["terminal_fact"]["store_ref"]).read_text())
     assert any(GPP_PLAINTEXT == cr["secret"] for v in store.values() for cr in v.get("credentials", []))
+
+
+def test_malformed_cpassword_is_rejected_not_fabricated(tmp_path):
+    # S3/S4 review HIGH: a hostile/garbage cpassword must decrypt to None (no
+    # fabricated credential), and must NOT produce a looted-credential capability.
+    from purplesploit.validation.executors import loot_rules as lr
+    for bad in ("AAAAAAAAAAAAAAAAAAAAAA", "not!base64!!", "", "A", "####"):
+        assert lr.gpp_decrypt(bad) is None, bad
+    from purplesploit.validation import states as st
+    xml = b'<Groups><User><Properties userName="DOM\\svc" cpassword="AAAAAAAAAAAAAAAAAAAAAA"/></User></Groups>'
+    assert lr.extract_credentials("x/Groups.xml", xml) == []           # no credential extracted
+    reader = _FakeReader(["SYSVOL"], {("SYSVOL", ""): [_Entry("Groups.xml", False, len(xml))]},
+                         contents={("SYSVOL", "Groups.xml"): xml})
+    res = get_executor("SHARE-LOOT").run_composable(_ctx(_cfg(), tmp_path, reader), _finding())
+    assert not any(c.state == st.S_LOOTED_CREDS for c in res.capabilities)   # no fabricated capability
+    # ... and the real vector still decrypts (regression)
+    assert lr.gpp_decrypt(GPP_CPW) == GPP_PLAINTEXT
