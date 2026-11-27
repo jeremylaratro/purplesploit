@@ -58,6 +58,14 @@ class InteractivePrompt(ConfirmationProvider):
         return Choice(validate=True, overrides=overrides)
 
 
+def _read_key(path: Optional[str]) -> Optional[str]:
+    """Read a signing key from a file (so it never appears in argv / ps / a
+    preview). The file holds the bare hex key (whitespace stripped)."""
+    if not path:
+        return None
+    return Path(path).read_text().strip() or None
+
+
 def build_config(args: argparse.Namespace) -> ValidationConfig:
     host_aliases: dict = {}
     if args.host_alias:
@@ -66,6 +74,9 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
             if raw and hid:
                 host_aliases[raw] = {"host_id": hid}
     return ValidationConfig(
+        forge_key=_read_key(getattr(args, "forge_key_file", None)),
+        forge_key_kind=getattr(args, "forge_key_kind", None),
+        forge_key_nt=_read_key(getattr(args, "forge_key_nt_file", None)),
         domain=args.domain, dc_ip=args.dc_ip,
         username=args.user, password=args.password,
         nt_hash=args.hash, aes_key=args.aes_key,
@@ -138,6 +149,14 @@ def build_parser() -> argparse.ArgumentParser:
                         "instead). Still prints a loud warning per op -- never a "
                         "silent bypass.")
     p.add_argument("--timeout", type=int, default=300)
+    # T4 ticket forging: the signing key is a SECRET -- supplied via a FILE (never
+    # argv/preview). krbtgt key (Golden/Diamond/Sapphire) or service key (Silver).
+    p.add_argument("--forge-key-file", help="file holding the hex signing key "
+                   "(krbtgt/service) for ticket forging")
+    p.add_argument("--forge-key-kind", choices=["aes", "nt"], default="aes",
+                   help="how to pass the forge key to ticketer (default aes)")
+    p.add_argument("--forge-key-nt-file", help="file holding the krbtgt NT hash "
+                   "(Sapphire needs both AES and NT)")
     root = DispatchParser(prog="purplesploit-validate", description=__doc__)
     root._switches = {o for action in shared._actions if action.nargs == 0
                       for o in action.option_strings} | {"-h", "--help"}

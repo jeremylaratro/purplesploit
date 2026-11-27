@@ -104,6 +104,7 @@ class Capability:
 _SECRET_FLAGS = frozenset({
     "-p", "--password", "-hashes", "-H", "--hash", "-aesKey", "--aesKey",
     "--aes-key", "-computer-pass", "-pfx", "-password", "-pass",
+    "-nthash", "--nthash",
 })
 
 
@@ -510,6 +511,18 @@ class ValidationExecutor(ABC):
 
     def chain_eff(self, ctx, finding) -> frozenset:
         return self.eff
+
+    def accepts_control(self, ctx, finding, cap) -> bool:
+        """Does this edge accept a threaded control_for(X) capability? Default
+        False -- only an edge that genuinely consumes an ACL-control grant
+        overrides this (e.g. GENERIC-ALL). Safe default: reject unless claimed."""
+        return False
+
+    def accepts_key(self, ctx, finding, cap) -> bool:
+        """Does this edge accept a threaded signing-key (krbtgt) capability?
+        Default False -- only a forging edge that consumes a krbtgt key overrides
+        this and validates the key's channel/format/binding. Safe default: reject."""
+        return False
 
     def _params(self, ctx, finding, overrides=None):
         bound = dict(getattr(finding, "_overrides", {}))

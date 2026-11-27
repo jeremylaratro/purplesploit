@@ -42,6 +42,10 @@ from .targeted_kerberoast import TargetedKerberoastExecutor
 from .force_change_password import ForceChangePasswordExecutor
 from .generic_all import GenericAllExecutor
 from .gpo_abuse import GpoAbuseExecutor
+from .golden_ticket import GoldenTicketExecutor
+from .silver_ticket import SilverTicketExecutor
+from .diamond_ticket import DiamondTicketExecutor
+from .sapphire_ticket import SapphireTicketExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -56,6 +60,9 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     WriteDaclExecutor, WriteOwnerExecutor, AddMemberExecutor,
     TargetedKerberoastExecutor, ForceChangePasswordExecutor, GenericAllExecutor,
     GpoAbuseExecutor,
+    # T4 -- Kerberos ticket forging. Reuse the DCSync KRBTGT output; S_PERSISTENCE
+    # terminal (Silver is service-scoped). Non-mutating (offline forge + reauth).
+    GoldenTicketExecutor, SilverTicketExecutor, DiamondTicketExecutor, SapphireTicketExecutor,
 )
 
 # Technique -> executor class.
