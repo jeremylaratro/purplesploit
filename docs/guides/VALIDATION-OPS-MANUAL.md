@@ -710,20 +710,32 @@ hit, `produced()` emits an in-memory `Capability(S_looted_creds, CAP_PASSWORD, v
 principal)` the engine can thread to a downstream edge (looted cred → pivot). The
 credential value is never serialized.
 
-**How to invoke — IMPORTANT.** SHARE-LOOT is **not currently reachable through the
-`run`, `chain`, or `pipeline` CLI modes** and is driven through the Python API (how its
-live proofs were run):
+**Run (CLI).** `--target` is the host scope; several hosts go in `--param hosts=h1,h2,h3`
+(comma-separated). The SHARE-LOOT knobs are flags; omit them for the defaults.
 
-- `run SHARE-LOOT` returns `{"errors": ["dispatch_error"]}` because `SHARE-LOOT` has
-  no entry in `validation/inputs.py::TARGET_PARAM` (the finding binder raises before
-  any tool runs). Confirmed empirically.
-- `SHARE-LOOT` is also absent from the aranum findings mapper, so `pipeline` never
-  maps a finding to it.
-- `share_protocol`, `share_access_mode`, the bounds, and the loot caps are **not
-  exposed as CLI flags** — the CLI's `build_config` does not set them — so NFS / mount
-  / bound tuning is only reachable by constructing a `ValidationConfig` directly.
+```bash
+# SMB crawl (default)
+python -m purplesploit.validation.cli run SHARE-LOOT \
+  --domain <d> --dc-ip <ip> --target <host> --user <u> --password <p>
 
-Python-API invocation (matches the merged live-proof path):
+# NFS, several hosts, tuned bounds
+python -m purplesploit.validation.cli run SHARE-LOOT \
+  --domain <d> --dc-ip <ip> --param hosts=10.0.0.5,10.0.0.6 \
+  --share-protocol nfs --share-max-depth 6 --share-crawl-deadline 120
+
+# kernel read-only mount + contained crawl (needs CAP_SYS_ADMIN)
+python -m purplesploit.validation.cli run SHARE-LOOT \
+  --domain <d> --dc-ip <ip> --target <host> --user <u> --password <p> \
+  --share-access-mode mount
+```
+
+Flags: `--share-protocol {smb,nfs}`, `--share-access-mode {crawl,mount}`, `--loot-store-dir`,
+`--no-loot`, `--share-max-shares`, `--share-max-depth`, `--share-max-entries`,
+`--share-max-files`, `--share-crawl-deadline` (seconds). SHARE-LOOT is **not** mapped from
+aranum findings, so the `pipeline` mode never dispatches it — it is `run`-driven (or chained
+as a `pre={S0_user_creds}` edge).
+
+Python-API invocation (equivalent; used by the live proofs):
 
 ```python
 from pathlib import Path
@@ -752,13 +764,9 @@ finding = NormalizedFinding(
 receipt = edge.run(ctx, finding)
 ```
 
-> **Known limitation (operator-readiness gap).** SHARE-LOOT has no `run`/`chain`/`pipeline`
-> CLI path yet — it needs a `validation/inputs.py::TARGET_PARAM` entry, and the CLI's
-> `build_config` does not surface `share_protocol` / `share_access_mode` / the bounds / the
-> loot caps as flags. Until that is wired, SHARE-LOOT (and SMB/NFS/mount/bound tuning) is
-> driven through the Python API above. The field names in the example are the real
-> `ValidationConfig` / `ExecutorContext` / `NormalizedFinding` members (verified against
-> `config.py` / `base.py` / `findings.py`).
+> **Note.** The `pipeline` mode does not dispatch SHARE-LOOT (no aranum findings mapper
+> entry) — it is reached through `run` (above) or as a chain edge. The Python-API fields
+> are the real `ValidationConfig` / `ExecutorContext` / `NormalizedFinding` members.
 
 ---
 
