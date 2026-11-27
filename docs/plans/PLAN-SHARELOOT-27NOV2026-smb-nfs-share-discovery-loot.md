@@ -53,20 +53,60 @@ AV/EDR evasion; destructive actions. Read-only is absolute.
 - **Integrity:** read-only; unreachable/denied share → explicit `inconclusive`, never a fabricated hit;
   recovered secret value never in a stored receipt (presence + location only).
 
-### Open design decisions (need sign-off before build)
-1. **Access method default** — crawl-only (smbclient/nxc fetch to scratch; no OS mount; most portable,
-   no root) **vs** mount read-only (mount.cifs / mount -o ro,nfsvers; faster for big trees, needs
-   privilege). Recommend: crawl-only default, mount opt-in.
-2. **Loot rule-pack aggressiveness** — curated secrets-first pack (high signal, fewer FPs) **vs** broad
-   (all "interesting" file types + PII + large-file heuristics; exhaustive but noisier). Recommend:
-   curated secrets-first in S3, broad pack as an opt-in rule set.
-3. **Build order** — SMB first then NFS (ship value fast on the AD lab) **vs** both in parallel.
-   Recommend: SMB first (S1), NFS next (S2), since the GOAD lab is SMB-rich.
-4. **Secret-value handling** — presence+location only in receipts, value copied to an operator
-   out-of-band store path (operator-configured), shredded from scratch. (This matches the toolchain's
-   standing secret rule; confirming it applies here.)
+### Design decisions (RESOLVED — owner sign-off 27NOV2026)
+1. **Access method = BOTH, operator-selectable.** A `share_access_mode` config field selects `crawl`
+   (default: smbclient/nxc read to a scratch dir; no OS mount, no root) or `mount` (read-only
+   `mount.cifs`/`mount -o ro`; faster on big trees, needs privilege). Both built in S1 (SMB); the
+   access layer is OS-generic so S2 (NFS) reuses it.
+2. **Loot pack = curated secrets-first** (S3): high-signal, low-FP (id_rsa/.ppk/.kdbx/.pfx/
+   unattend.xml/web.config/.env, connection strings, cloud tokens, "password"-shaped). A broad pack
+   ships later as an opt-in rule set.
+3. **Build order = SMB first, then NFS.** S1=SMB discover+access, S3=loot engine, S4=dual-mode+proof;
+   **S2 (NFS) comes after** S1 on the SMB-rich GOAD lab (sprint order S1→S3→S4, then S2, or S2 folded
+   before S4 — decided at S1 close).
+4. **Secret-value handling = presence+location only** in receipts (standing toolchain rule); a
+   recovered secret value goes to an operator-configured out-of-band store and is shredded from
+   scratch. Proof tokens over PUBLIC identifiers (host/share/path) only.
 
-## Phase 7/8 (to finalize at plan sign-off)
-Test plan + benefit metric drafted per sprint after the design is confirmed (e.g. S1 benefit =
-shares discovered + files crawled + secrets found on an owned GOAD share, scored against a seeded
-truth). Peer-reviewed (Codex Sol) before build, per methodology.
+## Phase 4/5 — S1 design (SMB discover + read-only access)
+New `share_loot.py` → `ShareLootExecutor` (technique `SHARE-LOOT`, class `share_loot`,
+`mutating=False`, read-only). Stages run in one `execute()`: **discover → access → (search=S3 no-op)
+→ shred**. S1 delivers discover + access (a crawled file **inventory** — paths/sizes, which are
+location, not content); the content search is S3.
+
+- **Discover:** per in-scope host, `nxc smb <host> <auth> --shares` (auth + `netresolve` discovery
+  flags reused), parse share names + read/write perms; READ-capable shares proceed. Unreachable/denied
+  → `inconclusive` diagnostic (via `netresolve.classify_resolution_failure` where resolution-shaped),
+  never a fabricated share.
+- **Access (read-only), mode-selected:**
+  - `crawl` (default): `smbclient //host/share -c 'recurse ON; ls'` to list, then bounded `get` of
+    candidate files into a per-run scratch dir. Never `put`/`rm`/`mkdir`.
+  - `mount`: `mount -t cifs -o ro,guest|creds //host/share <mnt>` → `os.walk` read-only → `umount`.
+    Guarded: mount only under a dedicated mountpoint; always unmount in a `finally`; `-o ro` enforced.
+  - Bounds: max files, max bytes/file, max depth, timeout — all config, so a huge tree can't hang.
+- **Receipt:** `proof.v1` with a terminal fact `shares_enumerated` (ok = ≥1 readable share crawled),
+  steps (discover/access), and a public inventory (host, share, path, size — NO content). Scratch
+  shredded on every path.
+- **Read-only guarantee (the core invariant):** the executor NEVER emits a write/delete/mkdir verb.
+  A unit test asserts no mutating smbclient/mount verb is ever in any built argv.
+
+## Phase 7 — S1 test plan (non-vacuous)
+- Discover: a scripted `nxc --shares` output → parsed share set + perms; a denied/unreachable host →
+  `inconclusive` with a diagnostic, not a fabricated share.
+- Access crawl: a scripted smbclient listing + gets → the inventory lists exactly the crawled files;
+  bounds enforced (a file over the cap is skipped and logged, not fetched).
+- Access mount: a fake runner records `mount -o ro` then `umount` (always, even on crawl error);
+  `-o ro` present; no write verb.
+- **Read-only invariant:** across every code path, assert no `put`/`rm`/`mkdir`/`rmdir`/rw-mount verb
+  is ever built (the central safety gate — shown able to go RED by a mutant that adds one).
+- Scratch shredded; receipt carries no file content.
+
+## Phase 8 — S1 benefit (pre-registered)
+On an owned GOAD host with a seeded readable share: count shares discovered + files crawled into the
+inventory (vs baseline = no such capability). Measured live on kali-vr against an owned share; scored
+against a small seeded truth (expected shares/files). Read-only confirmed (share contents unchanged;
+no canary written).
+
+## Delegation (codex-interop, ~60/40)
+Plan: Claude. **Plan review (Phase 5 gate): Codex Sol.** S1 impl: Claude → Codex reviews diff.
+Live proof: Claude (GOAD).
