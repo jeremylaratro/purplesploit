@@ -57,12 +57,13 @@ class _ForgeFake(CommandRunner):
     """
 
     def __init__(self, *, make_ccache=True, reauth_mode="precise", domain_sid=SID,
-                 forge_rc=0, login_principal="Administrator"):
+                 forge_rc=0, login_principal="Administrator", report_abs_path=None):
         self.make_ccache = make_ccache
         self.reauth_mode = reauth_mode
         self.domain_sid = domain_sid
         self.forge_rc = forge_rc
         self.login_principal = login_principal
+        self.report_abs_path = report_abs_path
         self.calls: list[list[str]] = []
         self.reauth_env: dict = {}
 
@@ -73,6 +74,8 @@ class _ForgeFake(CommandRunner):
             return RunResult(0, stdout=f"[*] Domain SID is: {self.domain_sid}\n")
         if tool == "impacket-ticketer":
             user = argv[-1]
+            if self.report_abs_path:    # reports an ABSOLUTE path, writes nothing to the scratch dir
+                return RunResult(self.forge_rc, stdout=f"[*] Saving ticket in {self.report_abs_path}\n")
             if self.make_ccache and cwd:
                 p = Path(cwd) / f"{user}.ccache"
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -468,3 +471,31 @@ def test_login_as_a_different_principal_is_rejected(tmp_path):
         _ctx(cfg, runner, tmp_path), _finding(),
         overrides={"forged_user": "Administrator", "reauth_target": HOST, "domain_sid": SID})
     assert receipt["complete"] is False and "reauth_failed" in receipt["errors"]
+
+
+def test_lookalike_principal_login_is_rejected(tmp_path):
+    # Identity is matched EXACTLY, not by substring: forging "Administrator" but
+    # logging in as "Administrator2" must be rejected (review r2 HIGH).
+    runner = _ForgeFake(login_principal="Administrator2")
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"forged_user": "Administrator", "reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is False and "reauth_failed" in receipt["errors"]
+
+
+def test_absolute_cache_path_outside_scratch_is_not_a_forge(tmp_path):
+    # A tool that reports an ABSOLUTE path to a pre-existing cache OUTSIDE the
+    # scratch dir, while writing nothing into the (cleared) scratch dir, must NOT
+    # count as a forge -- freshness is resolved only inside the scratch dir (r2).
+    stale = Path(tmp_path) / "outside" / "Administrator.ccache"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"STALE-OUTSIDE-TICKET")
+    runner = _ForgeFake(report_abs_path=str(stale))
+    cfg = _cfg(forge_key=AES_KEY, forge_key_kind="aes")
+    receipt = get_executor("GOLDEN-TICKET").run(
+        _ctx(cfg, runner, tmp_path), _finding(),
+        overrides={"forged_user": "Administrator", "reauth_target": HOST, "domain_sid": SID})
+    assert receipt["complete"] is False and "forge_failed" in receipt["errors"]
+    assert not runner.called("nxc")
+    assert stale.exists()                               # the outside cache was never touched

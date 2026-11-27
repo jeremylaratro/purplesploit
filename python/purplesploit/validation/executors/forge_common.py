@@ -112,15 +112,27 @@ def _slug(name: str) -> str:
     return (s[:64] or "forge").lstrip(".") or "forge"
 
 
+# The cache-backed login line WITH the authenticated principal captured:
+# "[+] REALM\principal from ccache (Pwn3d!)". Group 1 is the whole principal token.
+_RE_REAUTH_PRINCIPAL = re.compile(r"\[\+\]\s+(\S+)\s+from ccache[^\n]*\(Pwn3d!\)", re.I)
+
+
+def _short_principal(p: Optional[str]) -> str:
+    return (p or "").split("\\")[-1].split("/")[-1].split("@")[0].strip().lower()
+
+
 def _reauth_identity_ok(output: str, expect_principal: Optional[str]) -> bool:
-    """A cache-backed login line that ALSO names the principal we forged for, so a
-    stray cached ticket for a different identity can never satisfy the proof. When
-    no principal is supplied, the precise predicate alone decides."""
-    short = ""
-    if expect_principal:
-        short = expect_principal.split("\\")[-1].split("/")[-1].split("@")[0].strip().lower()
+    """A cache-backed login line whose AUTHENTICATED principal EXACTLY equals the
+    one we forged for -- so a stray cached ticket for a different identity (or a
+    look-alike like ``Administrator2`` / ``EvilAdministrator``, or a host name that
+    merely contains the string) can never satisfy the proof. When no principal is
+    supplied, the precise predicate alone decides."""
+    want = _short_principal(expect_principal)
     for line in output.splitlines():
-        if _RE_FORGE_REAUTH_OK.search(line) and (not short or short in line.lower()):
+        m = _RE_REAUTH_PRINCIPAL.search(line)
+        if not m:
+            continue
+        if not want or _short_principal(m.group(1)) == want:
             return True
     return False
 
@@ -159,8 +171,11 @@ def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target
     forge_out = (res.stdout or "") + (res.stderr or "")
     m = _RE_CCACHE_SAVED.search(forge_out)
     if m:
-        cand = Path(m.group(1))
-        ccache = cand if cand.is_absolute() else (forge_dir / cand.name)
+        # ALWAYS resolve inside the cleared scratch dir (basename only): an absolute
+        # path in the tool's output must never point `forged` at a stale cache
+        # OUTSIDE this dir (review r2). The forge runs with cwd=forge_dir, so the
+        # real cache is here regardless of how the tool spells the path.
+        ccache = forge_dir / Path(m.group(1)).name
     # forged IFF the tool succeeded AND wrote the cache in THIS cleared dir -- never
     # a stale cache, never a non-zero/timed-out/errored forge.
     forged = bool(res.returncode == 0 and not res.error and not res.timed_out
