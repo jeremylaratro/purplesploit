@@ -116,10 +116,11 @@ class ValidationConfig:
     poll_interval_s: float = 2.0
 
     # --- SHARELOOT (SMB/NFS share discovery + crawl) -------------------------
-    # Read-only share access. 'crawl' = programmatic SMB client reads (default,
-    # no privilege, portable). 'mount' is DEFERRED (S1b) and currently returns
-    # inconclusive:mount_mode_deferred -- it needs descriptor-anchored (openat2)
-    # containment the crawl path does not require.
+    # Read-only share access. 'crawl' = programmatic client reads (default, no
+    # privilege, portable). 'mount' (S1b) = kernel SMB/NFS client mount (ro,nosuid,
+    # nodev,noexec) crawled with descriptor-anchored containment (mnt_id-pinned
+    # openat walk; see mount_reader.py) -- needs CAP_SYS_ADMIN; fails closed
+    # (inconclusive:mount_unavailable) if nothing can be mounted.
     share_access_mode: str = "crawl"
     # SHARE-LOOT transport: 'smb' (S1, impacket) or 'nfs' (S2, pyNfsClient NFSv3).
     # The crawl/loot engine is transport-agnostic; only discovery + the read-only
@@ -161,6 +162,8 @@ class ValidationConfig:
             raise ValueError("extra_targets must be a list")
         if self.share_protocol not in ("smb", "nfs"):
             raise ValueError("share_protocol must be 'smb' or 'nfs'")
+        if self.share_access_mode not in ("crawl", "mount"):
+            raise ValueError("share_access_mode must be 'crawl' or 'mount'")
 
     # --- derived helpers -------------------------------------------------
     @property

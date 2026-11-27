@@ -267,10 +267,108 @@ each with a RED-provable test + live re-proof (no regression, 432→458):
 5. **Vacuous test** — the method-execution assertion `ran | {all names}` collapsed to all names. Fix:
    assert `{4 methods} <= ran`.
 
+## S1b — mount-mode access with descriptor-anchored containment (PLAN, base 37fb8fc)
+**Problem:** `share_access_mode="mount"` is a fail-closed stub (`inconclusive:mount_mode_deferred`).
+Mount mode uses the KERNEL SMB/NFS client (handles dialects, SMB3 encryption, Kerberos-auth mounts,
+NFSv4, DFS the Python libs can't), but reading an attacker-controlled mounted share via `os.walk`/
+`open` risks symlink-escape, `..`-escape, and cross-mount escape (TOCTOU). The crawl path avoids this
+by never touching a local FS; mount mode must add descriptor-anchored containment.
+
+**Design decisions (2+ options where open):**
+- *Containment mechanism.* (a) `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_XDEV)` — kernel-
+  atomic, but **CPython does not expose `os.openat2`** (confirmed) → would need a `ctypes` syscall (arch
+  syscall 437, struct packing, kernel ≥5.6). (b) **CHOSEN: per-component `openat` walk** — pure stdlib
+  (`os.open(dir_fd=parent)` + `O_NOFOLLOW` + `O_PATH|O_DIRECTORY`, `os.scandir(fd)`, `os.stat(dir_fd=)`),
+  portable to any Linux, the well-established safe-traversal pattern. Flip-trigger: if a reviewer finds
+  a stdlib-walk escape the kernel call would prevent, switch to the ctypes `openat2`.
+- *Credential passing (SMB).* argv leaks to the process list → **creds via a `0600` `O_EXCL` credentials
+  file** (`cred=`), never argv.
+- *Discovery.* UNCHANGED — mount mode reuses the programmatic/multi-method discovery (`_MountReader.
+  list_shares` delegates to the programmatic reader; NFS still goes through `nfs_discover`). Only ACCESS
+  (`list_dir`/`read_file`) differs.
+
+**`_MountReader(ShareReader)`** — per share: lazy read-only hardened mount, contained crawl, guaranteed
+unmount.
+1. **Hardened RO mount** (argv LISTS, no shell): SMB `mount.cifs //HOST/SHARE MP -o
+   ro,nosuid,nodev,noexec,vers=3.0,cred=<0600 file>` (guest if no creds); NFS `mount.nfs HOST:/EXPORT MP
+   -o ro,nosuid,nodev,noexec,soft,timeo=,retrans=`. MP = `mkdtemp` 0700.
+2. **openat containment (the security core):** descend with `os.open(comp, O_NOFOLLOW|O_PATH|O_DIRECTORY,
+   dir_fd=parent)` anchored at the mount-root dirfd; list via `os.scandir(dirfd)`; read via
+   `os.open(comp, O_NOFOLLOW|O_RDONLY, dir_fd=parent)` + `fstat` (S_ISREG + `st_dev == root_dev`). NEVER
+   pass `..`; **symlink entries are skipped** (and counted) — a symlink descent/read fails `O_NOFOLLOW`
+   (ELOOP). Equivalent to RESOLVE_BENEATH|NO_SYMLINKS|NO_XDEV. dirfds cached per relpath.
+3. **Fail-closed:** mount needs `CAP_SYS_ADMIN`; a mount failure → that share `unreachable`; if NO share
+   could be mounted (privilege/tool absent) → terminal `inconclusive:mount_unavailable` (ok=False), never
+   a false success. Gated behind `cfg.authorized`.
+4. **Guaranteed teardown:** every mounted share unmounted (`umount`, `umount -l` fallback) and every
+   mountpoint + credentials file removed/shredded in `close()` AND on any exception (try/finally).
+
+Feeds the existing `_Crawler`/`loot_rules` unchanged. Receipt gains `access_mode="mount"`, per-share
+mount outcome, and `symlinks_skipped`.
+
+**Test plan (non-vacuous).** Containment (local fixtures, no privilege — the security proof): symlink →
+`/etc/passwd` outside root REFUSED (RED proof: the escape target's bytes are never returned; disabling
+`O_NOFOLLOW` would read it); symlink → sibling dir NOT descended; cross-dev submount rejected by `st_dev`;
+normal nested files read + looted. Mount-argv construction: list form, `ro,nosuid,nodev,noexec`, password
+NOT in argv. Fail-closed: mount failure → unreachable; all-fail → `inconclusive:mount_unavailable`.
+Teardown: `close()` unmounts every share + removes mountpoints/creds.
+**Baseline:** 458 @ `37fb8fc`. **Benefit:** mount mode goes inconclusive-stub → working contained RO access.
+**Live proof:** privileged throwaway container (kali-vr lacks `CAP_SYS_ADMIN`): seed a tree with loot + a
+planted symlink → `/etc/passwd`, bind-mount RO, run `_MountReader` → loot detected, escape BLOCKED,
+unmounted clean.
+
+### S1b plan-review resolutions (Codex Sol adversary, 27NOV2026 — FIX-FIRST → design corrected)
+The adversary review broke the first design; all points adopted (verified live on the host):
+1. **`scandir` on an `O_PATH` dirfd raises EBADF** (my design was broken). → Directories are opened
+   **readable**: `os.open(comp, O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC, dir_fd=parent)` — used both for
+   `scandir` and as the openat anchor. `O_DIRECTORY` makes a FIFO/file/device named as a dir component
+   fail `ENOTDIR` (no block, no device open-handler).
+2. **Opening a file by name before a type check can BLOCK on a FIFO / fire a device open-handler, and
+   races a swap.** → Files are **pinned first** with `O_PATH|O_NOFOLLOW` (no block, no handler, no
+   follow), `fstat`-verified `S_ISREG` + identity, then **reopened for reading via procfs**
+   (`/proc/self/fd/<pathfd>` `O_RDONLY`) — the SAME pinned inode, so no name re-resolution race.
+3. **`st_dev` is a weak mount boundary** (two mounts of one fs share it). → Pin the root's **`mnt_id`**
+   (`/proc/self/fdinfo/<fd>`) and require every opened dir/file fd to match it (plus `st_dev`); **fail
+   closed** if fdinfo is unreadable. Symlink entries are skipped + counted; `..` is never passed.
+4. **Mount success ≠ enumeration success.** → A root enumeration failure RAISES → the share is `denied`
+   (never an empty success, same class as the S2 fix). `inconclusive:mount_unavailable` fires ONLY when
+   NO share could be mounted; a mounted-but-unreadable share is `denied`, not inconclusive.
+5. **Partial-mount / teardown lifecycle.** → Mountpoint + creds path are registered BEFORE the mount
+   runs; after the helper returns, actual state is reconciled via `os.path.ismount`; the creds file is
+   `0600 O_EXCL` and **unlinked immediately after the mount call** (shrinks the secret-leak window to the
+   mount duration). Teardown **closes ALL cached fds first** (so the mount isn't busy), then a **bounded**
+   `umount` (runner timeout), then `umount -l` fallback, then `rmdir` only if confirmed unmounted; each
+   resource is cleaned independently and failures reported. *Residual (documented):* a `SIGKILL`
+   mid-mount can still leak a mount/creds file (Python finalizers don't run on `SIGKILL`); a recursively
+   private mount namespace (`unshare`, needs ctypes on py3.11) is the future hardening — out of scope for
+   S1b, which targets the realistic threat (malicious REMOTE share, authorized operator, no concurrent
+   local mount-attacker).
+
+## S1b build + live proof (27NOV2026) — mount mode with descriptor-anchored containment
+S1b shipped: `mount_reader.py` = `_ContainedDir` (the mnt_id-pinned openat walk) + `MountReader` (the
+per-share RO-mount lifecycle), wired into the executor via `share_access_mode="mount"`. Discovery is
+reused unchanged; only ACCESS is mounted. The corrected (plan-reviewed) containment: readable
+`O_RDONLY|O_DIRECTORY|O_NOFOLLOW` dir fds (scandir + openat anchor); `O_PATH|O_NOFOLLOW` file pins
+reopened via `/proc/self/fd` (no FIFO-block, no device handler, no re-resolution race); `mnt_id`
+(`/proc/self/fdinfo`) pinned at root and verified on every fd (fail-closed if unreadable); symlink +
+non-regular entries skipped + counted; `..` never passed. Hardened RO mount (`ro,nosuid,nodev,noexec`;
+SMB creds via a `0600` file unlinked right after the mount, never argv); fail-closed
+(`inconclusive:mount_unavailable` when nothing mounts); teardown closes all fds then bounded `umount`.
+
+**Proven live (REAL `mount.nfs`, privileged container):** the executor in `share_access_mode="mount"`
+ran `mount.nfs 127.0.0.1:/export -o ro,nosuid,nodev,noexec,...` (a real kernel mount), crawled the
+mounted tree with `_ContainedDir` (**5 files / 7 dirs, complete**, both case-variant dirs), and DETECTED
+`id_rsa` (ssh_private_key + private_key_block) and `Groups.xml` (gpp_cpassword). The **planted symlink
+`pwned` → `/etc/passwd` was BLOCKED** (`symlinks_skipped=1`; `/etc/passwd` bytes never in the receipt),
+secret-safe receipt, and `close()` left **0 leftover mounts** (clean teardown). Containment is unit-proven
+over local fixtures (symlink-escape → b"", symlinked-dir not descended, `..` contained, FIFO no-block,
+`mnt_id` mismatch refused, unreadable-`mnt_id` fails closed). **475/475 validation tests** (458 base + 17).
+
 ## Status
 S1 (SMB discover+crawl) merged; S3 (loot engine) + S4 (dual-mode creds) built + live-proven; **S2 (NFS
-transport + multi-method discovery) built + review-hardened (Codex r1, 5 HIGH fixed) + live-proven on
-this branch.** The first joint Windows/Linux
-module is feature-complete for SMB + NFS. Remaining: S1b (mount mode, openat2 descriptor-anchored
-containment); optional `share_protocol='auto'` per-host probing. The owner's "don't rely only on
-showmount" and "detection only" directives are both satisfied by S2.
+transport + multi-method discovery) MERGED (PR #137, main 37fb8fc); S1b (mount mode + descriptor-anchored
+containment) built + plan-reviewed + live-proven on this branch.** SHARE-LOOT is now feature-complete for
+SMB + NFS in both crawl and mount access modes. **Open: SHARE-LOOT has no `run`-CLI path** (no
+`inputs.TARGET_PARAM` entry; SMB/NFS/bounds config is Python-API-only) -- an operator-readiness gap to
+close next (see docs PR #138 VERIFY). Optional `share_protocol='auto'` per-host probing remains. Optional `share_protocol='auto'` per-host probing remains.
+The owner's "don't rely only on showmount" and "detection only" directives are satisfied by S2.

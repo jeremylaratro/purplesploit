@@ -248,12 +248,14 @@ def test_share_enum_denied_is_recorded(tmp_path):
 
 # ===================================================================== mount defer
 
-def test_mount_mode_is_deferred_inconclusive(tmp_path):
+def test_mount_mode_no_longer_deferred(tmp_path):
+    # S1b: mount mode is implemented (see test_mount_reader.py for the contained reader).
+    # The deprecated `mount_mode_deferred` inconclusive is gone; access_mode is recorded.
     reader = _FakeReader(["SYSVOL"], _tree())
     r = _run(_cfg(share_access_mode="mount"), tmp_path, reader)
-    assert r["complete"] is False and r["terminal_fact"] is None
-    assert "inconclusive:mount_mode_deferred" in r["errors"]
-    assert reader.calls == []                                # never even connected
+    assert not any("mount_mode_deferred" in e for e in r["errors"])
+    assert r["terminal_fact"] is not None                    # it actually ran
+    assert r["terminal_fact"]["access_mode"] == "mount"
 
 
 # ===================================================================== S3 loot
