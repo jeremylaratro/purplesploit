@@ -46,6 +46,7 @@ from .golden_ticket import GoldenTicketExecutor
 from .silver_ticket import SilverTicketExecutor
 from .diamond_ticket import DiamondTicketExecutor
 from .sapphire_ticket import SapphireTicketExecutor
+from .share_loot import ShareLootExecutor
 from .stubs import STUB_EXECUTORS
 
 # Full executors win over any stub key of the same technique.
@@ -63,6 +64,8 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     # T4 -- Kerberos ticket forging. Reuse the DCSync KRBTGT output; S_PERSISTENCE
     # terminal (Silver is service-scoped). Non-mutating (offline forge + reauth).
     GoldenTicketExecutor, SilverTicketExecutor, DiamondTicketExecutor, SapphireTicketExecutor,
+    # SHARELOOT S1 -- read-only SMB share discovery + crawl (first joint Win/Linux module).
+    ShareLootExecutor,
 )
 
 # Technique -> executor class.

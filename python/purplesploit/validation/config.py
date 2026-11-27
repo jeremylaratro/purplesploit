@@ -115,6 +115,24 @@ class ValidationConfig:
     # Tests inject a tiny/zero interval so the poll loop never actually sleeps.
     poll_interval_s: float = 2.0
 
+    # --- SHARELOOT (SMB/NFS share discovery + crawl) -------------------------
+    # Read-only share access. 'crawl' = programmatic SMB client reads (default,
+    # no privilege, portable). 'mount' is DEFERRED (S1b) and currently returns
+    # inconclusive:mount_mode_deferred -- it needs descriptor-anchored (openat2)
+    # containment the crawl path does not require.
+    share_access_mode: str = "crawl"
+    # Operator out-of-band store for the raw host/share/path -> opaque-location-ID
+    # map (paths can contain secrets, so they NEVER go in a receipt). None -> a
+    # per-run file under output_dir. The map is the operator's; receipts carry IDs.
+    loot_store_dir: Optional[str] = None
+    # Crawl BOUNDS (enforced DURING traversal; a bound hit -> an explicit partial
+    # outcome, never a silent truncation). All runtime-configurable, no host pins.
+    share_max_shares: int = 64          # readable shares enumerated per host
+    share_max_depth: int = 12           # directory recursion depth
+    share_max_entries: int = 50000      # total dir entries visited per run
+    share_max_files: int = 20000        # files recorded in the inventory per run
+    share_crawl_deadline_s: int = 300   # whole-run wall-clock deadline for the crawl
+
     def __post_init__(self) -> None:
         if not self.domain:
             raise ValueError("domain is required")
