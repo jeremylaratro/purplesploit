@@ -108,23 +108,38 @@ def _aes_cbc_decrypt(key: bytes, iv: bytes, ct: bytes):
 
 
 def gpp_decrypt(cpassword: str) -> Optional[str]:
-    """Decrypt a GPP ``cpassword`` to its plaintext, or ``None``. Deterministic."""
+    """Decrypt a GPP ``cpassword`` to its plaintext, or ``None``. STRICT at every
+    step so a hostile/garbage cpassword returns ``None`` (never a fabricated
+    credential, S3/S4 review): strict Base64, FULL PKCS#7 padding validation, and
+    STRICT UTF-16LE decoding. Deterministic."""
     import base64
+    import binascii
     try:
         s = (cpassword or "").strip()
+        if not s:
+            return None
         m = len(s) % 4
         if m:
             s += "=" * (4 - m)
-        ct = base64.b64decode(s)
+        try:
+            ct = base64.b64decode(s, validate=True)           # strict Base64
+        except (binascii.Error, ValueError):
+            return None
         if not ct or len(ct) % 16:
             return None
         dec = _aes_cbc_decrypt(_GPP_KEY, b"\x00" * 16, ct)
         if not dec:
             return None
         pad = dec[-1]
-        if 1 <= pad <= 16:
-            dec = dec[:-pad]
-        out = dec.decode("utf-16-le", "ignore")
+        if not (1 <= pad <= 16) or dec[-pad:] != bytes([pad]) * pad:  # FULL PKCS#7 check
+            return None
+        body = dec[:-pad]
+        if len(body) % 2:                                     # UTF-16LE is 2 bytes/char
+            return None
+        try:
+            out = body.decode("utf-16-le")                    # STRICT decode (no 'ignore')
+        except UnicodeDecodeError:
+            return None
         return out or None
     except Exception:
         return None
