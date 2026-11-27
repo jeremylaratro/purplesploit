@@ -1,0 +1,11 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — [nfs_reader.py:176](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s2/python/purplesploit/validation/executors/nfs_reader.py:176): Infinite pagination.** A server repeatedly returning only `name=b"."`, `cookie=0`, `eof=False` keeps `saw_entry=True` without increasing the retained-entry count. Neither the entry cap nor crawl deadline stops the loop. Reproduced through 100 calls before an external stop.
+
+- **HIGH — [nfs_reader.py:152](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s2/python/purplesploit/validation/executors/nfs_reader.py:152): Denied access becomes successful coverage.** A `readdirplus` response `{"status": 13}` becomes `[]`. Reproduced outcome: export marked `listed`, observed access `True`, exhaustive coverage `True`, despite permission denial.
+
+- **HIGH — [nfs_reader.py:242](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s2/python/purplesploit/validation/executors/nfs_reader.py:242): Root export silently lost.** With programmatic/showmount discovery empty and nmap reporting `|_  / *`, the regex requires another non-whitespace character after `/`. Parsing and the final union both return `[]`, dropping the root export.
+
+- **HIGH — [nfs_reader.py:295](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s2/python/purplesploit/validation/executors/nfs_reader.py:295): Timeouts reported as successful discovery runs.** Returning `RunResult(returncode=None, error="TimeoutExpired: exceeded deadline")` for all CLI methods records all three as `ran=True`. Separately, `Mount.export()` raising `TimeoutError` is swallowed at line 93 and also recorded as `ran=True`. Both were reproduced.
+
+- **HIGH — [test_nfs_reader.py:336](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s2/python/tests/unit/validation/test_nfs_reader.py:336): Method-execution assertion is vacuous.** The assertion unions successful method names with **all** recorded method names, so `ran` cannot affect the result. Forcing every returned method to `ran=False` still passes this test, defeating its claimed execution check.

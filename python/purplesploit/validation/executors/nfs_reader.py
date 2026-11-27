@@ -37,6 +37,11 @@ from typing import Any, Optional
 _NF3REG = 1   # regular file
 _NF3DIR = 2   # directory
 
+# Hard backstop on readdirplus pages per directory: a hostile server can stream an
+# endless directory (advancing cookies, no eof). A well-behaved 50k-entry directory
+# needs tens of pages at maxcount 32768, so 4096 is ~100x headroom yet still finite.
+_MAX_READDIR_PAGES = 4096
+
 # The read-only NFS auth (AUTH_UNIX / AUTH_SYS, flavor 1). uid/gid 0 only requests
 # access; the server's export policy decides what is actually readable. No secret.
 _AUTH = {"flavor": 1, "machine_name": "shareloot", "uid": 0, "gid": 0, "aux_gid": []}
@@ -86,12 +91,13 @@ class _NfsReader:
 
     # -- discovery -------------------------------------------------------------
     def list_shares(self) -> list[str]:
-        """Programmatic ``Mount.export()`` -- the export catalog (method 1 of 4)."""
+        """Programmatic ``Mount.export()`` -- the export catalog (method 1 of 4).
+
+        Propagates a MountD/RPC failure (timeout, refused) to the caller so a FAILED
+        enumeration is distinguishable from a server with genuinely zero exports --
+        :func:`nfs_discover` records the former as ``ran=False`` (not an empty success)."""
         out: list[str] = []
-        try:
-            exports = self._mount.export()
-        except Exception:
-            return []
+        exports = self._mount.export()
         for e in (exports or []):
             d = getattr(e, "ex_dir", None)
             if d is None and isinstance(e, dict):
@@ -147,16 +153,22 @@ class _NfsReader:
         out: list = []
         cookie: Any = 0
         verf: Any = 0
+        pages = 0
         while True:
-            rd = self._nfs.readdirplus(fh, cookie, verf, 8192, auth=self._auth)
-            resok = (rd or {}).get("resok") or {}
+            if pages >= _MAX_READDIR_PAGES:                  # endless-stream backstop (hostile server)
+                break
+            pages += 1
+            rd = self._nfs.readdirplus(fh, cookie, verf, 8192, auth=self._auth) or {}
+            status = rd.get("status", 0)
+            resok = rd.get("resok")
+            if resok is None or status not in (0, None):     # DENIED/error -> raise, never a false
+                raise OSError(f"readdirplus {export!r}:{path!r} failed (status={status})")
             reply = resok.get("reply") or {}
             verf = resok.get("cookieverf", verf)
+            start_cookie = cookie                            # detect a non-advancing cursor
             node = reply.get("entries")
-            saw_entry = False
             while node:
                 en = node[0] if isinstance(node, (list, tuple)) else node
-                saw_entry = True
                 nm = _decode_name(en.get("name"))
                 cookie = en.get("cookie", cookie)
                 if nm not in (".", ".."):
@@ -173,7 +185,7 @@ class _NfsReader:
                 node = en.get("nextentry")
             if reply.get("eof"):
                 break
-            if not saw_entry:                                # no progress, not eof -> stop (defensive)
+            if cookie == start_cookie:                       # cursor did not advance -> stop (no progress)
                 break
         return out
 
@@ -239,7 +251,7 @@ def _parse_showmount(stdout: str) -> list[str]:
     return out
 
 
-_NMAP_EXPORT = re.compile(r"^\|?_?\s*(/\S+)")
+_NMAP_EXPORT = re.compile(r"^\|?_?\s*(/\S*)")   # \S* so a bare root export "/" is not dropped
 
 
 def _parse_nmap_showmount(stdout: str) -> list[str]:
@@ -289,36 +301,33 @@ def nfs_discover(runner, reader: _NfsReader, host: str, timeout: int) -> tuple[l
 
     t = max(1, int(timeout))
 
-    # 2. showmount -e <host>
-    try:
-        res = runner.run(["showmount", "--no-headers", "-e", host], timeout=t)
-        if getattr(res, "error", None) and _tool_missing(res):
-            _record("showmount", None, False, "tool_absent")
+    # 2. showmount -e <host>   3. nmap --script nfs-showmount (independent backup)
+    for name, argv, parse, tmo in (
+        ("showmount", ["showmount", "--no-headers", "-e", host], _parse_showmount, t),
+        ("nmap.nfs-showmount",
+         ["nmap", "-Pn", "-p", "2049,111", "--script", "nfs-showmount", host],
+         _parse_nmap_showmount, max(t, 30)),
+    ):
+        try:
+            res = runner.run(argv, timeout=tmo)
+        except Exception as exc:
+            _record(name, None, False, type(exc).__name__)
+            continue
+        bad = _method_unavailable(res)                    # absent/timeout != "ran, found none"
+        if bad:
+            _record(name, None, False, bad)
         else:
-            _record("showmount", _parse_showmount(res.stdout), True)
-    except Exception as exc:
-        _record("showmount", None, False, f"{type(exc).__name__}")
-
-    # 3. nmap --script nfs-showmount (independent backup enumerator)
-    try:
-        res = runner.run(["nmap", "-Pn", "-p", "2049,111", "--script", "nfs-showmount", host],
-                         timeout=max(t, 30))
-        if getattr(res, "error", None) and _tool_missing(res):
-            _record("nmap.nfs-showmount", None, False, "tool_absent")
-        else:
-            _record("nmap.nfs-showmount", _parse_nmap_showmount(res.stdout), True)
-    except Exception as exc:
-        _record("nmap.nfs-showmount", None, False, f"{type(exc).__name__}")
+            _record(name, parse(getattr(res, "stdout", "") or ""), True)
 
     # 4. rpcinfo -- liveness signal only (confirms NFS/mountd up; contributes no path).
     try:
         res = runner.run(["rpcinfo", "-p", host], timeout=t)
-        if getattr(res, "error", None) and _tool_missing(res):
-            methods.append({"method": "rpcinfo", "ran": False, "found": 0, "new": 0,
-                            "note": "tool_absent"})
+        bad = _method_unavailable(res)
+        if bad:
+            methods.append({"method": "rpcinfo", "ran": False, "found": 0, "new": 0, "note": bad})
         else:
             methods.append({"method": "rpcinfo", "ran": True, "found": 0, "new": 0,
-                            "nfs_up": _rpcinfo_shows_nfs(res.stdout)})
+                            "nfs_up": _rpcinfo_shows_nfs(getattr(res, "stdout", "") or "")})
     except Exception as exc:
         methods.append({"method": "rpcinfo", "ran": False, "found": 0, "new": 0,
                         "note": type(exc).__name__})
@@ -326,6 +335,15 @@ def nfs_discover(runner, reader: _NfsReader, host: str, timeout: int) -> tuple[l
     return list(seen.keys()), methods
 
 
-def _tool_missing(res) -> bool:
+def _method_unavailable(res) -> Optional[str]:
+    """``"timeout"`` / ``"tool_absent"`` if the CLI run did NOT complete normally, else
+    ``None``. A timed-out or missing tool is INCONCLUSIVE (``ran=False``) -- never a
+    successful run that merely found nothing."""
+    if getattr(res, "timed_out", False):
+        return "timeout"
     err = (getattr(res, "error", None) or "").lower()
-    return any(m in err for m in ("filenotfounderror", "no such file", "not found"))
+    if "timeout" in err:
+        return "timeout"
+    if any(m in err for m in ("filenotfounderror", "no such file", "not found")):
+        return "tool_absent"
+    return None
