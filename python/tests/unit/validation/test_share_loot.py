@@ -148,14 +148,14 @@ def test_depth_bound_yields_partial(tmp_path):
     reader = _FakeReader(["SYSVOL"], _tree())
     r = _run(_cfg(share_max_depth=1), tmp_path, reader)      # can't descend into policies/scripts
     assert r["terminal_fact"]["coverage"]["truncated"] is True
-    assert "partial:bounds_reached" in r["errors"] and r["complete"] is False
+    assert "partial:bounds_reached" in r["errors"] and r["terminal_fact"]["coverage"]["complete"] is False
 
 
 def test_file_count_bound_yields_partial(tmp_path):
     reader = _FakeReader(["SYSVOL"], _tree())
     r = _run(_cfg(share_max_files=1), tmp_path, reader)
     assert r["terminal_fact"]["coverage"]["truncated"] is True
-    assert "partial:bounds_reached" in r["errors"] and r["complete"] is False
+    assert "partial:bounds_reached" in r["errors"] and r["terminal_fact"]["coverage"]["complete"] is False
 
 
 def test_deadline_bound_yields_partial(tmp_path):
@@ -183,7 +183,7 @@ def test_child_subtree_denial_makes_share_partial_not_complete(tmp_path):
     tf = r["terminal_fact"]
     assert tf["ok"] is True                                   # observed access at the root
     assert any(p["share"] == "SYSVOL" and p["outcome"] == "partial" for p in tf["per_share"])
-    assert tf["coverage"]["complete"] is False and r["complete"] is False
+    assert tf["coverage"]["complete"] is False and r["complete"] is True   # observed access despite partial coverage
     assert "partial:subtree_denied" in r["errors"]
 
 
@@ -193,7 +193,7 @@ def test_share_cap_omission_is_incomplete(tmp_path):
     r = _run(_cfg(share_max_shares=1), tmp_path, reader)
     cov = r["terminal_fact"]["coverage"]
     assert cov["shares_omitted"] == 2 and cov["complete"] is False
-    assert "partial:share_cap" in r["errors"] and r["complete"] is False
+    assert "partial:share_cap" in r["errors"] and r["complete"] is True    # accessed; coverage incomplete
 
 
 def test_listing_that_overruns_the_deadline_is_recorded_incomplete(tmp_path, monkeypatch):
@@ -211,7 +211,7 @@ def test_listing_that_overruns_the_deadline_is_recorded_incomplete(tmp_path, mon
     reader = _SlowReader(["SYSVOL"], _tree())
     r = _run(_cfg(share_crawl_deadline_s=2), tmp_path, reader)   # deadline = 1000 + 2 = 1002
     cov = r["terminal_fact"]["coverage"]
-    assert cov["deadline_hit"] is True and r["complete"] is False
+    assert cov["deadline_hit"] is True and cov["complete"] is False        # overran; accessed first
     assert r["terminal_fact"]["ok"] is True                     # root WAS listed before the overrun
 
 
@@ -339,3 +339,39 @@ def test_loot_rules_unit():
     assert lr.should_fetch("a/big.exe", 1000, 2_000_000) is False      # binary not fetched
     assert lr.should_fetch("a/id_rsa", 9_999_999, 2_000_000) is False  # over the per-file cap
     assert lr.content_findings(b"ordinary text, no secrets here") == []
+
+
+# ===================================================================== S4 looted creds
+# The canonical published MS GPP example cpassword -> "Local*P4ssword!".
+GPP_CPW = "edBSHOwhZLTjt/QS9FeIcJ83mjWA98gw9guKOhJOdcqh+ZGMeXOsQbCpZ3xUjTLfCuNH8pG5aSVYdYw/NglVmQ"
+GPP_USER = "MyDomain\\SvcBackup"
+GPP_PLAINTEXT = "GPPstillStandingStrong2k18"
+GROUPS_XML = (f'<?xml version="1.0"?><Groups><User name="x"><Properties userName="{GPP_USER}" '
+              f'cpassword="{GPP_CPW}"/></User></Groups>').encode()
+
+
+def test_gpp_cpassword_decrypt_and_extract():
+    from purplesploit.validation.executors import loot_rules as lr
+    assert lr.gpp_decrypt(GPP_CPW) == GPP_PLAINTEXT
+    creds = lr.extract_credentials("x/Groups.xml", GROUPS_XML)
+    assert creds and creds[0].principal == GPP_USER and creds[0].secret == GPP_PLAINTEXT
+    assert creds[0].source == "gpp_cpassword"
+
+
+def test_looted_credential_becomes_capability_not_in_receipt(tmp_path):
+    from purplesploit.validation.executors.base import CAP_PASSWORD
+    from purplesploit.validation import states as st
+    tree = {("SYSVOL", ""): [_Entry("Groups.xml", False, len(GROUPS_XML))]}
+    reader = _FakeReader(["SYSVOL"], tree, contents={("SYSVOL", "Groups.xml"): GROUPS_XML})
+    res = get_executor("SHARE-LOOT").run_composable(_ctx(_cfg(), tmp_path, reader), _finding())
+    looted = [c for c in res.capabilities if c.state == st.S_LOOTED_CREDS]
+    assert looted and looted[0].channel == CAP_PASSWORD
+    assert looted[0].value == GPP_PLAINTEXT and looted[0].principal == GPP_USER
+    assert looted[0].secret is True                    # SECRET channel -> engine keeps it in-memory
+    # the receipt carries PRESENCE only: no secret, no principal, no cpassword
+    blob = json.dumps(res.receipt)
+    assert GPP_PLAINTEXT not in blob and GPP_USER not in blob and GPP_CPW not in blob
+    assert res.receipt["terminal_fact"]["loot"]["usable_credentials"] == 1
+    # but the operator store has the usable credential (the loot)
+    store = json.loads(Path(res.receipt["terminal_fact"]["store_ref"]).read_text())
+    assert any(GPP_PLAINTEXT == cr["secret"] for v in store.values() for cr in v.get("credentials", []))

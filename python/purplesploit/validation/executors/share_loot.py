@@ -45,7 +45,7 @@ from typing import Any, Callable, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof, states
 from . import loot_rules
-from .base import (ValidationExecutor, ExecutorContext, StepRecord)
+from .base import (ValidationExecutor, ExecutorContext, StepRecord, Capability, CAP_PASSWORD)
 
 
 # ------------------------------------------------------------ read-only SMB reader
@@ -152,9 +152,9 @@ class ShareLootExecutor(ValidationExecutor):
     mutating = False
     verified_recipe = False                       # until lab-proven on an owned share
     pre = frozenset({states.S0_USER_CREDS})
-    eff = frozenset()                             # discovery, not an escalation state
-    recipe_ref = ("SHARE-LOOT S1 = impacket SMBConnection listShares + recursive listPath "
-                  "(read-only, bounded, opaque location IDs); inventory receipt")
+    eff = frozenset({states.S_LOOTED_CREDS})      # S4: may produce usable looted credentials
+    recipe_ref = ("SHARE-LOOT = impacket SMBConnection listShares + recursive listPath "
+                  "(read-only, bounded, opaque IDs) + loot search + GPP-cpassword creds")
 
     reader_factory = staticmethod(_impacket_reader)   # test seam (ctx.share_reader_factory overrides)
 
@@ -266,7 +266,11 @@ class ShareLootExecutor(ValidationExecutor):
 
         coverage = crawler.coverage(per_share, hosts_skipped)
         any_listed = crawler.any_dir_listed            # OBSERVED ACCESS = a real listing (r1-review #5)
-        complete = coverage["complete"] and any_listed
+        # The receipt `complete` means the EDGE DID ITS JOB (observed access), so a
+        # bounded/partial crawl still yields its loot + produced capabilities. EXHAUSTIVE
+        # COVERAGE is a separate dimension: coverage["complete"] + the partial:* errors
+        # (the edge never CLAIMS exhaustive coverage when it is partial).
+        complete = bool(any_listed)
         if coverage["truncated"]:
             errors.append("partial:bounds_reached")
         if coverage["deadline_hit"]:
@@ -290,12 +294,25 @@ class ShareLootExecutor(ValidationExecutor):
                    "loot": {"findings": crawler.loot_findings,
                             "by_category": crawler.loot_by_category,
                             "fetched_files": crawler.fetched_files,
+                            # PRESENCE count only -- the (principal, secret) pairs are in
+                            # the operator store + the in-memory capability, never here.
+                            "usable_credentials": len(crawler.usable_creds),
                             "hits": crawler.loot_hits[:200]}},
         )
-        return self._artifact(steps, gate, terminal, bool(complete), errors)
+        art = self._artifact(steps, gate, terminal, bool(complete), errors)
+        art["_usable_creds"] = crawler.usable_creds    # engine-only (dropped by _receipt_from)
+        return art
 
     def produced(self, ctx, finding, params, artifact) -> list:
-        return []                                      # discovery produces NO capability (r1 #6)
+        """S4: a usable looted credential (GPP cpassword decrypt) becomes an in-memory
+        SECRET capability the engine can thread to a downstream edge (looted cred ->
+        pivot). Never serialized; the receipt carries only a presence count."""
+        caps = []
+        for c in artifact.get("_usable_creds", []):
+            if c.get("secret") and c.get("principal"):
+                caps.append(Capability(state=states.S_LOOTED_CREDS, channel=CAP_PASSWORD,
+                                       value=c["secret"], principal=c["principal"]))
+        return caps
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors) -> dict:
@@ -328,6 +345,7 @@ class _Crawler:
         self.loot_hits: list[str] = []            # opaque loc_ids with findings (receipt-safe)
         self.fetched_files = 0
         self.fetched_bytes = 0
+        self.usable_creds: list[dict] = []        # S4: {principal,secret,source,loc} -- in-memory/store only
 
     def past_deadline(self) -> bool:
         if time.monotonic() >= self.deadline:
@@ -377,6 +395,12 @@ class _Crawler:
             self.fetched_files += 1
             self.fetched_bytes += len(data)
             findings += loot_rules.content_findings(data)
+            # S4: extract USABLE (principal, secret) credentials (GPP cpassword decrypt).
+            for cred in loot_rules.extract_credentials(path, data):
+                self.usable_creds.append({"principal": cred.principal, "secret": cred.secret,
+                                          "source": cred.source, "loc": lid})
+                self.store[lid].setdefault("credentials", []).append(
+                    {"principal": cred.principal, "secret": cred.secret, "source": cred.source})
         if findings:
             self.store[lid]["findings"] = [{"category": f.category, "match_type": f.match_type,
                                             "detail": f.detail} for f in findings]
