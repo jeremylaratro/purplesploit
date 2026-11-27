@@ -1,0 +1,5 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — Non-CA zero counts still falsely skip ADCS** ([discovery.py:27](/srv/share/dev/purplesploit/.claude/worktrees/smartdisc/python/purplesploit/validation/discovery.py:27)). Reproduced `RunResult(0, stderr="[*] Found 0 certificate templates")`: `has_ca=False`, skipping all five ADCS techniques. [Certipy logs template and CA counts separately](https://github.com/ly4k/Certipy/blob/master/certipy/commands/find.py). Require explicit CA absence; other zero counts must leave `None`.
+
+- **HIGH — Failed LDAP reads can falsely skip delegation/SPN techniques** ([discovery.py:158](/srv/share/dev/purplesploit/.claude/worktrees/smartdisc/python/purplesploit/validation/discovery.py:158)). A nonzero response containing `sAMAccountName` passes `_account_read_ok`; missing attributes become `False`, skipping CONSTRAINED-DELEG-PT, BRONZE-BIT, and S4U2SELF. Reproduced through `build_verdicts()`. Require a clean, genuine account response before inferring absence. Forging gates and successful-read delegation/SPN/computer branches remain correct.
