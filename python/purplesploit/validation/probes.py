@@ -1154,6 +1154,47 @@ class GpoAbuseProbe(PreconditionProbe):
             evidence={"ace_confirmed": None})
 
 
+class _ForgeTicketProbe(PreconditionProbe):
+    """T4 ticket forging: the precondition is possession of the SIGNING KEY
+    (krbtgt / service key), supplied OUT-OF-BAND by the operator (or threaded from
+    an upstream KRBTGT edge in a chain) -- not a target-readable property. So this
+    probe only checks key AVAILABILITY (never reading or logging the key): no key
+    at all is a positive ``viable=False`` (the forge cannot run); otherwise
+    ``unknown=True`` (attempt anyway), since forge viability is not otherwise
+    detectable from the target. Non-destructive (no tool call)."""
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        from .executors.forge_common import signing_key
+        key, _ = signing_key(ctx)
+        if not key:
+            return ProbeResult(
+                viable=False,
+                reason=("no signing key available (ticket forging needs the krbtgt/service "
+                        "key supplied out-of-band or threaded) -> skip"),
+                evidence={"signing_key_present": False})
+        return ProbeResult(
+            viable=True, unknown=True,
+            reason=("signing key present; forge viability is not otherwise target-detectable "
+                    "-- attempting anyway"),
+            evidence={"signing_key_present": True})
+
+
+class GoldenTicketProbe(_ForgeTicketProbe):
+    technique = "GOLDEN-TICKET"
+
+
+class SilverTicketProbe(_ForgeTicketProbe):
+    technique = "SILVER-TICKET"
+
+
+class DiamondTicketProbe(_ForgeTicketProbe):
+    technique = "DIAMOND-TICKET"
+
+
+class SapphireTicketProbe(_ForgeTicketProbe):
+    technique = "SAPPHIRE-TICKET"
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
@@ -1165,6 +1206,8 @@ _PROBES: tuple[type[PreconditionProbe], ...] = (
     # T3 (25NOV2026) -- ACL / object-takeover edges. All 7 now registered.
     WriteDaclProbe, WriteOwnerProbe, AddMemberProbe, TargetedKerberoastProbe,
     ForceChangePasswordProbe, GenericAllProbe, GpoAbuseProbe,
+    # T4 (26NOV2026) -- Kerberos ticket forging (key-availability probes).
+    GoldenTicketProbe, SilverTicketProbe, DiamondTicketProbe, SapphireTicketProbe,
 )
 
 # Technique -> probe class.
@@ -1220,5 +1263,6 @@ __all__ = [
     "Esc8Probe", "Esc11Probe", "CertifriedProbe", "DCSyncProbe",
     "CoercionProbe", "NTLMRelayProbe", "UnconstrainedDelegProbe",
     "WriteDaclProbe", "WriteOwnerProbe", "AddMemberProbe", "TargetedKerberoastProbe",
-    "ForceChangePasswordProbe", "GenericAllProbe",
+    "ForceChangePasswordProbe", "GenericAllProbe", "GpoAbuseProbe",
+    "GoldenTicketProbe", "SilverTicketProbe", "DiamondTicketProbe", "SapphireTicketProbe",
 ]

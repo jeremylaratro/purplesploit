@@ -59,6 +59,14 @@ class ValidationConfig:
     password: Optional[str] = None
     nt_hash: Optional[str] = None           # 'LM:NT', ':NT', or bare NT
     aes_key: Optional[str] = None
+    # T4 forging signing key (SECRET): the krbtgt NT/AES key (Golden/Diamond/
+    # Sapphire) or a service-account key (Silver), supplied out-of-band by the
+    # operator (CLI --forge-key-file / env) for standalone dispatch. NEVER a
+    # ParamSpec (would leak via params_preview) and NEVER serialized -- masked in
+    # redacted(). In a chain the key is threaded from the KRBTGT capability instead.
+    forge_key: Optional[str] = None
+    forge_key_kind: Optional[str] = None    # 'aes' | 'nt' (how to pass it to ticketer)
+    forge_key_nt: Optional[str] = None      # SECRET: the krbtgt NT hash for Sapphire (needs both NT+AES)
     extra_targets: list[str] = field(default_factory=list)  # member hosts / DCs by IP or FQDN
 
     # --- run i/o ---------------------------------------------------------
@@ -151,7 +159,7 @@ class ValidationConfig:
     def redacted(self) -> dict[str, Any]:
         """Config as a dict with secret fields masked -- safe to log/preview."""
         data = asdict(self)
-        for key in ("password", "nt_hash", "aes_key"):
+        for key in ("password", "nt_hash", "aes_key", "forge_key", "forge_key_nt"):
             if data.get(key):
                 data[key] = "***redacted***"
         for key in ("output_dir", "nmap_input", "findings_json", "proof_truth"):

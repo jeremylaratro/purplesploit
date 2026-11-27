@@ -21,7 +21,9 @@ def test_base_states_are_distinct_nonempty_strings():
             states.S_COERCED_AUTH, states.S_COMPUTER_CONTROL,
             states.S_RBCD_WRITE, states.S_IMPERSONATION_TGT,
             # T3 additions (ACL/object-takeover edges).
-            states.S_ACL_CONTROL, states.S_ACL_CRED]
+            states.S_ACL_CONTROL, states.S_ACL_CRED,
+            # T4 addition (Kerberos ticket forging -> reusable authenticator).
+            states.S_PERSISTENCE]
     assert all(isinstance(s, str) and s for s in base)
     assert len(set(base)) == len(base)                   # no collisions
     assert set(base) == set(states.BASE_STATES)

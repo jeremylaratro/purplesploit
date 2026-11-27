@@ -375,7 +375,9 @@ def test_registry_covers_all_fifteen_techniques():
         "COERCION", "NTLM-RELAY", "UNCONSTRAINED-DELEG",       # PP: listener trio added
         "WRITE-DACL", "WRITE-OWNER", "ADD-MEMBER",
         "TARGETED-KERBEROAST", "FORCE-CHANGE-PASSWORD",
-        "GENERIC-ALL", "GPO-ABUSE"}                              # T3: ACL edges (all 7)
+        "GENERIC-ALL", "GPO-ABUSE",                              # T3: ACL edges (all 7)
+        "GOLDEN-TICKET", "SILVER-TICKET",                        # T4: Kerberos forging
+        "DIAMOND-TICKET", "SAPPHIRE-TICKET"}
 
 
 def test_get_probe_unknown_technique_is_none():

@@ -74,12 +74,24 @@ S_ACL_CONTROL = "S_acl_control"
 # credential is promoted to DA_CREDS or DC_TGT in this sprint.
 S_ACL_CRED = "S_acl_cred"
 
+# T4 Kerberos ticket forging: a forged, reusable authenticator (Golden/Diamond/
+# Sapphire). CAPABILITY-BACKED, unlike S_DA: the chain reaches it ONLY when a
+# forging edge produces the ccache capability (which it does only on a verified
+# re-authentication), so the engine's goal-reached check requires it in the store
+# (like cred:/control:), never from a declared eff alone. Bounded by the forged
+# ticket's lifetime + the signing-key (krbtgt) validity -- not "survives resets".
+S_PERSISTENCE = "S_persistence"
+
 # The base (parameter-free) capability states.
 BASE_STATES: frozenset = frozenset({
     S0_USER_CREDS, DC_TGT, DA_CREDS, KRBTGT, S_DA,
     S_COERCED_AUTH, S_COMPUTER_CONTROL, S_RBCD_WRITE, S_IMPERSONATION_TGT,
-    S_ACL_CONTROL, S_ACL_CRED,
+    S_ACL_CONTROL, S_ACL_CRED, S_PERSISTENCE,
 })
+
+# Capability-backed base-state goals: reaching one requires the produced
+# capability to be in the store (the engine must not accept a declared eff alone).
+CAPABILITY_BACKED_BASE_STATES: frozenset = frozenset({S_PERSISTENCE})
 
 _CERT_PREFIX = "cert:"
 _LOCAL_ADMIN_PREFIX = "local_admin:"
@@ -163,7 +175,8 @@ def all_states(states: Iterable[str]) -> bool:
 __all__ = [
     "S0_USER_CREDS", "DC_TGT", "DA_CREDS", "KRBTGT", "S_DA",
     "S_COERCED_AUTH", "S_COMPUTER_CONTROL", "S_RBCD_WRITE", "S_IMPERSONATION_TGT",
-    "S_ACL_CONTROL", "S_ACL_CRED",
-    "BASE_STATES", "cert_for", "local_admin_for", "cred_for", "cred_principal",
+    "S_ACL_CONTROL", "S_ACL_CRED", "S_PERSISTENCE",
+    "BASE_STATES", "CAPABILITY_BACKED_BASE_STATES",
+    "cert_for", "local_admin_for", "cred_for", "cred_principal",
     "control_for", "is_state", "all_states",
 ]

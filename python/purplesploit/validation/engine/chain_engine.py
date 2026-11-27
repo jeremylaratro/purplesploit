@@ -219,6 +219,14 @@ class ChainEngine:
             if st.startswith("control:"):
                 if entry.capability is None or not edge.accepts_control(ctx, finding, entry.capability):
                     continue
+            elif st == states.KRBTGT:
+                # H4: a signing-key state (krbtgt) is consumable only when the edge
+                # positively ACCEPTS the threaded key -- channel + key format + not a
+                # placeholder + principal/domain binding. A valueless/placeholder key
+                # never establishes it, and an operator-supplied key is NEVER
+                # substituted for an absent/invalid produced key.
+                if entry.capability is None or not edge.accepts_key(ctx, finding, entry.capability):
+                    continue
             return {st: entry}
         return {}
 
@@ -349,8 +357,15 @@ class ChainEngine:
                 origin = OPERATOR_SEED if OPERATOR_SEED in lineage else lineage[0]
                 store.setdefault(cap.state, _StateEntry(capability=cap, provenance=origin))
 
-            if self.goal in eff and (not self.goal.startswith(("cred:", "control:"))
-                                     or self.goal in store):
+            # B3: a CAPABILITY-BACKED goal (cred:/control:, or S_PERSISTENCE) is
+            # reached ONLY when its produced capability is actually in the store --
+            # never from a declared eff alone (a forging edge that did not
+            # re-authenticate produces no capability, so it must not count). S_DA
+            # (a terminal state reached by a completing edge like DCSYNC) is
+            # unchanged, as it is not capability-backed.
+            cap_backed = (self.goal.startswith(("cred:", "control:"))
+                          or self.goal in states.CAPABILITY_BACKED_BASE_STATES)
+            if self.goal in eff and (not cap_backed or self.goal in store):
                 reached = True
                 escalation = edge_escalation
                 break                                        # early-exit at first goal (H4)

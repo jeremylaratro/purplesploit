@@ -25,6 +25,10 @@ TARGET_PARAM = {
     "CERTIFRIED": "ca_host", "COERCION": "victim_dc",
     "UNCONSTRAINED-DELEG": "victim_dc", "NTLM-RELAY": "relay_target",
     "GPO-ABUSE": "gpo_guid",
+    # T4 ticket forging: --target is the host to authenticate against (Silver: the
+    # service host). Signing keys are NEVER params (supplied out-of-band).
+    "GOLDEN-TICKET": "reauth_target", "SILVER-TICKET": "service_host",
+    "DIAMOND-TICKET": "reauth_target", "SAPPHIRE-TICKET": "reauth_target",
 }
 
 # Param -> finding entity aliases used by existing executors' defaults/identity.
@@ -33,6 +37,9 @@ PUBLIC_ENTITY = frozenset({
     "target", "trustee", "rights", "group", "member", "victim", "principal",
     "spn", "pivot", "host", "ca_host", "ca", "template", "gpo_guid", "linked_host",
     "share", "account", "target_host", "victim_dc", "relay_target",
+    # T4 ticket-forging public params (never the signing key).
+    "reauth_target", "service_host", "forged_user", "groups", "user_id",
+    "domain_sid", "impersonate",
 })
 
 
