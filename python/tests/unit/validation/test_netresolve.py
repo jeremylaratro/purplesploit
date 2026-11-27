@@ -121,6 +121,16 @@ def test_classify_unrelated_failure_returns_none():
         _cfg(), "winterfell", "[-] STATUS_LOGON_FAILURE") is None
 
 
+def test_classify_reachable_kdc_error_code_is_not_resolution_failure():
+    # a KDC_ERR_* means the KDC WAS reached and responded -> NOT resolution_failed
+    # (review S1-r1: the broad `kdc...cannot` regex misclassified BADOPTION).
+    for err in ("KDC_ERR_BADOPTION(KDC cannot accommodate requested option)",
+                "KDC_ERR_S_PRINCIPAL_UNKNOWN",
+                "KDC_ERR_PREAUTH_FAILED",
+                "[-] KRB_AP_ERR_MODIFIED"):
+        assert netresolve.classify_resolution_failure(_cfg(), "host", err) is None, err
+
+
 def test_classifier_leaks_no_secrets():
     cfg = _cfg(password="SuperSecret!", nt_hash="deadbeef" * 4)
     d = netresolve.classify_resolution_failure(cfg, "host", "Cannot find KDC for realm X")
