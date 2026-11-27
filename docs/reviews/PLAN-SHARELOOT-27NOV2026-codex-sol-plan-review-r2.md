@@ -1,0 +1,15 @@
+VERDICT: FIX-FIRST
+
+1. **#1 SOUND:** `smbclient -L` enumerates shares without filesystem write probes; read-only access attempts and a fail-closed NetExec version gate resolve the mutation issue. This guarantees no share-content mutation, not absence of server audit activity. [Samba implementation](https://github.com/samba-team/samba/blob/master/source3/client/client.c).
+
+2. **#2 BLOCKER — Partially resolved ([L122](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s1/docs/plans/PLAN-SHARELOOT-27NOV2026-smb-nfs-share-discovery-loot.md:122)).** Programmatic SMB calls and opaque destinations close command-parser injection. Mount containment remains vulnerable: an entry or ancestor can change after `realpath` validation and before opening. Walk flags do not constrain subsequent file opens. Require descriptor-anchored, race-resistant traversal/opening, such as `openat2` with beneath/no-symlink restrictions, failing closed when unavailable. Also retain r1’s private mountpoint and verification of actual CIFS identity/read-only flags. [Resolution controls](https://man7.org/linux/man-pages/man2/openat2.2.html).
+
+3. **#3 HIGH — Partially resolved ([L123](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s1/docs/plans/PLAN-SHARELOOT-27NOV2026-smb-nfs-share-discovery-loot.md:123)).** Independent cleanup, attached-mount exclusion, and failure→inconclusive are sound. Still missing are bounded worker shutdown before shredding, reconciliation when mounting times out after attachment, and crash recovery/storage provisions supporting “shredded on every path.” Exception handling cannot cover uncatchable termination. Define these explicitly. [Signal semantics](https://man7.org/linux/man-pages/man7/signal.7.html).
+
+4. **#4 HIGH — Listing consumption remains unresolved ([L124](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-s1/docs/plans/PLAN-SHARELOOT-27NOV2026-smb-nfs-share-discovery-loot.md:124)).** Impacket’s ordinary `listPath` accumulates an entire directory before returning; `os.walk` likewise assembles directory lists before yielding. Caller-side entry caps therefore arrive too late. Specify bounded directory paging/streaming, capped discovery stdout/stderr buffering, and deadline enforcement inside blocking operations. Retain explicit partial outcomes. [Impacket implementation](https://github.com/fortra/impacket/blob/master/impacket/smb3.py), [Python traversal contract](https://docs.python.org/3/library/os.html#os.walk).
+
+5. **#5 SOUND:** Opaque IDs across receipts, tokens, diagnostics, and logs, with raw mappings confined to the protected operator store, resolve secret-bearing location leakage.
+
+6. **#6 SOUND:** A dedicated `share_inventory` terminal kind, persistence adapter, and coordinated scorer/truth support are the correct integration; discovery produces no credential capability.
+
+7. **#7 SOUND:** Explicit host/share outcomes, separate access and completeness predicates, and mixed/denied/truncated fixtures resolve the existential-success problem.

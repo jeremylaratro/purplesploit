@@ -131,3 +131,34 @@ draft above.
 adapter, bounds + cleanup + exhaustiveness are first-class. This is a larger, security-critical S1
 than the draft; it is the correct scope. Build proceeds from this resolved design (a short r2 verify
 of the revised plan precedes implementation).
+
+## Plan-review r2 verify (Codex Sol, 27NOV2026) — scope decision
+Review: `docs/reviews/PLAN-SHARELOOT-27NOV2026-codex-sol-plan-review-r2.md`. 4 SOUND (#1 read-only
+discovery, #5 opaque IDs, #6 `share_inventory` terminal kind, #7 exhaustiveness). The 3 partials
+(#2 mount TOCTOU/symlink race, #3 mount crash-recovery/`SIGKILL`, #4 whole-directory accumulation)
+are all MOUNT-mode OS-level safety — too deep to build safely in the same pass.
+
+**Decision: S1 ships CRAWL mode ONLY (programmatic impacket `SMBConnection`). MOUNT mode is DEFERRED
+to its own sprint (S1b).** Rationale:
+- Crawl uses the impacket SMB client to read REMOTE paths and writes to opaque content-addressed
+  names in a flat scratch dir — there is **no local mount and no local filesystem walk**, so #2
+  (realpath→open TOCTOU, symlink escape) and #3 (attached-mount unmount/crash recovery) **do not
+  apply**. The user's "both access modes" decision is preserved as the end state; crawl (the
+  no-privilege, portable default) lands first.
+- #4 (bounded consumption) still applies to crawl and IS resolved: all limits — aggregate scratch
+  bytes, total entry count, per-read byte cap (stop mid-file at the cap), max depth, max files,
+  visited-cycle detection, and a **whole-run deadline checked between every blocking op** — are
+  enforced DURING traversal; any bound hit yields an explicit `partial` outcome. Residual (documented,
+  accepted): impacket `listPath` returns one directory's entries as a list, so a single pathologically
+  huge directory's listing is bounded by the whole-run deadline (wall-clock) rather than streamed;
+  a paged-listing follow-up is noted. No `os.walk`, no mount → no TOCTOU.
+- **S1b (deferred, documented requirements for mount mode):** private mountpoint + verify actual CIFS
+  identity & `ro` flags; descriptor-anchored race-resistant traversal (`openat2` RESOLVE_BENEATH |
+  RESOLVE_NO_SYMLINKS, fail closed if unavailable); bounded worker shutdown before shred; mount-state
+  reconciliation on post-attach timeout; crash-recovery marker so scratch is reclaimable after an
+  uncatchable kill. Until S1b, `share_access_mode="mount"` returns `inconclusive:mount_mode_deferred`.
+
+**S1 build (crawl-only, from this resolved design):** discovery via impacket `listShares` (read-only,
+programmatic — no `smbclient` shell at all); crawl via `listPath`/`getFile` with the #4 bounds +
+cycle detection; opaque location IDs (raw map → operator store); `share_inventory` terminal kind
+(+ harness mirror); per-host/share exhaustiveness; scratch shredded in `finally`.
