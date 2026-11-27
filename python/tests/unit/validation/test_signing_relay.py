@@ -87,6 +87,26 @@ def test_multi_host_mix(tmp_path):
     assert tf["ok"] is True and tf["exposed_hosts"] == ["braavos"]   # only braavos exposed
 
 
+def test_ldap_channel_binding_unknown_is_not_exposed(tmp_path):
+    # review HIGH: nxc emits "Unknown" on a failed LDAP read -> must stay INCONCLUSIVE,
+    # never a false ldap_relay. signing Enforced + CB Unknown -> NOT exposed.
+    r = _Runner(smb={"dc": SMB_ON},
+                ldap={"dc": "LDAP dc 389 DC [*] (signing:Enforced) (channel binding:Unknown)"})
+    res = get_executor("SIGNING-RELAY").run(_ctx(_cfg(), r, tmp_path), _finding("dc"))
+    tf = res["terminal_fact"]
+    assert tf["ok"] is False and "ldap_relay" not in tf["exposed_classes"]
+    assert tf["per_host"][0]["ldap_signing_required"] is True            # explicit value kept
+
+
+def test_ldap_when_supported_cb_is_exposed(tmp_path):
+    # signing Required but channel binding "When Supported" (bypassable) -> ldap_relay.
+    r = _Runner(smb={"dc": SMB_ON},
+                ldap={"dc": "LDAP dc 389 DC [*] (signing:Required) (channel binding:When Supported)"})
+    res = get_executor("SIGNING-RELAY").run(_ctx(_cfg(), r, tmp_path), _finding("dc"))
+    assert res["terminal_fact"]["ok"] is True
+    assert "ldap_relay" in res["terminal_fact"]["exposed_classes"]
+
+
 def test_creds_not_in_receipt(tmp_path):
     r = _Runner(smb={"braavos": SMB_OFF}, ldap={"braavos": LDAP_NONE})
     res = get_executor("SIGNING-RELAY").run(_ctx(_cfg(password="S3cr3t!"), r, tmp_path), _finding("braavos"))
