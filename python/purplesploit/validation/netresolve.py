@@ -72,10 +72,16 @@ def nxc_kerberos_flags(cfg) -> list[str]:
 # Conservative by design — tuned against the real nxc/impacket output in S2's live
 # proof. A miss degrades to "no diagnostic" (the raw tool error still surfaces),
 # never a false success.
+# NOTE: match only KDC *discovery/resolution* failures -- NOT KDC error codes
+# (``KDC_ERR_*`` means the KDC WAS reached and responded, e.g.
+# ``KDC_ERR_BADOPTION(KDC cannot accommodate requested option)`` -- a reachable KDC
+# rejecting an option, which must NOT be labelled "KDC not found").
 _RE_REALM_KDC = re.compile(
-    r"cannot\s+find\s+kdc|kdc\b[^\n]{0,40}\b(?:not\s+found|unreachable|cannot|no\s+such)"
+    r"cannot\s+find\s+kdc|couldn'?t\s+find\s+kdc"
+    r"|kdc\b[^\n]{0,40}\b(?:not\s+found|unreachable)"
+    r"|no\s+kdc\s+(?:found|for\b)"
     r"|unable\s+to\s+(?:find|reach|resolve)[^\n]{0,20}kdc"
-    r"|\brealm\b[^\n]{0,40}(?:not\s+found|unknown|could\s+not|cannot|unreachable)"
+    r"|\brealm\b[^\n]{0,40}(?:not\s+found|unreachable|could\s+not\s+(?:be\s+)?(?:found|resolved?))"
     r"|kerberos[^\n]{0,40}name\s+resolution",
     re.I)
 _RE_FQDN = re.compile(
