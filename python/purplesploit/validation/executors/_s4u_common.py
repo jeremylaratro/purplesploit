@@ -46,12 +46,15 @@ def op_auth_target(cfg, principal: str) -> str:
 
 
 def parse_ticket(stdout: str, out_dir: Path) -> Optional[str]:
-    """The saved ccache path (absolute, under ``out_dir`` if getST wrote a bare name)."""
+    """The saved ccache path, resolved ABSOLUTE. getST writes a bare filename to its
+    cwd (``out_dir``); the proof step then runs with ``cwd=out_dir`` too, so a RELATIVE
+    path (e.g. the CLI default ``./validation-run``) would double-nest under
+    ``KRB5CCNAME`` and the ticket would not be found. Always return an absolute path."""
     m = TICKET_RE.search(stdout or "")
     if not m:
         return None
     p = Path(m.group(1).strip())
-    return str(p if p.is_absolute() else out_dir / p)
+    return str(p if p.is_absolute() else (Path(out_dir) / p).resolve())
 
 
 def classify_kerberos_failure(text: str) -> Optional[str]:
