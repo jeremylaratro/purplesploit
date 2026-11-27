@@ -319,6 +319,40 @@ class ValidationOrchestrator:
             "score": score,
         }
 
+    # -- capability discovery (probe-all + opt-in auto-exploit) -----------
+    def discover(self, hosts, exploit: bool = False, allow_destructive: bool = False) -> dict:
+        """Probe EVERY technique from the operator's creds + scope and report viability;
+        with ``exploit=True`` also auto-fire the ELIGIBLE set (see :mod:`discovery` for the
+        safety gate). Discovery is read-only; only verified, viable, complete, non-mutating
+        (unless ``allow_destructive``) techniques are auto-exploited."""
+        from . import discovery
+        verdicts = discovery.build_verdicts(self.context, hosts, allow_destructive)
+        cands = discovery.candidate_findings(self.config, hosts)   # deterministic -> aligned with verdicts
+        outcomes: list[ValidationOutcome] = []
+        if exploit:
+            self.receipts_dir.mkdir(parents=True, exist_ok=True)
+            for i, (finding, v) in enumerate(zip(cands, verdicts)):
+                if not v.eligible_for_autoexploit:
+                    continue
+                executor = get_executor(finding.technique)
+                receipt = executor.run(self.context, finding)
+                name = f"disc_{i:02d}_{finding.technique}.json"
+                path = proof.write_receipt(receipt, self.receipts_dir / name)
+                outcomes.append(ValidationOutcome(
+                    technique=finding.technique, finding_id=finding.finding_id,
+                    receipt_path=path, receipt=receipt, overrides={}))
+        score = self.score(outcomes) if outcomes else {"scored": False, "reason": "no auto-exploit"}
+        return {
+            "config": self.config.redacted(),
+            "mode": "discover",
+            "discovery": [v.to_dict() for v in verdicts],
+            "summary": discovery.summarize(verdicts),
+            "exploited": [{"technique": o.technique, "receipt": str(o.receipt_path),
+                           "complete": o.receipt.get("complete"),
+                           "terminal": bool(o.receipt.get("terminal_fact"))} for o in outcomes],
+            "score": score,
+        }
+
     # -- report helpers ---------------------------------------------------
     @staticmethod
     def _planned_entry(pv: PlannedValidation) -> dict:
