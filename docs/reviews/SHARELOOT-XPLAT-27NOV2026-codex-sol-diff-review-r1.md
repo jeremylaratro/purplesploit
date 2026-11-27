@@ -1,0 +1,3 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — [loot_rules.py:162](/srv/share/dev/purplesploit/.claude/worktrees/shareloot-xplat/python/purplesploit/validation/executors/loot_rules.py:162): UTF-16 credential extraction corrupts account names.** Deleting NULs does not convert UTF-16 into UTF-8. In UTF-16LE and BE `Groups.xml`, `userName="DOM\José"` becomes `DOM\Jos` because UTF-8 decoding silently drops byte `E9`. The valid cpassword then produces a usable-credential capability for the wrong account. Reproduced through the crawler and capability production; including both names with the same cpassword also incorrectly deduplicates them. Decode UTF-16/32 with the appropriate codec before matching, preserve Unicode principals, and add LE/BE principal-integrity tests.
