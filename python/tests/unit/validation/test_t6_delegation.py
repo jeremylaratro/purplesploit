@@ -36,10 +36,11 @@ class _FakeRunner(CommandRunner):
         tool = Path(argv[0]).name
         if tool == "nxc":
             return RunResult(returncode=0, stdout=self.nxc)
-        return RunResult(returncode=0, stdout=self.getst)
+        out = self.getst(argv) if callable(self.getst) else self.getst
+        return RunResult(returncode=0, stdout=out)
 
-    def getst_argv(self):
-        return next(c for c in self.calls if Path(c[0]).name == "impacket-getST")
+    def getst_calls(self):
+        return [c for c in self.calls if Path(c[0]).name == "impacket-getST"]
 
 
 def _cfg(**kw):
@@ -77,6 +78,16 @@ def test_classify_kerberos_failure():
     assert s4u.classify_kerberos_failure("all good") is None
 
 
+def test_parse_ticket_is_absolute_even_for_relative_out_dir():
+    # review HIGH: a bare-name ticket under a RELATIVE out_dir (the CLI default
+    # ./validation-run) must resolve ABSOLUTE, else cwd=out_dir double-nests KRB5CCNAME.
+    path = s4u.parse_ticket("[*] Saving ticket in admin@cifs.ccache", Path("validation-run"))
+    assert path is not None and Path(path).is_absolute()
+    assert path.endswith("/validation-run/admin@cifs.ccache")
+    # an absolute path from getST is kept as-is
+    assert s4u.parse_ticket("[*] Saving ticket in /tmp/x.ccache", Path("validation-run")) == "/tmp/x.ccache"
+
+
 # ===================================================================== S4U2SELF
 def test_s4u2self_local_admin_pwned(tmp_path):
     r = _FakeRunner(getst=TICKET_LINE, nxc="SMB castelblack 445 [+] north\\Administrator (Pwn3d!)")
@@ -84,7 +95,7 @@ def test_s4u2self_local_admin_pwned(tmp_path):
     tf = res["terminal_fact"]
     assert tf["ok"] is True and res["complete"] is True
     assert tf["classification"] == "local_admin"
-    argv = r.getst_argv()
+    argv = r.getst_calls()[0]
     assert "-self" in argv and "-altservice" in argv            # the S4U2self recipe
     blob = json.dumps(res)
     assert FAKE_AES not in blob and ".ccache" not in blob        # key + ticket never in the receipt
@@ -117,20 +128,45 @@ def test_s4u2self_no_ticket_classified_not_fabricated(tmp_path):
 
 
 # ===================================================================== BRONZE-BIT
+_WF = "winterfell.north.sevenkingdoms.local"
+# A getST fake that honours the negative control: without -force-forwardable it returns
+# `ctrl`, with it `forced`. A true Bronze Bit needs the control to FAIL + the forced run
+# to succeed (so an already-forwardable/protocol-transition account can't read as exploited).
+def _getst(ctrl, forced):
+    return lambda argv: forced if "-force-forwardable" in argv else ctrl
+
+
+BADOPT = "[-] Kerberos SessionError: KDC_ERR_BADOPTION(KDC cannot accommodate requested option)"
+PATCHED = "[*]\tForcing...\n[-] Kerberos SessionError: KRB_AP_ERR_MODIFIED(Message stream modified)"
+
+
 def test_bronze_bit_exploited(tmp_path):
-    r = _FakeRunner(getst=TICKET_LINE, nxc="SMB winterfell 445 [+] north\\Administrator (Pwn3d!)")
-    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding("winterfell.north.sevenkingdoms.local"))
+    # control (no -ff) FAILS non-forwardable; forced run SUCCEEDS -> the CVE was the differentiator.
+    r = _FakeRunner(getst=_getst(BADOPT, TICKET_LINE), nxc="SMB winterfell 445 [+] north\\Administrator (Pwn3d!)")
+    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding(_WF))
     tf = res["terminal_fact"]
     assert tf["ok"] is True and tf["classification"] == "exploited"
-    assert "-force-forwardable" in r.getst_argv()               # the CVE exploit flag
+    assert len(r.getst_calls()) == 2                            # negative control + forged run
+    assert "-force-forwardable" in r.getst_calls()[1]           # the forged (second) run
+    assert "-force-forwardable" not in r.getst_calls()[0]       # the control omits the flag
     assert FAKE_AES not in json.dumps(res)
 
 
+def test_bronze_bit_ordinary_delegation_is_not_exploited(tmp_path):
+    # review HIGH: a protocol-transition account's ticket is already forwardable -> the control
+    # SUCCEEDS -> this is ordinary delegation, NOT the CVE. Must not read as exploited.
+    r = _FakeRunner(getst=_getst(TICKET_LINE, TICKET_LINE), nxc="(Pwn3d!)")
+    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding(_WF))
+    assert res["terminal_fact"]["ok"] is False
+    assert res["terminal_fact"]["classification"] == "ordinary_delegation"
+    assert "ordinary_delegation" in res["errors"]
+    assert len(r.getst_calls()) == 1                            # stopped at the control (no forged run)
+
+
 def test_bronze_bit_kdc_patched_is_detected(tmp_path):
-    # the GOAD reality: an enforcing KDC rejects the forged ticket -> correctly classified.
-    r = _FakeRunner(getst="[*]\tForcing the service ticket to be forwardable\n"
-                          "[-] Kerberos SessionError: KRB_AP_ERR_MODIFIED(Message stream modified)")
-    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding("winterfell.north.sevenkingdoms.local"))
+    # the GOAD reality: control fails non-forwardable, the forged run is rejected by the patched KDC.
+    r = _FakeRunner(getst=_getst(BADOPT, PATCHED))
+    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding(_WF))
     tf = res["terminal_fact"]
     assert tf["ok"] is False and tf["classification"] == "kdc_patched"
     assert "kdc_patched" in res["errors"] and "kdc_patched" in tf["predicate"]
@@ -138,20 +174,18 @@ def test_bronze_bit_kdc_patched_is_detected(tmp_path):
 
 
 def test_bronze_bit_not_delegatable(tmp_path):
-    r = _FakeRunner(getst="[-] Kerberos SessionError: KDC_ERR_BADOPTION(KDC cannot accommodate requested option)")
-    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding("winterfell.north.sevenkingdoms.local"))
+    r = _FakeRunner(getst=_getst(BADOPT, BADOPT))                # control + forced both BADOPTION
+    res = get_executor("BRONZE-BIT").run(_ctx(_cfg(), r, tmp_path), _finding(_WF))
     assert res["terminal_fact"]["classification"] == "not_delegatable"
     assert res["terminal_fact"]["ok"] is False
 
 
 def test_bronze_bit_produces_impersonation_tgt_only_when_exploited(tmp_path):
-    exploited = _FakeRunner(getst=TICKET_LINE, nxc="(Pwn3d!)")
-    cr = get_executor("BRONZE-BIT").run_composable(_ctx(_cfg(), exploited, tmp_path),
-                                                   _finding("winterfell.north.sevenkingdoms.local"))
+    exploited = _FakeRunner(getst=_getst(BADOPT, TICKET_LINE), nxc="(Pwn3d!)")
+    cr = get_executor("BRONZE-BIT").run_composable(_ctx(_cfg(), exploited, tmp_path), _finding(_WF))
     assert cr.capabilities and cr.capabilities[0].state == states.S_IMPERSONATION_TGT
-    patched = _FakeRunner(getst="KRB_AP_ERR_MODIFIED")
-    cr2 = get_executor("BRONZE-BIT").run_composable(_ctx(_cfg(), patched, tmp_path),
-                                                    _finding("winterfell.north.sevenkingdoms.local"))
+    patched = _FakeRunner(getst=_getst(BADOPT, PATCHED))
+    cr2 = get_executor("BRONZE-BIT").run_composable(_ctx(_cfg(), patched, tmp_path), _finding(_WF))
     assert cr2.capabilities == []                                # patched -> no capability produced
 
 
