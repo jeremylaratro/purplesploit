@@ -1191,6 +1191,27 @@ class SapphireTicketProbe(_ForgeTicketProbe):
     technique = "SAPPHIRE-TICKET"
 
 
+class ShareLootProbe(PreconditionProbe):
+    """SHARE-LOOT: read-only SMB share discovery + crawl. Viable when the operator
+    has SMB credentials to authenticate the enumeration. No network probe here (and
+    deliberately NOT the mutating ``nxc --shares``) -- the executor itself records
+    per-host reachability/denial, so this stays a cheap, read-only applicability
+    check."""
+    technique = "SHARE-LOOT"
+
+    def check(self, ctx: ExecutorContext, finding) -> ProbeResult:
+        cfg = ctx.config
+        if cfg.username and cfg.has_credentials():
+            return ProbeResult(
+                viable=True,
+                reason="SMB credentials present; read-only share enumeration is applicable",
+                evidence={"has_creds": True})
+        return ProbeResult(
+            viable=False,
+            reason="no SMB credentials to authenticate share enumeration",
+            evidence={"has_creds": False})
+
+
 # ---------------------------------------------------------------- registry
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
@@ -1204,6 +1225,8 @@ _PROBES: tuple[type[PreconditionProbe], ...] = (
     ForceChangePasswordProbe, GenericAllProbe, GpoAbuseProbe,
     # T4 (26NOV2026) -- Kerberos ticket forging (key-availability probes).
     GoldenTicketProbe, SilverTicketProbe, DiamondTicketProbe, SapphireTicketProbe,
+    # SHARELOOT S1 (27NOV2026) -- read-only SMB share discovery + crawl.
+    ShareLootProbe,
 )
 
 # Technique -> probe class.

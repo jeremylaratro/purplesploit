@@ -40,6 +40,7 @@ PROOF_SCHEMA = "adlab.plan003.proof.v1"
 TERMINAL_KINDS = frozenset({
     "authn_success", "secret_recovered", "rbcd_access",
     "cert_issued_and_used", "file_write_readback", "replication_dump",
+    "share_inventory",   # SHARELOOT: read-only SMB/NFS share discovery + crawl (no cred recovery)
 })
 
 # Classifier gate verdicts an executor may record for a gated op.

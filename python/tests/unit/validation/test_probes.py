@@ -377,7 +377,8 @@ def test_registry_covers_all_fifteen_techniques():
         "TARGETED-KERBEROAST", "FORCE-CHANGE-PASSWORD",
         "GENERIC-ALL", "GPO-ABUSE",                              # T3: ACL edges (all 7)
         "GOLDEN-TICKET", "SILVER-TICKET",                        # T4: Kerberos forging
-        "DIAMOND-TICKET", "SAPPHIRE-TICKET"}
+        "DIAMOND-TICKET", "SAPPHIRE-TICKET",
+        "SHARE-LOOT"}                                            # SHARELOOT S1: SMB share discovery
 
 
 def test_get_probe_unknown_technique_is_none():
