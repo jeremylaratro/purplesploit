@@ -1,0 +1,3 @@
+VERDICT: FIX-FIRST
+
+- **HIGH — Certipy errors become definitive CA absence** at [discovery.py:158](/srv/share/dev/purplesploit/.claude/worktrees/smartdisc/python/purplesploit/validation/discovery.py:158). `_tool_errored()` does not reject nonzero exit codes. Reproduced with `RunResult(1, stderr="[-] Got error: LDAP connection failed")`: recon sets `has_ca=False`, skipping ADCS-ESC1, ESC8, ESC11, CERTIFRIED, and SHADOW-CREDS. Unrecognized nonempty output also falsely skips them. Set `False` only on confirmed CA absence; preserve `None` for failed or inconclusive reads. Add tests exercising these responses through real `recon()`; the current unknown-prerequisite test replaces recon entirely.

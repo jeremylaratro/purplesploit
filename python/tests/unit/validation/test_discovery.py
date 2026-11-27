@@ -173,6 +173,27 @@ def test_recon_reads_delegation_and_ca(tmp_path):
     assert r.has_delegation is True and r.has_ca is True and r.has_spn is False
 
 
+def test_recon_ca_errored_is_unknown_not_absent(tmp_path):
+    # review HIGH: a FAILED certipy read must leave has_ca=None (not False), so ADCS is
+    # not falsely skipped; a CLEAN no-CA read is a confirmed False.
+    def _runner(certipy_out, certipy_rc=0):
+        class _R(CommandRunner):
+            def run(self, argv, *, env=None, timeout=None, cwd=None):
+                if Path(argv[0]).name == "certipy-ad":
+                    return RunResult(returncode=certipy_rc, stdout=certipy_out)
+                return RunResult(returncode=0, stdout="")   # account read fails -> delegation None
+        return _R()
+
+    def _recon(runner):
+        return discovery.recon(ExecutorContext(_cfg(tmp_path), runner=runner,
+                               authorizer=AuthorizedLabProvider(True), output_dir=tmp_path))
+
+    assert _recon(_runner("[-] Got error: LDAP connection failed", certipy_rc=1)).has_ca is None
+    assert _recon(_runner("")).has_ca is None                               # empty -> unknown
+    assert _recon(_runner("[*] Finding certificate...\nFound 0 certificate authorities")).has_ca is False
+    assert _recon(_runner("Certificate Authorities\n  0\n    CA Name : north-CA")).has_ca is True
+
+
 def test_probe_parse_handles_real_nxc_whitespace_format():
     # Carrier-validation fix: real `nxc ldap --query` is WHITESPACE-separated with a
     # "Response for object" marker (not colon-delimited). The parse must read it -- the
