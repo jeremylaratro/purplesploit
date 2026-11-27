@@ -116,7 +116,7 @@ class DispatchParser(argparse.ArgumentParser):
         i = 0
         while i < len(args):
             token = args[i]
-            if token in {"pipeline", "run", "chain"}:
+            if token in {"pipeline", "run", "chain", "discover"}:
                 args.insert(0, args.pop(i))
                 break
             if not token.startswith("-"):
@@ -196,6 +196,12 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", parents=[shared], help="dispatch one technique")
     run.add_argument("technique", choices=sorted(IMPLEMENTED), type=str.upper)
     run.add_argument("--param", action="append", default=[], metavar="KEY=VALUE")
+    discover = commands.add_parser("discover", parents=[shared],
+                                   help="probe EVERY technique from the creds+scope; report "
+                                        "viability (read-only), optionally auto-exploit the eligible set")
+    discover.add_argument("--exploit", action="store_true",
+                          help="auto-exploit the eligible techniques (verified + viable + complete + "
+                               "non-mutating unless --allow-destructive); discovery alone is read-only")
     chain = commands.add_parser("chain", parents=[shared], help="compose a capability path")
     chain.add_argument("--goal", default=states.S_DA)
     chain.add_argument("--allow-crack", action="store_true")
@@ -231,6 +237,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.command == "pipeline":
             report = orch.run()
             status = _score_exit(report.get("score", {}))
+        elif args.command == "discover":
+            report = orch.discover(list(args.target or []), exploit=args.exploit,
+                                   allow_destructive=args.allow_destructive)
+            status = (_score_exit(report.get("score", {})) if report.get("exploited")
+                      else 0)   # read-only discovery always exits 0; exploit exits on the score
+
         elif args.command == "run":
             if len(args.target or []) > 1:
                 raise InputError("one_target_required")

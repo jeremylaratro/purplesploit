@@ -119,7 +119,11 @@ class PreconditionProbe(ABC):
 # ---------------------------------------------------------------- read helpers
 # A successful NetExec LDAP object read echoes the sAMAccountName anchor; its
 # absence means we did not actually read the object -> unknown (fail safe).
-_RE_ANCHOR = re.compile(r"\bsAMAccountName\b\s*[:=]", re.I)
+# A per-account LDAP read succeeded. Real `nxc ldap --query` prints a
+# "[+] Response for object: CN=..." marker and then whitespace-separated attributes
+# (NOT colon-delimited), so anchor on that marker OR the echoed sAMAccountName (any
+# separator) -- the old colon-only anchor never matched real nxc output.
+_RE_ANCHOR = re.compile(r"(Response for object\b|\bsAMAccountName\b)", re.I)
 
 
 def _tool_errored(res: RunResult) -> bool:
@@ -134,11 +138,14 @@ def _text(res: RunResult) -> str:
 
 
 def _extract_attr(text: str, attr: str) -> Optional[str]:
-    """The value on a ``<attr>: value`` / ``<attr> = value`` line (first match).
+    """The value on a ``<attr>: value`` / ``<attr> = value`` / ``<attr>   value`` line
+    (first match).
 
     Tolerates a leading tool prefix (NetExec prints ``LDAP <ip> <port> <host>
-    attr: value``), matching the attribute anywhere on the line to end-of-line."""
-    pat = re.compile(rf"(?mi){re.escape(attr)}\s*[:=]\s*(\S.*?)\s*$")
+    attr<sep>value``) and the real ``nxc ldap --query`` format, which separates the
+    attribute from its value with WHITESPACE (``attr    value``), not a colon/equals --
+    so the separator is a colon/equals (with optional spaces) OR one-or-more spaces."""
+    pat = re.compile(rf"(?mi){re.escape(attr)}(?:[ \t]*[:=][ \t]*|[ \t]+)(\S.*?)[ \t]*$")
     m = pat.search(text or "")
     return m.group(1).strip() if m else None
 
@@ -1324,9 +1331,15 @@ def probe_finding(ctx: ExecutorContext, finding) -> Optional[ProbeResult]:
     try:
         return probe.check(ctx, finding)
     except Exception as exc:  # fail safe -> unknown, never a false viable=False
+        # Only the exception TYPE enters the public reason -- the message could carry
+        # credential-bearing tool argv; the full error goes to the private error log.
+        try:
+            ctx._private_errors.append(f"probe {getattr(probe,'technique','?')}: {exc}")
+        except Exception:
+            pass
         return ProbeResult(
             viable=True, unknown=True,
-            reason=f"probe error ({type(exc).__name__}: {exc}); attempting anyway",
+            reason=f"probe error ({type(exc).__name__}); attempting anyway",
             evidence={})
 
 
