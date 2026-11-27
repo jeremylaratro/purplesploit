@@ -140,6 +140,19 @@ def test_probe_parse_handles_real_nxc_whitespace_format():
     assert _extract_attr(colon, "sAMAccountName") == "jon.snow"
 
 
+def test_extract_attr_ignores_status_marker_lines_no_cred_leak():
+    # review HIGH: nxc echoes `[+] domain\\user:PASSWORD` in its auth banner. A password
+    # that happens to contain an attribute-name substring must NOT be captured as that
+    # attribute's value (status-marker lines are excluded from attribute parsing).
+    from purplesploit.validation.probes import _extract_attr
+    leaky = ("LDAP 1.2.3.4 389 DC [+] north\\jon.snow:msDS-AllowedToDelegateTo CanarySecret!\n"
+             "LDAP 1.2.3.4 389 DC [+] Response for object: CN=jon.snow\n"
+             "LDAP 1.2.3.4 389 DC sAMAccountName       jon.snow\n")
+    assert _extract_attr(leaky, "msDS-AllowedToDelegateTo") is None   # not in a real result row
+    assert "CanarySecret" not in str(_extract_attr(leaky, "msDS-AllowedToDelegateTo"))
+    assert _extract_attr(leaky, "sAMAccountName") == "jon.snow"        # genuine row still read
+
+
 def test_discover_cli_read_only(tmp_path, monkeypatch):
     # `discover` without --exploit is read-only (no receipts) and exits 0.
     monkeypatch.setattr(discovery.probes_mod, "run_probes",
