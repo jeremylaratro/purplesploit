@@ -235,6 +235,31 @@ def test_coercion_operator_override_method_and_listener(tmp_path):
     assert "10.0.0.250" in trig                  # coercion points at the operator listener
 
 
+# ------------------------------------------------- T6/S3 coercion extras + redact fix
+def test_coercion_shadowcoerce_argv():
+    from purplesploit.validation.executors.coercion import coercion_trigger_argv, COERCION_METHODS
+    assert "shadowcoerce" in COERCION_METHODS
+    argv = coercion_trigger_argv("shadowcoerce", "dc01", "10.0.0.250", _cfg())
+    assert argv[0] == "coercer" and "--filter-protocol-name" in argv
+    assert argv[argv.index("--filter-protocol-name") + 1] == "MS-FSRVP"   # ShadowCoerce = MS-FSRVP
+    assert "dc01" in argv and "10.0.0.250" in argv
+
+
+def test_webdav_coercion_is_a_listener_format_through_an_existing_vector():
+    # WebDAV coercion is NOT a distinct method: an <host>@80/<path> listener on
+    # petitpotam/dfscoerce makes the target's WebClient authenticate over HTTP.
+    from purplesploit.validation.executors.coercion import coercion_trigger_argv
+    argv = coercion_trigger_argv("dfscoerce", "dc01", "10.0.0.250@80/x", _cfg())
+    assert "10.0.0.250@80/x" in argv                # the WebDAV listener rides the real vector
+
+
+def test_redact_masks_coercer_double_dash_hashes():
+    # review HIGH: Coercer's --hashes (double-dash) was NOT masked by redact_argv -> a leak.
+    from purplesploit.validation.executors.base import redact_argv
+    out = redact_argv(["coercer", "coerce", "--hashes", "aad3b435:deadbeefcafe", "-t", "dc01"])
+    assert "aad3b435:deadbeefcafe" not in out and "***" in out
+
+
 # ============================================================ NTLM-RELAY
 def _relay_finding(host="srv02.north.sevenkingdoms.local"):
     return map_finding({"finding_id": "AR-r1", "host": host, "category": "relay",

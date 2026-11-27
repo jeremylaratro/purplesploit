@@ -163,5 +163,28 @@ chain-wired (BRONZE-BIT → `S_impersonation_tgt`; S4U2SELF → `local_admin_for
 496/496 validation tests (485 base + 11); classification + Pwn3d-requires-admin + no-secret-in-receipt +
 kdc_patched detection + chain-producer gates covered.
 
+## S3 — coercion extras (light path)
+Shipped: `shadowcoerce` (MS-FSRVP) added to `COERCION_METHODS` + `coercion_trigger_argv` via the Coercer
+multiplexer with `--filter-protocol-name MS-FSRVP` (flag confirmed live on kali-vr; `coercer` has no
+`-m fsrvp`). Plus the review's secret-masking fix: `--hashes` (Coercer's double-dash form) added to
+`redact_argv._SECRET_FLAGS` (previously only `-hashes` was masked → a leak in any shown/stored argv).
+**WebDAV coercion is NOT a separate method** — it is a listener FORMAT (`<host>@80/<path>` passed as
+`listener_host` to petitpotam/dfscoerce so the target's WebClient authenticates over HTTP); Coercer's
+`-l` takes an IP, so a bespoke `webdav` method would have been a wrong invocation. Documented accordingly.
+Unverified vectors (consistent with the existing coercion methods; FSRVP/WebClient are typically
+disabled on a DC, so no GOAD success is expected — correctly left unverified). Light path: trivial change,
+design already settled by the plan review; no separate diff-review round. 502/502 validation tests.
+
+## S4 — Kerberos-relay: DEFERRED (with reason)
+Not built this tranche. krbrelayx relaying service-ticket/AP-REQ auth to LDAP/SMB/ADCS is listener-based
+(like NTLM-RELAY) and has no clean, verifiable proof path on this GOAD (no established prerequisites for a
+mitm6→ADCS-over-DNS scenario; WebClient not default). The cross-family plan review concurred with deferral.
+Recorded here; revisit if a provable krbrelayx scenario is stood up.
+
+## Status: T6 COMPLETE
+S1 Bronze Bit (negative-validation; GOAD KDC patched) + S2 S4U2self-abuse (PROVED local admin on
+castelblack) merged (PR #141). S3 coercion extras (ShadowCoerce + redact fix) this branch. S4 Kerberos-relay
+deferred-with-reason. The delegation/relay-extras tranche is complete.
+
 ## Baseline
 485 validation tests @ `66a8cc4` (captured; per-sprint manifests at each sprint's real base SHA).
