@@ -1,0 +1,19 @@
+# SHARE-LOOT S1b (mount mode) test manifest — base 37fb8fc; suite 458→475 (17 new).
+# Live-proven: real mount.nfs + contained crawl + symlink-escape BLOCKED + clean unmount.
+test_mount_reader.py::test_contained_lists_and_reads
+test_mount_reader.py::test_symlink_entry_skipped_in_listing
+test_mount_reader.py::test_symlink_read_never_returns_target_bytes
+test_mount_reader.py::test_symlinked_dir_component_not_descended
+test_mount_reader.py::test_dotdot_cannot_escape
+test_mount_reader.py::test_fifo_is_skipped_and_read_does_not_block
+test_mount_reader.py::test_mnt_id_mismatch_refused
+test_mount_reader.py::test_unreadable_mnt_id_fails_closed
+test_mount_reader.py::test_per_dir_cap_overflow_detectable
+test_mount_reader.py::test_read_file_bounded
+test_mount_reader.py::test_mount_argv_smb_creds_never_in_argv
+test_mount_reader.py::test_mount_argv_nfs
+test_mount_reader.py::test_mount_reader_crawls_contained_and_tears_down
+test_mount_reader.py::test_mount_failure_propagates_as_denied
+test_mount_reader.py::test_executor_mount_mode_end_to_end
+test_mount_reader.py::test_executor_mount_unavailable_is_inconclusive
+test_mount_reader.py::test_config_rejects_unknown_access_mode

@@ -10,10 +10,15 @@ construction, secret-safe by construction:
   or pyNfsClient NFSv3 (NFS) -- through a narrow read-only interface
   (:class:`ShareReader`: ``list_shares`` / ``list_dir`` / ``read_file`` / ``close``
   only). There is NO ``smbclient -c`` command string, so no shell / command-parser
-  injection (plan review r1 #2); and no local mount / ``os.walk``, so no TOCTOU /
-  symlink-escape (r2 #2/#3 -- that is the DEFERRED mount mode, S1b). NFS export
-  discovery is MULTI-METHOD (programmatic + showmount + nmap + rpcinfo), each CLI
-  method an argv list (no shell string), so showmount alone cannot hide an export.
+  injection (plan review r1 #2). NFS export discovery is MULTI-METHOD (programmatic +
+  showmount + nmap + rpcinfo), each CLI method an argv list (no shell string), so
+  showmount alone cannot hide an export.
+- **Access mode (``config.share_access_mode``):** ``crawl`` (default) reads via the
+  programmatic client -- no local mount, no ``os.walk``, so no TOCTOU / symlink-escape
+  by construction. ``mount`` (S1b) uses the kernel SMB/NFS client (dialects the libs
+  can't) and crawls the mounted, attacker-controlled tree with DESCRIPTOR-ANCHORED
+  containment (``mnt_id``-pinned openat walk, ``O_NOFOLLOW``/``O_PATH``; see
+  :mod:`mount_reader`) so a symlink / ``..`` / cross-mount cannot escape.
 - **Opaque location IDs** (r1 #5): a file/dir path can CONTAIN a secret, so a raw
   path NEVER enters a receipt. Each crawled path gets ``loc:<rand>``; the raw
   ``id -> {host,share,path,size,...}`` map goes ONLY to the operator's out-of-band
@@ -49,7 +54,7 @@ from typing import Any, Callable, Optional
 
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof, states
-from . import loot_rules, nfs_reader
+from . import loot_rules, nfs_reader, mount_reader
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, Capability, CAP_PASSWORD)
 
 
@@ -226,9 +231,9 @@ class ShareLootExecutor(ValidationExecutor):
             steps.append(StepRecord(name=name, ok=ok, argv_display=[], returncode=None, note=note))
 
         mode = getattr(cfg, "share_access_mode", "crawl")
-        if mode != "crawl":                       # mount mode DEFERRED (S1b) -- fail closed
-            errors.append("inconclusive:mount_mode_deferred")
-            rec("access_mode", False, f"mode={mode} deferred to S1b (crawl only in S1)")
+        if mode not in ("crawl", "mount"):        # unknown mode -> fail closed (never a false success)
+            errors.append(f"inconclusive:unknown_access_mode:{mode}")
+            rec("access_mode", False, f"unknown mode={mode}")
             return self._artifact(steps, gate, None, False, errors)
 
         hosts = self._hosts(ctx, finding, params)
@@ -238,8 +243,21 @@ class ShareLootExecutor(ValidationExecutor):
 
         protocol = getattr(cfg, "share_protocol", "smb")
         discovery_log: list[dict] = []
-        factory: Callable = (getattr(ctx, "share_reader_factory", None)
-                             or self._default_factory(protocol))
+        mount_any = False
+        used_mount_reader = False
+        symlinks_skipped = 0
+        special_skipped = 0
+        # Reader factory: a test seam (ctx.share_reader_factory) wins outright; else the
+        # programmatic reader for `protocol`, wrapped in a MountReader for mount mode --
+        # same programmatic DISCOVERY, kernel-mounted CONTAINED access (S1b).
+        if getattr(ctx, "share_reader_factory", None):
+            factory: Callable = ctx.share_reader_factory
+        elif mode == "mount":
+            def factory(c, host, timeout):
+                disc = self._default_factory(protocol)(c, host, timeout)
+                return mount_reader.MountReader(c, host, protocol, disc, ctx.runner)
+        else:
+            factory = self._default_factory(protocol)
         out_dir = Path(ctx.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         store_dir = Path(getattr(cfg, "loot_store_dir", None) or (out_dir / "loot-store"))
@@ -283,6 +301,18 @@ class ShareLootExecutor(ValidationExecutor):
             finally:
                 if reader is not None:
                     reader.close()
+                    if isinstance(reader, mount_reader.MountReader):   # aggregate after close
+                        used_mount_reader = True
+                        mount_any = mount_any or reader.mount_succeeded
+                        symlinks_skipped += reader.symlinks_skipped
+                        special_skipped += reader.special_skipped
+
+        # Mount mode fail-closed: if a MountReader was used but NO share could be mounted
+        # (privilege/tooling absent), the result is INCONCLUSIVE, never a (false) success
+        # -- distinct from a mounted-but-unreadable share, which is a per-share `denied`
+        # (adversary plan-review #3).
+        if mode == "mount" and used_mount_reader and not mount_any:
+            errors.append("inconclusive:mount_unavailable")
 
         # Persist the raw opaque-ID -> path map to the OPERATOR store ONLY, created
         # EXCLUSIVELY with mode 0600 (no 0644 window -- r1-review #6).
@@ -320,8 +350,11 @@ class ShareLootExecutor(ValidationExecutor):
             proof_token=proof.proof_token("SHARE-LOOT", cfg.domain, ",".join(sorted(hosts)),
                                           "listed" if any_listed else "none"),
             extra={"coverage": coverage, "per_share": per_share,
-                   "store_ref": str(store_ref), "access_mode": "crawl",
+                   "store_ref": str(store_ref), "access_mode": mode,
                    "protocol": protocol, "discovery": discovery_log,
+                   **({"mount": {"mounted_any": mount_any,
+                                 "symlinks_skipped": symlinks_skipped,
+                                 "special_skipped": special_skipped}} if mode == "mount" else {}),
                    # LOOT summary: PRESENCE + CATEGORY + opaque loc_ids only. No
                    # values, no raw paths -- the loot itself is in the operator store.
                    "loot": {"findings": crawler.loot_findings,
