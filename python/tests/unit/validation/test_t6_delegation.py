@@ -37,7 +37,7 @@ class _FakeRunner(CommandRunner):
         if tool == "nxc":
             return RunResult(returncode=0, stdout=self.nxc)
         out = self.getst(argv) if callable(self.getst) else self.getst
-        return RunResult(returncode=0, stdout=out)
+        return out if isinstance(out, RunResult) else RunResult(returncode=0, stdout=out)
 
     def getst_calls(self):
         return [c for c in self.calls if Path(c[0]).name == "impacket-getST"]
@@ -161,6 +161,22 @@ def test_bronze_bit_ordinary_delegation_is_not_exploited(tmp_path):
     assert res["terminal_fact"]["classification"] == "ordinary_delegation"
     assert "ordinary_delegation" in res["errors"]
     assert len(r.getst_calls()) == 1                            # stopped at the control (no forged run)
+
+
+def test_bronze_bit_control_inconclusive_blocks_exploit(tmp_path):
+    # round-2 HIGH: a TRANSIENT control failure (timeout) is NOT evidence of non-forwardability.
+    # Even if the forged run would succeed, the result must be inconclusive -- no exploit, no capability.
+    def gs(argv):
+        if "-force-forwardable" in argv:
+            return TICKET_LINE                                  # the forged run WOULD succeed
+        return RunResult(returncode=None, timed_out=True, error="timeout")  # control inconclusive
+    r = _FakeRunner(getst=gs, nxc="(Pwn3d!)")
+    cr = get_executor("BRONZE-BIT").run_composable(_ctx(_cfg(), r, tmp_path), _finding(_WF))
+    assert cr.receipt["terminal_fact"]["ok"] is False
+    assert cr.receipt["terminal_fact"]["classification"] == "inconclusive"
+    assert "inconclusive:control_inconclusive" in cr.receipt["errors"]
+    assert cr.capabilities == []                               # no exploit claim on an inconclusive control
+    assert len(r.getst_calls()) == 1                           # stopped at the control (no forged run)
 
 
 def test_bronze_bit_kdc_patched_is_detected(tmp_path):

