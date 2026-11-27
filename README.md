@@ -202,6 +202,42 @@ show services
 
 
 ---
+# Validation techniques
+
+Beyond enumeration, PurpleSploit ships an **operator-driven Active Directory
+validation subsystem** (`purplesploit.validation`): it consumes detection findings,
+offers per-issue opt-in validation with recommended-default + overridable parameters,
+runs parameterized executors that encode **proven per-technique recipes**, and emits
+scored `proof.v1` receipts (`proved` / `not-proved` / `inconclusive`). `exit 0` is
+never proof — each step is judged by a predicate over tool output, mutating ops carry
+a **verified rollback**, destructive ops are gated behind a confirmation, and every
+recovered secret is kept out of the receipt.
+
+Techniques span the AD attack surface:
+
+- **Kerberos roasting & cracking** — KERBEROAST, ASREP, TARGETED-KERBEROAST
+- **Delegation abuse (S4U)** — RBCD, CONSTRAINED-DELEG-PT, UNCONSTRAINED-DELEG
+- **Credential exposure** — LAPS, SHADOW-CREDS
+- **ACL / object takeover** — WRITE-DACL, WRITE-OWNER, ADD-MEMBER,
+  FORCE-CHANGE-PASSWORD, GENERIC-ALL, GPO-ABUSE
+- **AD CS (certificate abuse)** — ADCS-ESC1, ESC8, ESC11, CERTIFRIED
+- **Coercion & relay** — COERCION, NTLM-RELAY
+- **Replication** — DCSYNC
+- **Kerberos ticket forging** — GOLDEN-TICKET, SILVER-TICKET, DIAMOND-TICKET,
+  SAPPHIRE-TICKET
+- **Shares** — OPENSHARES-WRITE (writable-share canary) and **SHARE-LOOT**, the first
+  joint Windows/Linux module: read-only **SMB + NFS** share discovery, bounded crawl,
+  and secrets-first loot search. NFS discovery unions four independent methods
+  (programmatic export, `showmount`, `nmap`, `rpcinfo`) so one wrong source can't hide
+  an export; findings are presence + opaque location IDs only, with recovered values
+  held in the operator's out-of-band store.
+
+Techniques run individually, as part of the findings-driven pipeline, or composed
+into a capability chain toward a goal state. **See the
+[Validation Ops Manual](docs/guides/VALIDATION-OPS-MANUAL.md)** for the exact commands,
+parameters, and per-technique how-to.
+
+---
 # Web Interface
 ### Target Dashboard
 
@@ -294,6 +330,7 @@ httpx
 
 ### Guides
 - **[Quick Start](QUICKSTART.md)** - Get started in 5 minutes
+- **[Validation Ops Manual](docs/guides/VALIDATION-OPS-MANUAL.md)** - How-to for every AD validation technique
 - **[Contributing](docs/CONTRIBUTING.md)** - Add your own modules
 - **[Changelog](CHANGELOG.md)** - Version history
 - **[Disclaimer](docs/DISCLAIMER.md)** - Legal and authorized use
