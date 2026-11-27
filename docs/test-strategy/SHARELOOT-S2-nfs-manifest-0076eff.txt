@@ -1,5 +1,6 @@
-# SHARE-LOOT S2 (NFS) test manifest — base SHA 0076eff; full validation suite 432→452 (20 new).
+# SHARE-LOOT S2 (NFS) test manifest — base SHA 0076eff; full validation suite 432→458 (26 new).
 # Live-proven DETECTION via real executor against nfs-kernel-server /export (27NOV2026).
+# Codex Sol r1: 5 HIGH confirmed + fixed (each RED-provable).
 test_nfs_reader.py::test_nfs_reader_lists_and_reads
 test_nfs_reader.py::test_readdirplus_linked_list_all_entries
 test_nfs_reader.py::test_readdirplus_paging_cookie_eof
@@ -8,6 +9,10 @@ test_nfs_reader.py::test_read_file_resolves_via_lookup_when_uncached
 test_nfs_reader.py::test_list_dir_per_dir_cap_overflow_detectable
 test_nfs_reader.py::test_read_file_bounded_max_bytes
 test_nfs_reader.py::test_nfs_reader_exposes_no_write_verbs
+test_nfs_reader.py::test_denied_readdirplus_raises_not_empty_success
+test_nfs_reader.py::test_denied_root_marks_share_denied_via_executor
+test_nfs_reader.py::test_pagination_stops_on_stationary_cookie
+test_nfs_reader.py::test_pagination_backstop_on_advancing_cookie
 test_nfs_reader.py::test_read_only_only_read_methods_called_via_executor
 test_nfs_reader.py::test_utf16_password_detected_through_nfs_reader
 test_nfs_reader.py::test_gpp_nonascii_principal_extracted_through_nfs
@@ -17,6 +22,8 @@ test_nfs_reader.py::test_discovery_recovers_export_showmount_misses
 test_nfs_reader.py::test_discovery_degrades_when_cli_tools_absent
 test_nfs_reader.py::test_rpcinfo_liveness_flag
 test_nfs_reader.py::test_parse_helpers
+test_nfs_reader.py::test_root_export_not_dropped
+test_nfs_reader.py::test_timeout_marks_method_not_ran
 test_nfs_reader.py::test_executor_protocol_nfs_end_to_end
 test_nfs_reader.py::test_config_rejects_unknown_protocol
 test_nfs_reader.py::test_default_protocol_is_smb

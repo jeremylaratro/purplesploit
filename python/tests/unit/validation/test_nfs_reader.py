@@ -63,10 +63,12 @@ class _FakeNfs:
     program = 100005          # Mount.program stand-ins for the factory (unused in tests)
     program_version = 3
 
-    def __init__(self, roots: dict[str, _Node], *, exports=None, page_size: int | None = None):
+    def __init__(self, roots: dict[str, _Node], *, exports=None, page_size: int | None = None,
+                 deny_readdir: set | None = None):
         self.roots = roots
         self.exports = list(exports) if exports is not None else list(roots.keys())
         self.page_size = page_size
+        self.deny_readdir = {d.encode() if isinstance(d, str) else d for d in (deny_readdir or set())}
         self.calls: list[tuple] = []
         self._by_fh: dict[bytes, _Node] = {}
         for root in roots.values():
@@ -95,6 +97,8 @@ class _FakeNfs:
     # -- NFSv3 --
     def readdirplus(self, dir_handle, cookie=0, cookie_verf=0, dircount=4096, auth=None):
         self.calls.append(("readdirplus", dir_handle, int(cookie)))
+        if dir_handle in self.deny_readdir:
+            return {"status": 13}                         # NFS3ERR_ACCES (permission denied)
         node = self._by_fh.get(dir_handle)
         if node is None or not node.is_dir:
             return {"resok": {"cookieverf": cookie_verf, "reply": {"entries": None, "eof": True}}}
@@ -238,6 +242,67 @@ def test_nfs_reader_exposes_no_write_verbs():
         assert not hasattr(_NfsReader, m)
 
 
+# ----------------------------------------------- review r1 fixes (adversarial server)
+def test_denied_readdirplus_raises_not_empty_success():
+    # review HIGH: a readdirplus permission denial (status 13) must RAISE (so the crawler
+    # records denied), NEVER return [] (which would read as a successful empty listing).
+    roots = {"/e": _dir("r", {"f": _file("f1", b"x")})}
+    fake = _FakeNfs(roots, deny_readdir={"r"})
+    rdr = _NfsReader(fake, fake, fake)
+    with pytest.raises(OSError):
+        rdr.list_dir("/e", "", 1000)
+
+
+def test_denied_root_marks_share_denied_via_executor(tmp_path):
+    roots = {"/export": _dir("r", {"f": _file("f1", b"x")})}
+    fake = _FakeNfs(roots, deny_readdir={"r"})               # root export unreadable
+    reader = _NfsReader(fake, fake, fake)
+    runner = _FakeRunner({"showmount": _showmount("Export list for h:\n/export *\n")})
+    res = get_executor("SHARE-LOOT").run(_nctx(_cfg(), tmp_path, reader, runner), _finding())
+    tf = res["terminal_fact"]
+    assert tf["ok"] is False                                 # no directory was actually listed
+    assert tf["coverage"]["shares_denied"] == 1 and tf["coverage"]["complete"] is False
+
+
+class _LoopNfs:
+    """Minimal backend that NEVER reaches eof -- models a hostile endless directory."""
+    def __init__(self, advancing: bool):
+        self.advancing, self.n = advancing, 0
+
+    def mnt(self, export, auth):
+        return {"mountinfo": {"status": 0, "fhandle": b"r"}}
+
+    def readdirplus(self, fh, cookie=0, verf=0, dircount=4096, auth=None):
+        self.n += 1
+        c = self.n if self.advancing else 0                  # advancing vs stationary cursor
+        en = {"name": b".", "cookie": c,
+              "name_attributes": {"attributes": {"type": 2, "size": 0}},
+              "name_handle": {"handle": {"data": b"r"}}, "nextentry": None}
+        return {"resok": {"cookieverf": 0, "reply": {"entries": [en], "eof": False}}}
+
+    def disconnect(self):
+        pass
+
+
+def test_pagination_stops_on_stationary_cookie():
+    # review HIGH (infinite pagination): a server streaming only '.' with a non-advancing
+    # cookie and eof=False must NOT loop forever -- the cursor-no-progress guard stops it.
+    fake = _LoopNfs(advancing=False)
+    rdr = _NfsReader(fake, fake, fake)
+    assert rdr.list_dir("/e", "", 1000) == []               # terminates, no real entries
+    assert fake.n == 1                                       # stopped after the first page
+
+
+def test_pagination_backstop_on_advancing_cookie(monkeypatch):
+    # the advancing-cursor variant can't be caught by the no-progress guard; the hard
+    # page backstop bounds it to a finite number of round-trips.
+    monkeypatch.setattr(nfs_reader, "_MAX_READDIR_PAGES", 5)
+    fake = _LoopNfs(advancing=True)
+    rdr = _NfsReader(fake, fake, fake)
+    assert rdr.list_dir("/e", "", 1000) == []
+    assert fake.n == 5                                       # bounded by _MAX_READDIR_PAGES
+
+
 # ========================================================= read-only via the executor
 def _cfg(**kw):
     base = dict(domain="north.sevenkingdoms.local", dc_ip="10.0.0.11",
@@ -333,8 +398,7 @@ def test_nfs_discover_unions_all_methods():
     exports, methods = nfs_discover(runner, rdr, HOST, 30)
     assert set(exports) == {"/export", "/home", "/srv/data"}      # UNION across 3 sources
     ran = {m["method"] for m in methods if m["ran"]}
-    assert {"mount.export", "showmount", "nmap.nfs-showmount", "rpcinfo"} <= ran | {
-        m["method"] for m in methods}
+    assert {"mount.export", "showmount", "nmap.nfs-showmount", "rpcinfo"} <= ran   # all 4 truly ran
 
 
 def test_discovery_recovers_export_showmount_misses():
@@ -377,6 +441,32 @@ def test_parse_helpers():
     assert _parse_nmap_showmount("| nfs-showmount:\n|_  /export *\n|   /home *\n") == ["/export", "/home"]
     assert _rpcinfo_shows_nfs("100003 3 tcp 2049 nfs") is True
     assert _rpcinfo_shows_nfs("111 portmapper") is False
+
+
+def test_root_export_not_dropped():
+    # review HIGH: the bare root export "/" must survive both parsers and the union.
+    assert _parse_showmount("Export list for h:\n/ *\n") == ["/"]
+    assert _parse_nmap_showmount("| nfs-showmount:\n|_  / *\n") == ["/"]
+    rdr, _ = _reader({}, exports=[])
+    runner = _FakeRunner({"nmap": _showmount("| nfs-showmount:\n|_  / *\n")})
+    exports, _ = nfs_discover(runner, rdr, HOST, 30)
+    assert exports == ["/"]                                   # the whole-root export is discovered
+
+
+def test_timeout_marks_method_not_ran():
+    # review HIGH: a CLI timeout / a Mount.export RPC failure is INCONCLUSIVE (ran=False),
+    # never a successful run that "found nothing".
+    class _Boom(_NfsReader):
+        def list_shares(self):
+            raise TimeoutError("export rpc timed out")
+    rdr = _Boom(_FakeNfs({}), _FakeNfs({}), _FakeNfs({}))
+    runner = _FakeRunner({
+        "showmount": lambda a: RunResult(returncode=None, timed_out=True, error="timeout"),
+    })
+    _, methods = nfs_discover(runner, rdr, HOST, 30)
+    by = {m["method"]: m for m in methods}
+    assert by["mount.export"]["ran"] is False                # RPC failure, not empty success
+    assert by["showmount"]["ran"] is False and by["showmount"].get("note") == "timeout"
 
 
 # ================================================================ executor integration

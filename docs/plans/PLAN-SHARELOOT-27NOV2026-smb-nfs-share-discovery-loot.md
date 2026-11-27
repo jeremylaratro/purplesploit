@@ -250,9 +250,27 @@ directive, the proof stops at DETECTION (no downstream auth demo). 452/452 valid
 (432 baseline `0076eff` + 20); multi-method "showmount-miss recovery" + read-only invariant gates
 mutation-proven RED.
 
+## S2 diff review (Codex Sol r1, 27NOV2026 — FIX-FIRST, 5 HIGH, all confirmed + fixed)
+Independent diff review (pattern B: Claude impl → Codex reviews). All 5 HIGH confirmed real and fixed,
+each with a RED-provable test + live re-proof (no regression, 432→458):
+1. **Infinite pagination** — a server streaming only `.`/non-advancing cookie/`eof=False` looped forever
+   in `list_dir`. Fix: cursor-no-progress guard (`cookie == start_cookie` → stop) + a hard
+   `_MAX_READDIR_PAGES` backstop for the advancing-cursor variant.
+2. **Denied → false success** — `readdirplus status 13` returned `[]` (read as a successful empty
+   listing → `ok`/`complete` True). Fix: `list_dir` RAISES on non-zero status / missing `resok`, so the
+   crawler's existing denied/partial handling fires (matches the SMB reader, which raises).
+3. **Root export `/` dropped** — `_NMAP_EXPORT` required `/\S+` so a bare `/` export never matched. Fix:
+   `/\S*`; `_parse_showmount` already handled `/`.
+4. **Timeout counted as a successful run** — a CLI timeout and a swallowed `Mount.export()` RPC failure
+   were both recorded `ran=True, found=0`. Fix: `list_shares` propagates the RPC error; `_method_unavailable`
+   maps timeout/absent → `ran=False` with a note.
+5. **Vacuous test** — the method-execution assertion `ran | {all names}` collapsed to all names. Fix:
+   assert `{4 methods} <= ran`.
+
 ## Status
 S1 (SMB discover+crawl) merged; S3 (loot engine) + S4 (dual-mode creds) built + live-proven; **S2 (NFS
-transport + multi-method discovery) built + live-proven on this branch.** The first joint Windows/Linux
+transport + multi-method discovery) built + review-hardened (Codex r1, 5 HIGH fixed) + live-proven on
+this branch.** The first joint Windows/Linux
 module is feature-complete for SMB + NFS. Remaining: S1b (mount mode, openat2 descriptor-anchored
 containment); optional `share_protocol='auto'` per-host probing. The owner's "don't rely only on
 showmount" and "detection only" directives are both satisfied by S2.
