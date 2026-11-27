@@ -121,6 +121,58 @@ def test_probe_error_reason_carries_no_secret(tmp_path):
     assert "SuperSecret123" not in res.reason and "RuntimeError" in res.reason   # type only
 
 
+def test_smart_gate_skips_prereq_absent_without_probing(tmp_path, monkeypatch):
+    # conditional gating: an account with NO delegation / NO SPN / no CA / no forge key
+    # must SKIP those technique groups WITHOUT running their (expensive) probes.
+    from purplesploit.validation.discovery import _Recon
+    monkeypatch.setattr(discovery, "recon", lambda ctx: _Recon(
+        has_delegation=False, has_spn=False, is_computer=False, has_ca=False, has_forge_key=False))
+    probed = []
+    def fake(ctx, findings, max_workers=8):
+        probed.extend(f.technique for f in findings)
+        return [ProbeResult(viable=True, unknown=True, reason="?") for _ in findings]
+    monkeypatch.setattr(discovery.probes_mod, "run_probes", fake)
+    v = {x.technique: x for x in discovery.build_verdicts(_ctx(_cfg(tmp_path), tmp_path), ["winterfell"])}
+    for t in ("CONSTRAINED-DELEG-PT", "BRONZE-BIT", "S4U2SELF", "ESC8", "CERTIFRIED",
+              "GOLDEN-TICKET", "SHADOW-CREDS"):
+        assert t not in probed                                     # gated out -> never probed
+        assert v[t].viable is False and "prerequisite_absent" in v[t].evidence   # explained skip
+    assert "KERBEROAST" in probed                                  # no shared prereq -> still probed
+    assert len(v) == len(IMPLEMENTED)                              # all still reported
+
+
+def test_smart_gate_fail_safe_on_unreadable_prereq(tmp_path, monkeypatch):
+    # an UNREADABLE prerequisite (None) must NOT skip -- fall through to the probe (fail-safe).
+    from purplesploit.validation.discovery import _Recon
+    monkeypatch.setattr(discovery, "recon", lambda ctx: _Recon(
+        has_delegation=None, has_spn=None, is_computer=False, has_ca=None, has_forge_key=False))
+    probed = []
+    def fake(ctx, findings, max_workers=8):
+        probed.extend(f.technique for f in findings)
+        return [ProbeResult(viable=True, reason="ok") for _ in findings]
+    monkeypatch.setattr(discovery.probes_mod, "run_probes", fake)
+    discovery.build_verdicts(_ctx(_cfg(tmp_path), tmp_path), ["winterfell"])
+    assert "CONSTRAINED-DELEG-PT" in probed and "ESC8" in probed   # unknown prereq -> probed, not skipped
+
+
+def test_recon_reads_delegation_and_ca(tmp_path):
+    class _R(CommandRunner):
+        def run(self, argv, *, env=None, timeout=None, cwd=None):
+            tool = Path(argv[0]).name
+            if tool == "nxc":
+                return RunResult(returncode=0, stdout=(
+                    "LDAP dc 389 WINTERFELL [+] Response for object: CN=jon.snow\n"
+                    "LDAP dc 389 WINTERFELL sAMAccountName       jon.snow\n"
+                    "LDAP dc 389 WINTERFELL msDS-AllowedToDelegateTo CIFS/winterfell\n"))
+            if tool == "certipy-ad":
+                return RunResult(returncode=0, stdout="Certificate Authorities\n  0\n    CA Name : north-CA\n")
+            return RunResult(returncode=0, stdout="")
+    ctx = ExecutorContext(_cfg(tmp_path), runner=_R(), authorizer=AuthorizedLabProvider(True),
+                          output_dir=tmp_path)
+    r = discovery.recon(ctx)
+    assert r.has_delegation is True and r.has_ca is True and r.has_spn is False
+
+
 def test_probe_parse_handles_real_nxc_whitespace_format():
     # Carrier-validation fix: real `nxc ldap --query` is WHITESPACE-separated with a
     # "Response for object" marker (not colon-delimited). The parse must read it -- the

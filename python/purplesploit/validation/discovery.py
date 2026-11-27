@@ -23,6 +23,8 @@ from .findings import NormalizedFinding
 from .executors import IMPLEMENTED, get_executor, is_implemented
 from .executors.base import ExecutorContext
 from . import probes as probes_mod
+from .probes import (_ldap_query, _certipy_find, _extract_attr, _account_read_ok,
+                     _text, _tool_errored, _RE_CA_PRESENT)
 
 # A viability probe is a cheap read; bound its per-op time so one slow/hanging read
 # cannot stall a whole-fleet discovery scan (the default tool timeout is minutes).
@@ -110,31 +112,115 @@ def _probe_ctx(ctx, probe_timeout: int):
     return pctx
 
 
+@dataclass
+class _Recon:
+    """Cheap SHARED facts read ONCE, used to gate whole groups of techniques before
+    their (often expensive) per-technique probes run. Each is True/False/None -- None
+    means the fact could not be read, so it NEVER gates (fail-safe: run the probe)."""
+    has_delegation: Optional[bool]    # the operator account holds msDS-AllowedToDelegateTo
+    has_spn: Optional[bool]           # the operator account has a servicePrincipalName
+    is_computer: bool                 # the operator account is a computer account (name ends '$')
+    has_ca: Optional[bool]            # an ADCS Certificate Authority is reachable
+    has_forge_key: bool               # a forging signing key is configured (--forge-key-file)
+
+    def to_dict(self):
+        return {"has_delegation": self.has_delegation, "has_spn": self.has_spn,
+                "is_computer": self.is_computer, "has_ca": self.has_ca,
+                "has_forge_key": self.has_forge_key}
+
+
+def _nonempty(v: Optional[str]) -> bool:
+    return bool(v and v.strip().lower() not in ("", "(not set)", "<not set>", "none", "-", "n/a"))
+
+
+def recon(ctx) -> _Recon:
+    """Read the shared prerequisites ONCE (the operator account's delegation/SPN, whether
+    an ADCS CA exists, whether a forge key is supplied) so discovery can skip groups of
+    techniques whose prerequisite is definitively absent -- cheaper than, and the gate
+    for, the per-technique probes."""
+    cfg = ctx.config
+    user = cfg.username or ""
+    is_computer = user.endswith("$")
+    has_del = has_spn = None
+    try:
+        res = _ldap_query(ctx, f"(sAMAccountName={user})",
+                          ["sAMAccountName", "msDS-AllowedToDelegateTo", "servicePrincipalName"])
+        text = _text(res)
+        if _account_read_ok(res, text):
+            has_del = _nonempty(_extract_attr(text, "msDS-AllowedToDelegateTo"))
+            has_spn = _nonempty(_extract_attr(text, "servicePrincipalName"))
+    except Exception:
+        pass
+    has_ca = None
+    try:
+        res = _certipy_find(ctx)
+        text = _text(res)
+        if text.strip() and not _tool_errored(res):
+            has_ca = bool(_RE_CA_PRESENT.search(text))
+    except Exception:
+        pass
+    return _Recon(has_delegation=has_del, has_spn=has_spn, is_computer=is_computer,
+                  has_ca=has_ca, has_forge_key=bool(getattr(cfg, "forge_key", None)))
+
+
+def _prereq_gate(technique: str, r: _Recon) -> tuple[Optional[bool], str]:
+    """``(met, what)``: ``met is False`` -> the prerequisite is DEFINITIVELY absent, so
+    skip the probe (mark not-viable). ``True``/``None`` -> run the probe (met or unknown)."""
+    if technique in ("CONSTRAINED-DELEG-PT", "BRONZE-BIT"):
+        return r.has_delegation, "msDS-AllowedToDelegateTo on the operator account"
+    if technique == "S4U2SELF":
+        return (True, "") if r.is_computer else (r.has_spn, "a servicePrincipalName / computer account")
+    if technique in ("ADCS-ESC1", "ESC8", "ESC11", "CERTIFRIED", "SHADOW-CREDS"):
+        return r.has_ca, "an ADCS Certificate Authority"
+    if technique in ("GOLDEN-TICKET", "DIAMOND-TICKET", "SAPPHIRE-TICKET", "SILVER-TICKET"):
+        return (r.has_forge_key if r.has_forge_key else False), "a forging signing key (--forge-key-file)"
+    return None, ""                                           # no shared prerequisite -> run the probe
+
+
+def _make_verdict(ctx, finding, viable, unknown, reason, evidence, allow) -> TechniqueVerdict:
+    ex = get_executor(finding.technique)
+    missing = _missing_required(ctx, ex, finding)
+    return TechniqueVerdict(
+        technique=finding.technique, technique_class=finding.technique_class, host=finding.host,
+        viable=viable, unknown=unknown, reason=reason, evidence=evidence,
+        implemented=is_implemented(finding.technique), verified_recipe=ex.verified_recipe,
+        mutating=ex.mutating, destructive=getattr(ex, "destructive", False),
+        missing_params=missing,
+        eligible_for_autoexploit=_eligible(ex, viable, unknown, missing, allow))
+
+
 def build_verdicts(ctx, hosts, allow_destructive: bool = False,
                    probe_timeout: int = _PROBE_TIMEOUT_CAP) -> list[TechniqueVerdict]:
-    """Probe every technique over the scope (READ-ONLY) and classify each. Runs the probes
-    directly (NOT through orchestrator.plan, which drops incomplete findings -- review #3),
-    so every technique appears in the report even when its target selector is missing.
-    Probes run under a capped timeout so one slow read can't stall the scan."""
+    """SMART discovery: read the shared prerequisites ONCE, then for each technique either
+    SKIP it (its prerequisite is definitively absent -> a fast, explained not-viable) or run
+    its per-technique probe. Every technique still appears in the report (review #3); probes
+    run under a capped timeout. A definitively-absent prerequisite is the only thing that
+    skips a probe -- an unreadable prerequisite falls through to the probe (fail-safe)."""
     allow = bool(getattr(ctx.config, "allow_destructive", False) or allow_destructive)
+    pctx = _probe_ctx(ctx, probe_timeout)
+    r = recon(pctx)                                          # shared, once
     cands = candidate_findings(ctx.config, hosts)
-    results = probes_mod.run_probes(_probe_ctx(ctx, probe_timeout), cands)
-    verdicts: list[TechniqueVerdict] = []
-    for finding, pr in zip(cands, results):
-        ex = get_executor(finding.technique)
-        missing = _missing_required(ctx, ex, finding)
-        viable = pr.viable if pr is not None else True
-        unknown = pr.unknown if pr is not None else True     # no probe -> unknown (never auto-fire)
-        reason = pr.reason if pr is not None else "no probe registered"
-        evidence = pr.evidence if pr is not None else {}
-        verdicts.append(TechniqueVerdict(
-            technique=finding.technique, technique_class=finding.technique_class, host=finding.host,
-            viable=viable, unknown=unknown, reason=reason, evidence=evidence,
-            implemented=is_implemented(finding.technique), verified_recipe=ex.verified_recipe,
-            mutating=ex.mutating, destructive=getattr(ex, "destructive", False),
-            missing_params=missing,
-            eligible_for_autoexploit=_eligible(ex, viable, unknown, missing, allow)))
-    return verdicts
+    verdicts: list[Optional[TechniqueVerdict]] = [None] * len(cands)
+    to_probe: list[int] = []
+    for i, finding in enumerate(cands):
+        met, what = _prereq_gate(finding.technique, r)
+        if met is False:                                    # prerequisite DEFINITIVELY absent -> skip
+            verdicts[i] = _make_verdict(
+                ctx, finding, viable=False, unknown=False,
+                reason=f"prerequisite absent ({what}) -- skipped before probing",
+                evidence={"prerequisite_absent": what}, allow=allow)
+        else:
+            to_probe.append(i)
+    results = probes_mod.run_probes(pctx, [cands[i] for i in to_probe])
+    for j, i in enumerate(to_probe):
+        pr = results[j]
+        verdicts[i] = _make_verdict(
+            ctx, cands[i],
+            viable=(pr.viable if pr is not None else True),
+            unknown=(pr.unknown if pr is not None else True),     # no probe -> unknown (never auto-fire)
+            reason=(pr.reason if pr is not None else "no probe registered"),
+            evidence=(pr.evidence if pr is not None else {}), allow=allow)
+    return [v for v in verdicts if v is not None]
 
 
 def summarize(verdicts: list[TechniqueVerdict]) -> dict[str, Any]:
@@ -144,6 +230,8 @@ def summarize(verdicts: list[TechniqueVerdict]) -> dict[str, Any]:
         "viable": sum(1 for v in verdicts if v.viable and not v.unknown),
         "not_viable": sum(1 for v in verdicts if not v.viable and not v.unknown),
         "unknown": sum(1 for v in verdicts if v.unknown),
+        "skipped_prereq": sorted({v.technique for v in verdicts
+                                  if "prerequisite_absent" in (v.evidence or {})}),
         "eligible_for_autoexploit": sum(1 for v in verdicts if v.eligible_for_autoexploit),
         "need_target": sorted({v.technique for v in verdicts if v.missing_params and v.viable}),
         "need_allow_destructive": sorted({v.technique for v in verdicts
