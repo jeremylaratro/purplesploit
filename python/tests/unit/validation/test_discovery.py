@@ -190,8 +190,37 @@ def test_recon_ca_errored_is_unknown_not_absent(tmp_path):
 
     assert _recon(_runner("[-] Got error: LDAP connection failed", certipy_rc=1)).has_ca is None
     assert _recon(_runner("")).has_ca is None                               # empty -> unknown
-    assert _recon(_runner("[*] Finding certificate...\nFound 0 certificate authorities")).has_ca is False
+    # certipy logs TEMPLATE counts separately -- "0 certificate templates" must NOT mean "no CA"
+    assert _recon(_runner("[*] Found 0 certificate templates")).has_ca is None
+    assert _recon(_runner("[*] Found 0 certificate authorities")).has_ca is False   # explicit CA absence
     assert _recon(_runner("Certificate Authorities\n  0\n    CA Name : north-CA")).has_ca is True
+
+
+def test_recon_delegation_requires_genuine_read(tmp_path):
+    # an error response that merely ECHOES the sAMAccountName filter must NOT be read as a
+    # genuine account read (which would infer has_delegation=False and skip delegation).
+    def _runner(nxc_out, nxc_rc=0):
+        class _R(CommandRunner):
+            def run(self, argv, *, env=None, timeout=None, cwd=None):
+                if Path(argv[0]).name == "nxc":
+                    return RunResult(returncode=nxc_rc, stdout=nxc_out)
+                return RunResult(returncode=0, stdout="")
+        return _R()
+
+    def _recon(runner):
+        return discovery.recon(ExecutorContext(_cfg(tmp_path), runner=runner,
+                               authorizer=AuthorizedLabProvider(True), output_dir=tmp_path))
+
+    # error echoing the filter, NO "Response for object" marker -> unknown, not absent
+    echo = "LDAP dc 389 WINTERFELL [-] Error running query (sAMAccountName=jon.snow): timeout"
+    assert _recon(_runner(echo, nxc_rc=1)).has_delegation is None
+    # a genuine clean read with the delegation attr -> True
+    good = ("LDAP dc 389 WINTERFELL [+] Response for object: CN=jon.snow\n"
+            "LDAP dc 389 WINTERFELL msDS-AllowedToDelegateTo CIFS/winterfell\n")
+    assert _recon(_runner(good)).has_delegation is True
+    # a genuine clean read WITHOUT the attr -> confirmed absent (False)
+    empty = "LDAP dc 389 WINTERFELL [+] Response for object: CN=jon.snow\nLDAP dc 389 WINTERFELL sAMAccountName jon.snow\n"
+    assert _recon(_runner(empty)).has_delegation is False
 
 
 def test_probe_parse_handles_real_nxc_whitespace_format():

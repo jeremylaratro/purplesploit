@@ -24,7 +24,12 @@ from typing import Any, Optional
 # (a bare "Certificate Authorities" header prints even with 0 CAs); CONFIRMED absent only
 # on an explicit 0/none marker from a clean run; anything else (error/inconclusive) -> None.
 _CA_PRESENT = re.compile(r"(CA Name\s*:|DNS Name\s*:|Web Enrollment)", re.I)
-_CA_ABSENT = re.compile(r"(found 0\b|0 (enabled )?certificate authorit|no certificate authorit)", re.I)
+# Absence must name AUTHORITIES specifically -- certipy logs template counts separately,
+# so a generic "found 0" (e.g. "0 certificate templates") must NOT read as "no CA".
+_CA_ABSENT = re.compile(r"(0 (enabled )?certificate authorit|no certificate authorit|no (enabled )?CAs?\b)", re.I)
+# The nxc ldap --query genuine-result marker: an error that merely echoes the query's
+# sAMAccountName must NOT be mistaken for a real account read.
+_LDAP_RESULT = re.compile(r"Response for object", re.I)
 _CERTIPY_ERR = re.compile(
     r"(got error|traceback|could not|connection (failed|refused|timed out)|\[-\]|exception|denied)", re.I)
 
@@ -155,7 +160,12 @@ def recon(ctx) -> _Recon:
         res = _ldap_query(ctx, f"(sAMAccountName={user})",
                           ["sAMAccountName", "msDS-AllowedToDelegateTo", "servicePrincipalName"])
         text = _text(res)
-        if _account_read_ok(res, text):
+        rc = getattr(res, "returncode", None)
+        # Infer absence ONLY from a GENUINE, clean account read -- not from an error that
+        # happens to echo the sAMAccountName filter (which would pass _account_read_ok).
+        genuine = (_account_read_ok(res, text) and rc in (0, None)
+                   and not _tool_errored(res) and bool(_LDAP_RESULT.search(text)))
+        if genuine:
             has_del = _nonempty(_extract_attr(text, "msDS-AllowedToDelegateTo"))
             has_spn = _nonempty(_extract_attr(text, "servicePrincipalName"))
     except Exception:
