@@ -36,9 +36,142 @@ def gc_qualify(cfg, sam: str) -> str:
     """NetBIOS-qualify a possibly GC-ambiguous account name → ``<NETBIOS>/<sam>``
     (the generalization of DCSYNC's ``krbtgt`` qualification that avoids
     ``ERROR_DS_NAME_ERROR_NOT_UNIQUE`` in a multi-domain forest). Falls back to the
-    bare name only when no NetBIOS name can be derived."""
+    bare name only when no NetBIOS name can be derived. Uses whatever
+    :func:`netbios` returns -- i.e. the operator override, a value cached by
+    :func:`ensure_netbios`, or the heuristic."""
     nb = netbios(cfg)
     return f"{nb}/{sam}" if nb else sam
+
+
+# ---------------------------------------------------- active NetBIOS resolution
+# The heuristic above (FQDN first label) is a GUESS -- the NetBIOS short name can
+# differ from the first DNS label. These methods ACTIVELY determine it from the DC.
+# Layering (owner request 27NOV2026): ONE main method, retried up to `attempts`
+# (default 3) times; then one-or-two BACKUP methods, each tried once; then the
+# deterministic heuristic as the final fallback. All verified live on GOAD.
+_NB_CHARS = re.compile(r"^[A-Za-z0-9._-]{1,15}$")        # a plausible NetBIOS short name
+_NB_NOISE = frozenset({"NAME", "SID", "DOMAIN", "SERVER", "POLICY", "NONE"})
+_RE_LSAQUERY = re.compile(r"^\s*Domain Name:\s*(\S+)\s*$", re.I | re.M)     # rpcclient lsaquery
+_RE_QUERYDOMINFO = re.compile(r"^\s*Domain:\s*(\S+)\s*$", re.I | re.M)      # rpcclient querydominfo
+_RE_LOOKUPSID_PFX = re.compile(r"([A-Za-z0-9._-]{1,15})\\[^\s\\]+\s+\(Sid", re.M)  # lookupsid "<rid>: NETBIOS\acct (Sid...)"
+
+
+def _nb_valid(name: Optional[str]) -> bool:
+    return bool(name) and bool(_NB_CHARS.match(name)) and name.strip().upper() not in _NB_NOISE
+
+
+def _text(res) -> str:
+    return (getattr(res, "stdout", "") or "") + "\n" + (getattr(res, "stderr", "") or "")
+
+
+def _rpc_user(cfg):
+    """``(user_value, extra_flags)`` for ``rpcclient -U`` from cfg, or ``None`` when
+    there is no usable password/NT-hash credential (Kerberos-only → fall back)."""
+    user = getattr(cfg, "username", None)
+    if not user:
+        return None
+    if getattr(cfg, "nt_hash", None):
+        nt = cfg.nt_hash.split(":")[-1]                 # 'LM:NT' / ':NT' / bare → NT
+        return f"{user}%{nt}", ["--pw-nt-hash"]
+    if getattr(cfg, "password", None) is not None:
+        return f"{user}%{cfg.password}", []
+    return None
+
+
+def _lookupsid_target(cfg) -> Optional[tuple]:
+    """``(target, extra_flags)`` for impacket-lookupsid, or ``None`` (Kerberos-only)."""
+    user = getattr(cfg, "username", None)
+    if not user:
+        return None
+    dom = getattr(cfg, "domain", "") or ""
+    if getattr(cfg, "nt_hash", None):
+        return f"{dom}/{user}@{cfg.dc_ip}", ["-hashes", cfg.nt_hash]
+    if getattr(cfg, "password", None) is not None:
+        return f"{dom}/{user}:{cfg.password}@{cfg.dc_ip}", []
+    return None
+
+
+def _nb_from_lsaquery(cfg, runner, timeout):
+    u = _rpc_user(cfg)
+    if u is None:
+        return None
+    user_val, extra = u
+    argv = ["rpcclient", "-U", user_val, *extra, cfg.dc_ip, "-c", "lsaquery"]
+    m = _RE_LSAQUERY.search(_text(runner.run(argv, timeout=timeout)))
+    return m.group(1) if m else None
+
+
+def _nb_from_querydominfo(cfg, runner, timeout):
+    u = _rpc_user(cfg)
+    if u is None:
+        return None
+    user_val, extra = u
+    argv = ["rpcclient", "-U", user_val, *extra, cfg.dc_ip, "-c", "querydominfo"]
+    m = _RE_QUERYDOMINFO.search(_text(runner.run(argv, timeout=timeout)))
+    return m.group(1) if m else None
+
+
+def _nb_from_lookupsid(cfg, runner, timeout):
+    t = _lookupsid_target(cfg)
+    if t is None:
+        return None
+    target, extra = t
+    argv = ["impacket-lookupsid", target, *extra, "1200"]
+    m = _RE_LOOKUPSID_PFX.search(_text(runner.run(argv, timeout=timeout)))
+    return m.group(1) if m else None
+
+
+def _try(fn, cfg, runner, timeout) -> Optional[str]:
+    try:
+        name = fn(cfg, runner, timeout)
+    except Exception:
+        return None
+    return name.strip().upper() if (name and _nb_valid(name)) else None
+
+
+def resolve_netbios(cfg, runner, *, attempts: int = 3, timeout=None):
+    """Actively resolve the domain's NetBIOS short name from the DC.
+
+    MAIN (``rpcclient lsaquery``) is retried up to ``attempts`` (default 3) times;
+    if every attempt fails, the BACKUP methods (``rpcclient querydominfo`` then
+    ``impacket-lookupsid``) are each tried once; if all fail, the deterministic
+    heuristic (:func:`netbios` — operator override or FQDN first label) is used.
+    An explicit ``cfg.netbios_domain`` override short-circuits (never queries).
+
+    Returns ``(netbios_name, method, trail)`` where ``trail`` is a list of
+    ``(method, attempt, ok)`` for provenance. PUBLIC data only (a short domain
+    name); the credentialed argv is masked by ``redact_argv`` when recorded.
+    """
+    trail: list = []
+    if getattr(cfg, "netbios_domain", None):
+        return netbios(cfg), "override", trail
+    timeout = timeout or getattr(cfg, "tool_timeout_s", 60)
+    for i in range(max(1, int(attempts))):
+        name = _try(_nb_from_lsaquery, cfg, runner, timeout)
+        trail.append(("lsaquery", i + 1, bool(name)))
+        if name:
+            return name, f"lsaquery(attempt {i + 1})", trail
+    for fn, label in ((_nb_from_querydominfo, "querydominfo"), (_nb_from_lookupsid, "lookupsid")):
+        name = _try(fn, cfg, runner, timeout)
+        trail.append((label, 1, bool(name)))
+        if name:
+            return name, label, trail
+    return netbios(cfg), "heuristic", trail
+
+
+def ensure_netbios(cfg, runner, **kw):
+    """Resolve the NetBIOS name and CACHE it onto ``cfg.netbios_domain`` so later
+    :func:`netbios`/:func:`gc_qualify` calls use the authoritative value. Only a
+    value from a NETWORK method is cached — a heuristic fallback is NOT cached, so
+    a transient failure never permanently pins the guess. Returns
+    ``(name, method, trail)``; an explicit override is respected (no query)."""
+    name, method, trail = resolve_netbios(cfg, runner, **kw)
+    if method not in ("heuristic", "override") and not getattr(cfg, "netbios_domain", None):
+        try:
+            cfg.netbios_domain = name
+        except Exception:
+            pass
+    return name, method, trail
 
 
 # ---------------------------------------------------------- Kerberos discovery

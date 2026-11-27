@@ -212,6 +212,15 @@ class DCSyncExecutor(ValidationExecutor):
             gate["classifier"] = "approved"
             gate["op"] = "dcsync"
 
+        # Resolve the REAL NetBIOS domain name (rpcclient lsaquery main, retried;
+        # querydominfo/lookupsid backups; heuristic fallback) so the krbtgt
+        # GC-qualification below uses the authoritative name instead of the
+        # FQDN-first-label guess (which can differ, breaking multi-domain DRSUAPI).
+        # Best-effort + public: the credentialed probe argv is NOT recorded; only
+        # the resolved short name + method (public) are noted.
+        nb, nb_method, _ = netresolve.ensure_netbios(cfg, ctx.runner)
+        record("resolve_netbios", [], None, True, note=f"NetBIOS={nb} via {nb_method}")
+
         # DCSync: presence-only -- test whether the krbtgt replicated, never store it.
         # Composed: thread the front's credential (input_caps) + its KRB5CCNAME
         # (ctx.env) so this DCSync authenticates with what the front produced (B1).
