@@ -1,0 +1,5 @@
+# DNSHARDEN regression baseline
+base_sha: 3e5931b
+cmd: python3 -m pytest tests/unit/validation
+collected: 0
+result: ======================= 361 passed, 2 warnings in 6.91s ========================
