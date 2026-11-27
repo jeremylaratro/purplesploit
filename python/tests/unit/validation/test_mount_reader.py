@@ -287,14 +287,16 @@ def test_config_rejects_unknown_access_mode():
 
 # ------------------------------------------------- diff-review r1 fixes (adversarial)
 def test_close_unmounts_when_flag_unset_but_really_mounted(tmp_path, monkeypatch):
-    # review HIGH: an interrupt can leave entry["mounted"] False while the mount is really
-    # installed; close() must use the REAL mount state (os.path.ismount) as source of truth.
+    # review HIGH (r1+r2): an interrupt can leave entry["mounted"] False while the mount is
+    # really installed, and a stale backing fs makes os.path.ismount lie -> close() must read
+    # the REAL state from /proc/self/mountinfo (_is_mounted) as source of truth.
     runner = _FakeRunner()
     mr = MountReader(_cfg(), "fs01", "smb", _FakeDiscovery([]), runner)
     mr._mounts["X"] = {"mp": str(tmp_path), "fs": None, "mounted": False, "cred": None}
-    monkeypatch.setattr(os.path, "ismount", lambda p: True)   # the mount IS actually present
+    monkeypatch.setattr(mount_reader, "_is_mounted",          # mountinfo says mounted (ESTALE-robust)
+                        lambda p: p == str(tmp_path))
     mr.close()
-    assert any(c[:1] == ["umount"] for c in runner.calls)     # unmounted despite the False flag
+    assert any(c[:1] == ["umount"] for c in runner.calls)     # unmounted despite the False flag + bad ismount
 
 
 def test_contained_dir_construction_failure_closes_root_fd(tmp_path, monkeypatch):

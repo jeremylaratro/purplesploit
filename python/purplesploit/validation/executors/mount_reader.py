@@ -56,6 +56,21 @@ def _mnt_id(fd: int) -> Optional[str]:
     return None
 
 
+def _is_mounted(mp: str) -> bool:
+    """Whether ``mp`` is a mount point, read from ``/proc/self/mountinfo`` -- robust to a
+    stale/erroring backing fs (``os.path.ismount`` ``lstat``s the mountpoint and returns a
+    false ``False`` on ``ESTALE``/``EIO``, which would skip teardown of a real mount)."""
+    try:
+        with open("/proc/self/mountinfo") as fh:
+            for line in fh:
+                f = line.split(" ")
+                if len(f) > 4 and f[4] == mp:          # field 5 (0-based 4) = mount point
+                    return True
+    except OSError:
+        return False
+    return False
+
+
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 _PIN_FLAGS = os.O_PATH | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
@@ -261,7 +276,7 @@ class MountReader:
 
     def _do_mount(self, share: str, mp: str) -> bool:
         """Run the hardened RO mount; return whether a mount is actually installed
-        (``os.path.ismount``, reconciled from the real state, NOT the helper's rc).
+        (:func:`_is_mounted`, reconciled from the real state, NOT the helper's rc).
         Overridable test seam. The creds file is unlinked right after the call."""
         argv, cred = self._mount_argv(share, mp)
         self._mounts[share]["cred"] = cred           # register BEFORE running (cleanup covers partial)
@@ -271,7 +286,7 @@ class MountReader:
             if cred:
                 _shred_unlink(cred)                  # consumed at mount time -> shrink leak window
                 self._mounts[share]["cred"] = None
-        return os.path.ismount(mp)
+        return _is_mounted(mp)
 
     def _ensure_mounted(self, share: str) -> dict:
         entry = self._mounts.get(share)
@@ -285,7 +300,7 @@ class MountReader:
         try:
             mounted = self._do_mount(share, mp)
         except BaseException:                         # incl. KeyboardInterrupt: reconcile then re-raise
-            entry["mounted"] = os.path.ismount(mp)    # a late/partial mount still needs teardown
+            entry["mounted"] = _is_mounted(mp)         # a late/partial mount still needs teardown
             raise
         entry["mounted"] = mounted
         if not mounted:
@@ -307,7 +322,7 @@ class MountReader:
     # -- teardown (guaranteed, independent per resource) -----------------------
     def _umount(self, mp: str) -> None:
         self._runner.run(["umount", mp], timeout=getattr(self._cfg, "tool_timeout_s", 60))
-        if os.path.ismount(mp):                       # still busy/failed -> lazy detach fallback
+        if _is_mounted(mp):                           # still busy/failed -> lazy detach fallback
             self._runner.run(["umount", "-l", mp], timeout=getattr(self._cfg, "tool_timeout_s", 60))
 
     def close(self) -> None:
@@ -320,11 +335,9 @@ class MountReader:
                     fs.close()                        # close ALL fds FIRST (unbusy the mount)
                 except Exception:
                     pass
-            try:                                      # source of truth = the REAL mount state, not just
-                really_mounted = entry.get("mounted") or os.path.ismount(entry["mp"])
-            except OSError:
-                really_mounted = bool(entry.get("mounted"))  # the stored flag (set before an interrupt)
-            if really_mounted:
+            # Source of truth = the REAL mount state from /proc/self/mountinfo (robust to
+            # a stale backing fs, where os.path.ismount lstat's the mountpoint and lies).
+            if entry.get("mounted") or _is_mounted(entry["mp"]):
                 try:
                     self._umount(entry["mp"])
                 except Exception:
@@ -332,7 +345,7 @@ class MountReader:
             if entry.get("cred"):
                 _shred_unlink(entry["cred"])
             try:
-                if not os.path.ismount(entry["mp"]):  # rmdir only if confirmed unmounted
+                if not _is_mounted(entry["mp"]):      # rmdir only if confirmed unmounted
                     os.rmdir(entry["mp"])
             except OSError:
                 pass
