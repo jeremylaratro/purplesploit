@@ -424,7 +424,11 @@ class _Crawler:
                 incomplete = True
                 break
             path, depth = stack.pop()
-            key = path.strip("/\\").lower()
+            # Cycle guard keyed on the EXACT path (NOT lower-cased): a case-SENSITIVE
+            # backing FS (Linux Samba/NFS) has distinct "Admin" vs "admin" dirs that
+            # lower-casing would collapse -> skipping real directories / missing loot.
+            # The depth/entry/deadline caps backstop any case-variant loop on Windows.
+            key = path.strip("/\\")
             if key in visited:
                 continue
             visited.add(key)
