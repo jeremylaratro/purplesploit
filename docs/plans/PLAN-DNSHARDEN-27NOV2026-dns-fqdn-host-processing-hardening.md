@@ -90,10 +90,14 @@ account-name ambiguity, opaque resolution failures) is fully covered by S1–S2 
 - `kdc_host(cfg) -> str` — `cfg.kdc_host or cfg.dc_ip`.
 - `dns_server(cfg) -> Optional[str]` — `cfg.dns_server or None` (**opt-in**; None ⇒ flag omitted).
 - `nxc_kerberos_flags(cfg) -> list[str]` — `["--kdcHost", kdc_host(cfg)]` **+** `["--dns-server", dns_server(cfg)]` only when `cfg.dns_server` is set.
-- `classify_resolution_failure(text) -> Optional[str]` — maps a FAILED tool's combined stdout/stderr
-  to `resolution_failed:realm_kdc` (`<REALM>:88` / KDC not found), `:fqdn` (name resolution / NXDOMAIN
-  for the target), or `:dns` (generic resolver failure); `None` when no resolution-shaped error is
-  present. **Classifier only — never decides success.**
+- `classify_resolution_failure(cfg, target, text) -> Optional[str]` — maps a FAILED tool's combined
+  stdout/stderr to a **rich, actionable** diagnostic (r2 #5d), not just a category. Returns a single
+  string of the shape
+  `resolution_failed:<which>: <failed-name> via <resolver-tried> — <reason>; fix: <action>`, e.g.
+  `resolution_failed:realm_kdc: NORTH.SEVENKINGDOMS.LOCAL:88 via kdcHost=<dc_ip> — KDC not found; fix: set cfg.kdc_host`
+  or `resolution_failed:fqdn: winterfell.north… via system/dns_server — name resolution failed; fix: set cfg.dns_server or add the host`.
+  `<which>` ∈ {`realm_kdc`, `fqdn`, `dns`}. Names/realms/IPs only (public — no secrets). `None` when no
+  resolution-shaped error is present. **Classifier only — never decides success.**
 
 ### `ValidationConfig` (G4-core)
 Add `kdc_host: Optional[str] = None`, `dns_server: Optional[str] = None` (non-secret; not in the
@@ -104,8 +108,12 @@ For each nxc call-site: if its auth mode is Kerberos (`-k`, `--use-kcache`, or `
 `netresolve.nxc_kerberos_flags(cfg)`. Confirmed sites to wire: `constrained_deleg`, `generic_all`,
 `rbcd`, `adcs_esc1`, and the `--aesKey` paths in `roast`/`add_member`/`targeted_kerberoast`/
 `gpo_abuse`/`certifried` (the S2 implementation re-derives the full list from a fresh inventory and
-records it). `forge_common`/silver/golden/diamond already pass `--kdcHost` (leave, or route through
-the helper for consistency — no value change). NTLM-mode calls untouched.
+records it). **`forge_common` MUST be routed through the helper** (r2 #3): today it passes
+`--dns-server <dc_ip>` **unconditionally** — the exact carrier-breaking pattern — so S2 replaces its
+inline flags with `nxc_kerberos_flags(cfg)`, making `--dns-server` opt-in there too. The four forging
+executors (silver/golden/diamond/sapphire) go through `forge_common`, so **re-prove all four live**
+after this change (they must still pass via `/etc/hosts` with `--kdcHost` only). NTLM-mode calls
+untouched.
 
 ### S3 diagnostic (folded into S2) — post-hoc, persisted
 After a Kerberos/remote call that did NOT succeed, call `classify_resolution_failure` on its output;
@@ -123,10 +131,12 @@ success path; never fabricates. Opt-in per wired call-site.
   unchanged" test fails.
 - **S2:** for each wired executor, the built nxc argv **contains `--kdcHost <dc>`** and, with no
   `cfg.dns_server`, **does NOT contain `--dns-server`** (carrier path byte-identical); a failed call
-  with a realm-resolution error string yields `errors` ⊇ `{resolution_failed:realm_kdc}` **in the
-  final receipt**; a success yields none. RED: remove the flag append → argv assertion fails; return
-  `complete` on a resolution failure → diagnostic-in-receipt test fails. Existing executor tests stay
-  green (NTLM paths unchanged).
+  with a realm-resolution error string yields a **rich** `errors` entry in the **final receipt** whose
+  text includes the failed name, the resolver tried, and the corrective action (r2 #5d) — not just a
+  category; a success yields none. RED: remove the flag append → argv assertion fails; drop the
+  name/resolver/fix context → the rich-diagnostic assertion fails. Existing executor tests stay green
+  (NTLM paths unchanged). **`forge_common` routed through the helper is covered by re-proving the four
+  forges live (Phase 8) + their existing unit tests staying green.**
 
 ## Phase 8 — Benefit (pre-registered, rigorous per r1 #4)
 **Metric:** count of Kerberos-mode executors whose **terminal succeeds** (harness-scored `proved`, or
