@@ -73,7 +73,7 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
             raw, _, hid = item.partition("=")
             if raw and hid:
                 host_aliases[raw] = {"host_id": hid}
-    return ValidationConfig(
+    kwargs = dict(
         forge_key=_read_key(getattr(args, "forge_key_file", None)),
         forge_key_kind=getattr(args, "forge_key_kind", None),
         forge_key_nt=_read_key(getattr(args, "forge_key_nt_file", None)),
@@ -93,6 +93,19 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
         tool_timeout_s=args.timeout,
         allow_destructive=args.allow_destructive,
     )
+    # SHARE-LOOT knobs: pass through ONLY when the operator set them, so the
+    # ValidationConfig defaults stay the single source of truth otherwise.
+    sl_map = {"share_protocol": "share_protocol", "share_access_mode": "share_access_mode",
+              "loot_store_dir": "loot_store_dir", "share_max_shares": "share_max_shares",
+              "share_max_depth": "share_max_depth", "share_max_entries": "share_max_entries",
+              "share_max_files": "share_max_files", "share_crawl_deadline": "share_crawl_deadline_s"}
+    for arg_name, cfg_name in sl_map.items():
+        val = getattr(args, arg_name, None)
+        if val is not None:
+            kwargs[cfg_name] = val
+    if getattr(args, "no_loot", False):
+        kwargs["loot_enabled"] = False
+    return ValidationConfig(**kwargs)
 
 
 class DispatchParser(argparse.ArgumentParser):
@@ -157,6 +170,24 @@ def build_parser() -> argparse.ArgumentParser:
                    help="how to pass the forge key to ticketer (default aes)")
     p.add_argument("--forge-key-nt-file", help="file holding the krbtgt NT hash "
                    "(Sapphire needs both AES and NT)")
+    # SHARE-LOOT (SMB/NFS share discovery + crawl + loot). Defaults track the
+    # ValidationConfig defaults; omitted flags leave those untouched.
+    sl = p.add_argument_group("SHARE-LOOT (share discovery + loot)")
+    sl.add_argument("--share-protocol", choices=["smb", "nfs"],
+                    help="share transport (default smb)")
+    sl.add_argument("--share-access-mode", choices=["crawl", "mount"],
+                    help="crawl=programmatic reads (default); mount=kernel RO mount "
+                         "with contained crawl (needs CAP_SYS_ADMIN)")
+    sl.add_argument("--loot-store-dir", help="operator out-of-band store for the "
+                    "raw path map + recovered values (default <output>/loot-store, 0600)")
+    sl.add_argument("--no-loot", action="store_true",
+                    help="disable the loot content search (inventory only)")
+    sl.add_argument("--share-max-shares", type=int, help="max shares per host (default 64)")
+    sl.add_argument("--share-max-depth", type=int, help="max crawl depth (default 12)")
+    sl.add_argument("--share-max-entries", type=int, help="max dir entries per run (default 50000)")
+    sl.add_argument("--share-max-files", type=int, help="max files inventoried (default 20000)")
+    sl.add_argument("--share-crawl-deadline", type=int,
+                    help="whole-run crawl wall-clock deadline in seconds (default 300)")
     root = DispatchParser(prog="purplesploit-validate", description=__doc__)
     root._switches = {o for action in shared._actions if action.nargs == 0
                       for o in action.option_strings} | {"-h", "--help"}
