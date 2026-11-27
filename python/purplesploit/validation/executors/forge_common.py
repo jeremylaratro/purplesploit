@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base import RunResult, redact_argv, StepRecord
+from .. import netresolve
 
 
 # PRECISE cache-backed login success (B2): "[+] REALM\\user from ccache (Pwn3d!)".
@@ -30,9 +31,8 @@ _RE_ANY_SID = re.compile(r"S-1-5-21-\d+-\d+-\d+")
 
 
 def netbios(cfg) -> str:
-    """NetBIOS short name: explicit cfg.netbios_domain, else the FQDN's first label."""
-    nb = getattr(cfg, "netbios_domain", None) or (cfg.domain or "").split(".", 1)[0]
-    return nb.upper()
+    """NetBIOS short name -- delegates to the canonical :mod:`netresolve` (G3)."""
+    return netresolve.netbios(cfg)
 
 
 def signing_key(ctx) -> tuple[Optional[str], Optional[str]]:
