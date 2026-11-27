@@ -162,3 +162,23 @@ to its own sprint (S1b).** Rationale:
 programmatic — no `smbclient` shell at all); crawl via `listPath`/`getFile` with the #4 bounds +
 cycle detection; opaque location IDs (raw map → operator store); `share_inventory` terminal kind
 (+ harness mirror); per-host/share exhaustiveness; scratch shredded in `finally`.
+
+## S1 build + live proof (27NOV2026)
+S1 shipped (crawl-only, programmatic impacket). Committed on dev/shareloot-s1. Proven live on GOAD
+(winterfell.north.sevenkingdoms.local, vagrant creds):
+
+| metric | result |
+|---|---|
+| terminal | `share_inventory` ok=True (read-only access observed) |
+| shares enumerated | 5 (ADMIN$, C$, IPC$, NETLOGON, SYSVOL) via impacket listShares |
+| crawled | 300 files + 19,913 dirs before the `share_max_files=300` bound → `truncated`/`partial`, `complete=False` (honest) |
+| secret-safety | **0 raw paths in the receipt**; all 20,213 raw paths confined to the opaque-ID operator store (`loc:*`) |
+| read-only | by construction (ShareReader = list ops only); unit-proven (only read methods called); no write on the live run |
+
+Bounds, cycle guard, per-share exhaustiveness, and opaque-ID secret-safety all demonstrated live.
+412/412 validation unit tests green (400 baseline + 12); secret-path gate mutation-proven RED.
+Scratch + loot-store shredded after the run.
+
+Remaining for the module: harness `proof_adapters` mirror of `share_inventory`; diff review + merge S1;
+then **S1b** (mount mode, deferred OS-safety), **S2** (NFS), **S3** (loot search engine), **S4**
+(dual-mode + full proof).
