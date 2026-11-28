@@ -331,6 +331,12 @@ def map_finding(raw: dict) -> NormalizedFinding:
                 nf.entity = signal.extractor(raw) or {}
             except Exception:  # an extractor must never crash the mapping
                 nf.entity = {}
+            # The ADCS promoter rule_ids cover multiple ESC families. Preserve
+            # ESC1's default, but route explicit A1 markers to their own recipes.
+            # New family signal wording is still an unverified assumption.
+            if nf.technique == "ADCS-ESC1" and nf.entity.get("esc") in {"ESC2", "ESC3", "ESC6"}:
+                nf.technique = f"ADCS-{nf.entity['esc']}"
+                nf.verified_signal = False
             break
     return nf
 

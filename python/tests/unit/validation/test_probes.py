@@ -380,7 +380,8 @@ def test_registry_covers_all_fifteen_techniques():
         "DIAMOND-TICKET", "SAPPHIRE-TICKET",
         "SHARE-LOOT",                                            # SHARELOOT S1: SMB share discovery
         "BRONZE-BIT", "S4U2SELF",                                # T6: delegation extras
-        "SIGNING-RELAY"}                                         # SMB/LDAP signing-posture exposure
+        "SIGNING-RELAY",
+        "ADCS-ESC2", "ADCS-ESC3", "ADCS-ESC6"}                                         # SMB/LDAP signing-posture exposure
 
 
 def test_get_probe_unknown_technique_is_none():
