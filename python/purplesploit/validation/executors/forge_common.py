@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .base import RunResult, redact_argv, StepRecord
 from .. import netresolve
@@ -138,11 +138,15 @@ def _reauth_identity_ok(output: str, expect_principal: Optional[str]) -> bool:
 
 
 def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target: str,
-                     out_dir: Path, expect_principal: Optional[str] = None
+                     out_dir: Path, expect_principal: Optional[str] = None,
+                     on_ticket: Optional[Callable[[Path], None]] = None
                      ) -> tuple[bool, list[StepRecord], list[str]]:
     """Forge (KRB5CCNAME UNSET, fresh ISOLATED scratch dir) then re-authenticate
     THROUGH the forged ccache only. Returns ``(ok, steps, errors)`` where ``ok`` is
     the PRECISE cache-backed login predicate bound to the forged principal.
+
+    ``on_ticket`` snapshots recovered material before any proof/cleanup. It does
+    not alter the success predicate or expose the ticket in the returned steps.
 
     Robustness (review r1): the forge happens in a dedicated ``.forge-<user>``
     subdirectory of ``out_dir`` that is cleared first and removed after -- so (a)
@@ -176,6 +180,8 @@ def forge_and_reauth(ctx, forge_argv: list[str], ccache_name: str, reauth_target
         # OUTSIDE this dir (review r2). The forge runs with cwd=forge_dir, so the
         # real cache is here regardless of how the tool spells the path.
         ccache = forge_dir / Path(m.group(1)).name
+    if on_ticket is not None:
+        on_ticket(ccache)
     # forged IFF the tool succeeded AND wrote the cache in THIS cleared dir -- never
     # a stale cache, never a non-zero/timed-out/errored forge.
     forged = bool(res.returncode == 0 and not res.error and not res.timed_out

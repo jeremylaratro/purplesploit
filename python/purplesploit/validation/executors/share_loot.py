@@ -55,7 +55,8 @@ from typing import Any, Callable, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof, states
 from . import loot_rules, nfs_reader, mount_reader
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, Capability, CAP_PASSWORD)
+from ._reveal_common import loot_secrets
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, Capability, CAP_PASSWORD)
 
 
 # ------------------------------------------------------------ read-only SMB reader
@@ -221,7 +222,18 @@ class ShareLootExecutor(ValidationExecutor):
         return hosts
 
     # --------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         steps: list[StepRecord] = []
         errors: list[str] = []
@@ -234,12 +246,12 @@ class ShareLootExecutor(ValidationExecutor):
         if mode not in ("crawl", "mount"):        # unknown mode -> fail closed (never a false success)
             errors.append(f"inconclusive:unknown_access_mode:{mode}")
             rec("access_mode", False, f"unknown mode={mode}")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
 
         hosts = self._hosts(ctx, finding, params)
         if not hosts:
             errors.append("no_target_hosts")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
 
         protocol = getattr(cfg, "share_protocol", "smb")
         discovery_log: list[dict] = []
@@ -263,7 +275,7 @@ class ShareLootExecutor(ValidationExecutor):
         store_dir = Path(getattr(cfg, "loot_store_dir", None) or (out_dir / "loot-store"))
         store_dir.mkdir(parents=True, exist_ok=True)
 
-        crawler = _Crawler(cfg)
+        crawler = _Crawler(cfg, artifact["_reveal"])
         per_share: list[dict] = []
         hosts_skipped = 0
         for host in hosts:
@@ -365,7 +377,7 @@ class ShareLootExecutor(ValidationExecutor):
                             "usable_credentials": len(crawler.usable_creds),
                             "hits": crawler.loot_hits[:200]}},
         )
-        art = self._artifact(steps, gate, terminal, bool(complete), errors)
+        art = finish_artifact(steps, gate, terminal, bool(complete), errors)
         art["_usable_creds"] = crawler.usable_creds    # engine-only (dropped by _receipt_from)
         return art
 
@@ -394,8 +406,9 @@ class _Crawler:
     traversal (before each network op), outcomes distinguish full/partial/denied,
     and observed access (`any_dir_listed`) is tracked separately from truncation."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, reveals=None):
         self.cfg = cfg
+        self.reveals = reveals if reveals is not None else []
         self.store: dict[str, dict] = {}          # operator out-of-band map: loc_id -> {path,...,findings}
         self.files = 0
         self.dirs = 0
@@ -460,9 +473,13 @@ class _Crawler:
                 data = b""
             self.fetched_files += 1
             self.fetched_bytes += len(data)
+            location = self.store[lid]
+            secret_path = f"{location['host']}/{share}/{path}"
+            self.reveals.extend(loot_secrets("SHARE-LOOT", secret_path, data))
             findings += loot_rules.content_findings(data)
             # S4: extract USABLE (principal, secret) credentials (GPP cpassword decrypt).
             for cred in loot_rules.extract_credentials(path, data):
+                self.reveals.append(SecretReveal("SHARE-LOOT", "password", cred.principal, cred.secret))
                 self.usable_creds.append({"principal": cred.principal, "secret": cred.secret,
                                           "source": cred.source, "loc": lid})
                 self.store[lid].setdefault("credentials", []).append(

