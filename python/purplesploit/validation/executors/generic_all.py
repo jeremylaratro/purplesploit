@@ -115,6 +115,7 @@ def _short_name(host: str) -> str:
 
 
 class GenericAllExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "GENERIC-ALL"
     technique_class = "acl"
     # Informational only -- the REAL, pivot-dependent kind is computed by
@@ -767,21 +768,22 @@ class GenericAllExecutor(ValidationExecutor):
 
     # ---------------------------------------------------------------- composition (C)
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        credentials = super().produced(ctx, finding, params, artifact)
         if not artifact.get("complete"):
-            return []
+            return credentials
         # The rbcd pivot yields an impersonation state (no threadable credential
         # VALUE here -- CAP_NONE, exactly as before; the engine does not thread it).
         if params["pivot"].value == "rbcd":
             return [Capability(state=states.S_IMPERSONATION_TGT, channel=CAP_NONE,
-                               principal=params["impersonate"].value or "")]
+                               principal=params["impersonate"].value or "")] + credentials
         # A presence marker alone proves no threadable credential: only an actual
         # NT hash recovered by THIS invocation establishes a usable cred_for(X).
         recovered = artifact.get("_recovered_hash")
         if not recovered:
-            return []
+            return credentials
         target = params["target"].value
         return [Capability(state=states.cred_for(target), channel=CAP_NT_HASH,
-                           value=recovered, principal=target)]
+                           value=recovered, principal=target)] + credentials
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

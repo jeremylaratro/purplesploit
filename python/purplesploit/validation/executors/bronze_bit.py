@@ -40,6 +40,7 @@ from . import _s4u_common as s4u
 
 
 class BronzeBitExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "BRONZE-BIT"
     technique_class = "delegation"
     terminal_kind = "authn_success"
@@ -194,12 +195,13 @@ class BronzeBitExecutor(ValidationExecutor):
         return art
 
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        credentials = super().produced(ctx, finding, params, artifact)
         prod = artifact.get("_composed_products") or {}
         ccache = prod.get("ccache")
         if not artifact.get("complete") or not ccache:
-            return []
+            return credentials
         return [Capability(state=states.S_IMPERSONATION_TGT, channel=CAP_CCACHE,
-                           value=ccache, principal=prod.get("principal"))]
+                           value=ccache, principal=prod.get("principal"))] + credentials
 
     def _result(self, steps, errors, ticket, ok, svc, impersonate, spn, target_host,
                 classification, cfg) -> dict:

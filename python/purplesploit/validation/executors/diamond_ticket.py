@@ -29,6 +29,7 @@ from .forge_common import (signing_key, key_flag, valid_key, resolve_domain_sid,
 
 
 class DiamondTicketExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "DIAMOND-TICKET"
     technique_class = "kerberos_forge"
     terminal_kind = "authn_success"
@@ -141,11 +142,12 @@ class DiamondTicketExecutor(ValidationExecutor):
         return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
+        credentials = super().produced(ctx, finding, params, artifact)
         if not artifact.get("complete"):
-            return []
+            return credentials
         forged = params["forged_user"].value
         return [Capability(state=states.S_PERSISTENCE, channel=CAP_PRINCIPAL,
-                           value=forged, principal=forged)]
+                           value=forged, principal=forged)] + credentials
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors):

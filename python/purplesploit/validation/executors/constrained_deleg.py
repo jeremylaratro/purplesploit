@@ -46,6 +46,7 @@ _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
 
 
 class ConstrainedDelegExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "CONSTRAINED-DELEG-PT"
     technique_class = "delegation"
     terminal_kind = "authn_success"

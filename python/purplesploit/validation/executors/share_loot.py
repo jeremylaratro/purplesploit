@@ -157,6 +157,7 @@ def _impacket_reader(cfg, host: str, timeout: int) -> ShareReader:
 
 # ------------------------------------------------------------------- the executor
 class ShareLootExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "SHARE-LOOT"
     technique_class = "share_loot"
     terminal_kind = "share_inventory"
@@ -385,12 +386,13 @@ class ShareLootExecutor(ValidationExecutor):
         """S4: a usable looted credential (GPP cpassword decrypt) becomes an in-memory
         SECRET capability the engine can thread to a downstream edge (looted cred ->
         pivot). Never serialized; the receipt carries only a presence count."""
+        credentials = super().produced(ctx, finding, params, artifact)
         caps = []
         for c in artifact.get("_usable_creds", []):
             if c.get("secret") and c.get("principal"):
                 caps.append(Capability(state=states.S_LOOTED_CREDS, channel=CAP_PASSWORD,
                                        value=c["secret"], principal=c["principal"]))
-        return caps
+        return caps + credentials
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors) -> dict:

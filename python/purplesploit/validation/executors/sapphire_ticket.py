@@ -28,6 +28,7 @@ from .forge_common import (signing_key, valid_key, resolve_domain_sid,
 
 
 class SapphireTicketExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "SAPPHIRE-TICKET"
     technique_class = "kerberos_forge"
     terminal_kind = "authn_success"
@@ -144,11 +145,12 @@ class SapphireTicketExecutor(ValidationExecutor):
         return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
+        credentials = super().produced(ctx, finding, params, artifact)
         if not artifact.get("complete"):
-            return []
+            return credentials
         imp = params["impersonate"].value
         return [Capability(state=states.S_PERSISTENCE, channel=CAP_PRINCIPAL,
-                           value=imp, principal=imp)]
+                           value=imp, principal=imp)] + credentials
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors):

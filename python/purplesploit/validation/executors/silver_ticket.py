@@ -27,6 +27,7 @@ from .forge_common import (signing_key, key_flag, valid_key, resolve_domain_sid,
 
 
 class SilverTicketExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "SILVER-TICKET"
     technique_class = "kerberos_forge"
     terminal_kind = "authn_success"
@@ -127,11 +128,12 @@ class SilverTicketExecutor(ValidationExecutor):
         return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
+        credentials = super().produced(ctx, finding, params, artifact)
         if not artifact.get("complete"):
-            return []
+            return credentials
         host = params["service_host"].value
         return [Capability(state=states.local_admin_for(host), channel=CAP_PRINCIPAL,
-                           value=host, principal=host)]
+                           value=host, principal=host)] + credentials
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors):

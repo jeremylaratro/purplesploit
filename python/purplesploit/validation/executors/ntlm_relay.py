@@ -167,6 +167,7 @@ def _loot_present(lootdir: Path) -> bool:
 
 
 class NTLMRelayExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "NTLM-RELAY"
     technique_class = "relay"
     terminal_kind = "replication_dump"   # smb_sam default; ldap_rbcd -> rbcd_access

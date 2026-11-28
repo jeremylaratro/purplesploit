@@ -95,6 +95,7 @@ _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
 
 
 class ADCSESC1Executor(ValidationExecutor):
+    recovers_credentials = True
     technique = "ADCS-ESC1"
     technique_class = "adcs"
     terminal_kind = "cert_issued_and_used"

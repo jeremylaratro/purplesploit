@@ -53,6 +53,7 @@ _RE_NXC_AUTH_OK = re.compile(r"\bSMB\b.*\[\+\]", re.I)
 
 class _RoastExecutor(ValidationExecutor):
     """Shared roast -> crack -> reauth body. Subclasses set the roast specifics."""
+    recovers_credentials = True
 
     technique_class = ""            # 'kerberoast' | 'asrep'
     terminal_kind = "authn_success"

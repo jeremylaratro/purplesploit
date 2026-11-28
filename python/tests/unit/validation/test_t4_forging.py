@@ -24,7 +24,7 @@ from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor, is_implemented
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
-    Capability, CAP_AES_KEY, CAP_NT_HASH, CAP_PRINCIPAL,
+    Capability, Credential, CAP_AES_KEY, CAP_NT_HASH, CAP_PRINCIPAL,
 )
 from purplesploit.validation import proof, states
 
@@ -246,7 +246,8 @@ def test_golden_produced_capability_only_on_complete(tmp_path):
     res = ex.run_composable(_ctx(cfg, runner, tmp_path), _finding(),
                             overrides={"reauth_target": HOST, "domain_sid": SID})
     assert res.complete is True
-    assert [c.state for c in res.capabilities] == [states.S_PERSISTENCE]
+    assert [c.state for c in res.capabilities if not isinstance(c, Credential)] == [states.S_PERSISTENCE]
+    assert any(isinstance(c, Credential) and c.secret_type == "ccache" for c in res.capabilities)
     cap = res.capabilities[0]
     assert cap.channel == CAP_PRINCIPAL and cap.value == "Administrator"
     # incomplete -> no capability leaks downstream
@@ -281,7 +282,8 @@ def test_silver_positive_is_service_scoped(tmp_path):
     tf = res.receipt["terminal_fact"]
     assert tf["kind"] == "authn_success" and tf["ok"] is True
     # effect is admin of THAT host's service, not domain persistence (H8)
-    assert [c.state for c in res.capabilities] == [states.local_admin_for(HOST)]
+    assert [c.state for c in res.capabilities if not isinstance(c, Credential)] == [states.local_admin_for(HOST)]
+    assert any(isinstance(c, Credential) and c.secret_type == "ccache" for c in res.capabilities)
     argv = runner.ticketer_argv()
     assert "-spn" in argv and f"cifs/{HOST}" in argv
     assert "-nthash" in argv            # NT service key rides -nthash (masked)

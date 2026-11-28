@@ -65,6 +65,7 @@ def _bloodyad_auth_argv(cfg, dc: str) -> list[str]:
 
 
 class ForceChangePasswordExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "FORCE-CHANGE-PASSWORD"
     technique_class = "acl"
     terminal_kind = "authn_success"

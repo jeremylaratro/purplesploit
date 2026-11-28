@@ -29,6 +29,7 @@ from .forge_common import (signing_key, key_flag, valid_key, resolve_domain_sid,
 
 
 class GoldenTicketExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "GOLDEN-TICKET"
     technique_class = "kerberos_forge"
     terminal_kind = "authn_success"
@@ -142,12 +143,13 @@ class GoldenTicketExecutor(ValidationExecutor):
         return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
+        credentials = super().produced(ctx, finding, params, artifact)
         if not artifact.get("complete"):
-            return []
+            return credentials
         forged = params["forged_user"].value
         # PUBLIC marker only (the forged identity) -- never the key or the ccache.
         return [Capability(state=states.S_PERSISTENCE, channel=CAP_PRINCIPAL,
-                           value=forged, principal=forged)]
+                           value=forged, principal=forged)] + credentials
 
     @staticmethod
     def _artifact(steps, gate, terminal_fact, complete, errors):

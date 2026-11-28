@@ -26,7 +26,7 @@ from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
-    Capability, CAP_CCACHE, CAP_NT_HASH, CAP_PRINCIPAL, ComposableResult,
+    Capability, Credential, CAP_CCACHE, CAP_NT_HASH, CAP_PRINCIPAL, ComposableResult,
 )
 from purplesploit.validation.executors.process_manager import ProcessManager, ProcHandle
 
@@ -220,7 +220,7 @@ def test_esc8_composed_defers_rollback_and_produces_dc_tgt(tmp_path):
     names = [s["name"] for s in res.receipt["steps"]]
     assert "rollback_deferred" in names and "destroy_key_material" not in names
     # produced a typed DC_TGT capability the engine can thread.
-    caps = res.capabilities
+    caps = [c for c in res.capabilities if not isinstance(c, Credential)]
     assert len(caps) == 1 and caps[0].state == states.DC_TGT
     assert caps[0].channel == CAP_CCACHE and caps[0].value and caps[0].principal == "dc01$"
     # the teardown obligation carries the secret paths (engine-only).
@@ -253,7 +253,10 @@ def test_esc8_standalone_still_destroys_inline(tmp_path):
     names = [s["name"] for s in res.receipt["steps"]]
     assert "destroy_key_material" in names and "rollback_deferred" not in names
     assert not (tmp_path / "dc01.pfx").exists()               # destroyed inline (composed=False)
-    assert res.capabilities == []                             # standalone exposes no product
+    assert res.capabilities and all(isinstance(c, Credential) for c in res.capabilities)
+    assert {c.secret_type for c in res.capabilities} == {"pfx", "ccache", "nthash"}
+    cc = next(c for c in res.capabilities if c.secret_type == "ccache")
+    assert Path(cc.value).read_bytes() == b"CC"                 # survives original cleanup
 
 
 def test_certifried_composed_defers_and_teardown_deletes_computer(tmp_path):

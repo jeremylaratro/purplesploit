@@ -30,6 +30,7 @@ from . import _s4u_common as s4u
 
 
 class S4U2SelfExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "S4U2SELF"
     technique_class = "delegation"
     terminal_kind = "authn_success"
@@ -148,12 +149,13 @@ class S4U2SelfExecutor(ValidationExecutor):
         return art
 
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        credentials = super().produced(ctx, finding, params, artifact)
         prod = artifact.get("_composed_products") or {}
         ccache, host = prod.get("ccache"), prod.get("host")
         if not artifact.get("complete") or not ccache or not host:
-            return []
+            return credentials
         return [Capability(state=states.local_admin_for(host), channel=CAP_CCACHE,
-                           value=ccache, principal=prod.get("principal"))]
+                           value=ccache, principal=prod.get("principal"))] + credentials
 
     def _result(self, steps, errors, ticket, ok, acct, impersonate, self_host,
                 classification, cfg) -> dict:

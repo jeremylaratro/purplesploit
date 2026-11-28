@@ -58,6 +58,7 @@ def _short_name(host: str) -> str:
 
 
 class RBCDExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "RBCD"
     technique_class = "delegation"
     terminal_kind = "rbcd_access"
