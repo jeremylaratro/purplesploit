@@ -186,3 +186,22 @@ Established empirically against GOAD north (jon.snow low-priv cred):
 executor live → trustworthy classification (positive, or a clean negative-validation for the
 cross-domain path with a control). Coercion/path mechanics are already proven, so this is
 code + a classification, not an open feasibility question.
+
+## Owner decisions (27NOV2026) + queue
+
+- **R1: LANDED** (PR #147, merged `ef81db5`; main `18016af`). Coercion-via-coercer + SMB-only
+  listener + 5-state classifier + per-mode proven + secret guards; 567 tests.
+- **D (owner): de-scope the auto-listener.** The in-process ntlmrelayx does not reliably CATCH
+  the coerced auth on the host-network attacker container (coercion fires + the DC's auth
+  provably reaches the host, but the executor's listener catches nothing). Rather than fight it:
+  **the operator runs their own listener (ntlmrelayx manually) and provides the listener IP**;
+  the module uses that external listener for the action options. This matches real operator flow.
+- **R2 (next): operator-custom-listener + action verbs.** Add an `external_listener` capability to
+  the relay executor (skip the in-process listener; fire coercion toward the operator's endpoint;
+  classify from a shared artifact where the operator exposes one, else report coercion-fired for
+  the operator to collect). Expose the 4 verbs (escalate / shell / crawl / dump) on SIGNING-RELAY,
+  each routed to the relay executor with external-listener support.
+- **Then: ADCS (T2 completion).** ESC2-7/9/10/13/15/16 + Golden-Cert. The relay chassis proven in
+  R1 de-risks the ADCS relay fronts (ESC8/ESC11/CERTIFRIED).
+- **Queue (owner, after ADCS): auto ligolo-ng setup + auto agent dispersal** — automated pivot
+  tunnel bring-up + agent deployment across reachable hosts. (Backlogged; see BACKLOG doc.)
