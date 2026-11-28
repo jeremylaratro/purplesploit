@@ -603,6 +603,58 @@ class ADCSESC1Probe(PreconditionProbe):
             evidence={"esc1_template": template or None})
 
 
+class _ADCSRequestProbe(PreconditionProbe):
+    """Viability read only; UNVERIFIED certipy-find ESC / CA-flag markers.
+
+    No enrollment or credential recovery occurs. Like the other certipy-find
+    probes this stays OUT of POSTURE_PROBES: find can follow discovered CA
+    endpoints, which the planner's fenced runner does not permit.
+    """
+    esc = ""
+
+    def check(self, ctx, finding):
+        template = (finding.entity or {}).get("template") or ""
+        evidence = {"template": template or None, "esc": self.esc}
+        res = _certipy_find(ctx, vulnerable=True)
+        text = _text(res)
+        if _tool_errored(res) or not _RE_CERTIPY_RAN.search(text):
+            return ProbeResult(True, f"{self.esc} certipy find unreadable -> attempting",
+                               evidence, unknown=True)
+        if _RE_CA_NONE.search(text):
+            return ProbeResult(False, "no Certificate Authority found -> skip", evidence)
+        marker = bool(re.search(rf"\[!\][^\n]*\b{self.esc}\b", text, re.I))
+        if self.esc == "ESC6":
+            marker = marker or bool(re.search(
+                r"(?:EDITF_ATTRIBUTESUBJECTALTNAME2|User Specified SAN)\s*[:=]\s*"
+                r"(?:Enabled|True)\b", text, re.I))
+        template_here = not template or bool(re.search(re.escape(template), text, re.I))
+        if marker and template_here:
+            return ProbeResult(True, f"certipy find reports {self.esc} request surface -> viable",
+                               {**evidence, "confirmed": True})
+        # No vulnerable templates does not disprove a CA-wide ESC6 setting.
+        if self.esc != "ESC6" and _RE_NO_VULN.search(text):
+            return ProbeResult(False, "no vulnerable certificate templates -> skip",
+                               {**evidence, "confirmed": False})
+        return ProbeResult(True, f"{self.esc} request prerequisites unconfirmed -> attempting",
+                           evidence, unknown=True)
+
+
+class ADCSESC2Probe(_ADCSRequestProbe):
+    technique = "ADCS-ESC2"
+    esc = "ESC2"
+
+
+class ADCSESC3Probe(_ADCSRequestProbe):
+    """Find can report EA viability; agent restrictions still need actual use."""
+    technique = "ADCS-ESC3"
+    esc = "ESC3"
+
+
+class ADCSESC6Probe(_ADCSRequestProbe):
+    technique = "ADCS-ESC6"
+    esc = "ESC6"
+
+
 class Esc8Probe(PreconditionProbe):
     """ESC8 (N1): re-confirm a relayable Web-Enrollment surface via certipy find --
     a Web-Enrollment-enabled / ESC8 marker is ``viable``; certipy reporting no CA
@@ -1314,6 +1366,7 @@ class SigningRelayProbe(PreconditionProbe):
 _PROBES: tuple[type[PreconditionProbe], ...] = (
     KerberoastProbe, ASREPProbe, LapsProbe, ConstrainedDelegProbe,
     RbcdProbe, OpenSharesProbe, ShadowCredsProbe, ADCSESC1Probe,
+    ADCSESC2Probe, ADCSESC3Probe, ADCSESC6Probe,
     # N1 -- ADCS relay fronts + the DCSync terminal.
     Esc8Probe, Esc11Probe, CertifriedProbe, DCSyncProbe,
     # PP (25NOV2026) -- the listener trio, completing detect coverage for all 15.
@@ -1414,6 +1467,7 @@ __all__ = [
     "probe_finding", "run_probes",
     "KerberoastProbe", "ASREPProbe", "LapsProbe", "ConstrainedDelegProbe",
     "RbcdProbe", "OpenSharesProbe", "ShadowCredsProbe", "ADCSESC1Probe",
+    "ADCSESC2Probe", "ADCSESC3Probe", "ADCSESC6Probe",
     "Esc8Probe", "Esc11Probe", "CertifriedProbe", "DCSyncProbe",
     "CoercionProbe", "NTLMRelayProbe", "UnconstrainedDelegProbe",
     "WriteDaclProbe", "WriteOwnerProbe", "AddMemberProbe", "TargetedKerberoastProbe",

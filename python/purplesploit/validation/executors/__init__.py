@@ -28,6 +28,9 @@ from .constrained_deleg import ConstrainedDelegExecutor
 from .openshares import OpenSharesExecutor
 from .shadow_creds import ShadowCredsExecutor
 from .adcs_esc1 import ADCSESC1Executor
+from .adcs_esc2 import ADCSESC2Executor
+from .adcs_esc3 import ADCSESC3Executor
+from .adcs_esc6 import ADCSESC6Executor
 from .coercion import CoercionExecutor
 from .ntlm_relay import NTLMRelayExecutor
 from .unconstrained_deleg import UnconstrainedDelegExecutor
@@ -57,6 +60,8 @@ _FULL: tuple[type[ValidationExecutor], ...] = (
     RBCDExecutor, KerberoastExecutor, ASREPExecutor, LAPSExecutor,
     ConstrainedDelegExecutor, OpenSharesExecutor, ShadowCredsExecutor,
     ADCSESC1Executor, CoercionExecutor, NTLMRelayExecutor, UnconstrainedDelegExecutor,
+    # ADCS T2 A1 -- template requests (recipe-known; not yet lab-proven).
+    ADCSESC2Executor, ADCSESC3Executor, ADCSESC6Executor,
     # N1 -- ADCS relay fronts + the reusable DCSync terminal (b1).
     ESC8Executor, ESC11Executor, CertifriedExecutor, DCSyncExecutor,
     # T3 -- ACL / object-takeover edges. All 7 now real (GPO-ABUSE built last,
@@ -106,7 +111,8 @@ __all__ = [
     "RBCDExecutor",
     "KerberoastExecutor", "ASREPExecutor", "LAPSExecutor",
     "ConstrainedDelegExecutor", "OpenSharesExecutor", "ShadowCredsExecutor",
-    "ADCSESC1Executor", "CoercionExecutor", "NTLMRelayExecutor",
+    "ADCSESC1Executor", "ADCSESC2Executor", "ADCSESC3Executor", "ADCSESC6Executor",
+    "CoercionExecutor", "NTLMRelayExecutor",
     "UnconstrainedDelegExecutor",
     "ESC8Executor", "ESC11Executor", "CertifriedExecutor", "DCSyncExecutor",
     "GenericAllExecutor", "WriteDaclExecutor", "WriteOwnerExecutor",
