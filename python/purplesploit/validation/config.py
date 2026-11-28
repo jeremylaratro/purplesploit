@@ -80,6 +80,9 @@ class ValidationConfig:
 
     # --- run i/o ---------------------------------------------------------
     output_dir: Path = Path("./validation-run")
+    cred_store_dir: Optional[str] = None   # default <output_dir>/cred-store
+    cred_store_file: Optional[str] = None  # explicit file path overrides directory
+    collect_creds: bool = True
 
     # --- detection layer (aranum) ---------------------------------------
     aranum_bin: str = "aranum"
@@ -206,6 +209,9 @@ class ValidationConfig:
     def redacted(self) -> dict[str, Any]:
         """Config as a dict with secret fields masked -- safe to log/preview."""
         data = asdict(self)
+        # Credential collection is operator-side state, not report content.
+        for key in ("cred_store_dir", "cred_store_file", "collect_creds"):
+            data.pop(key)
         # Preserve the existing default report bytes when reveal is not enabled.
         if not self.show_flag:
             data.pop("show_flag")

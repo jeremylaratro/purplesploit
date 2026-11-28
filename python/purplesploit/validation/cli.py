@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Optional
 
 from .config import ValidationConfig
+from .credential_store import CredentialStore
 from .orchestrator import (ValidationOrchestrator, ConfirmationProvider, Choice,
                            AutoConfirm)
 from .executors import is_implemented, get_executor, IMPLEMENTED
-from .executors.base import ValidationPlan
+from .executors.base import ValidationPlan, SecretReveal
 from .inputs import finding_from_inputs, InputError
 from .engine import da_in_minutes, default_edges
 from . import states, proof
@@ -101,6 +102,9 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
         tool_timeout_s=args.timeout,
         allow_destructive=args.allow_destructive,
         show_flag=getattr(args, "show_flag", False),
+        cred_store_dir=getattr(args, "cred_store_dir", None),
+        cred_store_file=getattr(args, "cred_store_file", None),
+        collect_creds=not getattr(args, "no_collect_creds", False),
     )
     # SHARE-LOOT knobs: pass through ONLY when the operator set them, so the
     # ValidationConfig defaults stay the single source of truth otherwise.
@@ -125,7 +129,7 @@ class DispatchParser(argparse.ArgumentParser):
         i = 0
         while i < len(args):
             token = args[i]
-            if token in {"pipeline", "run", "chain", "discover"}:
+            if token in {"pipeline", "run", "chain", "discover", "creds"}:
                 args.insert(0, args.pop(i))
                 break
             if not token.startswith("-"):
@@ -150,6 +154,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--aes-key")
     p.add_argument("--target", action="append", help="extra target host (repeatable)")
     p.add_argument("--output", default="./validation-run")
+    p.add_argument("--cred-store-dir", help="private credential store directory (default <output>/cred-store)")
+    p.add_argument("--cred-store-file", help="explicit private credential store file path")
+    p.add_argument("--no-collect-creds", action="store_true", help="disable recovered credential collection")
     p.add_argument("--aranum-bin", default="aranum")
     p.add_argument("--nmap", help="nmap output file for 'aranum run -i'")
     p.add_argument("--findings-json", help="pre-existing aranum findings.json (skip enum)")
@@ -220,6 +227,21 @@ def build_parser() -> argparse.ArgumentParser:
     chain.add_argument("--map", action="append", default=[], metavar="TECH=TARGET")
     chain.add_argument("--param", action="append", default=[], metavar="TECH.KEY=VALUE",
                        help="per-edge parameters, e.g. WRITE-DACL.trustee=operator")
+    creds = commands.add_parser("creds", help="list or clear the private credential store")
+    # Store commands need no target or authentication. Accept store/display
+    # options on either side of the list/clear subcommand.
+    def store_options(parser, suppress=False):
+        default = argparse.SUPPRESS if suppress else None
+        parser.add_argument("--output", default=argparse.SUPPRESS if suppress else "./validation-run")
+        parser.add_argument("--cred-store-dir", default=default)
+        parser.add_argument("--cred-store-file", default=default)
+        parser.add_argument("--show-flag", action="store_true",
+                            default=argparse.SUPPRESS if suppress else False,
+                            help="reveal stored values on /dev/tty only")
+    store_options(creds)
+    actions = creds.add_subparsers(dest="creds_action", required=True)
+    store_options(actions.add_parser("list", help="show credential metadata"), suppress=True)
+    store_options(actions.add_parser("clear", help="wipe stored credentials"), suppress=True)
     return root
 
 
@@ -240,11 +262,52 @@ def _score_exit(score):
     return 0
 
 
+def _creds(args) -> int:
+    args.output_dir = Path(args.output)
+    store = CredentialStore.from_config(args)
+    try:
+        if args.creds_action == "clear":
+            store.clear()
+            report = {"cleared": True}
+        else:
+            report = store.list()
+            if args.show_flag:
+                kinds = {"nthash": "nt_hash", "aeskey": "aes_key",
+                         "ccache": "ccache_base64", "pfx": "pfx_base64"}
+                reveals = [SecretReveal(entry["source_technique"],
+                                        kinds.get(entry["secret_type"], entry["secret_type"]),
+                                        entry["principal"], entry["value"])
+                           for entry in store.load()]
+                if reveals:
+                    reveal_to_terminal(reveals)
+    except Exception:
+        # JSON/parser/filesystem exceptions can contain secret values or paths.
+        json.dump({"errors": ["credential_store_error"]}, sys.stdout)
+        sys.stdout.write("\n")
+        return 2
+    json.dump(report, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "creds":
+        return _creds(args)
     config = build_config(args)
     confirmer = AutoConfirm() if args.yes else InteractivePrompt()
     orch = ValidationOrchestrator(config, confirmer=confirmer)
+    if config.collect_creds:
+        store = CredentialStore.from_config(config)
+
+        def collect(capabilities):
+            try:
+                store.upsert(capabilities)
+            except Exception as exc:
+                # Store errors stay private; they must not change proof output.
+                orch.context._private_errors.append(str(exc))
+
+        orch.context.on_capabilities = collect
     if config.show_flag:
         orch.context.on_artifact = _display_reveals
     try:

@@ -394,6 +394,9 @@ class ExecutorContext:
     # Installed ONLY by the CLI display path. Raw artifacts never enter reports.
     on_artifact: Optional[Callable[["ValidationExecutor", dict], None]] = field(
         default=None, repr=False)
+    # CLI-only operator store callback; capabilities never enter public reports.
+    on_capabilities: Optional[Callable[[list[Capability]], None]] = field(
+        default=None, repr=False)
     # Preserve recovery if a later proof raises. Cleared after each execution;
     # only its private reveal key is carried into an exception artifact.
     _pending_reveal_artifact: Optional[dict] = field(default=None, repr=False)
@@ -647,6 +650,8 @@ class ValidationExecutor(ABC):
         """
         params = self._params(ctx, finding, overrides)
         artifact = self._execute_to_artifact(ctx, finding, params)
+        if ctx.config.collect_creds and ctx.on_capabilities is not None:
+            ctx.on_capabilities(self.produced(ctx, finding, params, artifact))
         if ctx.config.show_flag and ctx.on_artifact is not None:
             ctx.on_artifact(self, artifact)
         return self._receipt_from(ctx, finding, params, artifact)
@@ -665,6 +670,8 @@ class ValidationExecutor(ABC):
             ctx.on_artifact(self, artifact)
         receipt = self._receipt_from(ctx, finding, params, artifact)
         caps = self.produced(ctx, finding, params, artifact)
+        if ctx.config.collect_creds and ctx.on_capabilities is not None:
+            ctx.on_capabilities(caps)
         if not artifact.get("complete"):
             # Failed proof still retains recovered credentials. Preserve the
             # previous complete-only gate for all existing state capabilities.
