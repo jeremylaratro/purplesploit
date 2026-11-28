@@ -12,17 +12,21 @@ import json
 import math
 import re
 import signal
+import sys
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import discovery, probes, states
+from .credential_store import CredentialStore
 from .executors import IMPLEMENTED, get_executor
 from .executors.acl_common import dacledit_read_argv
-from .executors.base import ExecutorContext, AuthorizedLabProvider, RunResult, SubprocessRunner
+from .executors.base import (ExecutorContext, AuthorizedLabProvider, Credential,
+                             RunResult, SubprocessRunner)
 from .findings import NormalizedFinding
+from .identity import credential_scope
 from .recommend import resolve_params
 
 
@@ -373,3 +377,409 @@ def plan(cfg, *, scope=(), scope_domain=(), scope_enumerate=(), goal=states.S_DA
     finally:
         audit_stream.close()
     return report
+
+
+# ========================================================================= 4b
+# The autopwn EXECUTION loop (ADR-003 Phase 4b). Dry-run ``plan`` above is the
+# unchanged default; NOTHING below runs unless the CLI gate (all of
+# ``--execute --yes --allow-destructive --scope`` + a typed risk acceptance, or
+# ``--dangerous`` for the acceptance only) has already passed. The loop auto-
+# executes mutating AD techniques toward a goal state. Its safety model is the
+# plan's and is NON-NEGOTIABLE:
+#   * EVERY resolved destination of EVERY hop is fenced at dispatch; an out-of-
+#     fence target is audited ``skipped_out_of_scope`` and NEVER dispatched.
+#   * The loop advances ONLY on a verified rollback; a dirty / unverified /
+#     interrupted mutation HALTS it (never advance against dirty state).
+#   * Kill (SIGINT / ``--kill-file``) + budget (``--max-hops`` / ``--max-time``)
+#     are admitted before every hop AND every tool launch; an in-flight mutation
+#     finishes its hardened rollback first.
+#   * The audit is a PUBLIC allowlist (identities, techniques, targets, outcome
+#     codes, rollback status) -- never a secret value, raw result, teardown
+#     obligation, or exception text.
+
+# The exact phrase the operator must type to accept the residual risk.
+ACCEPT_PHRASE = "EXECUTE"
+
+
+def recognized_destinations(argv):
+    """Best-effort host extraction from a tool argv for the defense-in-depth tool-
+    boundary fence. Conservative by design: it recognizes ONLY the leading shapes
+    that reliably carry a host (``nxc <proto> <host>``, an impacket
+    ``domain/user[:pass]@host`` auth target, and a ``-dc-ip``/``-target-ip``
+    value), so it never produces a false out-of-fence refusal on an unrelated
+    token. The PRIMARY destination guarantee is the pre-dispatch
+    :func:`resolved_destinations` fence; this is only a backstop."""
+    if not isinstance(argv, (list, tuple)) or not argv:
+        return []
+    hosts = []
+    if len(argv) >= 3 and argv[0] == "nxc":
+        hosts.append(argv[2])
+    if isinstance(argv[0], str) and argv[0].startswith("impacket-"):
+        for token in argv:
+            if isinstance(token, str) and "/" in token and "@" in token.split("/", 1)[1]:
+                hosts.append(token.rsplit("@", 1)[1])
+    for flag in ("-dc-ip", "-target-ip"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 < len(argv):
+                hosts.append(argv[i + 1])
+    return [h for h in (host_name(x) for x in hosts) if h]
+
+
+class ExecuteRunner:
+    """Wraps the real/injected command runner for the execute loop.
+
+    Before every tool launch it admits the kill-switch + budget -- EXCEPT while a
+    mutation's hardened rollback is in flight (``ctx._pending_teardown is not
+    None``), so an in-flight rollback always finishes before the loop halts. It
+    also fences every destination it can recognize (defense in depth); an out-of-
+    fence recognized host is audited and refused, never dispatched."""
+
+    def __init__(self, underlying, fence, admission, event, ctx_holder):
+        self.underlying = underlying
+        self.fence = fence
+        self.admission = admission
+        self.event = event
+        self.ctx_holder = ctx_holder
+
+    def run(self, argv, *, env=None, timeout=None, cwd=None):
+        ctx = self.ctx_holder[0]
+        tearing_down = ctx is not None and getattr(ctx, "_pending_teardown", None) is not None
+        if not tearing_down:
+            # Kill-switch + budget BEFORE every (non-rollback) tool launch.
+            self.admission.check()
+        for host in recognized_destinations(argv):
+            if not self.fence.contains(host):
+                self.event("skipped_out_of_scope", target=host_name(host), in_scope=False)
+                return RunResult(returncode=None, error="out_of_scope")
+        return self.underlying.run(argv, env=env, timeout=timeout, cwd=cwd)
+
+
+@dataclass
+class _Identity:
+    """A frontier identity. ``selector`` is None for the operator start identity
+    (the configured auth) and a ``principal@domain`` store selector for a gained
+    one (re-scoped via the Phase-3 credential store)."""
+    selector: object
+    principal: str
+    domain: str
+    machine: bool = False
+
+    @property
+    def key(self):
+        return (self.principal.casefold(), (self.domain or "").casefold())
+
+
+def _execute_warning(fence, goal):
+    """The LOUD, PUBLIC residual-risk warning. Names only the declared scope
+    (hosts/domains the operator chose) -- never a secret."""
+    pub = fence.public()
+    declared = (sorted(fence.hosts) + ["domain:" + d for d in sorted(fence.domains)]
+                + ["enumerated:" + h for h in sorted(fence.enumerated_hosts)])
+    scope_desc = ", ".join(declared) or "(empty)"
+    return ("autopwn EXECUTE mode auto-executes mutating AD techniques toward "
+            f"{goal}. Rollback is NOT guaranteed if the run is interrupted "
+            "(SIGINT / kill-file may leave AD mutated). The scope fence "
+            f"[{scope_desc}] is the ONLY boundary.")
+
+
+def execute(cfg, *, scope=(), scope_domain=(), scope_enumerate=(), goal=states.S_DA,
+            max_hops=1000, max_time=300, kill_file=None, params=None, runner=None,
+            dangerous=False, warn_fn=None, prompt_fn=None, clock=time.monotonic,
+            discover=None):
+    """Run the fenced, gated autopwn EXECUTION loop. Returns a PUBLIC-only report
+    and writes a PUBLIC-only append-only audit (``autopwn.execute.v1``).
+
+    ``params`` is TECH -> public selector overrides. ``runner`` is the injected
+    command runner the real executors drive (default :class:`SubprocessRunner`);
+    the loop wraps it in :class:`ExecuteRunner`. ``discover`` is the per-identity
+    discovery callable ``(ctx, hosts) -> verdicts`` (default the full
+    :func:`discovery.build_verdicts` with ``allow_destructive``); each verdict
+    exposes ``technique`` / ``host`` / ``eligible_for_autoexploit``."""
+    fence = ScopeFence.parse(scope, scope_domain)
+    enum_domains = ScopeFence.parse(domains=scope_enumerate).domains
+    base_dc = host_name(cfg.dc_ip)
+    if base_dc and any(base_dc.endswith('.' + domain) for domain in enum_domains):
+        fence.enumeration_endpoints.add(base_dc)
+    if goal == "DA":
+        goal = states.S_DA
+    if goal not in states.BASE_STATES:
+        raise ValueError("unknown_goal")
+    params = params or {}
+    if set(params) - IMPLEMENTED:
+        raise ValueError("unknown_technique")
+    admission = Admission(max_hops, max_time, kill_file, clock)
+    warn_fn = warn_fn or (lambda s: print(s, file=sys.stderr))
+    prompt_fn = prompt_fn if prompt_fn is not None else input
+    if discover is None:
+        def discover(ctx, hosts):
+            return discovery.build_verdicts(ctx, hosts, allow_destructive=True)
+    base_cfg = cfg
+    start_principal = cfg.username or ""
+    warning = _execute_warning(fence, goal)
+
+    events, path = [], []
+    audit_stream = None
+    header = None
+    accept_mode = None
+    current = {"principal": start_principal}
+
+    def write(record):
+        audit_stream.write(json.dumps(record) + '\n')
+        audit_stream.flush()
+
+    def open_audit():
+        nonlocal audit_stream, header
+        header = {"schema": "autopwn.execute.v1", "mode": "execute",
+                  "principal": start_principal, "goal": goal, "fence": fence.public(),
+                  "warning": warning, "accept_mode": accept_mode}
+        cfg.output_dir.mkdir(parents=True, exist_ok=True)
+        audit = cfg.output_dir / ("autopwn-" + uuid.uuid4().hex + ".jsonl")
+        audit_stream = audit.open('x', encoding='utf-8')
+        write({"header": header})
+        for pending in events:
+            write(pending)
+
+    # Event signature IS the public schema: identities, techniques, targets,
+    # outcome codes, and rollback status ONLY -- never a secret / raw result.
+    def event(outcome, *, technique=None, target=None, in_scope=None, rollback=None,
+              principal=None):
+        record = {"outcome": outcome, "technique": technique, "target": target,
+                  "principal": principal if principal is not None else current["principal"],
+                  "in_scope": in_scope, "rollback": rollback}
+        events.append(record)
+        if audit_stream is not None:
+            write(record)
+
+    ctx_holder = [None]
+    underlying = runner if runner is not None else SubprocessRunner()
+    safe = ExecuteRunner(underlying, fence, admission, event, ctx_holder)
+    store = CredentialStore.from_config(base_cfg)
+    status = "empty_frontier"
+    goal_reached = False
+
+    def in_fence_hosts(active_cfg):
+        return sorted({h for h in (fence.hosts | fence.enumerated_hosts |
+                       set(active_cfg.extra_targets)) if fence.contains(h)})
+
+    def make_ctx(active_cfg):
+        return ExecutorContext(active_cfg, safe, AuthorizedLabProvider(active_cfg.authorized),
+                               active_cfg.output_dir)
+
+    try:
+        with admission.signals():
+            # Budget / existing kill-file gate BEFORE anything is read or accepted.
+            admission.check(expansion=True)
+            # Risk acceptance BEFORE any mutating hop (and before any read).
+            warn_fn("\n*** autopwn EXECUTE -- DESTRUCTIVE, AUTONOMOUS ***")
+            warn_fn(warning)
+            if dangerous:
+                accept_mode = "dangerous"
+            else:
+                try:
+                    answer = prompt_fn(f"Type '{ACCEPT_PHRASE}' to proceed, anything else aborts: ")
+                except (EOFError, KeyboardInterrupt):
+                    answer = ""
+                if (answer or "").strip() != ACCEPT_PHRASE:
+                    status = "acceptance_declined"
+                    open_audit()
+                    event(status)
+                    write({"status": status, "goal_status": "not_established",
+                           "goal_reached": False, "executed_path": path})
+                    audit_stream.close()
+                    return {"header": header, "events": events, "executed_path": path,
+                            "status": status, "goal_status": "not_established",
+                            "goal_reached": False}
+                accept_mode = "interactive"
+            # Resolve --scope-enumerate against the (fenced) DC, then persist the
+            # header so the exact scope + accept-mode are recorded before any hop.
+            boot_ctx = make_ctx(base_cfg)
+            ctx_holder[0] = boot_ctx
+            _enumerate_into_fence(boot_ctx, admission, fence, enum_domains)
+            open_audit()
+            event("warning_accepted")
+
+            visited = set()
+            frontier = [_Identity(None, start_principal, base_cfg.domain,
+                                  machine=start_principal.endswith("$"))]
+            while frontier:
+                admission.check()                      # kill/budget BETWEEN hops
+                identity = _pop_frontier(frontier)
+                if identity.key in visited:
+                    continue
+                visited.add(identity.key)
+                current["principal"] = identity.principal
+                scope_cm = (nullcontext((base_cfg, None)) if identity.selector is None
+                            else credential_scope(base_cfg, identity.selector))
+                try:
+                    with scope_cm as (active_cfg, _cred):
+                        ctx = make_ctx(active_cfg)
+                        ctx.on_capabilities = None     # set per hop
+                        ctx_holder[0] = ctx
+                        # Infra must be explicitly in-fence to be touched.
+                        infra = [active_cfg.dc_ip, active_cfg.kdc_host or active_cfg.dc_ip]
+                        if active_cfg.dns_server:
+                            infra.append(active_cfg.dns_server)
+                        if any(not fence.contains(h) for h in infra):
+                            for h in infra:
+                                if not fence.contains(h):
+                                    event("skipped_out_of_scope", target=host_name(h), in_scope=False)
+                            continue
+                        event("identity_entered", in_scope=True)
+                        verdicts = discover(ctx, in_fence_hosts(active_cfg))
+                        goal_reached = _run_identity_hops(
+                            ctx, active_cfg, fence, admission, goal, params,
+                            verdicts, store, frontier, visited, event, path)
+                        if goal_reached:
+                            status = "goal_reached"
+                            break
+                except _LoopHalt as halt:
+                    status = halt.code
+                    goal_reached = halt.code == "goal_reached"
+                    break
+                except Exception:
+                    # Forgiving by default: a single unresolvable identity (bad
+                    # re-scope / discovery error) is audited and SKIPPED -- it
+                    # never aborts the whole engagement and never leaks a reason.
+                    event("identity_skipped", in_scope=None)
+                    continue
+    except PlanStopped as stopped:
+        status = stopped.code
+    except KeyboardInterrupt:
+        status = "interrupted"
+    except Exception:
+        # Never retain exception messages anywhere public.
+        status = "execution_failed"
+    if audit_stream is None:
+        open_audit()
+    event(status)
+    goal_status = "established" if goal_reached else "not_established"
+    report = {"header": header, "events": events, "executed_path": path,
+              "status": status, "goal_status": goal_status, "goal_reached": goal_reached}
+    try:
+        write({"status": status, "goal_status": goal_status,
+               "goal_reached": goal_reached, "executed_path": path})
+    finally:
+        audit_stream.close()
+    return report
+
+
+class _LoopHalt(BaseException):
+    """Unwind BOTH loop levels on a terminal event (goal reached / rollback halt /
+    kill / budget). Carries the PUBLIC status code only."""
+    def __init__(self, code):
+        self.code = code
+
+
+def _pop_frontier(frontier):
+    """DA-adjacent first (machine accounts), else FIFO -- cycle-safe via visited."""
+    for i, identity in enumerate(frontier):
+        if identity.machine:
+            return frontier.pop(i)
+    return frontier.pop(0)
+
+
+def _enumerate_into_fence(ctx, admission, fence, enum_domains):
+    """Materialize ``--scope-enumerate`` domains into the host fence via the fenced
+    DC (same read + parse as the dry-run planner); fail-closed and secret-safe."""
+    for domain in sorted(enum_domains):
+        admission.check()
+        res = probes._ldap_query(ctx, "(objectClass=computer)", ["dNSHostName"])
+        admission.check()
+        if res.returncode == 0 and not res.error and not res.timed_out:
+            for line in (res.stdout or "").splitlines():
+                if re.search(r"\[[-+*]\]", line):
+                    continue
+                match = re.search(r"\bdNSHostName(?:\s*[:=]\s*|\s+)(\S+)\s*$", line, re.I)
+                host = host_name(match[1]) if match else None
+                if host and host.endswith('.' + domain):
+                    fence.enumerated_hosts.add(host)
+
+
+def _rollback_status(ctx):
+    """``(applied, verified)`` of the just-executed hop's mutation. The loop
+    advances ONLY when a mutation that WAS applied is also ``rollback.verified``."""
+    artifact = getattr(ctx, "_last_artifact", None) or {}
+    mutation = artifact.get("mutation") or {}
+    applied = bool(mutation.get("applied"))
+    verified = (mutation.get("rollback") or {}).get("verified") is True
+    return applied, verified
+
+
+def _run_identity_hops(ctx, active_cfg, fence, admission, goal, params,
+                       verdicts, store, frontier, visited, event, path):
+    """Execute every eligible, goal-directed, fully-fenced hop for one identity.
+
+    Returns True iff the goal was reached. Raises :class:`_LoopHalt` to stop the
+    whole run on a dirty rollback, a kill/budget stop, or an interrupt mid-hop."""
+    principal = active_cfg.username or ""
+    for verdict in verdicts or []:
+        admission.check()                              # kill/budget BEFORE each hop
+        if not getattr(verdict, "eligible_for_autoexploit", False):
+            continue
+        technique = getattr(verdict, "technique", None)
+        host = getattr(verdict, "host", None)
+        executor = get_executor(technique)
+        if executor is None:
+            continue
+        # Greedy toward the goal: a hop that GAINS a new identity or REACHES the goal.
+        reaches_goal = goal in executor.eff
+        if not (executor.recovers_credentials or reaches_goal):
+            continue
+        finding = NormalizedFinding(source={}, finding_id="autopwn-" + str(technique),
+                                    host=host, technique=technique,
+                                    technique_class=executor.technique_class, entity={})
+        overrides = params.get(technique, {})
+        specs = executor.param_specs(ctx, finding)
+        vals = {s.name: overrides.get(s.name, s.recommended) for s in specs}
+        # Fence EVERY resolved destination at dispatch; out-of-fence -> never run.
+        destinations = resolved_destinations(active_cfg, finding, specs, vals)
+        outside = [h for h in destinations if not fence.contains(h)]
+        if outside:
+            for dest in outside:
+                event("skipped_out_of_scope", technique=technique,
+                      target=host_name(dest), in_scope=False)
+            continue
+        admission.expand()                             # budget: count the hop
+        event("executed_hop", technique=technique, target=host, in_scope=True)
+        collected = []
+        ctx.on_capabilities = lambda caps: collected.extend(c for c in caps if c is not None)
+        try:
+            receipt = executor.run(ctx, finding, overrides=overrides)
+        except BaseException as exc:                   # noqa: BLE001 -- interrupt mid-hop
+            # The hardened rollback already ran inside run(); inspect its result,
+            # audit the rollback status, and HALT -- never advance on dirty state.
+            applied, verified = _rollback_status(ctx)
+            event("hop_interrupted", technique=technique, target=host,
+                  rollback=("not_applicable" if not applied else
+                            "verified" if verified else "dirty"))
+            raise _LoopHalt(exc.code if isinstance(exc, PlanStopped) else "interrupted")
+        applied, verified = _rollback_status(ctx)
+        rollback = ("not_applicable" if not applied else "verified" if verified else "dirty")
+        complete = bool(receipt.get("complete"))
+        path.append({"technique": technique, "target": host, "principal": principal,
+                     "mutating": bool(executor.mutating), "rollback": rollback,
+                     "complete": complete, "reached_goal": reaches_goal and complete})
+        event("hop_result", technique=technique, target=host, rollback=rollback,
+              in_scope=True)
+        # Advance ONLY on a verified rollback; a dirty mutation HALTS the loop.
+        if applied and not verified:
+            event("rollback_dirty_halt", technique=technique, target=host, rollback="dirty")
+            raise _LoopHalt("rollback_halt")
+        # Collect produced credentials (Phase 2 store) and extend the frontier.
+        try:
+            store.upsert(collected)
+        except Exception:
+            pass                                       # store errors stay private
+        for cap in collected:
+            if isinstance(cap, Credential) and cap.secret and cap.principal:
+                domain = cap.domain or active_cfg.domain
+                key = (cap.principal.casefold(), (domain or "").casefold())
+                if key not in visited:
+                    selector = f"{cap.principal}@{domain}" if domain else cap.principal
+                    frontier.append(_Identity(selector, cap.principal, domain,
+                                              machine=bool(cap.is_machine)))
+        if reaches_goal and complete:
+            event("goal_reached", technique=technique, target=host, in_scope=True)
+            return True
+    return False

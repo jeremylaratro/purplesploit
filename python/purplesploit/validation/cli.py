@@ -232,8 +232,15 @@ def build_parser() -> argparse.ArgumentParser:
         if action.dest in ("domain", "dc_ip"):
             action.required = False
     autopwn = commands.add_parser("autopwn", parents=[planner_shared],
-                                  help="non-secret, fenced dry-run planner (Phase 4a)")
-    autopwn.add_argument("--execute", action="store_true", help="unsupported until Phase 4b")
+                                  help="fenced autopwn: non-secret dry-run planner (default) "
+                                       "or the gated execution loop (--execute)")
+    autopwn.add_argument("--execute", action="store_true",
+                         help="run the EXECUTION loop (auto-executes mutating AD techniques). "
+                              "Requires ALL of --yes --allow-destructive and a scope fence, "
+                              "PLUS a typed risk acceptance (or --dangerous). Dry-run otherwise.")
+    autopwn.add_argument("--dangerous", action="store_true",
+                         help="bypass ONLY the interactive risk-acceptance prompt (for "
+                              "non-interactive --execute runs); never bypasses the flag/scope gate")
     autopwn.add_argument("--scope", action="append", default=[], metavar="HOST,...")
     autopwn.add_argument("--scope-domain", action="append", default=[], metavar="DOMAIN,...")
     autopwn.add_argument("--scope-enumerate", action="append", default=[], metavar="DOMAIN",
@@ -320,15 +327,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "creds":
         return _creds(args)
     if args.command == "autopwn":
-        # Gate BEFORE build_config (which reads signing-key files), identity
-        # re-scope (which loads secrets), or orchestrator construction.
+        # Phase 4b execution gate: enforce ALL of --execute --yes
+        # --allow-destructive and a scope fence BEFORE build_config (which reads
+        # files) or any identity re-scope. --dangerous bypasses ONLY the later
+        # interactive acceptance, never this gate.
         if args.execute:
-            parser.error("execution not yet supported (Phase 4b)")
+            has_fence = bool(args.scope or args.scope_domain or args.scope_enumerate)
+            missing = [name for name, present in (
+                ("--yes", args.yes), ("--allow-destructive", args.allow_destructive),
+                ("--scope", has_fence)) if not present]
+            if missing:
+                parser.error("autopwn --execute requires " + ", ".join(missing)
+                             + " (a scope fence is --scope / --scope-domain / --scope-enumerate)")
         if not args.domain or not args.dc_ip:
             parser.error("autopwn requires --domain and --dc-ip")
         if args.as_cred or args.forge_key_file or args.forge_key_nt_file or args.show_flag:
             parser.error("autopwn supports configured start authentication only; secret-file reads and reveal are disabled")
-        from .autopwn import plan
         try:
             scoped = {}
             for key, value in _pairs(args.param).items():
@@ -336,13 +350,23 @@ def main(argv: Optional[list[str]] = None) -> int:
                 if not sep or not param:
                     raise InputError("invalid_parameter")
                 scoped.setdefault(tech.upper(), {})[param] = value
-            report = plan(build_config(args), scope=args.scope, scope_domain=args.scope_domain,
-                          scope_enumerate=args.scope_enumerate, goal=args.goal,
-                          max_hops=args.max_hops, max_time=args.max_time, kill_file=args.kill_file,
-                          params=scoped)
-            status = 2 if report["status"] in ("empty_scope", "planning_failed") else 0
-            if report["status"] == "empty_scope":
-                print("empty in-scope set; planning halted (no implicit targets)", file=sys.stderr)
+            if args.execute:
+                from .autopwn import execute
+                report = execute(build_config(args), scope=args.scope,
+                                 scope_domain=args.scope_domain, scope_enumerate=args.scope_enumerate,
+                                 goal=args.goal, max_hops=args.max_hops, max_time=args.max_time,
+                                 kill_file=args.kill_file, params=scoped, dangerous=args.dangerous)
+                status = 2 if report["status"] in (
+                    "acceptance_declined", "execution_failed") else 0
+            else:
+                from .autopwn import plan
+                report = plan(build_config(args), scope=args.scope, scope_domain=args.scope_domain,
+                              scope_enumerate=args.scope_enumerate, goal=args.goal,
+                              max_hops=args.max_hops, max_time=args.max_time, kill_file=args.kill_file,
+                              params=scoped)
+                status = 2 if report["status"] in ("empty_scope", "planning_failed") else 0
+                if report["status"] == "empty_scope":
+                    print("empty in-scope set; planning halted (no implicit targets)", file=sys.stderr)
         except Exception:
             report, status = {"errors": ["planner_input_or_audit_error"]}, 2
         json.dump(report, sys.stdout, indent=2)
