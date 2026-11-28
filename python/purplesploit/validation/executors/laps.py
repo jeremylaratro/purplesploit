@@ -36,7 +36,7 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv)
+                   redact_argv, SecretReveal)
 
 
 # GetLAPSPassword success markers: a recovered managed-password / LAPS line.
@@ -112,6 +112,14 @@ class LAPSExecutor(ValidationExecutor):
         local_admin = v["local_admin"]
         op_target, op_extra = self._op_auth_target(cfg)
 
+        # Private recovery channel, populated before any downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         steps: list[StepRecord] = []
         errors: list[str] = []
         gate = {"classifier": "not_required", "op": None}
@@ -128,7 +136,7 @@ class LAPSExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "laps_read"
             errors.append("gate_denied:laps_read")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "laps_read"
@@ -138,13 +146,16 @@ class LAPSExecutor(ValidationExecutor):
         res = ctx.runner.run(read_argv, timeout=cfg.tool_timeout_s)
         out = res.stdout or ""
         laps_pw = self._parse_laps_pw(out)
+        if laps_pw:
+            artifact["_reveal"].append(SecretReveal(
+                self.technique, "password", f"{host}\\{local_admin}", laps_pw))
         read_ok = bool(laps_pw) or bool(_RE_LAPS_RECOVERED.search(out))
         record("laps_read", read_argv, res, read_ok,
                note="recovered" if read_ok else "no password")
         if not laps_pw:
             # Read succeeded but we could not parse a usable password to log in with.
             errors.append("laps_no_password" if not read_ok else "laps_pw_unparsed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
 
         # 2) local-admin login = the terminal proof -----------------------
         login_argv = ["nxc", "smb", host, "-u", local_admin, "-p", laps_pw, "--local-auth"]
@@ -165,7 +176,10 @@ class LAPSExecutor(ValidationExecutor):
             extra={"host": host},
         )
         complete = login_ok
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish(steps, gate, mutation, terminal_fact, complete, errors)
+
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
 
     # ---------------------------------------------------------------- helpers
     @staticmethod

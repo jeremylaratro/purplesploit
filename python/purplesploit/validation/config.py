@@ -109,6 +109,7 @@ class ValidationConfig:
     # things). Never a silent default-on bypass: it only stands in for the
     # interactive press-yes prompt when there is genuinely no stdin to block on.
     allow_destructive: bool = False
+    show_flag: bool = False                # live terminal display only (opt-in)
     tool_timeout_s: int = 300
     # Interval between listener-output polls for the listener-based executors
     # (ADR-001). Small by default; the total poll is bounded by tool_timeout_s.
@@ -205,6 +206,9 @@ class ValidationConfig:
     def redacted(self) -> dict[str, Any]:
         """Config as a dict with secret fields masked -- safe to log/preview."""
         data = asdict(self)
+        # Preserve the existing default report bytes when reveal is not enabled.
+        if not self.show_flag:
+            data.pop("show_flag")
         for key in ("password", "nt_hash", "aes_key", "forge_key", "forge_key_nt"):
             if data.get(key):
                 data[key] = "***redacted***"

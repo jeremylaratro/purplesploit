@@ -46,6 +46,15 @@ class RunResult:
 
 
 # ------------------------------------------------------------------ capability output
+@dataclass(frozen=True)
+class SecretReveal:
+    """Recovered material for live display only; NEVER part of a receipt/report."""
+    technique: str
+    kind: str
+    principal: str
+    value: str
+
+
 # Channels the chaining engine (C) knows how to route into a downstream edge.
 CAP_CCACHE = "ccache"       # a Kerberos credential-cache PATH -> KRB5CCNAME + ccache param
 CAP_NT_HASH = "nt_hash"     # an NT hash (SECRET) -> -hashes, in-memory only
@@ -367,6 +376,12 @@ class ExecutorContext:
 
     _private_errors: list[str] = field(default_factory=list, repr=False)
     _pending_teardown: Optional[dict] = field(default=None, repr=False)
+    # Installed ONLY by the CLI display path. Raw artifacts never enter reports.
+    on_artifact: Optional[Callable[["ValidationExecutor", dict], None]] = field(
+        default=None, repr=False)
+    # Preserve recovery if a later proof raises. Cleared after each execution;
+    # only its private reveal key is carried into an exception artifact.
+    _pending_reveal_artifact: Optional[dict] = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.destructive_confirmer is None:
@@ -491,6 +506,15 @@ class ValidationExecutor(ABC):
         return [self.recipe_ref] if self.recipe_ref else []
 
     # -- composition hooks (review B2/B3) -- default no-ops -------------------
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        """Live display hook: read ONLY engine-only, underscore-prefixed keys.
+
+        Independent of produced(): recovery can precede a failed proof or cleanup
+        and is also available on standalone runs. Called only by the CLI display
+        callback, never by receipt construction, persistence, or the chain store.
+        """
+        return []
+
     def produced(self, ctx: ExecutorContext, finding,
                  params: dict[str, ParamValue], artifact: dict) -> list[Capability]:
         """Typed capabilities this edge established, for the engine to THREAD into
@@ -550,6 +574,7 @@ class ValidationExecutor(ABC):
         """Run ``execute`` fail-closed: any exception becomes an incomplete
         artifact carrying the error (never a fabricated proof)."""
         ctx._pending_teardown = None
+        ctx._pending_reveal_artifact = None
         try:
             return self.execute(ctx, finding, params)
         except StubNotImplemented as exc:
@@ -558,10 +583,14 @@ class ValidationExecutor(ABC):
         except Exception as exc:  # fail closed -> incomplete receipt, never a proof
             ctx._private_errors.append(str(exc))
             artifact = {"steps": [], "complete": False, "errors": ["executor_exception"]}
+            if ctx._pending_reveal_artifact is not None:
+                artifact["_reveal"] = ctx._pending_reveal_artifact.get("_reveal", [])
             if ctx._pending_teardown:
                 artifact["mutation"] = {"applied": True}
                 artifact["teardown_obligation"] = ctx._pending_teardown
             return artifact
+        finally:
+            ctx._pending_reveal_artifact = None
 
     def _receipt_from(self, ctx: ExecutorContext, finding,
                       params: dict[str, ParamValue], artifact: dict) -> dict:
@@ -594,6 +623,8 @@ class ValidationExecutor(ABC):
         """
         params = self._params(ctx, finding, overrides)
         artifact = self._execute_to_artifact(ctx, finding, params)
+        if ctx.config.show_flag and ctx.on_artifact is not None:
+            ctx.on_artifact(self, artifact)
         return self._receipt_from(ctx, finding, params, artifact)
 
     def run_composable(self, ctx: ExecutorContext, finding,
@@ -606,6 +637,8 @@ class ValidationExecutor(ABC):
         downstream terminal (B3)."""
         params = self._params(ctx, finding, overrides)
         artifact = self._execute_to_artifact(ctx, finding, params)
+        if ctx.config.show_flag and ctx.on_artifact is not None:
+            ctx.on_artifact(self, artifact)
         receipt = self._receipt_from(ctx, finding, params, artifact)
         caps = self.produced(ctx, finding, params, artifact) if artifact.get("complete") else []
         return ComposableResult(

@@ -20,6 +20,14 @@ from .inputs import finding_from_inputs, InputError
 from .engine import da_in_minutes, default_edges
 from . import states, proof
 from .orchestrator import ValidationOutcome
+from .reveal_sink import reveal_to_terminal
+
+
+def _display_reveals(executor, artifact):
+    """CLI-only channel; neither the artifact nor reveals enter a report."""
+    reveals = executor.revealed_secrets(artifact)
+    if reveals:
+        reveal_to_terminal(reveals)
 
 
 class InteractivePrompt(ConfirmationProvider):
@@ -92,6 +100,7 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
         auto_confirm=args.yes,
         tool_timeout_s=args.timeout,
         allow_destructive=args.allow_destructive,
+        show_flag=getattr(args, "show_flag", False),
     )
     # SHARE-LOOT knobs: pass through ONLY when the operator set them, so the
     # ValidationConfig defaults stay the single source of truth otherwise.
@@ -162,6 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "instead). Still prints a loud warning per op -- never a "
                         "silent bypass.")
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--show-flag", action="store_true",
+                   help="reveal recovered secrets on /dev/tty only; refuse without "
+                        "an interactive terminal (never included in receipts)")
     # T4 ticket forging: the signing key is a SECRET -- supplied via a FILE (never
     # argv/preview). krbtgt key (Golden/Diamond/Sapphire) or service key (Silver).
     p.add_argument("--forge-key-file", help="file holding the hex signing key "
@@ -233,6 +245,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     config = build_config(args)
     confirmer = AutoConfirm() if args.yes else InteractivePrompt()
     orch = ValidationOrchestrator(config, confirmer=confirmer)
+    if config.show_flag:
+        orch.context.on_artifact = _display_reveals
     try:
         if args.command == "pipeline":
             report = orch.run()
