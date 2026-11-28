@@ -13,6 +13,7 @@ from typing import Optional
 
 from .config import ValidationConfig
 from .credential_store import CredentialStore
+from .identity import credential_scope, CredentialScopeError
 from .orchestrator import (ValidationOrchestrator, ConfirmationProvider, Choice,
                            AutoConfirm)
 from .executors import is_implemented, get_executor, IMPLEMENTED
@@ -157,6 +158,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cred-store-dir", help="private credential store directory (default <output>/cred-store)")
     p.add_argument("--cred-store-file", help="explicit private credential store file path")
     p.add_argument("--no-collect-creds", action="store_true", help="disable recovered credential collection")
+    p.add_argument("--as-cred", metavar="SELECTOR",
+                   help="act as a stored credential: principal, principal@domain, or zero-based store index")
     p.add_argument("--aranum-bin", default="aranum")
     p.add_argument("--nmap", help="nmap output file for 'aranum run -i'")
     p.add_argument("--findings-json", help="pre-existing aranum findings.json (skip enum)")
@@ -295,6 +298,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "creds":
         return _creds(args)
     config = build_config(args)
+    if args.as_cred is not None:
+        try:
+            with credential_scope(config, args.as_cred) as (active, credential):
+                # Only public identity metadata goes to the live banner.
+                identity = f"{active.username}@{active.domain}"
+                source = credential["source_technique"]
+                print(f"now acting as {identity} [source: {source}]")
+                return _dispatch(args, active)
+        except CredentialScopeError as exc:
+            json.dump({"errors": [str(exc)]}, sys.stdout)
+            sys.stdout.write("\n")
+            return 2
+    return _dispatch(args, config)
+
+
+def _dispatch(args: argparse.Namespace, config: ValidationConfig) -> int:
     confirmer = AutoConfirm() if args.yes else InteractivePrompt()
     orch = ValidationOrchestrator(config, confirmer=confirmer)
     if config.collect_creds:
