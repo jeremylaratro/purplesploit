@@ -218,6 +218,7 @@ class RBCDExecutor(ValidationExecutor):
             return finish_artifact(steps, gate, mutation, None, False, errors)
         add_argv = ["impacket-addcomputer", "-computer-name", f"{new}$",
                     "-computer-pass", new_pass, "-dc-ip", dc, *op_extra, op_target]
+        ctx._pending_teardown = {"args": (vsam, new, op_target, op_extra,)}
         res = ctx.runner.run(add_argv, timeout=ctx.config.tool_timeout_s)
         add_ok = _RE_ADDCOMPUTER_OK.search(res.stdout or "") is not None
         record("addcomputer", add_argv, res, add_ok)
@@ -295,6 +296,13 @@ class RBCDExecutor(ValidationExecutor):
         # Complete = chain ran through the terminal step and rollback was tried.
         complete = getst_ok and mutation["rollback"]["performed"]
         return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        self._rollback(ctx, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record) -> None:

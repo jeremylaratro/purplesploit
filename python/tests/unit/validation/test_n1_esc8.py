@@ -159,7 +159,9 @@ def test_esc8_no_cert_is_inconclusive(tmp_path):
     receipt = get_executor("ESC8").run(_ctx(cfg, runner, tmp_path, pm), _esc8_finding())
     assert receipt["complete"] is False and receipt["terminal_fact"] is None
     assert "esc8_no_cert" in receipt["errors"]
-    assert receipt["mutation"]["applied"] is False          # nothing issued -> no rollback
+    # The attempted mutation cannot be ruled out by missing output alone.
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
     assert pm.stopped
     assert not any(Path(c[0]).name == "certipy-ad" for c in runner.calls)   # auth never ran
 

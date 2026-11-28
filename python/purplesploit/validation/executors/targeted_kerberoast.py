@@ -256,6 +256,7 @@ class TargetedKerberoastExecutor(ValidationExecutor):
         # 3) write the SPN (mutating) --------------------------------------------
         set_argv = _bloodyad_auth_argv(cfg, dc) + ["set", "object", victim,
                                                    "servicePrincipalName", "-v", spn]
+        ctx._pending_teardown = {"args": (victim, spn,)}
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_OK.search(set_out))
@@ -349,6 +350,13 @@ class TargetedKerberoastExecutor(ValidationExecutor):
         if not artifact.get("complete"):
             return credentials
         return [Capability(state=states.cred_for(victim), channel=CAP_NONE, principal=victim)] + credentials
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        self._rollback(ctx, ctx.config, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, victim, spn, mutation, steps, errors, record) -> None:

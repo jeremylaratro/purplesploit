@@ -143,6 +143,7 @@ class WriteDaclExecutor(ValidationExecutor):
 
         # 3) write the new ACE ------------------------------------------------
         write_argv = dacledit_write_argv(cfg, target, dc, trustee, rights)
+        ctx._pending_teardown = {"args": (target, trustee, rights,)}
         res = ctx.runner.run(write_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         write_out = (res.stdout or "") + (res.stderr or "")
         write_ok = bool(_RE_DACL_WRITE_OK.search(write_out))
@@ -152,8 +153,6 @@ class WriteDaclExecutor(ValidationExecutor):
             errors.append("write_dacl_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
-        if ctx.composed:
-            ctx._pending_teardown = {"args": (target, trustee, rights,)}
 
         # 4) POSITIVE readback = the terminal proof (never the write call's own
         #    exit code) ---------------------------------------------------------

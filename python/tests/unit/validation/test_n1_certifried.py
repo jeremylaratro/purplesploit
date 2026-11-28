@@ -217,7 +217,9 @@ def test_certifried_account_create_fails_is_not_proved(tmp_path):
     receipt = _run(cfg, tmp_path, runner)
     assert receipt["complete"] is False and receipt["terminal_fact"] is None
     assert "account_create_failed" in receipt["errors"]
-    assert receipt["mutation"]["applied"] is False            # nothing to roll back
+    # The attempted mutation cannot be ruled out by missing output alone.
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is True
     # req/auth never ran.
     assert not any(c[1] in ("req", "auth") for c in runner.calls if Path(c[0]).name == "certipy-ad")
 

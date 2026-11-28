@@ -56,6 +56,7 @@ from ..predicates import file_present_nonempty
 from .. import proof
 from .. import states
 from ._reveal_common import key_material, pkinit_hashes
+from ._rollback_common import key_material_obligation, key_material_paths
 from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_CCACHE)
 from .process_manager import poll_for_capture
@@ -225,9 +226,11 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
 
         # 1) start the ntlmrelayx --adcs listener (non-blocking). UNVERIFIED.
         listener_argv = self._listener_argv(cfg, v)
+        ctx._pending_teardown = key_material_obligation(out_dir)
         try:
             handle = ctx.proc_manager.start(listener_argv, cwd=str(out_dir))
         except OSError as exc:
+            ctx._pending_teardown = None
             record("start_listener", listener_argv, None, False, note=f"spawn failed: {exc}")
             errors.append("listener_start_failed")
             return finish_artifact(steps, gate, mutation, None, False, errors)
@@ -273,6 +276,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         # names when only the cert-issued marker was observed.
         pfx = _issued_pfx(out_dir) or str(
             out_dir / f"{(_short_name(victim_dc) or 'cert').lower()}.pfx")
+        ctx._pending_teardown["pfx"] = pfx
         capture_issued()
         auth_argv = ["certipy-ad", "auth", "-pfx", pfx, "-dc-ip", cfg.dc_ip]
         res = ctx.runner.run(auth_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
@@ -280,6 +284,7 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         auth_out = (res.stdout or "") + (res.stderr or "")
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)
+        ctx._pending_teardown["ccache"] = ccache
         artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonated, ccache))
         artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonated, auth_out))
         record("cert_auth", auth_argv, res, auth_ok,
@@ -311,9 +316,10 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
             # Secret paths for the engine's deferred teardown; in-memory products
             # for threading. Neither reaches the receipt (_receipt_from ignores
             # both keys) -- H6.
-            artifact["teardown_obligation"] = {
-                "method": "destroy issued-cert key material (.pfx + .ccache)",
-                "paths": [p for p in (pfx, ccache) if p]}
+            ctx._pending_teardown.update(
+                method="destroy issued-cert key material (.pfx + .ccache)",
+                paths=[p for p in (pfx, ccache) if p])
+            artifact["teardown_obligation"] = ctx._pending_teardown
             artifact["_composed_products"] = {
                 "ccache": ccache, "pfx": pfx, "principal": impersonated}
             return artifact
@@ -343,10 +349,10 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         alive for composition -- the same functional rollback as standalone
         (certipy has no revoke, #66157), run at chain teardown and verified by
         confirmed file-absence (the ESC1 non-vacuous rule)."""
-        paths = (obligation or {}).get("paths") or []
+        paths = key_material_paths(obligation or {})
         if not paths:
-            return {"performed": False, "verified": True, "method": None,
-                    "note": "no key material to destroy"}
+            return {"performed": False, "verified": False, "method": None,
+                    "note": "key material not confirmed destroyed"}
         if ctx.authorizer.authorize("rollback", {"composed": True}) == "denied":
             return {"performed": False, "verified": False,
                     "method": "destroy issued-cert key material (.pfx + .ccache)",
@@ -370,7 +376,10 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
             return
         mutation["rollback"]["performed"] = True
         mutation["rollback"]["method"] = "destroy issued-cert key material (.pfx + .ccache)"
-        destroyed = self._destroy_key_material([pfx, ccache], steps)
+        paths = [p for p in (pfx, ccache) if p]
+        if ctx._pending_teardown is not None:
+            paths.extend(key_material_paths(ctx._pending_teardown))
+        destroyed = self._destroy_key_material(list(dict.fromkeys(paths)), steps)
         mutation["rollback"]["verified"] = destroyed
         if not destroyed:
             errors.append("rollback_unverified")

@@ -352,7 +352,7 @@ def test_genericall_rbcd_rollback_delete_fail(tmp_path):
     assert receipt["mutation"]["rollback"]["verified"] is False
 
 
-def test_genericall_rbcd_addcomputer_fails_no_further_calls(tmp_path):
+def test_genericall_rbcd_addcomputer_failure_still_rolls_back(tmp_path):
     cfg = _cfg()
     script = _rbcd_script()
     script["addcomputer:add"] = RunResult(0, stdout="[-] access denied\n")
@@ -362,8 +362,9 @@ def test_genericall_rbcd_addcomputer_fails_no_further_calls(tmp_path):
         overrides={"pivot": "rbcd", "new_computer": "testpc"})
     assert receipt["complete"] is False
     assert "addcomputer_failed" in receipt["errors"]
-    assert receipt["mutation"]["applied"] is False
-    assert not any(Path(c[0]).name == "impacket-rbcd" for c in runner.calls)
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is True
+    assert any("-delete" in c for c in runner.calls)
 
 
 # ======================================================================= target_identity

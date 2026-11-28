@@ -260,7 +260,9 @@ def test_adcs_req_fails_is_not_proved(tmp_path):
     receipt = get_executor("ADCS-ESC1").run(_ctx(cfg, runner, tmp_path), _adcs_finding())
     assert receipt["complete"] is False
     assert receipt["terminal_fact"] is None               # never issued -> no proof
-    assert receipt["mutation"]["applied"] is False         # nothing to roll back
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["dirty"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
     assert "cert_request_failed" in receipt["errors"]
     assert any(s["name"] == "cert_request" and s["ok"] is False for s in receipt["steps"])
     # auth / nxc / revoke never ran.
