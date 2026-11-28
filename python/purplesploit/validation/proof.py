@@ -137,6 +137,8 @@ def normalize_mutation(raw: Mapping | None) -> dict:
                 "rollback": {"performed": False, "method": None, "verified": False}}
     if isinstance(raw, Mapping):
         mutation["applied"] = raw.get("applied") is True
+        if "dirty" in raw:
+            mutation["dirty"] = raw.get("dirty") is True
         rollback = raw.get("rollback")
         if isinstance(rollback, Mapping):
             mutation["rollback"]["performed"] = rollback.get("performed") is True
@@ -144,6 +146,9 @@ def normalize_mutation(raw: Mapping | None) -> dict:
             if isinstance(method, str):
                 mutation["rollback"]["method"] = method
             mutation["rollback"]["verified"] = rollback.get("verified") is True
+    if mutation.get("dirty"):
+        mutation["applied"] = True
+        mutation["rollback"]["verified"] = False
     return mutation
 
 

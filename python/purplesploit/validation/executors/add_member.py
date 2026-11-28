@@ -197,6 +197,7 @@ class AddMemberExecutor(ValidationExecutor):
 
         # 3) add the member ----------------------------------------------------
         add_argv = _bloodyad_auth_argv(cfg, dc) + ["add", "groupMember", group, member]
+        ctx._pending_teardown = {"args": (group, member, member_short,)}
         res = ctx.runner.run(add_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         add_out = (res.stdout or "") + (res.stderr or "")
         add_ok = bool(_RE_BLOODYAD_ADD_MEMBER_OK.search(add_out))
@@ -206,8 +207,6 @@ class AddMemberExecutor(ValidationExecutor):
             errors.append("add_member_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
-        if ctx.composed:
-            ctx._pending_teardown = {"args": (group, member, member_short,)}
 
         # 4) POSITIVE readback = the terminal proof (never the add call's own
         #    exit code) ---------------------------------------------------------

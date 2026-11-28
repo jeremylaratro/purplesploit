@@ -390,7 +390,10 @@ class ExecutorContext:
     composed: bool = False                                    # True => mutating fronts DEFER rollback to chain teardown
 
     _private_errors: list[str] = field(default_factory=list, repr=False)
+    # Register BEFORE a mutating call. Targets and paths are engine-only secrets.
     _pending_teardown: Optional[dict] = field(default=None, repr=False)
+    # Includes interrupted runs, whose caller receives an exception, not a receipt.
+    _last_artifact: Optional[dict] = field(default=None, repr=False)
     # Installed ONLY by the CLI display path. Raw artifacts never enter reports.
     on_artifact: Optional[Callable[["ValidationExecutor", dict], None]] = field(
         default=None, repr=False)
@@ -554,8 +557,9 @@ class ValidationExecutor(ABC):
         Default: nothing to tear down. Returns
         ``{performed, verified, method, note}``; a mutating front overrides it.
         The engine requires ``verified`` before it reports a chain "clean" (H4)."""
-        return {"performed": False, "verified": True, "method": None,
-                "note": "no teardown obligation (non-mutating edge)"}
+        return {"performed": False, "verified": obligation is None, "method": None,
+                "note": ("rollback unavailable" if obligation is not None else
+                         "no teardown obligation (non-mutating edge)")}
 
     def chain_pre(self, ctx, finding) -> frozenset:
         return self.pre
@@ -596,28 +600,90 @@ class ValidationExecutor(ABC):
 
     def _execute_to_artifact(self, ctx: ExecutorContext, finding,
                              params: dict[str, ParamValue]) -> dict:
-        """Run ``execute`` fail-closed: any exception becomes an incomplete
-        artifact carrying the error (never a fabricated proof)."""
+        """Execute with a pre-registered cleanup obligation on every write.
+
+        Catch process-control exceptions long enough to attempt cleanup and keep
+        a runtime artifact, then propagate them so the caller still stops.
+        """
         ctx._pending_teardown = None
         ctx._pending_reveal_artifact = None
+        ctx._last_artifact = None
+        interruption = None
         try:
-            return self.execute(ctx, finding, params)
-        except StubNotImplemented as exc:
-            ctx._private_errors.append(str(exc))
-            return {"steps": [], "complete": False, "errors": ["stub_not_implemented"]}
-        except Exception as exc:  # fail closed -> incomplete receipt, never a proof
-            ctx._private_errors.append(str(exc))
-            artifact = {"steps": [], "complete": False, "errors": ["executor_exception"]}
-            if ctx._pending_reveal_artifact is not None:
-                artifact["_reveal"] = ctx._pending_reveal_artifact.get("_reveal", [])
-                if "_credential_cache" in ctx._pending_reveal_artifact:
-                    artifact["_credential_cache"] = ctx._pending_reveal_artifact["_credential_cache"]
-            if ctx._pending_teardown:
-                artifact["mutation"] = {"applied": True}
-                artifact["teardown_obligation"] = ctx._pending_teardown
+            try:
+                artifact = self.execute(ctx, finding, params)
+            except BaseException as exc:
+                ctx._private_errors.append(str(exc))
+                error = ("stub_not_implemented" if isinstance(exc, StubNotImplemented)
+                         else "executor_exception")
+                artifact = {"steps": [], "complete": False, "errors": [error]}
+                if ctx._pending_reveal_artifact is not None:
+                    artifact["_reveal"] = ctx._pending_reveal_artifact.get("_reveal", [])
+                    if "_credential_cache" in ctx._pending_reveal_artifact:
+                        artifact["_credential_cache"] = ctx._pending_reveal_artifact["_credential_cache"]
+                if not isinstance(exc, Exception):
+                    interruption = exc
+                if ctx._pending_teardown is not None:
+                    cleanup_stop = self._recover_mutation(ctx, artifact, ctx._pending_teardown)
+                    interruption = interruption or cleanup_stop
+            else:
+                obligation = ctx._pending_teardown
+                mutation = artifact.get("mutation") or {}
+                rollback = mutation.get("rollback") or {}
+                deferred = artifact.get("teardown_obligation") is not None
+                # A failed write predicate is not evidence that nothing changed.
+                # Recover early returns that did not reach an inline rollback.
+                if (obligation is not None and not deferred
+                        and not rollback.get("performed")
+                        and "gate_denied:rollback" not in artifact.get("errors", [])):
+                    interruption = self._recover_mutation(ctx, artifact, obligation)
+                elif mutation.get("applied"):
+                    if deferred:
+                        # An outstanding B3 rollback has not been verified yet.
+                        rollback["verified"] = False
+                    mutation["dirty"] = not deferred and rollback.get("verified") is not True
+                    if rollback.get("verified") is True:
+                        ctx._pending_teardown = None
+                    elif mutation["dirty"] and obligation is not None:
+                        artifact["teardown_obligation"] = obligation
+            ctx._last_artifact = artifact
+            if interruption is not None:
+                raise interruption
             return artifact
         finally:
             ctx._pending_reveal_artifact = None
+
+    def _recover_mutation(self, ctx: ExecutorContext, artifact: dict,
+                          obligation: dict) -> Optional[BaseException]:
+        """Best-effort teardown; absence of positive verification stays DIRTY.
+
+        Never expose the obligation or an exception's text in a receipt. Keep
+        unresolved targets in the engine-only artifact for later recovery.
+        """
+        rollback = {"performed": False, "method": None, "verified": False}
+        mutation = {"applied": True, "dirty": True, "rollback": rollback}
+        artifact["mutation"] = mutation
+        artifact["teardown_obligation"] = obligation
+        # Publish the conservative state BEFORE cleanup, which can itself stop.
+        ctx._last_artifact = artifact
+        interruption = None
+        try:
+            result = self.teardown(ctx, obligation)
+            rollback.update(proof.normalize_mutation({"rollback": result})["rollback"])
+            # A no-op cannot discharge a pre-write mutation obligation.
+            rollback["verified"] = rollback["verified"] and rollback["performed"]
+        except BaseException as exc:
+            ctx._private_errors.append(str(exc))
+            artifact.setdefault("errors", []).append("teardown_exception")
+            if not isinstance(exc, Exception):
+                interruption = exc
+        mutation["dirty"] = rollback["verified"] is not True
+        if rollback["verified"] is True:
+            ctx._pending_teardown = None
+            artifact.pop("teardown_obligation", None)
+        else:
+            artifact.setdefault("errors", []).append("rollback_unverified")
+        return interruption
 
     def _receipt_from(self, ctx: ExecutorContext, finding,
                       params: dict[str, ParamValue], artifact: dict) -> dict:

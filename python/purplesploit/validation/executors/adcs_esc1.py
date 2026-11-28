@@ -68,6 +68,7 @@ from typing import Any, Optional
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from ._reveal_common import pkinit_hashes
+from ._rollback_common import key_material_obligation, key_material_paths
 from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 
@@ -256,11 +257,13 @@ class ADCSESC1Executor(ValidationExecutor):
                     "-target", ca_host]
         if ldap_scheme:
             req_argv += ["-ldap-scheme", ldap_scheme]
+        ctx._pending_teardown = key_material_obligation(out_dir, ca=ca, serial=None)
         res = ctx.runner.run(req_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         req_out = (res.stdout or "") + (res.stderr or "")
         issued_ok = bool(_RE_REQ_ISSUED.search(req_out))
         serial = self._parse_serial(req_out)                 # for rollback (public)
         pfx = self._parse_pfx(req_out, out_dir, impersonate)  # secret (masked/dropped)
+        ctx._pending_teardown.update(serial=serial, pfx=pfx)
         record("cert_request", req_argv, res, issued_ok,
                note="cert issued" if issued_ok else "request failed")
         if not issued_ok:
@@ -276,6 +279,7 @@ class ADCSESC1Executor(ValidationExecutor):
         artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonate, auth_out))
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)        # secret path (masked/dropped)
+        ctx._pending_teardown["ccache"] = ccache
         record("cert_auth", auth_argv, res, auth_ok,
                note="pkinit ok" if auth_ok else "pkinit failed")
         if not auth_ok:
@@ -325,6 +329,15 @@ class ADCSESC1Executor(ValidationExecutor):
         complete = bool(issued_ok and auth_ran and mutation["rollback"]["performed"])
         return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
+    def teardown(self, ctx, obligation) -> dict:
+        if ctx.authorizer.authorize(
+                "rollback", {"ca": obligation["ca"],
+                             "serial_present": obligation.get("serial") is not None}) == "denied":
+            return {"performed": False, "verified": False, "method": None}
+        verified = self._destroy_key_material(key_material_paths(obligation), [])
+        return {"performed": True, "verified": verified,
+                "method": "destroy issued-cert key material (.pfx + .ccache)"}
+
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, ca, serial, mutation, steps, errors, pfx, ccache) -> None:
         """Destroy the issued key material -- the functional rollback for ESC1.
@@ -347,7 +360,10 @@ class ADCSESC1Executor(ValidationExecutor):
             return
         mutation["rollback"]["performed"] = True
         mutation["rollback"]["method"] = "destroy issued-cert key material (.pfx + .ccache)"
-        destroyed = self._destroy_key_material([pfx, ccache], steps)
+        paths = [p for p in (pfx, ccache) if p]
+        if ctx._pending_teardown is not None:
+            paths.extend(key_material_paths(ctx._pending_teardown))
+        destroyed = self._destroy_key_material(list(dict.fromkeys(paths)), steps)
         mutation["rollback"]["verified"] = destroyed
         if not destroyed:
             errors.append("rollback_unverified")

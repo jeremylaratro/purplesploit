@@ -315,6 +315,7 @@ class GpoAbuseExecutor(ValidationExecutor):
         malicious_path.write_bytes(malicious_bytes)
         put_argv = ["nxc", "smb", dc, *_nxc_auth_flags(cfg),
                    "--put-file", str(malicious_path), unc]
+        ctx._pending_teardown = {"args": (dc, gpo_dn, unc, marker, baseline_existed, baseline_bytes,)}
         res = ctx.runner.run(put_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         put_ran = not _tool_errored(res)
         record("write_malicious_task", put_argv, res, put_ran,
@@ -435,6 +436,13 @@ class GpoAbuseExecutor(ValidationExecutor):
                            f"{cfg.tool_timeout_s}s (bounded, honest no-capture)")
                 return False
             time.sleep(cfg.poll_interval_s)
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        self._rollback(ctx, ctx.config, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, dc, gpo_dn, unc, marker, baseline_existed,

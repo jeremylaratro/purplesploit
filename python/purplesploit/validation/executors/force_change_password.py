@@ -180,6 +180,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
         errors.append(f"advisory:irreversible:original_password_not_recoverable:"
                       f"{victim}@{cfg.domain}")
         set_argv = _bloodyad_auth_argv(cfg, dc) + ["set", "password", victim, new_pw]
+        ctx._pending_teardown = {"victim": victim, "reason": "original password unavailable"}
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_PW_OK.search(set_out))

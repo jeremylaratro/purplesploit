@@ -163,6 +163,7 @@ class ShadowCredsExecutor(ValidationExecutor):
 
         shadow_argv = ["certipy-ad", "shadow", "auto", "-account", account,
                        *self._op_auth_argv(cfg), "-dc-ip", dc]
+        ctx._pending_teardown = {"account": account, "reason": "tool-owned original Key Credentials unavailable"}
         res = ctx.runner.run(shadow_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         out = (res.stdout or "") + (res.stderr or "")
         artifact["_reveal"].extend(pkinit_hashes(self.technique, account, out))

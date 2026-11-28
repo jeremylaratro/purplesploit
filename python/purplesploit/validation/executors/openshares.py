@@ -179,6 +179,7 @@ class OpenSharesExecutor(ValidationExecutor):
             gate["op"] = "openshares_write"
 
         put_argv = self._smb_argv(unc, smb_user, f"put {local_canary} {canary_name}")
+        ctx._pending_teardown = {"args": (unc, smb_user, canary_name, absent_path,)}
         res = ctx.runner.run(put_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         put_out = (res.stdout or "") + (res.stderr or "")
         put_ok = bool(_RE_PUT_OK.search(put_out)) and not _RE_SMB_ERROR.search(put_out)
@@ -222,6 +223,13 @@ class OpenSharesExecutor(ValidationExecutor):
 
         complete = write_proved and mutation["rollback"]["performed"]
         return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+
+    def teardown(self, ctx, obligation) -> dict:
+        mutation = {"applied": True,
+                    "rollback": {"performed": False, "method": None, "verified": False}}
+        self._rollback(ctx, *obligation["args"], mutation, [], [],
+                       lambda *args, **kwargs: None)
+        return mutation["rollback"]
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, unc, smb_user, canary_name, absent_path, mutation,

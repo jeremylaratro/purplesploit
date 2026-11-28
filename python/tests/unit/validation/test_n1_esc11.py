@@ -142,7 +142,9 @@ def test_esc11_no_cert_is_inconclusive(tmp_path):
     receipt = get_executor("ESC11").run(_ctx(cfg, _KeyRunner(), tmp_path, pm), _esc11_finding())
     assert receipt["complete"] is False and receipt["terminal_fact"] is None
     assert "esc11_no_cert" in receipt["errors"]
-    assert receipt["mutation"]["applied"] is False
+    # The attempted mutation cannot be ruled out by missing output alone.
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
 
 
 def test_esc11_gate_denied_inconclusive(tmp_path):

@@ -166,6 +166,7 @@ class WriteOwnerExecutor(ValidationExecutor):
 
         # 4) write the new owner -----------------------------------------------
         owner_write_argv = owneredit_write_argv(cfg, target, dc, trustee)
+        ctx._pending_teardown = {"args": (target, trustee, original_owner,)}
         res = ctx.runner.run(owner_write_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         owner_write_out = (res.stdout or "") + (res.stderr or "")
         owner_write_ok = bool(_RE_OWNER_WRITE_OK.search(owner_write_out))
@@ -175,8 +176,6 @@ class WriteOwnerExecutor(ValidationExecutor):
             errors.append("write_owner_failed")
             return self._artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
-        if ctx.composed:
-            ctx._pending_teardown = {"args": (target, trustee, original_owner,)}
 
         # 5) as the new owner, self-grant FullControl (modest duplication of
         #    WRITE-DACL's write, same rationale as acl_common.py's docstring) --

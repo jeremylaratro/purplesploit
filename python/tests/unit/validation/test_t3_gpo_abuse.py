@@ -306,7 +306,7 @@ def test_gpoabuse_rollback_unverified_when_restore_doesnt_stick(tmp_path):
     assert "rollback_unverified" in receipt["errors"]
 
 
-def test_gpoabuse_task_write_not_confirmed_aborts_no_rollback(tmp_path):
+def test_gpoabuse_task_write_not_confirmed_still_rolls_back(tmp_path):
     cfg = _cfg(allow_destructive=True, tool_timeout_s=5, poll_interval_s=0)
     runner = _FakeRunner()
     unc = _unc(cfg)
@@ -317,8 +317,10 @@ def test_gpoabuse_task_write_not_confirmed_aborts_no_rollback(tmp_path):
         _ctx(cfg, runner, tmp_path, destructive_confirmer=_approved_confirmer()), _finding())
     assert receipt["complete"] is False
     assert "gpo_abuse_task_write_not_confirmed" in receipt["errors"]
-    assert receipt["mutation"]["applied"] is False
-    assert receipt["mutation"]["rollback"]["performed"] is False
+    assert receipt["mutation"]["applied"] is True
+    assert receipt["mutation"]["dirty"] is True
+    assert receipt["mutation"]["rollback"]["verified"] is False
+    assert receipt["mutation"]["rollback"]["performed"] is True
 
 
 def test_gpoabuse_rollback_gate_denied(tmp_path):
