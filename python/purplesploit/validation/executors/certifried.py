@@ -80,6 +80,7 @@ def certifried_computer(base: str) -> str:
 
 
 class CertifriedExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "CERTIFRIED"
     technique_class = "adcs"
     terminal_kind = "cert_issued_and_used"
@@ -299,12 +300,13 @@ class CertifriedExecutor(ValidationExecutor):
         """Expose the PKINIT ccache (DC-context TGT) as a threadable ``DC_TGT`` (B2);
         a downstream DCSync authenticates as the spoofed DC via ``KRB5CCNAME``. The
         ccache PATH is a secret and stays in-memory only."""
+        credentials = super().produced(ctx, finding, params, artifact)
         prod = artifact.get("_composed_products") or {}
         ccache = prod.get("ccache")
         if not ccache:
-            return []
+            return credentials
         return [Capability(state=states.DC_TGT, channel=CAP_CCACHE,
-                           value=ccache, principal=prod.get("principal"))]
+                           value=ccache, principal=prod.get("principal"))] + credentials
 
     def teardown(self, ctx, obligation) -> dict:
         """Deferred rollback (B3): delete the created computer, positively confirm

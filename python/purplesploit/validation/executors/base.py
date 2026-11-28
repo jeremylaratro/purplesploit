@@ -62,14 +62,15 @@ CAP_AES_KEY = "aes_key"     # an AES key (SECRET) -> -aesKey -k, in-memory only
 CAP_PRINCIPAL = "principal" # the principal a cred acts as (e.g. "dc01$") -> target principal
 CAP_CONTROL = "control"   # a typed, object/right-bound grant, never an auth credential
 CAP_PASSWORD = "password"   # a recovered cleartext password (SECRET) -> looted credential
+CAP_PFX = "pfx"             # a recovered certificate/private-key bundle (SECRET)
 CAP_NONE = "none"           # a state established with no machine-consumable artifact
 CAP_CHANNELS = frozenset({CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_CONTROL,
-                          CAP_PASSWORD, CAP_NONE})
+                          CAP_PASSWORD, CAP_PFX, CAP_NONE})
 
 # Channels whose VALUE is a secret and must never be serialized into a receipt /
 # ChainReport. A ccache PATH is project-marked secret too (it names bearer key
 # material on disk), so the engine keeps it in-memory and out of any report (H6).
-_SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE, CAP_PASSWORD})
+_SECRET_CHANNELS = frozenset({CAP_NT_HASH, CAP_AES_KEY, CAP_CCACHE, CAP_PASSWORD, CAP_PFX})
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,11 @@ class Capability:
     value: Any = None
     principal: Optional[str] = None
     provenance: tuple[str, ...] = ()  # assigned once by the engine; aliases retain it
+    domain: str = ""
+    is_machine: bool = False
+    secret_type: str = ""
+    source_technique: str = ""
+    reach_hint: tuple[str, ...] = ()
 
     @property
     def secret(self) -> bool:
@@ -107,6 +113,15 @@ class Capability:
     def __post_init__(self):
         if self.channel not in CAP_CHANNELS:
             raise ValueError(f"unknown capability channel: {self.channel!r}")
+
+
+@dataclass(frozen=True)
+class Credential(Capability):
+    """A recovered credential; its value is runtime-only, like Capability.value.
+
+    File credentials hold a private snapshot path whose lifetime follows the
+    value, so the original executor's cleanup cannot invalidate the credential.
+    """
 
 
 # Flags whose following token is a secret and must be masked in any stored argv.
@@ -370,7 +385,7 @@ class ExecutorContext:
     # -- composition slots (review B1/B3): empty/False for every standalone run,
     #    so the 15 executors and every existing call site are untouched. The
     #    chaining engine (C) populates them per edge when composing a chain.
-    input_caps: dict[str, Any] = field(default_factory=dict)  # threaded creds: ccache/nt_hash/aes_key/principal
+    input_caps: dict[str, Any] = field(default_factory=dict)  # threaded creds: password/ccache/nt_hash/aes_key/principal
     env: dict[str, str] = field(default_factory=dict)         # extra env (e.g. KRB5CCNAME=<ccache>) forwarded to runner
     composed: bool = False                                    # True => mutating fronts DEFER rollback to chain teardown
 
@@ -479,6 +494,9 @@ class ValidationExecutor(ABC):
     # fronts + the C tranche set these over ``states`` constants.
     pre: frozenset = frozenset()
     eff: frozenset = frozenset()
+    # Opt in only for fronts with recovery-time _reveal capture. The display
+    # hook remains opt-in at the CLI and is never called by production.
+    recovers_credentials: bool = False
 
     # -- interface subclasses implement --------------------------------------
     @abstractmethod
@@ -517,11 +535,15 @@ class ValidationExecutor(ABC):
 
     def produced(self, ctx: ExecutorContext, finding,
                  params: dict[str, ParamValue], artifact: dict) -> list[Capability]:
-        """Typed capabilities this edge established, for the engine to THREAD into
-        a downstream edge (B2). Default: none -- a non-composable executor. A
-        front overrides this to expose its ccache/hash/principal; the engine
-        routes each by channel and keeps secret values in-memory only."""
-        return []
+        """Recovered credentials, independent of proof success or composition.
+
+        Existing state producers append these to their original capabilities.
+        Pure write/detection primitives retain the default empty result.
+        """
+        if not self.recovers_credentials or not artifact.get("_reveal"):
+            return []
+        from ._credential_common import credentials_from_reveals
+        return credentials_from_reveals(ctx, artifact, finding=finding, params=params)
 
     def teardown(self, ctx: ExecutorContext, obligation: dict) -> dict:
         """Run the DEFERRED rollback for a composed mutating edge (B3), using the
@@ -585,6 +607,8 @@ class ValidationExecutor(ABC):
             artifact = {"steps": [], "complete": False, "errors": ["executor_exception"]}
             if ctx._pending_reveal_artifact is not None:
                 artifact["_reveal"] = ctx._pending_reveal_artifact.get("_reveal", [])
+                if "_credential_cache" in ctx._pending_reveal_artifact:
+                    artifact["_credential_cache"] = ctx._pending_reveal_artifact["_credential_cache"]
             if ctx._pending_teardown:
                 artifact["mutation"] = {"applied": True}
                 artifact["teardown_obligation"] = ctx._pending_teardown
@@ -640,7 +664,11 @@ class ValidationExecutor(ABC):
         if ctx.config.show_flag and ctx.on_artifact is not None:
             ctx.on_artifact(self, artifact)
         receipt = self._receipt_from(ctx, finding, params, artifact)
-        caps = self.produced(ctx, finding, params, artifact) if artifact.get("complete") else []
+        caps = self.produced(ctx, finding, params, artifact)
+        if not artifact.get("complete"):
+            # Failed proof still retains recovered credentials. Preserve the
+            # previous complete-only gate for all existing state capabilities.
+            caps = [cap for cap in caps if isinstance(cap, Credential)]
         return ComposableResult(
             receipt=receipt,
             complete=bool(artifact.get("complete")),

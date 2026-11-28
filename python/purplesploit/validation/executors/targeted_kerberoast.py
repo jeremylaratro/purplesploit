@@ -101,6 +101,7 @@ def _principal_short(name: str) -> str:
 
 
 class TargetedKerberoastExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "TARGETED-KERBEROAST"
     technique_class = "acl"
     terminal_kind = "authn_success"
@@ -343,10 +344,11 @@ class TargetedKerberoastExecutor(ValidationExecutor):
 
     # ---------------------------------------------------------------- composition (C)
     def produced(self, ctx, finding, params, artifact) -> list[Capability]:
+        credentials = super().produced(ctx, finding, params, artifact)
         victim = params["victim"].value or ""
         if not artifact.get("complete"):
-            return []
-        return [Capability(state=states.cred_for(victim), channel=CAP_NONE, principal=victim)]
+            return credentials
+        return [Capability(state=states.cred_for(victim), channel=CAP_NONE, principal=victim)] + credentials
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, cfg, victim, spn, mutation, steps, errors, record) -> None:

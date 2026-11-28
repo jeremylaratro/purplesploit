@@ -96,6 +96,7 @@ def _krbtgt_target(cfg) -> str:
 
 
 class DCSyncExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "DCSYNC"
     technique_class = "dcsync"
     terminal_kind = "replication_dump"
@@ -259,8 +260,8 @@ class DCSyncExecutor(ValidationExecutor):
             errors.append("dcsync_failed")
             return finish(steps, gate, mutation, None, False, errors)
 
-        # Capability routing remains composed-only; reveal was already captured
-        # above on both branches, even when replication proof later failed.
+        # The legacy signing-key state remains composed-only. Universal
+        # credentials use the recovery captures above on both branches.
         signing_key = signing_kind = None
         if getattr(ctx, "composed", False):
             signing_key, signing_kind = _extract_krbtgt_signing_key(combined)
@@ -281,14 +282,17 @@ class DCSyncExecutor(ValidationExecutor):
         return list(artifact.get("_reveal", []))
 
     def produced(self, ctx, finding, params, artifact) -> list:
-        """T4b: thread the recovered krbtgt signing key to a downstream forging
-        edge as a SECRET-channel KRBTGT capability (engine keeps it in-memory,
-        never serialized). Empty unless the composed path captured a real key."""
+        """Universal credentials plus the legacy composed KRBTGT signing state.
+
+        Only that signing state requires a completed composed proof; credentials
+        use the recovery captures regardless of the later proof outcome.
+        """
+        credentials = super().produced(ctx, finding, params, artifact)
         key = artifact.get("_krbtgt_signing_key")
         if not artifact.get("complete") or not key:
-            return []
+            return credentials
         channel = CAP_AES_KEY if artifact.get("_krbtgt_signing_kind") == "aes" else CAP_NT_HASH
-        return [Capability(state=states.KRBTGT, channel=channel, value=key, principal="krbtgt")]
+        return [Capability(state=states.KRBTGT, channel=channel, value=key, principal="krbtgt")] + credentials
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

@@ -81,6 +81,7 @@ def _captured_ccache(out_dir: Path, sam: str) -> Optional[str]:
 
 
 class UnconstrainedDelegExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "UNCONSTRAINED-DELEG"
     technique_class = "delegation"
     terminal_kind = "replication_dump"

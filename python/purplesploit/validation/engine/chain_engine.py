@@ -43,7 +43,7 @@ from typing import Any, Callable, Optional
 from .. import states
 from ..executors.base import (
     ValidationExecutor, ExecutorContext, Capability,
-    CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PRINCIPAL, CAP_NONE, CAP_CONTROL, ControlGrant,
+    CAP_CCACHE, CAP_NT_HASH, CAP_AES_KEY, CAP_PASSWORD, CAP_PRINCIPAL, CAP_NONE, CAP_CONTROL, ControlGrant,
 )
 
 OPERATOR_SEED = "operator-seed"
@@ -200,6 +200,8 @@ class ChainEngine:
                 input_caps["nt_hash"] = cap.value
             elif cap.channel == CAP_AES_KEY and cap.value:
                 input_caps["aes_key"] = cap.value
+            elif cap.channel == CAP_PASSWORD and cap.value:
+                input_caps["password"] = cap.value
             elif cap.channel == CAP_PRINCIPAL and cap.value:
                 input_caps["principal"] = cap.value
             if cap.principal and "principal" not in input_caps:

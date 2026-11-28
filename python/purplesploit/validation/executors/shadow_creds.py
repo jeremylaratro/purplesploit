@@ -59,6 +59,7 @@ def _short_name(host: str) -> str:
 
 
 class ShadowCredsExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "SHADOW-CREDS"
     technique_class = "shadow_creds"
     terminal_kind = "secret_recovered"

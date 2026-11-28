@@ -90,6 +90,7 @@ def _issued_pfx(out_dir: Path) -> Optional[str]:
 class _ADCSRelayFrontExecutor(ValidationExecutor):
     """Shared base for the listener-based ADCS relay fronts (ESC8 HTTP Web-Enroll,
     ESC11 RPC ICPR). Subclasses set ``technique`` and build ``_listener_argv``."""
+    recovers_credentials = True
     technique_class = "adcs"
     terminal_kind = "cert_issued_and_used"
     mutating = True
@@ -329,12 +330,13 @@ class _ADCSRelayFrontExecutor(ValidationExecutor):
         """Expose the issued cert's PKINIT ccache as a threadable ``DC_TGT`` (B2):
         a downstream DCSync authenticates as this machine principal via
         ``KRB5CCNAME``. The ccache PATH is a secret and stays in-memory only."""
+        credentials = super().produced(ctx, finding, params, artifact)
         prod = artifact.get("_composed_products") or {}
         ccache = prod.get("ccache")
         if not ccache:
-            return []
+            return credentials
         return [Capability(state=states.DC_TGT, channel=CAP_CCACHE,
-                           value=ccache, principal=prod.get("principal"))]
+                           value=ccache, principal=prod.get("principal"))] + credentials
 
     def teardown(self, ctx, obligation) -> dict:
         """Deferred rollback (B3): destroy the issued key material the engine kept

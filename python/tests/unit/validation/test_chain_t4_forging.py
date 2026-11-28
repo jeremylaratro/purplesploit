@@ -24,7 +24,7 @@ from purplesploit.validation.findings import map_finding
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     ExecutorContext, CommandRunner, RunResult, AuthorizedLabProvider,
-    ValidationExecutor, ComposableResult, Capability, CAP_CCACHE,
+    ValidationExecutor, ComposableResult, Capability, Credential, CAP_CCACHE,
 )
 from purplesploit.validation.engine import ChainEngine
 from purplesploit.validation import states
@@ -161,15 +161,16 @@ def test_chain_report_carries_no_krbtgt_secret(tmp_path):
     assert OP_PW not in blob            # the operator password, never stored
 
 
-def test_dcsync_standalone_never_captures_the_key(tmp_path):
-    # Non-composed DCSync stays presence-only: no key captured, no capability.
+def test_dcsync_standalone_produces_credentials_without_signing_state(tmp_path):
     runner = _ChainForgeRunner()
     res = get_executor("DCSYNC").run_composable(
         ExecutorContext(_cfg(), runner=runner, authorizer=AuthorizedLabProvider(True),
                         output_dir=tmp_path, composed=False),
         _finding_for(get_executor("DCSYNC")))
     assert res.complete is True
-    assert res.capabilities == []       # no KRBTGT key threaded when not composing
+    assert res.capabilities and all(isinstance(c, Credential) for c in res.capabilities)
+    assert any(c.value == KRBTGT_AES and c.secret_type == "aeskey" for c in res.capabilities)
+    assert all(c.state != states.KRBTGT for c in res.capabilities)
     # and the receipt never carried the secret
     assert KRBTGT_AES not in json.dumps(res.receipt)
 

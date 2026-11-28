@@ -52,6 +52,7 @@ _RE_LAPS_TABLE_HDR = re.compile(
 
 
 class LAPSExecutor(ValidationExecutor):
+    recovers_credentials = True
     technique = "LAPS"
     technique_class = "laps"
     terminal_kind = "authn_success"
