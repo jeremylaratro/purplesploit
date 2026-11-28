@@ -67,7 +67,8 @@ from typing import Any, Optional
 
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import pkinit_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 
 
@@ -202,7 +203,18 @@ class ADCSESC1Executor(ValidationExecutor):
         return argv
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         dc = cfg.dc_ip
@@ -233,7 +245,7 @@ class ADCSESC1Executor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "adcs_cert_request"
             errors.append("gate_denied:adcs_cert_request")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if verdict == "approved":
             gate["classifier"] = "approved"
             gate["op"] = "adcs_cert_request"
@@ -252,7 +264,7 @@ class ADCSESC1Executor(ValidationExecutor):
                note="cert issued" if issued_ok else "request failed")
         if not issued_ok:
             errors.append("cert_request_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         mutation["applied"] = True                            # a cert WAS issued
 
         # 2) PKINIT with the issued pfx -> TGT + NT hash ---------------------
@@ -260,6 +272,7 @@ class ADCSESC1Executor(ValidationExecutor):
         res = ctx.runner.run(auth_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         auth_ran = True
         auth_out = (res.stdout or "") + (res.stderr or "")
+        artifact["_reveal"].extend(pkinit_hashes(self.technique, impersonate, auth_out))
         auth_ok = bool(_RE_AUTH_OK.search(auth_out))
         ccache = self._parse_ccache(auth_out, out_dir)        # secret path (masked/dropped)
         record("cert_auth", auth_argv, res, auth_ok,
@@ -309,7 +322,7 @@ class ADCSESC1Executor(ValidationExecutor):
                 errors.append(f"advisory:ca_db_revocation_followup:serial={serial}")
 
         complete = bool(issued_ok and auth_ran and mutation["rollback"]["performed"])
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- rollback
     def _rollback(self, ctx, ca, serial, mutation, steps, errors, pfx, ccache) -> None:

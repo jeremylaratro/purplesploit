@@ -1,6 +1,7 @@
 """Phase 0: real CLI dispatch with fake tools; reveal is a separate live channel."""
 from __future__ import annotations
 
+import base64
 import io
 import json
 from dataclasses import FrozenInstanceError
@@ -13,15 +14,18 @@ from purplesploit.validation.config import ValidationConfig
 from purplesploit.validation.executors import get_executor
 from purplesploit.validation.executors.base import (
     AuthorizedLabProvider, CommandRunner, ExecutorContext, RunResult, SecretReveal,
+    Capability, ControlGrant, CAP_CONTROL,
 )
+from purplesploit.validation.executors.process_manager import ProcessManager, ProcHandle
+from purplesploit.validation.executors.share_loot import ShareReader, _Entry
 from purplesploit.validation.inputs import finding_from_inputs
 from purplesploit.validation.orchestrator import AutoConfirm
 from purplesploit.validation.probes import ProbeResult
 
 
-TECHNIQUES = ("DCSYNC", "LAPS", "KERBEROAST")
+TECHNIQUES = ("DCSYNC", "LAPS", "KERBEROAST", "ASREP")
 TARGETS = {"DCSYNC": "dc.example.test", "LAPS": "member.example.test",
-           "KERBEROAST": "svc_sql"}
+           "KERBEROAST": "svc_sql", "ASREP": "svc_sql"}
 NOTICE = "[--show-flag] suppressed: no interactive terminal\n"
 
 
@@ -33,7 +37,8 @@ def _secrets(technique, variant=0):
                 ("aes_key", "EXAMPLE\\svc_sql", ("70" if variant == 0 else "80") * 16)]
     if technique == "LAPS":
         return [("password", "member.example.test\\administrator", f"LAPS_SENTINEL_{variant}!")]
-    return [("crackable_hash", "svc_sql", f"$krb5tgs$23$*svc_sql$EXAMPLE*$HASH_SENTINEL_{variant}"),
+    prefix = "$krb5asrep$23$svc_sql@EXAMPLE:" if technique == "ASREP" else "$krb5tgs$23$*svc_sql$EXAMPLE*$"
+    return [("crackable_hash", "svc_sql", f"{prefix}HASH_SENTINEL_{variant}"),
             ("password", "svc_sql", f"CRACKED_SENTINEL_{variant}!")]
 
 
@@ -60,7 +65,7 @@ class _Runner(CommandRunner):
                              stderr="" if self.success else output)
         if tool == "impacket-GetLAPSPassword":
             return RunResult(0, stdout="Password: " + self.secrets[0][2])
-        if tool == "impacket-GetUserSPNs":
+        if tool in ("impacket-GetUserSPNs", "impacket-GetNPUsers"):
             return RunResult(0, stdout=self.secrets[0][2])
         if tool == "hashcat":
             assert not self.deny_crack, "crack gate was bypassed"
@@ -90,6 +95,8 @@ def dispatch(monkeypatch):
             if authorizer is not None:
                 kwargs["authorizer"] = authorizer
             original(self, *args, **kwargs)
+            if hasattr(runner, "configure"):
+                runner.configure(self.context)
             contexts.append(self.context)
 
         monkeypatch.setattr(cli.ValidationOrchestrator, "__init__", init)
@@ -114,7 +121,7 @@ def _assert_clean(receipt, secrets, path):
         assert secret not in encoded
         assert secret.encode() not in raw
         assert secret not in (receipt.get("terminal_fact") or {}).get("proof_token", "")
-    assert "_reveal" not in encoded
+    assert '"_reveal":' not in encoded
 
 
 @pytest.mark.parametrize("technique", TECHNIQUES)
@@ -282,16 +289,17 @@ def test_recovery_survives_a_later_proof_exception(technique, composed, tmp_path
 
 
 @pytest.mark.parametrize("denied", [False, True])
-def test_roast_reveals_hash_even_without_crack(denied, tmp_path, dispatch, capsys):
+@pytest.mark.parametrize("technique", ["KERBEROAST", "ASREP"])
+def test_roast_reveals_hash_even_without_crack(technique, denied, tmp_path, dispatch, capsys):
     class DenyCrack(AuthorizedLabProvider):
         def authorize(self, op, detail):
             return "denied" if op == "offline_crack" else "not_required"
 
-    runner = _Runner("KERBEROAST", cracked=False, deny_crack=denied)
+    runner = _Runner(technique, cracked=False, deny_crack=denied)
     delivered, _ = dispatch(runner, authorizer=DenyCrack() if denied else None)
-    assert cli.main(_args("run", tmp_path) + ["KERBEROAST", "--target", "svc_sql"]) == 1
+    assert cli.main(_args("run", tmp_path) + [technique, "--target", "svc_sql"]) == 1
     receipt = json.loads(capsys.readouterr().out)
-    assert delivered == [SecretReveal("KERBEROAST", *runner.secrets[0])]
+    assert delivered == [SecretReveal(technique, *runner.secrets[0])]
     _assert_clean(receipt, runner.secrets, tmp_path / "verification-receipt.json")
 
 
@@ -367,7 +375,7 @@ def test_reveal_contract_is_frozen_and_default_hook_has_no_products():
     reveal = SecretReveal("LAPS", "password", "admin", "value")
     with pytest.raises(FrozenInstanceError):
         reveal.value = "changed"
-    edge = get_executor("ASREP")  # Phase 0 adds no capture/reveal to other techniques.
+    edge = get_executor("ADD-MEMBER")  # Pure mutation primitives recover nothing.
     assert edge.revealed_secrets({"_reveal": [reveal], "password": "public-key trap"}) == []
     for technique in TECHNIQUES:
         # Each reference hook ignores every public artifact field.
@@ -383,3 +391,368 @@ def test_shared_flag_parsing_and_default_report_compatibility(mode):
     cfg = ValidationConfig("example.test", "192.0.2.1")
     assert cfg.show_flag is False
     assert "show_flag" not in cfg.redacted()
+
+
+# Full rollout: expected lists are independent of production reveal parsers.
+
+
+_COVERAGE_CASES = [
+    "TARGETED-KERBEROAST", "SHADOW-CREDS", "ADCS-ESC1", "ESC8", "ESC11", "CERTIFRIED",
+    "GENERIC-ALL:shadow_creds", "GENERIC-ALL:reset_password", "GENERIC-ALL:spn_kerberoast",
+    "GENERIC-ALL:rbcd", "FORCE-CHANGE-PASSWORD", "GOLDEN-TICKET", "SILVER-TICKET",
+    "DIAMOND-TICKET", "SAPPHIRE-TICKET", "BRONZE-BIT", "S4U2SELF", "CONSTRAINED-DELEG-PT",
+    "SHARE-LOOT", "UNCONSTRAINED-DELEG", "NTLM-RELAY", "RBCD",
+]
+_FORGERS = {"GOLDEN-TICKET", "SILVER-TICKET", "DIAMOND-TICKET", "SAPPHIRE-TICKET"}
+_TICKETS = _FORGERS | {"BRONZE-BIT", "S4U2SELF", "CONSTRAINED-DELEG-PT", "RBCD"}
+_DC = "dc.example.test"
+
+
+def _coverage_params(case):
+    technique, _, pivot = case.partition(":")
+    params = {
+        "TARGETED-KERBEROAST": {"victim": "svc_sql"},
+        "SHADOW-CREDS": {"account": "svc_sql"},
+        "ADCS-ESC1": {"ca": "EXAMPLE-CA", "template": "User", "impersonate": "Administrator"},
+        "ESC11": {"ca": "EXAMPLE-CA"},
+        "CERTIFRIED": {"ca": "EXAMPLE-CA", "dc_fqdn": _DC, "new_computer": "operator_tmp"},
+        "GENERIC-ALL": {"pivot": pivot, "target": "svc_sql", "new_computer": "operator_tmp"},
+        "FORCE-CHANGE-PASSWORD": {"victim": "svc_sql"},
+        "SILVER-TICKET": {"service_host": _DC},
+        "DIAMOND-TICKET": {"forged_user": "Administrator"},
+        "RBCD": {"new_computer": "operator_tmp"},
+        "NTLM-RELAY": {"mode": "smb_sam"},
+    }.get(technique, {}).copy()
+    if technique in _FORGERS:
+        params["domain_sid"] = "S-1-5-21-111111111-222222222-333333333"
+    return params
+
+
+class _CoveragePM(ProcessManager):
+    def __init__(self, runner):
+        self.runner = runner
+
+    def start(self, argv, *, env=None, cwd=None):
+        path = Path(cwd)
+        if self.runner.technique in {"ESC8", "ESC11"}:
+            (path / "dc.pfx").write_bytes(self.runner.pfx)
+        elif self.runner.technique == "UNCONSTRAINED-DELEG":
+            (path / "dc$.ccache").write_bytes(self.runner.ticket)
+        elif self.runner.technique == "NTLM-RELAY":
+            lootdir = Path(argv[argv.index("-l") + 1])
+            (lootdir / "dc_samhashes.sam").write_text(self.runner.dump)
+        return ProcHandle(id="reveal-listener")
+
+    def read(self, handle):
+        return "GOT certificate"
+
+    def poll(self, handle):
+        return None
+
+    def stop(self, handle):
+        return self.read(handle)
+
+
+class _CoverageReader(ShareReader):
+    def __init__(self, runner):
+        self.runner = runner
+
+    def list_shares(self):
+        return ["SYSVOL"]
+
+    def list_dir(self, share, path, limit):
+        return [_Entry(".env", False, len(self.runner.loot))] if path == "" else []
+
+    def read_file(self, share, path, max_bytes):
+        return self.runner.loot[:max_bytes]
+
+    def close(self):
+        pass
+
+
+class _CoverageRunner(CommandRunner):
+    def __init__(self, case, variant=0, *, access=True):
+        self.case = case
+        self.technique = case.partition(":")[0]
+        self.access = access
+        self.calls = []
+        self.nt = ("91" if variant == 0 else "92") * 16
+        self.nt2 = ("93" if variant == 0 else "94") * 16
+        self.aes = ("95" if variant == 0 else "96") * 32
+        self.password = f"ROLLOUT_PASSWORD_{variant}!"
+        self.ticket = f"ROLLOUT_CCACHE_{variant}!".encode() + b"\x00\xff"
+        self.pfx = f"ROLLOUT_PFX_{variant}!".encode() + b"\x00\xfe"
+        self.hash = f"$krb5tgs$23$*svc_sql$EXAMPLE*$ROLLOUT_HASH_{variant}"
+        self.token = f"ROLLOUT_TOKEN_{variant}!"
+        self.loot = (f'DB_PASSWORD="{self.password}"\nAPI_KEY={self.token}\n'
+                     f'OTHER_PASSWORD=SECOND_{self.password}\n').encode()
+        self.dump = (f"EXAMPLE\\krbtgt:502:{'00' * 16}:{self.nt}:::\n"
+                     f"EXAMPLE\\svc_sql:1100:{'00' * 16}:{self.nt2}:::\n"
+                     f"EXAMPLE\\krbtgt:aes256-cts-hmac-sha1-96:{self.aes}\n")
+
+    def configure(self, ctx):
+        Path(ctx.output_dir).mkdir(parents=True, exist_ok=True)
+        ctx.config.poll_interval_s = 0
+        ctx.config.tool_timeout_s = 1
+        ctx.config.forge_key = "ab" * 32
+        ctx.config.forge_key_kind = "aes"
+        ctx.config.forge_key_nt = "cd" * 16
+        ctx.proc_manager = _CoveragePM(self)
+        ctx.share_reader_factory = lambda *args: _CoverageReader(self)
+
+    @property
+    def secrets(self):
+        cc = ("ccache_base64", "Administrator", base64.b64encode(self.ticket).decode())
+        if self.technique in _TICKETS or self.case == "GENERIC-ALL:rbcd":
+            return [cc]
+        if self.technique in {"ESC8", "ESC11", "CERTIFRIED"}:
+            return [("pfx_base64", "dc$", base64.b64encode(self.pfx).decode()),
+                    ("ccache_base64", "dc$", cc[2]), ("nt_hash", "dc$", self.nt)]
+        dumps = [("nt_hash", "EXAMPLE\\krbtgt", self.nt),
+                 ("nt_hash", "EXAMPLE\\svc_sql", self.nt2),
+                 ("aes_key", "EXAMPLE\\krbtgt", self.aes)]
+        if self.technique == "UNCONSTRAINED-DELEG":
+            return [("ccache_base64", "dc$", cc[2]), *dumps]
+        if self.technique == "NTLM-RELAY":
+            return dumps
+        if self.technique == "SHARE-LOOT":
+            path = f"{_DC}/SYSVOL/.env"
+            return [("api_token", path, self.token), ("password", path, self.password),
+                    ("password", path, "SECOND_" + self.password)]
+        if self.technique == "ADCS-ESC1":
+            return [("nt_hash", "Administrator", self.nt)]
+        if self.technique == "SHADOW-CREDS" or self.case == "GENERIC-ALL:shadow_creds":
+            return [("nt_hash", "svc_sql", self.nt)]
+        if self.technique == "TARGETED-KERBEROAST" or self.case == "GENERIC-ALL:spn_kerberoast":
+            return [("crackable_hash", "svc_sql", self.hash), ("password", "svc_sql", self.password)]
+        return [("password", "svc_sql", self.password)]
+
+    def run(self, argv, *, env=None, timeout=None, cwd=None):
+        self.calls.append(list(argv))
+        tool = Path(argv[0]).name
+        if tool == "impacket-dacledit":
+            return RunResult(0, "ACCESS ALLOWED ACE\nTrustee: operator  Rights: GenericAll\n")
+        if tool == "bloodyAD":
+            if "password" in argv:
+                assert argv[-1] == self.password
+            return RunResult(0, "Attribute successfully set; password successfully set")
+        if tool == "impacket-GetUserSPNs":
+            return RunResult(0, self.hash)
+        if tool == "hashcat":
+            return RunResult(0, self.password if "--show" in argv else "")
+        if tool == "certipy-ad":
+            if argv[1] == "shadow":
+                return RunResult(0, f"Got hash for 'svc_sql': {'00' * 16}:{self.nt}\nSuccessfully restored")
+            if argv[1] == "account":
+                return RunResult(0, "Successfully created account" if argv[2] == "create"
+                                 else "Successfully deleted account")
+            if argv[1] == "req":
+                (Path(cwd) / "issued.pfx").write_bytes(self.pfx)
+                return RunResult(0, "Successfully requested certificate\n"
+                                 "Saved certificate and private key to 'issued.pfx'")
+            if argv[1] == "auth":
+                (Path(cwd) / "dc.ccache").write_bytes(self.ticket)
+                principal = "Administrator" if self.technique == "ADCS-ESC1" else "dc$"
+                return RunResult(0, "Got TGT\nSaved credential cache to 'dc.ccache'\n"
+                                 f"Got hash for '{principal}': {'00' * 16}:{self.nt}")
+        if tool == "impacket-addcomputer":
+            return RunResult(0, "Successfully deleted computer account" if "-delete" in argv
+                             else "Successfully added computer account")
+        if tool == "impacket-rbcd":
+            action = argv[argv.index("-action") + 1]
+            return RunResult(0, {"write": "Delegation rights modified successfully",
+                                 "flush": "Delegation rights flushed", "read": "Accounts allowed to act"}[action])
+        if tool in {"impacket-getST", "impacket-ticketer"}:
+            if self.technique == "BRONZE-BIT" and "-force-forwardable" not in argv:
+                return RunResult(1, "KDC_ERR_BADOPTION")
+            name = argv[-1] if tool == "impacket-ticketer" else "impersonated"
+            (Path(cwd) / f"{name}.ccache").write_bytes(self.ticket)
+            return RunResult(0, f"Saving ticket in {name}.ccache")
+        if tool == "impacket-secretsdump":
+            return RunResult(0, self.dump)
+        if tool == "nxc":
+            if argv[1] == "ldap":
+                return RunResult(0, "LDAP [+] EXAMPLE\\operator\nsAMAccountName: svc_sql\n")
+            return RunResult(0, "SMB [+] EXAMPLE\\Administrator from ccache (Pwn3d!)"
+                             if self.access else ("SMB [+] EXAMPLE\\Administrator" if self.technique == "S4U2SELF"
+                                                  else "SMB [-] access denied"))
+        return RunResult(0, "")
+
+
+@pytest.mark.parametrize("case", _COVERAGE_CASES)
+@pytest.mark.parametrize("show", [False, True])
+@pytest.mark.parametrize("composed", [False, True])
+@pytest.mark.parametrize("proof_exception", [False, True])
+def test_rollout_reveal_delivery_and_invariant(case, show, composed, proof_exception, tmp_path,
+                                              monkeypatch, dispatch, capsys):
+    tokens = []
+    technique = case.partition(":")[0]
+    for variant in (0, 1):
+        runner = _CoverageRunner(case, variant)
+        delivered, _ = dispatch(runner)
+        if not show:
+            monkeypatch.setattr(type(get_executor(technique)), "revealed_secrets",
+                                lambda *a: pytest.fail("reveal hook called without opt-in"))
+        monkeypatch.setattr("secrets.token_urlsafe", lambda n: runner.password)
+        output = tmp_path / str(variant)
+        params = _coverage_params(case)
+        if proof_exception:
+            monkeypatch.setattr(proof, "build_terminal_fact", lambda *a, **k: (_ for _ in ()).throw(
+                RuntimeError("later proof failed")))
+        if composed:
+            cfg = ValidationConfig("example.test", "192.0.2.1", username="operator",
+                                   password="operator-input", show_flag=show, allow_destructive=True)
+            ctx = ExecutorContext(cfg, runner, AuthorizedLabProvider(), output, composed=True,
+                                  on_artifact=lambda edge, art: cli.reveal_to_terminal(edge.revealed_secrets(art)))
+            runner.configure(ctx)
+            edge = get_executor(technique)
+            finding = finding_from_inputs(ctx, edge, _DC, params)
+            if technique == "GENERIC-ALL":
+                ctx.input_caps["control"] = Capability(
+                    states.control_for("svc_sql"), CAP_CONTROL,
+                    ControlGrant("operator", "svc_sql", "GenericAll", "operator-seed"))
+            result = edge.run_composable(ctx, finding, params)
+            receipt = result.receipt
+            report = engine.ChainReport(states.S_DA, result.complete, False, True,
+                                        path=[technique], receipts=[receipt]).to_dict()
+            output.mkdir(parents=True, exist_ok=True)
+            report_path = output / "chain-report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n")
+            for _, _, secret in runner.secrets:
+                assert secret not in repr(report)
+                assert secret.encode() not in report_path.read_bytes()
+            if result.teardown_obligation:
+                edge.teardown(ctx, result.teardown_obligation)
+        else:
+            args = _args("run", output, show) + ["--allow-destructive", technique, "--target", _DC]
+            for key, value in params.items():
+                args += ["--param", f"{key}={value}"]
+            status = cli.main(args)
+            captured = capsys.readouterr()
+            receipt = json.loads(captured.out)
+            assert status == (0 if receipt.get("complete") else 1), receipt
+            for _, _, secret in runner.secrets:
+                assert secret not in captured.out + captured.err
+        assert delivered == ([SecretReveal(technique, *row) for row in runner.secrets] if show else []), receipt
+        assert ("executor_exception" in receipt["errors"]) is proof_exception, receipt
+        _assert_clean(receipt, runner.secrets, output / "verification-receipt.json")
+        tokens.append((receipt.get("terminal_fact") or {}).get("proof_token"))
+        if technique in _FORGERS:
+            assert not list(output.glob(".forge-*/*.ccache"))
+    assert tokens[0] == tokens[1]
+    if not proof_exception:
+        assert tokens[0]
+
+
+@pytest.mark.parametrize("technique", ["BRONZE-BIT", "S4U2SELF", *sorted(_FORGERS)])
+def test_ticket_revealed_after_failed_proof_and_cleanup(technique, tmp_path, dispatch, capsys):
+    runner = _CoverageRunner(technique, access=False)
+    delivered, _ = dispatch(runner)
+    args = _args("run", tmp_path) + [technique, "--target", _DC]
+    for key, value in _coverage_params(technique).items():
+        args += ["--param", f"{key}={value}"]
+    assert cli.main(args) == 1
+    receipt = json.loads(capsys.readouterr().out)
+    assert not receipt["complete"]
+    assert delivered == [SecretReveal(technique, *row) for row in runner.secrets]
+    _assert_clean(receipt, runner.secrets, tmp_path / "verification-receipt.json")
+    if technique in _FORGERS:
+        assert not list(tmp_path.glob(".forge-*/*.ccache"))
+
+
+@pytest.mark.parametrize("technique", ["ADD-MEMBER", "WRITE-DACL", "WRITE-OWNER", "GPO-ABUSE",
+                                       "OPENSHARES-WRITE", "COERCION", "SIGNING-RELAY"])
+def test_no_secret_primitives_use_default_empty_hook(technique):
+    reveal = SecretReveal("trap", "password", "user", "trap")
+    assert get_executor(technique).revealed_secrets({"_reveal": [reveal], "password": "trap"}) == []
+
+
+@pytest.mark.parametrize("technique", sorted({c.partition(":")[0] for c in _COVERAGE_CASES} | set(TECHNIQUES)))
+def test_every_reveal_hook_reads_only_private_keys(technique):
+    assert get_executor(technique).revealed_secrets({"reveal": ["trap"], "password": "trap"}) == []
+
+
+@pytest.mark.parametrize("case", ["TARGETED-KERBEROAST", "GENERIC-ALL:spn_kerberoast"])
+@pytest.mark.parametrize("denied", [False, True])
+def test_rollout_hash_revealed_without_cracking(case, denied, tmp_path, monkeypatch, dispatch, capsys):
+    class Uncracked(_CoverageRunner):
+        def run(self, argv, **kwargs):
+            if argv[0] == "hashcat":
+                assert not denied
+                return RunResult(0, "")
+            return super().run(argv, **kwargs)
+
+    class DenyCrack(AuthorizedLabProvider):
+        def authorize(self, op, detail):
+            return "denied" if op == "offline_crack" and denied else "not_required"
+
+    runner = Uncracked(case)
+    delivered, _ = dispatch(runner, authorizer=DenyCrack())
+    technique = runner.technique
+    args = _args("run", tmp_path) + [technique, "--target", _DC]
+    for key, value in _coverage_params(case).items():
+        args += ["--param", f"{key}={value}"]
+    assert cli.main(args) == 1
+    receipt = json.loads(capsys.readouterr().out)
+    assert delivered == [SecretReveal(technique, *runner.secrets[0])]
+    _assert_clean(receipt, runner.secrets, tmp_path / "verification-receipt.json")
+
+
+@pytest.mark.parametrize("technique", ["ESC8", "ESC11", "UNCONSTRAINED-DELEG", "NTLM-RELAY"])
+def test_listener_secret_survives_stop_exception(technique, tmp_path, monkeypatch, dispatch, capsys):
+    def broken_stop(self, handle):
+        raise RuntimeError("listener stop failed")
+
+    monkeypatch.setattr(_CoveragePM, "stop", broken_stop)
+    runner = _CoverageRunner(technique)
+    delivered, _ = dispatch(runner)
+    args = _args("run", tmp_path) + [technique, "--target", _DC]
+    for key, value in _coverage_params(technique).items():
+        args += ["--param", f"{key}={value}"]
+    assert cli.main(args) == 1
+    receipt = json.loads(capsys.readouterr().out)
+    rows = runner.secrets if technique == "NTLM-RELAY" else runner.secrets[:1]
+    assert delivered == [SecretReveal(technique, *row) for row in rows]
+    _assert_clean(receipt, runner.secrets, tmp_path / "verification-receipt.json")
+
+
+def test_rbcd_no_impersonation_ticket_recovers_nothing(tmp_path, dispatch, capsys):
+    class NoTicket(_CoverageRunner):
+        def run(self, argv, **kwargs):
+            if argv[0] == "impacket-getST":
+                return RunResult(1, "KDC_ERR_BADOPTION")
+            return super().run(argv, **kwargs)
+
+    delivered, _ = dispatch(NoTicket("RBCD"))
+    assert cli.main(_args("run", tmp_path) + ["RBCD", "--target", _DC,
+                                             "--param", "new_computer=operator_tmp"]) == 1
+    receipt = json.loads(capsys.readouterr().out)
+    assert delivered == [] and "getST_no_ticket" in receipt["errors"]
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16-le"])
+def test_share_loot_reveals_all_inspected_values_and_gpp(encoding, tmp_path, dispatch, capsys):
+    runner = _CoverageRunner("SHARE-LOOT")
+    cpw = "edBSHOwhZLTjt/QS9FeIcJ83mjWA98gw9guKOhJOdcqh+ZGMeXOsQbCpZ3xUjTLfCuNH8pG5aSVYdYw/NglVmQ"
+    private_key = "-----BEGIN PRIVATE KEY-----\nPRIVATE_SENTINEL\n-----END PRIVATE KEY-----"
+    aws_id = "AKIA" + "A" * 16
+    aws_secret = "AWS_SECRET_SENTINEL_1234567890"
+    slack = "xoxb-SLACKTOKEN12345678"
+    extra = (f'\n<Properties userName="EXAMPLE\\backup" cpassword="{cpw}"/>\n'
+             f'{private_key}\n{aws_id}\naws_secret_access_key={aws_secret}\n{slack}\n'
+             'Connection String=Data Source=db;pwd=DB_CONNECTION_SENTINEL;\n')
+    runner.loot = (runner.loot.decode() + extra).encode(encoding)
+    delivered, _ = dispatch(runner)
+    assert cli.main(_args("run", tmp_path) + ["SHARE-LOOT", "--target", _DC]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    location = f"{_DC}/SYSVOL/.env"
+    expected = [
+        ("private_key", location, private_key), ("aws_access_key_id", location, aws_id),
+        ("slack_token", location, slack), ("gpp_cpassword", location, cpw),
+        ("aws_secret_access_key", location, aws_secret), ("api_token", location, runner.token),
+        ("password", location, runner.password), ("password", location, "SECOND_" + runner.password),
+        ("password", location, "DB_CONNECTION_SENTINEL"),
+        ("password", "EXAMPLE\\backup", "GPPstillStandingStrong2k18"),
+    ]
+    assert delivered == [SecretReveal("SHARE-LOOT", *row) for row in expected]
+    _assert_clean(receipt, expected, tmp_path / "verification-receipt.json")

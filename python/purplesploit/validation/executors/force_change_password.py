@@ -34,7 +34,7 @@ from typing import Any
 from ..recommend import ParamSpec, ParamValue, values
 from .. import proof
 from .. import states
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv)
 from .acl_common import dacledit_read_argv, confirm_ace, _RE_ACE_GENERIC_ALL, _RE_FORCE_CHANGE_PW_RIGHT
 
@@ -114,7 +114,18 @@ class ForceChangePasswordExecutor(ValidationExecutor):
         ]
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         victim = v["victim"]
@@ -143,7 +154,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
                    ("precondition insufficient" if confirmed is False else "unconfirmed"))
         if confirmed is False:
             errors.append("force_change_password_not_confirmed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         if confirmed is None:
             errors.append("advisory:force_change_password_unconfirmed_attempting_anyway")
 
@@ -156,7 +167,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
             gate["classifier"] = "denied"
             gate["op"] = "force_change_password"
             errors.append("gate_denied:force_change_password")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
         gate["classifier"] = "approved"
         gate["op"] = "force_change_password"
 
@@ -171,6 +182,8 @@ class ForceChangePasswordExecutor(ValidationExecutor):
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_PW_OK.search(set_out))
+        if set_ok:
+            artifact["_reveal"].append(SecretReveal(self.technique, "password", victim, new_pw))
         # bloodyAD's `set password` takes the new password as a bare POSITIONAL
         # argument (no preceding flag), so `redact_argv`'s flag-keyed masking
         # (-p/--password/...) cannot catch it -- manually blank it before
@@ -180,7 +193,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
               note="password reset" if set_ok else "password reset failed")
         if not set_ok:
             errors.append("password_set_failed")
-            return self._artifact(steps, gate, mutation, None, False, errors)
+            return finish_artifact(steps, gate, mutation, None, False, errors)
 
         # 4) re-authenticate as the victim = the terminal proof (never the set
         #    call's own exit code alone) -----------------------------------------
@@ -206,7 +219,7 @@ class ForceChangePasswordExecutor(ValidationExecutor):
         # NEVER performed for this technique (by design, not a gap), so it must
         # never be required for `complete`, unlike every other T3 executor.
         complete = bool(reauth_ok)
-        return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+        return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
     @staticmethod
     def _artifact(steps, gate, mutation, terminal_fact, complete, errors) -> dict:

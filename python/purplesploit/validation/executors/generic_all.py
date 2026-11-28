@@ -44,7 +44,8 @@ from ..recommend import (ParamSpec, ParamValue, values, resolve_params,
 from ..predicates import positive_absence
 from .. import proof
 from .. import states
-from .base import (ValidationExecutor, ExecutorContext, ValidationPlan, StepRecord,
+from ._reveal_common import key_material, pkinit_hashes
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, ValidationPlan, StepRecord,
                    RunResult, redact_argv, ToolAttempt, first_successful,
                    Capability, CAP_NONE, CAP_NT_HASH, CAP_CONTROL, ControlGrant)
 from .acl_common import dacledit_read_argv, confirm_ace, _RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE
@@ -322,7 +323,13 @@ class GenericAllExecutor(ValidationExecutor):
         return argv
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
         cfg = ctx.config
         v = values(params)
         target, pivot = v["target"], v["pivot"]
@@ -364,8 +371,9 @@ class GenericAllExecutor(ValidationExecutor):
             "shadow_creds": self._run_shadow_creds,
             "rbcd": self._run_rbcd,
         }
-        return dispatch[pivot](ctx, cfg, target, v, dc, out_dir, steps, errors, gate,
-                               mutation, record)
+        artifact.update(dispatch[pivot](ctx, cfg, target, v, dc, out_dir, steps, errors, gate,
+                                        mutation, record))
+        return artifact
 
     # ---------------------------------------------------------------- pivot: reset_password
     def _run_reset_password(self, ctx, cfg, target, v, dc, out_dir, steps, errors,
@@ -388,6 +396,9 @@ class GenericAllExecutor(ValidationExecutor):
         res = ctx.runner.run(set_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         set_out = (res.stdout or "") + (res.stderr or "")
         set_ok = bool(_RE_BLOODYAD_SET_PW_OK.search(set_out))
+        if set_ok:
+            ctx._pending_reveal_artifact["_reveal"].append(
+                SecretReveal(self.technique, "password", target, new_pw))
         # positional secret -- redact_argv's flag-keyed masking can't catch it
         # (see force_change_password.py's identical fix).
         record("set_password", set_argv[:-1] + ["***"], res, set_ok,
@@ -449,6 +460,8 @@ class GenericAllExecutor(ValidationExecutor):
                      "-request-user", target, *op_extra]
         res = ctx.runner.run(roast_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         hashes = _RE_KRB5TGS.findall(res.stdout or "")
+        ctx._pending_reveal_artifact["_reveal"].extend(
+            SecretReveal(self.technique, "crackable_hash", target, blob) for blob in hashes)
         roast_ok = bool(hashes)
         record("roast", roast_argv, res, roast_ok,
               note=(f"{len(hashes)} hash(es)" if roast_ok else "no hash"))
@@ -477,6 +490,9 @@ class GenericAllExecutor(ValidationExecutor):
                     "--potfile-path", str(potfile), "--outfile-format", "2", "--quiet"]
         res_show = ctx.runner.run(show_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         plaintext = self._first_plaintext(res_show.stdout or "")
+        if plaintext:
+            ctx._pending_reveal_artifact["_reveal"].append(
+                SecretReveal(self.technique, "password", target, plaintext))
         crack_ok = bool(plaintext)
         record("crack", crack_argv, res, crack_ok,
               note="cracked" if crack_ok else "not cracked")
@@ -551,6 +567,7 @@ class GenericAllExecutor(ValidationExecutor):
                        *self._certipy_auth_argv(cfg), "-dc-ip", dc]
         res = ctx.runner.run(shadow_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         out = (res.stdout or "") + (res.stderr or "")
+        ctx._pending_reveal_artifact["_reveal"].extend(pkinit_hashes(self.technique, target, out))
         hash_ok = bool(_RE_SHADOW_HASH.search(out))
         restore_ok = bool(_RE_SHADOW_RESTORE.search(out))
         record("shadow_auto", shadow_argv, res, hash_ok,
@@ -651,6 +668,8 @@ class GenericAllExecutor(ValidationExecutor):
         res = ctx.runner.run(getst_argv, timeout=cfg.tool_timeout_s,
                              env={"KRB5CCNAME": None}, cwd=str(out_dir))
         ticket = self._parse_ticket(res.stdout or "", out_dir)
+        ctx._pending_reveal_artifact["_reveal"].extend(
+            key_material(self.technique, "ccache", impersonate, ticket))
         getst_ok = ticket is not None
         record("getST", getst_argv, res, getst_ok,
                 note="ticket saved" if getst_ok else "no ticket")

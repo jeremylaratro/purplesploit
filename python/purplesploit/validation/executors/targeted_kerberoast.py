@@ -35,7 +35,7 @@ from ..recommend import ParamSpec, ParamValue, values, recommended_spn
 from ..predicates import positive_absence
 from .. import proof
 from .. import states
-from .base import (ValidationExecutor, ExecutorContext, StepRecord, RunResult,
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, StepRecord, RunResult,
                    redact_argv, Capability, CAP_NONE)
 from .acl_common import dacledit_read_argv, confirm_ace, _RE_ACE_GENERIC_ALL, _RE_ACE_GENERIC_WRITE
 from .roast import DEFAULT_WORDLIST
@@ -187,7 +187,18 @@ class TargetedKerberoastExecutor(ValidationExecutor):
         return target, extra
 
     # ---------------------------------------------------------------- execute
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params: dict[str, ParamValue]) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         victim, spn, wordlist = v["victim"], v["spn"], v["wordlist"]
@@ -212,7 +223,7 @@ class TargetedKerberoastExecutor(ValidationExecutor):
             if mutation["applied"]:
                 self._rollback(ctx, cfg, victim, spn, mutation, steps, errors, record)
                 complete = bool(ok and mutation["rollback"]["performed"])
-            return self._artifact(steps, gate, mutation, terminal_fact, complete, errors)
+            return finish_artifact(steps, gate, mutation, terminal_fact, complete, errors)
 
         # 1) confirm the PRECONDITION ACE over the victim ---------------------
         read_argv = dacledit_read_argv(cfg, victim, dc)
@@ -260,6 +271,8 @@ class TargetedKerberoastExecutor(ValidationExecutor):
                      "-request-user", victim, *op_extra]
         res = ctx.runner.run(roast_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         hashes = _RE_KRB5TGS.findall(res.stdout or "")
+        artifact["_reveal"].extend(SecretReveal(
+            self.technique, "crackable_hash", victim, blob) for blob in hashes)
         roast_ok = bool(hashes)
         record("roast", roast_argv, res, roast_ok,
               note=(f"{len(hashes)} hash(es)" if roast_ok else "no hash"))
@@ -291,6 +304,8 @@ class TargetedKerberoastExecutor(ValidationExecutor):
                     "--potfile-path", str(potfile), "--outfile-format", "2", "--quiet"]
         res_show = ctx.runner.run(show_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         plaintext = self._first_plaintext(res_show.stdout or "")
+        if plaintext:
+            artifact["_reveal"].append(SecretReveal(self.technique, "password", victim, plaintext))
         crack_ok = bool(plaintext)
         record("crack", crack_argv, res, crack_ok,
               note="cracked" if crack_ok else "not cracked")

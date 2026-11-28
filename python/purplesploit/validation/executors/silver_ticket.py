@@ -20,7 +20,8 @@ from pathlib import Path
 
 from ..recommend import ParamSpec, values
 from .. import proof, states
-from .base import (ValidationExecutor, ExecutorContext, Capability, CAP_PRINCIPAL)
+from ._reveal_common import key_material
+from .base import (SecretReveal, ValidationExecutor, ExecutorContext, Capability, CAP_PRINCIPAL)
 from .forge_common import (signing_key, key_flag, valid_key, resolve_domain_sid,
                            forge_and_reauth)
 
@@ -75,7 +76,18 @@ class SilverTicketExecutor(ValidationExecutor):
         host = self._params(ctx, finding)["service_host"].value
         return frozenset({states.local_admin_for(host)})
 
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     def execute(self, ctx: ExecutorContext, finding, params) -> dict:
+        # Private recovery channel, populated before downstream proof/cleanup.
+        artifact = {"_reveal": []}
+        ctx._pending_reveal_artifact = artifact
+
+        def finish_artifact(*args):
+            artifact.update(self._artifact(*args))
+            return artifact
+
         cfg = ctx.config
         v = values(params)
         out_dir = Path(ctx.output_dir)
@@ -86,11 +98,11 @@ class SilverTicketExecutor(ValidationExecutor):
         sid = resolve_domain_sid(ctx, v.get("domain_sid") or None)
         if not sid:
             errors.append("domain_sid_unresolved")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
         key, kind = signing_key(ctx)
         if not valid_key(key, kind):
             errors.append("no_service_key")
-            return self._artifact(steps, gate, None, False, errors)
+            return finish_artifact(steps, gate, None, False, errors)
 
         host = v["service_host"]
         forged = v["forged_user"]
@@ -98,7 +110,9 @@ class SilverTicketExecutor(ValidationExecutor):
                       "-domain", cfg.domain, "-spn", f"cifs/{host}",
                       "-user-id", v["user_id"], forged]
         ok, fsteps, ferrors = forge_and_reauth(ctx, forge_argv, forged, host, out_dir,
-                                               expect_principal=forged)
+                                               expect_principal=forged,
+                                               on_ticket=lambda path: artifact["_reveal"].extend(
+                                                   key_material(self.technique, "ccache", forged, path)))
         steps += fsteps
         errors += ferrors
 
@@ -110,7 +124,7 @@ class SilverTicketExecutor(ValidationExecutor):
                                           "authn_success" if ok else "authn_failed"),
             extra={"forged_user": forged, "service_host": host},
         )
-        return self._artifact(steps, gate, terminal_fact, ok, errors)
+        return finish_artifact(steps, gate, terminal_fact, ok, errors)
 
     def produced(self, ctx, finding, params, artifact):
         if not artifact.get("complete"):

