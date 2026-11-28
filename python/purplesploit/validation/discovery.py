@@ -45,6 +45,18 @@ from .probes import (_ldap_query, _certipy_find, _extract_attr, _account_read_ok
 _PROBE_TIMEOUT_CAP = 30
 
 
+def discover_posture(ctx, finding):
+    """Phase 4a variant: posture only, one already-fenced finding at a time.
+
+    No shared recon, implicit target, credential read, executor dispatch, generic
+    probe registry, or exception log. Caller supplies the admission/fence runner.
+    Raw reasons and evidence are runtime-only; the planner exports fixed events.
+    """
+    if not finding.host:
+        return probes_mod.ProbeResult(viable=False, unknown=True, reason="empty_scope")
+    return probes_mod.non_secret_probe(ctx, finding)
+
+
 def candidate_findings(cfg, hosts) -> list[NormalizedFinding]:
     """One synthetic finding per IMPLEMENTED technique × scope host. ``entity={}`` --
     position-based probes read ``cfg.username``; no selector is set to the operator."""

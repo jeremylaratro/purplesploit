@@ -1336,6 +1336,33 @@ PROBE_REGISTRY: dict[str, type[PreconditionProbe]] = {
     cls.technique: cls for cls in _PROBES
 }
 
+# Explicitly reviewed posture-only probes. Do not derive this from PROBE_REGISTRY:
+# a new read-only probe may retrieve passwords, tickets, or other credentials.
+# LAPS reads passwords; certipy find may follow discovered CA endpoints; coercer
+# scan sends active coercion RPCs. None belongs in a non-secret planner.
+POSTURE_PROBES = {cls.technique: cls for cls in (
+    KerberoastProbe, ASREPProbe, ConstrainedDelegProbe, RbcdProbe,
+    OpenSharesProbe, DCSyncProbe, NTLMRelayProbe, UnconstrainedDelegProbe,
+    WriteDaclProbe, WriteOwnerProbe, AddMemberProbe, TargetedKerberoastProbe,
+    ForceChangePasswordProbe, GenericAllProbe, GpoAbuseProbe,
+    ShareLootProbe, BronzeBitProbe, S4U2SelfProbe, SigningRelayProbe,
+)}
+
+
+def non_secret_probe(ctx, finding):
+    """Planner-only discovery; no generic probe dispatch or exception logging.
+
+    The caller MUST supply a fenced posture-only runner. Reasons/evidence remain
+    private and must never be copied into a planner report.
+    """
+    cls = POSTURE_PROBES.get(finding.technique)
+    if cls is None:
+        return ProbeResult(viable=False, unknown=True, reason="posture_unavailable")
+    try:
+        return cls().check(ctx, finding)
+    except Exception:
+        return ProbeResult(viable=False, unknown=True, reason="posture_unavailable")
+
 
 def get_probe(technique: Optional[str]) -> Optional[PreconditionProbe]:
     """Instantiate the probe for ``technique``, or ``None`` if none is registered."""

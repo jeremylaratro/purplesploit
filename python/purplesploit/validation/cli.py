@@ -83,10 +83,11 @@ def build_config(args: argparse.Namespace) -> ValidationConfig:
             raw, _, hid = item.partition("=")
             if raw and hid:
                 host_aliases[raw] = {"host_id": hid}
+    planner = getattr(args, "command", None) == "autopwn"
     kwargs = dict(
-        forge_key=_read_key(getattr(args, "forge_key_file", None)),
+        forge_key=None if planner else _read_key(getattr(args, "forge_key_file", None)),
         forge_key_kind=getattr(args, "forge_key_kind", None),
-        forge_key_nt=_read_key(getattr(args, "forge_key_nt_file", None)),
+        forge_key_nt=None if planner else _read_key(getattr(args, "forge_key_nt_file", None)),
         domain=args.domain, dc_ip=args.dc_ip,
         username=args.user, password=args.password,
         nt_hash=args.hash, aes_key=args.aes_key,
@@ -130,7 +131,7 @@ class DispatchParser(argparse.ArgumentParser):
         i = 0
         while i < len(args):
             token = args[i]
-            if token in {"pipeline", "run", "chain", "discover", "creds"}:
+            if token in {"pipeline", "run", "chain", "discover", "autopwn", "creds"}:
                 args.insert(0, args.pop(i))
                 break
             if not token.startswith("-"):
@@ -224,6 +225,26 @@ def build_parser() -> argparse.ArgumentParser:
     discover.add_argument("--exploit", action="store_true",
                           help="auto-exploit the eligible techniques (verified + viable + complete + "
                                "non-mutating unless --allow-destructive); discovery alone is read-only")
+    # Permit --execute to fail with the Phase 4b error even without auth/scope.
+    import copy
+    planner_shared = copy.deepcopy(shared)
+    for action in planner_shared._actions:
+        if action.dest in ("domain", "dc_ip"):
+            action.required = False
+    autopwn = commands.add_parser("autopwn", parents=[planner_shared],
+                                  help="non-secret, fenced dry-run planner (Phase 4a)")
+    autopwn.add_argument("--execute", action="store_true", help="unsupported until Phase 4b")
+    autopwn.add_argument("--scope", action="append", default=[], metavar="HOST,...")
+    autopwn.add_argument("--scope-domain", action="append", default=[], metavar="DOMAIN,...")
+    autopwn.add_argument("--scope-enumerate", action="append", default=[], metavar="DOMAIN",
+                         help="materialize computer hosts via an explicitly fenced DC")
+    autopwn.add_argument("--goal", default=states.S_DA)
+    autopwn.add_argument("--kill-file")
+    autopwn.add_argument("--max-hops", type=int, default=1000,
+                         help="maximum candidate expansions, including skipped candidates")
+    autopwn.add_argument("--max-time", type=float, default=300)
+    autopwn.add_argument("--param", action="append", default=[], metavar="TECH.KEY=VALUE",
+                         help="public per-technique selectors; never executed")
     chain = commands.add_parser("chain", parents=[shared], help="compose a capability path")
     chain.add_argument("--goal", default=states.S_DA)
     chain.add_argument("--allow-crack", action="store_true")
@@ -294,9 +315,39 @@ def _creds(args) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.command == "creds":
         return _creds(args)
+    if args.command == "autopwn":
+        # Gate BEFORE build_config (which reads signing-key files), identity
+        # re-scope (which loads secrets), or orchestrator construction.
+        if args.execute:
+            parser.error("execution not yet supported (Phase 4b)")
+        if not args.domain or not args.dc_ip:
+            parser.error("autopwn requires --domain and --dc-ip")
+        if args.as_cred or args.forge_key_file or args.forge_key_nt_file or args.show_flag:
+            parser.error("autopwn supports configured start authentication only; secret-file reads and reveal are disabled")
+        from .autopwn import plan
+        try:
+            scoped = {}
+            for key, value in _pairs(args.param).items():
+                tech, sep, param = key.partition('.')
+                if not sep or not param:
+                    raise InputError("invalid_parameter")
+                scoped.setdefault(tech.upper(), {})[param] = value
+            report = plan(build_config(args), scope=args.scope, scope_domain=args.scope_domain,
+                          scope_enumerate=args.scope_enumerate, goal=args.goal,
+                          max_hops=args.max_hops, max_time=args.max_time, kill_file=args.kill_file,
+                          params=scoped)
+            status = 2 if report["status"] in ("empty_scope", "planning_failed") else 0
+            if report["status"] == "empty_scope":
+                print("empty in-scope set; planning halted (no implicit targets)", file=sys.stderr)
+        except Exception:
+            report, status = {"errors": ["planner_input_or_audit_error"]}, 2
+        json.dump(report, sys.stdout, indent=2)
+        sys.stdout.write('\n')
+        return status
     config = build_config(args)
     if args.as_cred is not None:
         try:
